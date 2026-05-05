@@ -1,0 +1,353 @@
+package com.example.customperm.command;
+
+import com.example.customperm.CustomPerm;
+import com.example.customperm.config.GradesConfig;
+import com.example.customperm.perm.LuckPermsService;
+import com.example.customperm.perm.PermissionService;
+import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import net.minecraft.ChatFormatting;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.commands.arguments.EntityArgument;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
+
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * /customperm grade  create|delete <name>
+ *                    addperm|removeperm <grade> <node>
+ *                    assign|unassign <player> <grade>
+ *                    list
+ * /customperm alias  add <name> <cmd1[; cmd2; ...]>     # macro: split on ';'
+ *                    addstep <name> <cmd>               # append a step to existing alias
+ *                    removestep <name> <index>          # 0-based
+ *                    steps <name>                       # show steps
+ *                    remove <name>
+ *                    list
+ * /customperm test   <player> <node>                    # debug: report grant/deny + backend
+ * /customperm reload
+ *
+ * Always requires op level 2 — this is the management command.
+ * When LuckPerms is the active backend, grade subcommands print a hint to use `/lp` instead.
+ */
+public class CustomPermCommand {
+
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        dispatcher.register(
+            Commands.literal("customperm")
+                .requires(src -> src.hasPermission(2))
+                .then(Commands.literal("grade")
+                    .then(Commands.literal("create")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .executes(CustomPermCommand::gradeCreate)))
+                    .then(Commands.literal("delete")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .executes(CustomPermCommand::gradeDelete)))
+                    .then(Commands.literal("addperm")
+                        .then(Commands.argument("grade", StringArgumentType.word())
+                            .then(Commands.argument("node", StringArgumentType.greedyString())
+                                .executes(CustomPermCommand::gradeAddPerm))))
+                    .then(Commands.literal("removeperm")
+                        .then(Commands.argument("grade", StringArgumentType.word())
+                            .then(Commands.argument("node", StringArgumentType.greedyString())
+                                .executes(CustomPermCommand::gradeRemovePerm))))
+                    .then(Commands.literal("assign")
+                        .then(Commands.argument("player", EntityArgument.player())
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .executes(CustomPermCommand::gradeAssign))))
+                    .then(Commands.literal("unassign")
+                        .then(Commands.argument("player", EntityArgument.player())
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .executes(CustomPermCommand::gradeUnassign))))
+                    .then(Commands.literal("list")
+                        .executes(CustomPermCommand::gradeList)))
+                .then(Commands.literal("alias")
+                    .then(Commands.literal("add")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .then(Commands.argument("commands", StringArgumentType.greedyString())
+                                .executes(CustomPermCommand::aliasAdd))))
+                    .then(Commands.literal("addstep")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .then(Commands.argument("command", StringArgumentType.greedyString())
+                                .executes(CustomPermCommand::aliasAddStep))))
+                    .then(Commands.literal("removestep")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .then(Commands.argument("index", IntegerArgumentType.integer(0))
+                                .executes(CustomPermCommand::aliasRemoveStep))))
+                    .then(Commands.literal("steps")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .executes(CustomPermCommand::aliasSteps)))
+                    .then(Commands.literal("remove")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .executes(CustomPermCommand::aliasRemove)))
+                    .then(Commands.literal("list")
+                        .executes(CustomPermCommand::aliasList)))
+                .then(Commands.literal("test")
+                    .then(Commands.argument("player", EntityArgument.player())
+                        .then(Commands.argument("node", StringArgumentType.greedyString())
+                            .executes(CustomPermCommand::testPerm))))
+                .then(Commands.literal("reload")
+                    .executes(CustomPermCommand::reload))
+        );
+    }
+
+    // ---------------- grade ----------------
+
+    private static int gradeCreate(CommandContext<CommandSourceStack> ctx) {
+        if (warnIfLuckPerms(ctx)) return 0;
+        String name = StringArgumentType.getString(ctx, "name");
+        GradesConfig g = CustomPerm.configManager.getGrades();
+        if (g.grades.containsKey(name)) {
+            ctx.getSource().sendFailure(Component.literal("Grade already exists: " + name));
+            return 0;
+        }
+        GradesConfig.Grade grade = new GradesConfig.Grade();
+        grade.name = name;
+        g.grades.put(name, grade);
+        CustomPerm.configManager.save();
+        success(ctx, "Created grade " + name);
+        return 1;
+    }
+
+    private static int gradeDelete(CommandContext<CommandSourceStack> ctx) {
+        if (warnIfLuckPerms(ctx)) return 0;
+        String name = StringArgumentType.getString(ctx, "name");
+        GradesConfig g = CustomPerm.configManager.getGrades();
+        if (g.grades.remove(name) == null) {
+            ctx.getSource().sendFailure(Component.literal("No such grade: " + name));
+            return 0;
+        }
+        g.userGrades.values().forEach(list -> list.remove(name));
+        CustomPerm.configManager.save();
+        resyncCommands(ctx);
+        success(ctx, "Deleted grade " + name);
+        return 1;
+    }
+
+    private static int gradeAddPerm(CommandContext<CommandSourceStack> ctx) {
+        if (warnIfLuckPerms(ctx)) return 0;
+        String gradeName = StringArgumentType.getString(ctx, "grade");
+        String node = StringArgumentType.getString(ctx, "node");
+        GradesConfig.Grade grade = CustomPerm.configManager.getGrades().grades.get(gradeName);
+        if (grade == null) {
+            ctx.getSource().sendFailure(Component.literal("No such grade: " + gradeName));
+            return 0;
+        }
+        grade.permissions.add(node);
+        CustomPerm.configManager.save();
+        resyncCommands(ctx);
+        success(ctx, "Added " + node + " -> " + gradeName);
+        return 1;
+    }
+
+    private static int gradeRemovePerm(CommandContext<CommandSourceStack> ctx) {
+        if (warnIfLuckPerms(ctx)) return 0;
+        String gradeName = StringArgumentType.getString(ctx, "grade");
+        String node = StringArgumentType.getString(ctx, "node");
+        GradesConfig.Grade grade = CustomPerm.configManager.getGrades().grades.get(gradeName);
+        if (grade == null) {
+            ctx.getSource().sendFailure(Component.literal("No such grade: " + gradeName));
+            return 0;
+        }
+        grade.permissions.remove(node);
+        CustomPerm.configManager.save();
+        resyncCommands(ctx);
+        success(ctx, "Removed " + node + " from " + gradeName);
+        return 1;
+    }
+
+    private static int gradeAssign(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        if (warnIfLuckPerms(ctx)) return 0;
+        ServerPlayer player = EntityArgument.getPlayer(ctx, "player");
+        String gradeName = StringArgumentType.getString(ctx, "grade");
+        if (!CustomPerm.configManager.getGrades().grades.containsKey(gradeName)) {
+            ctx.getSource().sendFailure(Component.literal("No such grade: " + gradeName));
+            return 0;
+        }
+        CustomPerm.configManager.getGrades()
+            .userGrades.computeIfAbsent(player.getUUID().toString(), k -> new ArrayList<>())
+            .add(gradeName);
+        CustomPerm.configManager.save();
+        resyncPlayer(ctx, player);
+        success(ctx, "Assigned " + gradeName + " -> " + player.getGameProfile().getName());
+        return 1;
+    }
+
+    private static int gradeUnassign(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        if (warnIfLuckPerms(ctx)) return 0;
+        ServerPlayer player = EntityArgument.getPlayer(ctx, "player");
+        String gradeName = StringArgumentType.getString(ctx, "grade");
+        var list = CustomPerm.configManager.getGrades().userGrades.get(player.getUUID().toString());
+        if (list != null) list.remove(gradeName);
+        CustomPerm.configManager.save();
+        resyncPlayer(ctx, player);
+        success(ctx, "Unassigned " + gradeName + " from " + player.getGameProfile().getName());
+        return 1;
+    }
+
+    private static int gradeList(CommandContext<CommandSourceStack> ctx) {
+        if (warnIfLuckPerms(ctx)) return 0;
+        Set<String> names = CustomPerm.configManager.getGrades().grades.keySet();
+        if (names.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal("No grades defined."), false);
+        } else {
+            ctx.getSource().sendSuccess(() -> Component.literal("Grades: " + String.join(", ", names)), false);
+        }
+        return 1;
+    }
+
+    // ---------------- alias ----------------
+
+    private static int aliasAdd(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        String raw = StringArgumentType.getString(ctx, "commands");
+        if (name.equals("customperm")) {
+            ctx.getSource().sendFailure(Component.literal("Reserved name."));
+            return 0;
+        }
+        List<String> steps = Arrays.stream(raw.split(";"))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .collect(Collectors.toCollection(ArrayList::new));
+        if (steps.isEmpty()) {
+            ctx.getSource().sendFailure(Component.literal("No commands provided."));
+            return 0;
+        }
+        CustomPerm.configManager.getAliases().aliases.put(name, steps);
+        CustomPerm.configManager.save();
+        resyncCommands(ctx);
+        success(ctx, "Alias /" + name + " set with " + steps.size() + " step(s)  (perm: customperm.alias." + name + ")");
+        return 1;
+    }
+
+    private static int aliasAddStep(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        String cmd = StringArgumentType.getString(ctx, "command").trim();
+        if (cmd.isEmpty()) {
+            ctx.getSource().sendFailure(Component.literal("Empty command."));
+            return 0;
+        }
+        var aliases = CustomPerm.configManager.getAliases().aliases;
+        aliases.computeIfAbsent(name, k -> new ArrayList<>()).add(cmd);
+        CustomPerm.configManager.save();
+        resyncCommands(ctx);
+        success(ctx, "Appended step #" + (aliases.get(name).size() - 1) + " to /" + name + ": " + cmd);
+        return 1;
+    }
+
+    private static int aliasRemoveStep(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        int index = IntegerArgumentType.getInteger(ctx, "index");
+        var steps = CustomPerm.configManager.getAliases().aliases.get(name);
+        if (steps == null) {
+            ctx.getSource().sendFailure(Component.literal("No such alias: " + name));
+            return 0;
+        }
+        if (index < 0 || index >= steps.size()) {
+            ctx.getSource().sendFailure(Component.literal("Index out of range (0.." + (steps.size() - 1) + ")"));
+            return 0;
+        }
+        String removed = steps.remove(index);
+        if (steps.isEmpty()) CustomPerm.configManager.getAliases().aliases.remove(name);
+        CustomPerm.configManager.save();
+        resyncCommands(ctx);
+        success(ctx, "Removed step #" + index + " from /" + name + ": " + removed);
+        return 1;
+    }
+
+    private static int aliasSteps(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        var steps = CustomPerm.configManager.getAliases().aliases.get(name);
+        if (steps == null || steps.isEmpty()) {
+            ctx.getSource().sendFailure(Component.literal("No such alias: " + name));
+            return 0;
+        }
+        ctx.getSource().sendSuccess(() -> Component.literal("Steps for /" + name + ":"), false);
+        for (int i = 0; i < steps.size(); i++) {
+            final int idx = i;
+            ctx.getSource().sendSuccess(() -> Component.literal("  #" + idx + ": /" + steps.get(idx)), false);
+        }
+        return 1;
+    }
+
+    private static int aliasRemove(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        if (CustomPerm.configManager.getAliases().aliases.remove(name) == null) {
+            ctx.getSource().sendFailure(Component.literal("No such alias: " + name));
+            return 0;
+        }
+        CustomPerm.configManager.save();
+        resyncCommands(ctx);
+        success(ctx, "Removed alias /" + name);
+        return 1;
+    }
+
+    private static int aliasList(CommandContext<CommandSourceStack> ctx) {
+        var map = CustomPerm.configManager.getAliases().aliases;
+        if (map.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal("No aliases defined."), false);
+        } else {
+            map.forEach((k, v) ->
+                ctx.getSource().sendSuccess(() -> Component.literal("/" + k + "  (" + v.size() + " step" + (v.size() > 1 ? "s" : "") + ")"), false));
+        }
+        return 1;
+    }
+
+    // ---------------- test ----------------
+
+    private static int testPerm(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = EntityArgument.getPlayer(ctx, "player");
+        String node = StringArgumentType.getString(ctx, "node");
+        boolean granted = PermissionService.get().hasPermission(player.createCommandSourceStack(), node);
+        String backend = (CustomPerm.permissions instanceof LuckPermsService) ? "LuckPerms" : "Internal";
+        ChatFormatting color = granted ? ChatFormatting.GREEN : ChatFormatting.RED;
+        String verdict = granted ? "GRANTED" : "DENIED";
+        ctx.getSource().sendSuccess(() -> Component.literal(
+            "[" + backend + "] " + player.getGameProfile().getName() + " :: " + node + " -> " + verdict
+        ).withStyle(color), false);
+        return granted ? 1 : 0;
+    }
+
+    // ---------------- reload ----------------
+
+    private static int reload(CommandContext<CommandSourceStack> ctx) {
+        CustomPerm.configManager.load();
+        resyncCommands(ctx);
+        success(ctx, "Configuration reloaded. Run /reload to rebuild the command tree if aliases changed.");
+        return 1;
+    }
+
+    // ---------------- helpers ----------------
+
+    private static boolean warnIfLuckPerms(CommandContext<CommandSourceStack> ctx) {
+        if (CustomPerm.permissions instanceof LuckPermsService) {
+            ctx.getSource().sendFailure(Component.literal(
+                "LuckPerms is active — manage groups/permissions with /lp instead. The internal grade store is unused."));
+            return true;
+        }
+        return false;
+    }
+
+    private static void success(CommandContext<CommandSourceStack> ctx, String msg) {
+        ctx.getSource().sendSuccess(() -> Component.literal(msg).withStyle(ChatFormatting.GREEN), true);
+    }
+
+    private static void resyncCommands(CommandContext<CommandSourceStack> ctx) {
+        var server = ctx.getSource().getServer();
+        if (server != null) server.getPlayerList().getPlayers().forEach(p -> server.getCommands().sendCommands(p));
+    }
+
+    private static void resyncPlayer(CommandContext<CommandSourceStack> ctx, ServerPlayer p) {
+        var server = ctx.getSource().getServer();
+        if (server != null) server.getCommands().sendCommands(p);
+    }
+}
