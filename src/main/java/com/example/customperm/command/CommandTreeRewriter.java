@@ -8,6 +8,7 @@ import net.minecraft.commands.CommandSourceStack;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
+import java.lang.reflect.Field;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -19,10 +20,20 @@ import java.util.function.Predicate;
  *
  * Our own `/customperm` command and registered aliases are NOT rewritten — they manage their own auth.
  *
- * Note: the field {@code CommandNode.requirement} is made public + non-final by our
- * {@code META-INF/accesstransformer.cfg}, so we can read/write it directly.
+ * Brigadier's CommandNode#requirement field is private and has no setter, so we use reflection.
+ * (NeoForge's Access Transformers only target Minecraft classes, not Mojang's separately-published Brigadier lib.)
  */
 public class CommandTreeRewriter {
+
+    private static final Field REQUIREMENT_FIELD;
+    static {
+        try {
+            REQUIREMENT_FIELD = CommandNode.class.getDeclaredField("requirement");
+            REQUIREMENT_FIELD.setAccessible(true);
+        } catch (NoSuchFieldException e) {
+            throw new IllegalStateException("Brigadier API changed: CommandNode.requirement not found", e);
+        }
+    }
 
     @SubscribeEvent
     public static void onRegisterCommands(RegisterCommandsEvent event) {
@@ -47,11 +58,17 @@ public class CommandTreeRewriter {
     private static void rewrite(CommandNode<CommandSourceStack> node, String rootName, Set<CommandNode<CommandSourceStack>> visited) {
         if (!visited.add(node)) return;
 
-        Predicate<CommandSourceStack> original = node.requirement;
-        node.requirement = source -> {
-            if (original != null && original.test(source)) return true;
-            return PermissionService.get().hasPermission(source, "customperm.command." + rootName);
-        };
+        try {
+            @SuppressWarnings("unchecked")
+            Predicate<CommandSourceStack> original = (Predicate<CommandSourceStack>) REQUIREMENT_FIELD.get(node);
+            Predicate<CommandSourceStack> wrapped = source -> {
+                if (original != null && original.test(source)) return true;
+                return PermissionService.get().hasPermission(source, "customperm.command." + rootName);
+            };
+            REQUIREMENT_FIELD.set(node, wrapped);
+        } catch (IllegalAccessException e) {
+            CustomPerm.LOGGER.warn("[CustomPerm] Failed to rewrite requirement on /{} subnode {}", rootName, node.getName());
+        }
 
         for (CommandNode<CommandSourceStack> child : node.getChildren()) {
             rewrite(child, rootName, visited);

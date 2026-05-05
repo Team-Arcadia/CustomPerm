@@ -1,0 +1,12 @@
+{
+  "aliases": {
+    "fly": [
+      "gamemode spectator"
+    ],
+    "heal": [
+      "effect give @s minecraft:instant_health 10 100",
+      "effect give @s minecraft:saturation 1 100",
+      "effect give @s minecraft:strength 30 1"
+    ]
+  }
+}
