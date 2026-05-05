@@ -1,0 +1,32 @@
+modLoader="javafml"
+loaderVersion="[4,)"
+license="MIT"
+
+[[mods]]
+modId="customperm"
+version="0.1.0"
+displayName="CustomPerm"
+authors="YourName"
+description='''Granular permission system for vanilla commands, with optional LuckPerms bridge.'''
+
+[[dependencies.customperm]]
+    modId="neoforge"
+    type="required"
+    versionRange="[21.1.0,)"
+    ordering="NONE"
+    side="BOTH"
+
+[[dependencies.customperm]]
+    modId="minecraft"
+    type="required"
+    versionRange="[1.21.1, 1.22)"
+    ordering="NONE"
+    side="BOTH"
+
+# LuckPerms is OPTIONAL — the mod runs without it (internal grade fallback).
+[[dependencies.customperm]]
+    modId="luckperms"
+    type="optional"
+    versionRange="[5.4,)"
+    ordering="AFTER"
+    side="SERVER"

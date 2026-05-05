@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>CustomPerm — Procédure de test</title>
+<style>
+    :root {
+        --bg: #1a1d23;
+        --panel: #242830;
+        --border: #3a3f4a;
+        --text: #e6e8eb;
+        --muted: #9ba3af;
+        --accent: #5b9dd9;
+        --green: #50c878;
+        --red: #e85d75;
+        --yellow: #f0c674;
+        --console: #2d4a3e;
+        --client: #4a3e2d;
+    }
+    * { box-sizing: border-box; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 30px 20px;
+        line-height: 1.6;
+    }
+    h1 {
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 10px;
+        margin-bottom: 5px;
+    }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    h2 {
+        margin-top: 40px;
+        padding: 10px 15px;
+        background: var(--panel);
+        border-left: 4px solid var(--accent);
+        border-radius: 4px;
+    }
+    h3 { color: var(--accent); margin-top: 25px; }
+    .test-step {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 15px 20px;
+        margin: 15px 0;
+    }
+    .test-step.passed { border-left: 4px solid var(--green); }
+    .test-step.failed { border-left: 4px solid var(--red); }
+    .step-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+    .step-header input[type=checkbox] {
+        width: 22px; height: 22px;
+        cursor: pointer;
+        accent-color: var(--green);
+    }
+    .step-title {
+        font-weight: 600;
+        font-size: 1.05em;
+        flex: 1;
+    }
+    .step-status {
+        display: flex;
+        gap: 5px;
+    }
+    .step-status button {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        cursor: pointer;
+        border-radius: 3px;
+        font-size: 0.85em;
+    }
+    .step-status button.active-pass { background: var(--green); color: #000; }
+    .step-status button.active-fail { background: var(--red); color: #fff; }
+    .where {
+        display: inline-block;
+        font-size: 0.75em;
+        font-weight: 600;
+        padding: 2px 8px;
+        border-radius: 3px;
+        margin-right: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .where.console { background: var(--console); color: #b6e3c8; }
+    .where.client { background: var(--client); color: #e3cfb6; }
+    pre {
+        background: #0e1014;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 12px 15px;
+        overflow-x: auto;
+        font-family: "Consolas", "Monaco", monospace;
+        font-size: 0.92em;
+        margin: 8px 0;
+    }
+    pre.console::before {
+        content: "Console serveur";
+        display: block;
+        color: #b6e3c8;
+        font-size: 0.75em;
+        font-weight: 600;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    pre.client::before {
+        content: "Client en jeu";
+        display: block;
+        color: #e3cfb6;
+        font-size: 0.75em;
+        font-weight: 600;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .expected {
+        background: rgba(91, 157, 217, 0.1);
+        border-left: 3px solid var(--accent);
+        padding: 8px 12px;
+        margin: 10px 0;
+        font-size: 0.95em;
+    }
+    .expected strong { color: var(--accent); }
+    .pass { color: var(--green); font-weight: 600; }
+    .fail { color: var(--red); font-weight: 600; }
+    .warn { color: var(--yellow); }
+    .summary {
+        position: sticky;
+        top: 0;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px 18px;
+        margin: 20px 0;
+        display: flex;
+        gap: 25px;
+        align-items: center;
+        flex-wrap: wrap;
+        z-index: 10;
+    }
+    .summary span {
+        font-weight: 600;
+    }
+    .summary .total { color: var(--muted); }
+    .summary .ok { color: var(--green); }
+    .summary .ko { color: var(--red); }
+    .summary .pending { color: var(--yellow); }
+    .summary button {
+        padding: 5px 12px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        cursor: pointer;
+        border-radius: 3px;
+    }
+    .checklist-final {
+        background: var(--panel);
+        border-radius: 6px;
+        padding: 20px;
+        margin-top: 30px;
+    }
+    .checklist-final ul {
+        list-style: none;
+        padding: 0;
+    }
+    .checklist-final li {
+        padding: 5px 0;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+    }
+    .note {
+        background: rgba(240, 198, 116, 0.1);
+        border-left: 3px solid var(--yellow);
+        padding: 10px 14px;
+        margin: 12px 0;
+        font-size: 0.95em;
+    }
+    @media print {
+        body { background: white; color: black; max-width: none; }
+        .test-step, .summary, h2 { background: #f5f5f5; border-color: #ccc; }
+        pre { background: #f0f0f0; color: #000; }
+        .summary { position: static; }
+        .step-status { display: none; }
+    }
+</style>
+</head>
+<body>
+
+<h1>CustomPerm — Procédure de test</h1>
+<p class="subtitle">Validation du mod sur NeoForge 1.21.1 avec LuckPerms en backend.</p>
+
+<div class="summary">
+    <span class="total">Total : <span id="total">0</span></span>
+    <span class="ok">Réussis : <span id="ok">0</span></span>
+    <span class="ko">Échoués : <span id="ko">0</span></span>
+    <span class="pending">En attente : <span id="pending">0</span></span>
+    <button onclick="resetAll()">Tout réinitialiser</button>
+</div>
+
+<div class="note">
+    <strong>Conventions :</strong>
+    <span class="where console">Console serveur</span> = fenêtre PowerShell où tourne <code>runServer</code>, commandes <em>sans</em> <code>/</code>.
+    <span class="where client">Client en jeu</span> = fenêtre Minecraft, commandes <em>avec</em> <code>/</code>.
+</div>
+
+<!-- ========== PHASE 0 ========== -->
+<h2>Phase 0 — Vérification du chargement</h2>
+
+<div class="test-step" data-id="0.1">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">0.1 — Vérifier le backend LuckPerms</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <p>Dans la console serveur, remonter dans les logs de démarrage et chercher la ligne suivante :</p>
+    <pre>[CustomPerm] LuckPerms detected — using LuckPerms backend.</pre>
+    <div class="expected"><strong>Attendu :</strong> la ligne est présente. Sinon, c'est le fallback interne qui est actif (à corriger).</div>
+</div>
+
+<!-- ========== PHASE 1 ========== -->
+<h2>Phase 1 — Baseline (Dev sans permission)</h2>
+
+<div class="test-step" data-id="1.1">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">1.1 — S'assurer que Dev n'est pas op</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">deop Dev
+op list</pre>
+    <div class="expected"><strong>Attendu :</strong> sortie <code>There are no operators</code> ou liste ne contenant pas <code>Dev</code>.</div>
+</div>
+
+<div class="test-step" data-id="1.2">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">1.2 — Tenter une commande sans permission</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="client">/gamemode survival</pre>
+    <div class="expected"><strong>Attendu :</strong> <span class="fail">Refus</span> avec <code>Unknown or incomplete command</code>. Le rewriter a bien retiré la commande de l'arbre pour ce joueur.</div>
+</div>
+
+<!-- ========== PHASE 2 ========== -->
+<h2>Phase 2 — Création d'un grade et octroi d'une permission</h2>
+
+<div class="test-step" data-id="2.1">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">2.1 — Créer le groupe vip et lui donner customperm.command.gamemode</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">lp creategroup vip
+lp group vip permission set customperm.command.gamemode true
+lp user Dev parent add vip</pre>
+    <div class="expected"><strong>Attendu :</strong> chaque commande répond <code>Successfully...</code>.</div>
+</div>
+
+<div class="test-step" data-id="2.2">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">2.2 — Vérifier la permission via /customperm test</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm test Dev customperm.command.gamemode</pre>
+    <div class="expected"><strong>Attendu :</strong> <span class="pass">[LuckPerms] Dev :: customperm.command.gamemode -&gt; GRANTED</span> en vert.</div>
+</div>
+
+<div class="test-step" data-id="2.3">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">2.3 — Test critique : commande autorisée pour un non-op</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="client">/gamemode creative</pre>
+    <div class="expected"><strong>Attendu :</strong> <span class="pass">la commande passe</span>, le mode passe en créatif. C'est la fonctionnalité principale du mod.</div>
+</div>
+
+<!-- ========== PHASE 3 ========== -->
+<h2>Phase 3 — Alias simple (1 commande)</h2>
+
+<div class="test-step" data-id="3.1">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">3.1 — Créer l'alias /fly et donner la permission</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm alias add fly gamemode spectator
+lp group vip permission set customperm.alias.fly true
+customperm alias list</pre>
+    <div class="expected"><strong>Attendu :</strong> la liste affiche <code>/fly  (1 step)</code>.</div>
+</div>
+
+<div class="test-step" data-id="3.2">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">3.2 — Exécuter l'alias en jeu</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="client">/fly</pre>
+    <div class="expected"><strong>Attendu :</strong> <span class="pass">passage en mode spectator</span>. Si l'autocomplétion ne propose pas <code>/fly</code>, déconnecte/reconnecte (re-sync du command tree).</div>
+</div>
+
+<!-- ========== PHASE 4 ========== -->
+<h2>Phase 4 — Macro multi-step</h2>
+
+<div class="test-step" data-id="4.1">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">4.1 — Créer un alias /heal avec 3 étapes</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm alias add heal effect give @s minecraft:instant_health 10 100; effect give @s minecraft:saturation 1 100; say bien soigne
+lp group vip permission set customperm.alias.heal true
+customperm alias steps heal</pre>
+    <div class="expected"><strong>Attendu :</strong> <code>customperm alias steps heal</code> affiche 3 lignes (#0, #1, #2).</div>
+</div>
+
+<div class="test-step" data-id="4.2">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">4.2 — Exécuter la macro</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="client">/heal</pre>
+    <div class="expected"><strong>Attendu :</strong> tu reçois l'effet de soin instantané, l'effet saturation, et le serveur dit <code>[Dev] bien soigne</code> dans le chat. Les 3 étapes s'enchaînent.</div>
+</div>
+
+<!-- ========== PHASE 5 ========== -->
+<h2>Phase 5 — Édition d'un alias en jeu</h2>
+
+<div class="test-step" data-id="5.1">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">5.1 — Ajouter un step à un alias existant</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm alias addstep heal effect give @s minecraft:strength 30 1
+customperm alias steps heal</pre>
+    <div class="expected"><strong>Attendu :</strong> 4 steps maintenant (#0, #1, #2, #3).</div>
+</div>
+
+<div class="test-step" data-id="5.2">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">5.2 — Retirer un step par index</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm alias removestep heal 2
+customperm alias steps heal</pre>
+    <div class="expected"><strong>Attendu :</strong> le step <code>say bien soigne</code> a disparu, les autres restent (renumérotés à partir de 0).</div>
+</div>
+
+<!-- ========== PHASE 6 ========== -->
+<h2>Phase 6 — Révocation et propagation immédiate</h2>
+
+<div class="test-step" data-id="6.1">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">6.1 — Retirer le grade au joueur</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">lp user Dev parent remove vip
+customperm test Dev customperm.command.gamemode</pre>
+    <div class="expected"><strong>Attendu :</strong> <span class="fail">[LuckPerms] Dev :: customperm.command.gamemode -&gt; DENIED</span> en rouge.</div>
+</div>
+
+<div class="test-step" data-id="6.2">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">6.2 — Vérifier le refus immédiat côté client</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="client">/gamemode survival</pre>
+    <div class="expected"><strong>Attendu :</strong> <span class="fail">refus</span> à nouveau (<code>Unknown or incomplete command</code>). La révocation s'est bien propagée sans déconnexion.</div>
+</div>
+
+<!-- ========== PHASE 7 ========== -->
+<h2>Phase 7 — Wildcard de permission</h2>
+
+<div class="test-step" data-id="7.1">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">7.1 — Donner customperm.command.* au groupe</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">lp group vip permission set customperm.command.* true
+lp user Dev parent add vip</pre>
+    <div class="expected"><strong>Attendu :</strong> chaque commande répond <code>Successfully...</code>.</div>
+</div>
+
+<div class="test-step" data-id="7.2">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">7.2 — Tester plusieurs commandes vanilla en même temps</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="client">/give @s diamond 64
+/effect give @s minecraft:speed 30 5
+/time set day</pre>
+    <div class="expected"><strong>Attendu :</strong> les 3 commandes passent. Le wildcard couvre toutes les commandes vanilla.</div>
+</div>
+
+<!-- ========== PHASE 8 ========== -->
+<h2>Phase 8 — Edge case : op préserve les droits vanilla</h2>
+
+<div class="test-step" data-id="8.1">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">8.1 — Op le joueur et retirer toutes ses perms LP</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">op Dev
+lp user Dev parent remove vip
+customperm test Dev customperm.command.gamemode</pre>
+    <div class="expected"><strong>Attendu :</strong> le test retourne <span class="fail">DENIED</span> (le test regarde uniquement le node LP, pas l'op-level — comportement par design).</div>
+</div>
+
+<div class="test-step" data-id="8.2">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">8.2 — Vérifier qu'un op a quand même tout</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="client">/gamemode creative</pre>
+    <div class="expected"><strong>Attendu :</strong> <span class="pass">commande autorisée</span>. Le wrapper <code>requires</code> respecte toujours l'op-level original (<code>hasPermission(2)</code>) en plus du node LP.</div>
+</div>
+
+<!-- ========== CHECKLIST FINALE ========== -->
+<div class="checklist-final">
+    <h2 style="background:transparent;padding:0;border:none;margin-top:0;">Checklist finale</h2>
+    <ul>
+        <li><input type="checkbox"> Sans op + sans perm = refusé</li>
+        <li><input type="checkbox"> Sans op + perm LP = autorisé</li>
+        <li><input type="checkbox"> Révocation propagée immédiatement (pas de déconnexion requise)</li>
+        <li><input type="checkbox"> Op niveau 4 = tout autorisé peu importe les nodes</li>
+        <li><input type="checkbox"> Aliases simples fonctionnent</li>
+        <li><input type="checkbox"> Aliases multi-step exécutent toutes les étapes dans l'ordre</li>
+        <li><input type="checkbox"> Édition d'aliases en jeu (addstep / removestep) fonctionne</li>
+        <li><input type="checkbox"> Wildcard <code>customperm.command.*</code> couvre toutes les commandes</li>
+        <li><input type="checkbox"> <code>/customperm test</code> reflète l'état réel des perms LP</li>
+    </ul>
+</div>
+
+<script>
+function setStatus(btn, status) {
+    const step = btn.closest('.test-step');
+    const buttons = step.querySelectorAll('.step-status button');
+    const cb = step.querySelector('input[type=checkbox]');
+    buttons.forEach(b => b.classList.remove('active-pass', 'active-fail'));
+    step.classList.remove('passed', 'failed');
+    if (status === 'pass') {
+        btn.classList.add('active-pass');
+        step.classList.add('passed');
+        cb.checked = true;
+    } else if (status === 'fail') {
+        btn.classList.add('active-fail');
+        step.classList.add('failed');
+        cb.checked = false;
+    }
+    saveState();
+    updateSummary();
+}
+
+function updateSummary() {
+    const steps = document.querySelectorAll('.test-step');
+    let ok = 0, ko = 0, pending = 0;
+    steps.forEach(s => {
+        if (s.classList.contains('passed')) ok++;
+        else if (s.classList.contains('failed')) ko++;
+        else pending++;
+    });
+    document.getElementById('total').textContent = steps.length;
+    document.getElementById('ok').textContent = ok;
+    document.getElementById('ko').textContent = ko;
+    document.getElementById('pending').textContent = pending;
+}
+
+function resetAll() {
+    if (!confirm('Réinitialiser tous les statuts ?')) return;
+    document.querySelectorAll('.test-step').forEach(s => {
+        s.classList.remove('passed', 'failed');
+        s.querySelector('input[type=checkbox]').checked = false;
+        s.querySelectorAll('.step-status button').forEach(b => b.classList.remove('active-pass', 'active-fail'));
+    });
+    document.querySelectorAll('.checklist-final input[type=checkbox]').forEach(cb => cb.checked = false);
+    localStorage.removeItem('customperm-test-state');
+    updateSummary();
+}
+
+function saveState() {
+    const state = {};
+    document.querySelectorAll('.test-step').forEach(s => {
+        const id = s.dataset.id;
+        if (s.classList.contains('passed')) state[id] = 'pass';
+        else if (s.classList.contains('failed')) state[id] = 'fail';
+    });
+    localStorage.setItem('customperm-test-state', JSON.stringify(state));
+}
+
+function loadState() {
+    const raw = localStorage.getItem('customperm-test-state');
+    if (!raw) { updateSummary(); return; }
+    const state = JSON.parse(raw);
+    Object.entries(state).forEach(([id, status]) => {
+        const step = document.querySelector(`.test-step[data-id="${id}"]`);
+        if (!step) return;
+        step.classList.add(status === 'pass' ? 'passed' : 'failed');
+        step.querySelector('input[type=checkbox]').checked = (status === 'pass');
+        const btn = step.querySelector(`.step-status button:${status === 'pass' ? 'first-of-type' : 'last-of-type'}`);
+        if (btn) btn.classList.add(status === 'pass' ? 'active-pass' : 'active-fail');
+    });
+    updateSummary();
+}
+
+document.querySelectorAll('.test-step .step-header input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+        const step = cb.closest('.test-step');
+        if (cb.checked) {
+            const passBtn = step.querySelector('.step-status button:first-of-type');
+            setStatus(passBtn, 'pass');
+        } else {
+            step.classList.remove('passed', 'failed');
+            step.querySelectorAll('.step-status button').forEach(b => b.classList.remove('active-pass', 'active-fail'));
+            saveState();
+            updateSummary();
+        }
+    });
+});
+
+loadState();
+</script>
+
+</body>
+</html>

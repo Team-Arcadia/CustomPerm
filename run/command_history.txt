@@ -1,0 +1,6 @@
+/gamemode creative
+/fly
+/gamemode creative
+/fly
+/luckperms DEV
+/lp
