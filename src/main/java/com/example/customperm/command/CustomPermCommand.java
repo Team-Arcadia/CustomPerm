@@ -23,18 +23,23 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * /customperm grade  create|delete <name>
- *                    addperm|removeperm <grade> <node>
- *                    assign|unassign <player> <grade>
- *                    list
- * /customperm alias  add <name> <cmd1[; cmd2; ...]>     # macro: split on ';'
- *                    addstep <name> <cmd>               # append a step to existing alias
- *                    removestep <name> <index>          # 0-based
- *                    steps <name>                       # show steps
- *                    remove <name>
- *                    list
- * /customperm test   <player> <node>                    # debug: report grant/deny + backend
+ * /customperm command add|remove <name>             # expose / hide a vanilla or modded command
+ *             command list                          # show currently exposed commands
+ * /customperm grade   create|delete <name>
+ *                     addperm|removeperm <grade> <node>
+ *                     assign|unassign <player> <grade>
+ *                     list
+ * /customperm alias   add <name> <cmd1[; cmd2; ...]>    # macro: split on ';'
+ *                     addstep <name> <cmd>              # append a step to existing alias
+ *                     removestep <name> <index>         # 0-based
+ *                     steps <name>                      # show steps
+ *                     remove <name>
+ *                     list
+ * /customperm test    <player> <node>                   # debug: report grant/deny + backend
  * /customperm reload
+ *
+ * The mod ships with NO commands pre-exposed. Each admin chooses what to expose via
+ * /customperm command add. Until exposed, every command keeps its vanilla op-only behaviour.
  *
  * Always requires op level 2 — this is the management command.
  * When LuckPerms is the active backend, grade subcommands print a hint to use `/lp` instead.
@@ -91,13 +96,78 @@ public class CustomPermCommand {
                             .executes(CustomPermCommand::aliasRemove)))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::aliasList)))
+                .then(Commands.literal("command")
+                    .then(Commands.literal("add")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .executes(CustomPermCommand::commandAdd)))
+                    .then(Commands.literal("remove")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .executes(CustomPermCommand::commandRemove)))
+                    .then(Commands.literal("list")
+                        .executes(CustomPermCommand::commandList)))
                 .then(Commands.literal("test")
                     .then(Commands.argument("player", EntityArgument.player())
                         .then(Commands.argument("node", StringArgumentType.greedyString())
                             .executes(CustomPermCommand::testPerm))))
+                .then(Commands.literal("debug")
+                    .then(Commands.argument("player", EntityArgument.player())
+                        .then(Commands.argument("command", StringArgumentType.word())
+                            .executes(CustomPermCommand::debugCheck))))
                 .then(Commands.literal("reload")
                     .executes(CustomPermCommand::reload))
         );
+    }
+
+    // ---------------- command exposure ----------------
+
+    private static int commandAdd(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        if (name.equals("customperm")) {
+            ctx.getSource().sendFailure(Component.literal("Cannot expose /customperm itself."));
+            return 0;
+        }
+        var server = ctx.getSource().getServer();
+        boolean exists = server != null && server.getCommands().getDispatcher().getRoot().getChildren()
+            .stream().anyMatch(n -> n.getName().equals(name));
+        if (!exists) {
+            ctx.getSource().sendFailure(Component.literal(
+                "Command /" + name + " does not exist on this server. Check the spelling and that the providing mod is loaded."));
+            return 0;
+        }
+        boolean added = CustomPerm.configManager.getCommands().grantedCommands.add(name);
+        if (!added) {
+            ctx.getSource().sendFailure(Component.literal("Command /" + name + " is already exposed."));
+            return 0;
+        }
+        CustomPerm.configManager.save();
+        resyncCommands(ctx);
+        success(ctx, "Exposed /" + name + " to the permission system. Grant `customperm.command." + name + "` to authorize.");
+        return 1;
+    }
+
+    private static int commandRemove(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        boolean removed = CustomPerm.configManager.getCommands().grantedCommands.remove(name);
+        if (!removed) {
+            ctx.getSource().sendFailure(Component.literal("Command /" + name + " is not currently exposed."));
+            return 0;
+        }
+        CustomPerm.configManager.save();
+        resyncCommands(ctx);
+        success(ctx, "/" + name + " is no longer exposed. Reverts to its original (vanilla) authorisation.");
+        return 1;
+    }
+
+    private static int commandList(CommandContext<CommandSourceStack> ctx) {
+        var commands = CustomPerm.configManager.getCommands().grantedCommands;
+        if (commands.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "No commands exposed. Use /customperm command add <name> to expose one."), false);
+        } else {
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "Exposed commands: " + String.join(", ", commands)), false);
+        }
+        return 1;
     }
 
     // ---------------- grade ----------------
@@ -298,6 +368,46 @@ public class CustomPermCommand {
         } else {
             map.forEach((k, v) ->
                 ctx.getSource().sendSuccess(() -> Component.literal("/" + k + "  (" + v.size() + " step" + (v.size() > 1 ? "s" : "") + ")"), false));
+        }
+        return 1;
+    }
+
+    // ---------------- debug ----------------
+
+    private static int debugCheck(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
+        ServerPlayer player = EntityArgument.getPlayer(ctx, "player");
+        String cmd = StringArgumentType.getString(ctx, "command");
+        CommandSourceStack source = player.createCommandSourceStack();
+
+        boolean inGrantedList = CustomPerm.configManager.getCommands().grantedCommands.contains(cmd);
+        boolean op2 = source.hasPermission(2);
+        boolean op4 = source.hasPermission(4);
+        String permNode = "customperm.command." + cmd;
+        boolean permGranted = PermissionService.get().hasPermission(source, permNode);
+        boolean shouldPass = op2 || (inGrantedList && permGranted);
+
+        var server = ctx.getSource().getServer();
+        var rootNode = server == null ? null : server.getCommands().getDispatcher().getRoot().getChildren()
+            .stream().filter(n -> n.getName().equals(cmd)).findFirst().orElse(null);
+        boolean actualWrapper = false;
+        if (rootNode != null) {
+            try {
+                actualWrapper = rootNode.canUse(source);
+            } catch (Throwable ignored) {}
+        }
+
+        ctx.getSource().sendSuccess(() -> Component.literal("=== Debug for /" + cmd + " (" + player.getGameProfile().getName() + ") ==="), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Command exists in dispatcher : " + (rootNode != null)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  In granted-commands list    : " + inGrantedList), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Source has op level 2       : " + op2), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Source has op level 4       : " + op4), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  PermService says " + permNode + " : " + permGranted), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Logical decision (computed) : " + shouldPass), false);
+        boolean finalActualWrapper = actualWrapper;
+        ctx.getSource().sendSuccess(() -> Component.literal("  Actual wrapper canUse()     : " + finalActualWrapper).withStyle(
+            finalActualWrapper == shouldPass ? ChatFormatting.GREEN : ChatFormatting.RED), false);
+        if (finalActualWrapper != shouldPass) {
+            ctx.getSource().sendSuccess(() -> Component.literal("  >>> MISMATCH — wrapper does not match expected logic <<<").withStyle(ChatFormatting.RED), false);
         }
         return 1;
     }

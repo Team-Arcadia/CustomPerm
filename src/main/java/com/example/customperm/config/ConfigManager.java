@@ -15,14 +15,17 @@ public class ConfigManager {
     private final Path dir;
     private final Path gradesFile;
     private final Path aliasesFile;
+    private final Path commandsFile;
 
     private GradesConfig grades = new GradesConfig();
     private AliasesConfig aliases = new AliasesConfig();
+    private CommandsConfig commands = new CommandsConfig();
 
     public ConfigManager() {
         this.dir = FMLPaths.CONFIGDIR.get().resolve("customperm");
         this.gradesFile = dir.resolve("grades.json");
         this.aliasesFile = dir.resolve("aliases.json");
+        this.commandsFile = dir.resolve("commands.json");
     }
 
     public void load() {
@@ -36,6 +39,10 @@ public class ConfigManager {
                 AliasesConfig parsed = GSON.fromJson(Files.readString(aliasesFile), AliasesConfig.class);
                 if (parsed != null) aliases = parsed;
             }
+            if (Files.exists(commandsFile)) {
+                CommandsConfig parsed = GSON.fromJson(Files.readString(commandsFile), CommandsConfig.class);
+                if (parsed != null) commands = parsed;
+            }
             save();
         } catch (IOException e) {
             CustomPerm.LOGGER.error("[CustomPerm] Failed to load config", e);
@@ -47,11 +54,13 @@ public class ConfigManager {
             Files.createDirectories(dir);
             Files.writeString(gradesFile, GSON.toJson(grades));
             Files.writeString(aliasesFile, GSON.toJson(aliases));
+            Files.writeString(commandsFile, GSON.toJson(commands));
         } catch (IOException e) {
             CustomPerm.LOGGER.error("[CustomPerm] Failed to save config", e);
         }
     }
 
-    public GradesConfig getGrades() { return grades; }
-    public AliasesConfig getAliases() { return aliases; }
+    public GradesConfig getGrades()     { return grades; }
+    public AliasesConfig getAliases()   { return aliases; }
+    public CommandsConfig getCommands() { return commands; }
 }

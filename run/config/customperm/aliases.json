@@ -6,7 +6,16 @@
     "heal": [
       "effect give @s minecraft:instant_health 10 100",
       "effect give @s minecraft:saturation 1 100",
-      "effect give @s minecraft:strength 30 1"
+      "say bien soigne"
+    ],
+    "boat": [
+      "/give @s minecraft:acacia_boat"
+    ],
+    "test": [
+      "/tp 0 0 0"
+    ],
+    "nathan": [
+      "/gamemode creative"
     ]
   }
 }
