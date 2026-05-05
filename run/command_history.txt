@@ -4,3 +4,31 @@
 /fly
 /luckperms DEV
 /lp
+/gamemode creative
+/fly
+/heal
+/gamemode creative
+/fly
+/heal
+/gamemode creative
+/give @s diamond 64
+/effect give @s minecraft:speed 30 5
+/time set day
+/lp delete vip
+/time set day
+/deop Dev
+/fly
+/heal
+/fly
+/heal
+/fly
+/customperm alias add boat /give @s minecraft:acacia_boat
+/lp group vip permission set customperm.alias.boat true
+/reload
+/boat
+/heal
+/customperm alias add test /tp 0 0 0
+/deop
+/deop Dev
+/fly
+/customperm alias add nathan /gamemode creative

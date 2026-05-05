@@ -35,11 +35,16 @@ public class AliasManager {
                     .requires(src -> src.hasPermission(2) || PermissionService.get().hasPermission(src, permNode))
                     .executes(ctx -> {
                         var server = ctx.getSource().getServer();
+                        // The alias is the *macro* — it grants access by virtue of being granted itself.
+                        // Run inner steps with op level 4 so vanilla / mod-tier commands inside the macro
+                        // don't have to be individually granted to the player. The source still points to
+                        // the player (entity, world, position) — only the permission level is elevated.
+                        var elevated = ctx.getSource().withPermission(4);
                         int executed = 0;
                         for (String step : steps) {
                             if (step == null || step.isBlank()) continue;
                             try {
-                                server.getCommands().performPrefixedCommand(ctx.getSource(), step);
+                                server.getCommands().performPrefixedCommand(elevated, step);
                                 executed++;
                             } catch (Throwable t) {
                                 CustomPerm.LOGGER.warn("[CustomPerm] alias /{} step `{}` threw: {}", alias, step, t.toString());

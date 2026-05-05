@@ -163,6 +163,90 @@
         cursor: pointer;
         border-radius: 3px;
     }
+    .summary button.primary {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+        font-weight: 600;
+    }
+    .notes {
+        margin-top: 10px;
+    }
+    .notes textarea {
+        width: 100%;
+        min-height: 50px;
+        background: #0e1014;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 8px 10px;
+        font-family: inherit;
+        font-size: 0.92em;
+        resize: vertical;
+    }
+    .notes textarea:focus {
+        outline: none;
+        border-color: var(--accent);
+    }
+    .notes label {
+        font-size: 0.85em;
+        color: var(--muted);
+        display: block;
+        margin-bottom: 4px;
+    }
+    #exportModal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+    }
+    #exportModal.show { display: flex; }
+    #exportModal .modal-inner {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 20px;
+        max-width: 800px;
+        width: 90%;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    #exportModal textarea {
+        width: 100%;
+        flex: 1;
+        min-height: 400px;
+        background: #0e1014;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 12px;
+        font-family: "Consolas", "Monaco", monospace;
+        font-size: 0.85em;
+        resize: vertical;
+    }
+    #exportModal .modal-buttons {
+        display: flex;
+        gap: 10px;
+        justify-content: flex-end;
+    }
+    #exportModal button {
+        padding: 8px 16px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        cursor: pointer;
+        border-radius: 3px;
+    }
+    #exportModal button.primary {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+    }
     .checklist-final {
         background: var(--panel);
         border-radius: 6px;
@@ -205,7 +289,20 @@
     <span class="ok">Réussis : <span id="ok">0</span></span>
     <span class="ko">Échoués : <span id="ko">0</span></span>
     <span class="pending">En attente : <span id="pending">0</span></span>
+    <button class="primary" onclick="exportResults()">Exporter les résultats</button>
     <button onclick="resetAll()">Tout réinitialiser</button>
+</div>
+
+<div id="exportModal">
+    <div class="modal-inner">
+        <h3 style="margin:0;">Résultats à copier-coller</h3>
+        <p style="margin:0;color:var(--muted);font-size:0.9em;">Sélectionne tout (<kbd>Ctrl+A</kbd>) puis copie (<kbd>Ctrl+C</kbd>), et colle dans le chat.</p>
+        <textarea id="exportText" readonly></textarea>
+        <div class="modal-buttons">
+            <button onclick="copyExport()">Copier dans le presse-papiers</button>
+            <button onclick="closeExport()">Fermer</button>
+        </div>
+    </div>
 </div>
 
 <div class="note">
@@ -226,6 +323,10 @@
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
     </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
     <p>Dans la console serveur, remonter dans les logs de démarrage et chercher la ligne suivante :</p>
     <pre>[CustomPerm] LuckPerms detected — using LuckPerms backend.</pre>
     <div class="expected"><strong>Attendu :</strong> la ligne est présente. Sinon, c'est le fallback interne qui est actif (à corriger).</div>
@@ -243,6 +344,10 @@
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
     </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
     <pre class="console">deop Dev
 op list</pre>
     <div class="expected"><strong>Attendu :</strong> sortie <code>There are no operators</code> ou liste ne contenant pas <code>Dev</code>.</div>
@@ -257,12 +362,34 @@ op list</pre>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
     </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
     <pre class="client">/gamemode survival</pre>
     <div class="expected"><strong>Attendu :</strong> <span class="fail">Refus</span> avec <code>Unknown or incomplete command</code>. Le rewriter a bien retiré la commande de l'arbre pour ce joueur.</div>
 </div>
 
 <!-- ========== PHASE 2 ========== -->
-<h2>Phase 2 — Création d'un grade et octroi d'une permission</h2>
+<h2>Phase 2 — Exposition d'une commande, création d'un grade et octroi d'une permission</h2>
+
+<div class="test-step" data-id="2.0">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title">2.0 — Exposer /gamemode au système de permissions</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm command add gamemode
+customperm command list</pre>
+    <div class="expected"><strong>Attendu :</strong> la liste affiche <code>Exposed commands: gamemode</code>. Sans cette étape préalable, aucune permission ne peut affecter <code>/gamemode</code> : la commande reste sur son comportement vanilla op-only.</div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
+</div>
 
 <div class="test-step" data-id="2.1">
     <div class="step-header">
@@ -272,6 +399,10 @@ op list</pre>
             <button onclick="setStatus(this,'pass')">Pass</button>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
+    </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
     </div>
     <pre class="console">lp creategroup vip
 lp group vip permission set customperm.command.gamemode true
@@ -288,6 +419,10 @@ lp user Dev parent add vip</pre>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
     </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
     <pre class="console">customperm test Dev customperm.command.gamemode</pre>
     <div class="expected"><strong>Attendu :</strong> <span class="pass">[LuckPerms] Dev :: customperm.command.gamemode -&gt; GRANTED</span> en vert.</div>
 </div>
@@ -300,6 +435,10 @@ lp user Dev parent add vip</pre>
             <button onclick="setStatus(this,'pass')">Pass</button>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
+    </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
     </div>
     <pre class="client">/gamemode creative</pre>
     <div class="expected"><strong>Attendu :</strong> <span class="pass">la commande passe</span>, le mode passe en créatif. C'est la fonctionnalité principale du mod.</div>
@@ -317,6 +456,10 @@ lp user Dev parent add vip</pre>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
     </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
     <pre class="console">customperm alias add fly gamemode spectator
 lp group vip permission set customperm.alias.fly true
 customperm alias list</pre>
@@ -331,6 +474,10 @@ customperm alias list</pre>
             <button onclick="setStatus(this,'pass')">Pass</button>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
+    </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
     </div>
     <pre class="client">/fly</pre>
     <div class="expected"><strong>Attendu :</strong> <span class="pass">passage en mode spectator</span>. Si l'autocomplétion ne propose pas <code>/fly</code>, déconnecte/reconnecte (re-sync du command tree).</div>
@@ -348,6 +495,10 @@ customperm alias list</pre>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
     </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
     <pre class="console">customperm alias add heal effect give @s minecraft:instant_health 10 100; effect give @s minecraft:saturation 1 100; say bien soigne
 lp group vip permission set customperm.alias.heal true
 customperm alias steps heal</pre>
@@ -362,6 +513,10 @@ customperm alias steps heal</pre>
             <button onclick="setStatus(this,'pass')">Pass</button>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
+    </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
     </div>
     <pre class="client">/heal</pre>
     <div class="expected"><strong>Attendu :</strong> tu reçois l'effet de soin instantané, l'effet saturation, et le serveur dit <code>[Dev] bien soigne</code> dans le chat. Les 3 étapes s'enchaînent.</div>
@@ -379,6 +534,10 @@ customperm alias steps heal</pre>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
     </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
     <pre class="console">customperm alias addstep heal effect give @s minecraft:strength 30 1
 customperm alias steps heal</pre>
     <div class="expected"><strong>Attendu :</strong> 4 steps maintenant (#0, #1, #2, #3).</div>
@@ -392,6 +551,10 @@ customperm alias steps heal</pre>
             <button onclick="setStatus(this,'pass')">Pass</button>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
+    </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
     </div>
     <pre class="console">customperm alias removestep heal 2
 customperm alias steps heal</pre>
@@ -410,6 +573,10 @@ customperm alias steps heal</pre>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
     </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
     <pre class="console">lp user Dev parent remove vip
 customperm test Dev customperm.command.gamemode</pre>
     <div class="expected"><strong>Attendu :</strong> <span class="fail">[LuckPerms] Dev :: customperm.command.gamemode -&gt; DENIED</span> en rouge.</div>
@@ -424,6 +591,10 @@ customperm test Dev customperm.command.gamemode</pre>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
     </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
     <pre class="client">/gamemode survival</pre>
     <div class="expected"><strong>Attendu :</strong> <span class="fail">refus</span> à nouveau (<code>Unknown or incomplete command</code>). La révocation s'est bien propagée sans déconnexion.</div>
 </div>
@@ -434,15 +605,22 @@ customperm test Dev customperm.command.gamemode</pre>
 <div class="test-step" data-id="7.1">
     <div class="step-header">
         <input type="checkbox">
-        <div class="step-title">7.1 — Donner customperm.command.* au groupe</div>
+        <div class="step-title">7.1 — Exposer plusieurs commandes et donner le wildcard au groupe</div>
         <div class="step-status">
             <button onclick="setStatus(this,'pass')">Pass</button>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
     </div>
-    <pre class="console">lp group vip permission set customperm.command.* true
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
+    <pre class="console">customperm command add give
+customperm command add effect
+customperm command add time
+lp group vip permission set customperm.command.* true
 lp user Dev parent add vip</pre>
-    <div class="expected"><strong>Attendu :</strong> chaque commande répond <code>Successfully...</code>.</div>
+    <div class="expected"><strong>Attendu :</strong> chaque commande répond <code>Successfully...</code>. Note : seules les commandes <em>exposées</em> sont affectées par le wildcard. Les autres commandes vanilla restent op-only.</div>
 </div>
 
 <div class="test-step" data-id="7.2">
@@ -453,6 +631,10 @@ lp user Dev parent add vip</pre>
             <button onclick="setStatus(this,'pass')">Pass</button>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
+    </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
     </div>
     <pre class="client">/give @s diamond 64
 /effect give @s minecraft:speed 30 5
@@ -472,6 +654,10 @@ lp user Dev parent add vip</pre>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
     </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
+    </div>
     <pre class="console">op Dev
 lp user Dev parent remove vip
 customperm test Dev customperm.command.gamemode</pre>
@@ -486,6 +672,10 @@ customperm test Dev customperm.command.gamemode</pre>
             <button onclick="setStatus(this,'pass')">Pass</button>
             <button onclick="setStatus(this,'fail')">Fail</button>
         </div>
+    </div>
+    <div class="notes">
+        <label>Notes (observation, message d'erreur, comportement inattendu) :</label>
+        <textarea placeholder="Optionnel — décris ce que tu as vu" oninput="saveState()"></textarea>
     </div>
     <pre class="client">/gamemode creative</pre>
     <div class="expected"><strong>Attendu :</strong> <span class="pass">commande autorisée</span>. Le wrapper <code>requires</code> respecte toujours l'op-level original (<code>hasPermission(2)</code>) en plus du node LP.</div>
@@ -549,6 +739,7 @@ function resetAll() {
         s.querySelectorAll('.step-status button').forEach(b => b.classList.remove('active-pass', 'active-fail'));
     });
     document.querySelectorAll('.checklist-final input[type=checkbox]').forEach(cb => cb.checked = false);
+    document.querySelectorAll('.notes textarea').forEach(t => t.value = '');
     localStorage.removeItem('customperm-test-state');
     updateSummary();
 }
@@ -557,8 +748,11 @@ function saveState() {
     const state = {};
     document.querySelectorAll('.test-step').forEach(s => {
         const id = s.dataset.id;
-        if (s.classList.contains('passed')) state[id] = 'pass';
-        else if (s.classList.contains('failed')) state[id] = 'fail';
+        const note = s.querySelector('.notes textarea')?.value || '';
+        let status = null;
+        if (s.classList.contains('passed')) status = 'pass';
+        else if (s.classList.contains('failed')) status = 'fail';
+        if (status || note) state[id] = { status, note };
     });
     localStorage.setItem('customperm-test-state', JSON.stringify(state));
 }
@@ -567,15 +761,83 @@ function loadState() {
     const raw = localStorage.getItem('customperm-test-state');
     if (!raw) { updateSummary(); return; }
     const state = JSON.parse(raw);
-    Object.entries(state).forEach(([id, status]) => {
+    Object.entries(state).forEach(([id, data]) => {
         const step = document.querySelector(`.test-step[data-id="${id}"]`);
         if (!step) return;
-        step.classList.add(status === 'pass' ? 'passed' : 'failed');
-        step.querySelector('input[type=checkbox]').checked = (status === 'pass');
-        const btn = step.querySelector(`.step-status button:${status === 'pass' ? 'first-of-type' : 'last-of-type'}`);
-        if (btn) btn.classList.add(status === 'pass' ? 'active-pass' : 'active-fail');
+        // backward compat: data could be a string
+        const status = (typeof data === 'string') ? data : data.status;
+        const note = (typeof data === 'string') ? '' : (data.note || '');
+        if (status === 'pass' || status === 'fail') {
+            step.classList.add(status === 'pass' ? 'passed' : 'failed');
+            step.querySelector('input[type=checkbox]').checked = (status === 'pass');
+            const btn = step.querySelector(`.step-status button:${status === 'pass' ? 'first-of-type' : 'last-of-type'}`);
+            if (btn) btn.classList.add(status === 'pass' ? 'active-pass' : 'active-fail');
+        }
+        const noteField = step.querySelector('.notes textarea');
+        if (noteField) noteField.value = note;
     });
     updateSummary();
+}
+
+function exportResults() {
+    const lines = [];
+    const total = document.querySelectorAll('.test-step').length;
+    const ok = document.getElementById('ok').textContent;
+    const ko = document.getElementById('ko').textContent;
+    const pending = document.getElementById('pending').textContent;
+
+    lines.push('# CustomPerm — Résultats de test');
+    lines.push('');
+    lines.push(`**Bilan :** ${ok}/${total} réussis · ${ko} échoués · ${pending} en attente`);
+    lines.push(`**Date :** ${new Date().toLocaleString('fr-FR')}`);
+    lines.push('');
+
+    // Group by phase (h2)
+    let currentPhase = null;
+    document.querySelectorAll('h2, .test-step').forEach(el => {
+        if (el.tagName === 'H2') {
+            currentPhase = el.textContent.trim();
+            lines.push('');
+            lines.push(`## ${currentPhase}`);
+        } else {
+            const id = el.dataset.id;
+            const title = el.querySelector('.step-title').textContent.trim();
+            let symbol = '[ ]';
+            if (el.classList.contains('passed')) symbol = '[PASS]';
+            else if (el.classList.contains('failed')) symbol = '[FAIL]';
+            const note = el.querySelector('.notes textarea').value.trim();
+            lines.push(`- ${symbol} ${title}`);
+            if (note) {
+                note.split('\n').forEach(l => lines.push(`    > ${l}`));
+            }
+        }
+    });
+
+    // Final checklist
+    lines.push('');
+    lines.push('## Checklist finale');
+    document.querySelectorAll('.checklist-final li').forEach(li => {
+        const cb = li.querySelector('input[type=checkbox]');
+        const text = li.textContent.trim();
+        lines.push(`- [${cb.checked ? 'x' : ' '}] ${text}`);
+    });
+
+    document.getElementById('exportText').value = lines.join('\n');
+    document.getElementById('exportModal').classList.add('show');
+}
+
+function closeExport() {
+    document.getElementById('exportModal').classList.remove('show');
+}
+
+function copyExport() {
+    const ta = document.getElementById('exportText');
+    ta.select();
+    document.execCommand('copy');
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = 'Copié !';
+    setTimeout(() => btn.textContent = orig, 1500);
 }
 
 document.querySelectorAll('.test-step .step-header input[type=checkbox]').forEach(cb => {
