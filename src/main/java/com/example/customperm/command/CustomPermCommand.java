@@ -113,6 +113,12 @@ public class CustomPermCommand {
                     .then(Commands.argument("player", EntityArgument.player())
                         .then(Commands.argument("command", StringArgumentType.word())
                             .executes(CustomPermCommand::debugCheck))))
+                .then(Commands.literal("status")
+                    .executes(CustomPermCommand::status))
+                .then(Commands.literal("scan")
+                    .executes(CustomPermCommand::scanAll)
+                    .then(Commands.argument("pattern", StringArgumentType.word())
+                        .executes(CustomPermCommand::scanPattern)))
                 .then(Commands.literal("reload")
                     .executes(CustomPermCommand::reload))
         );
@@ -292,11 +298,31 @@ public class CustomPermCommand {
             ctx.getSource().sendFailure(Component.literal("No commands provided."));
             return 0;
         }
+
+        // Collision warning: if an existing real (non-alias) command has this name,
+        // adding the alias will shadow it. The admin can still proceed.
+        var server = ctx.getSource().getServer();
+        boolean shadowsExisting = false;
+        if (server != null && !CustomPerm.configManager.getAliases().aliases.containsKey(name)) {
+            shadowsExisting = server.getCommands().getDispatcher().getRoot().getChildren()
+                .stream().anyMatch(n -> n.getName().equals(name));
+        }
+
         CustomPerm.configManager.getAliases().aliases.put(name, steps);
         CustomPerm.configManager.save();
         refreshAlias(ctx, name);
         resyncCommands(ctx);
-        success(ctx, "Alias /" + name + " set with " + steps.size() + " step(s)  (perm: customperm.alias." + name + ")");
+
+        if (shadowsExisting) {
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "WARNING: /" + name + " shadows an existing command. Players will need `customperm.alias." + name +
+                "` (not the command's own perm) to use it."
+            ).withStyle(ChatFormatting.YELLOW), true);
+        }
+        success(ctx, "Alias /" + name + " set with " + steps.size() + " step(s).");
+        ctx.getSource().sendSuccess(() -> Component.literal(
+            "  Permission node: customperm.alias." + name + "  |  Steps run with op-level 4 — only grant to trusted users."
+        ).withStyle(ChatFormatting.GRAY), false);
         return 1;
     }
 
@@ -437,6 +463,82 @@ public class CustomPermCommand {
             "[" + backend + "] " + player.getGameProfile().getName() + " :: " + node + " -> " + verdict
         ).withStyle(color), false);
         return granted ? 1 : 0;
+    }
+
+    // ---------------- status / scan ----------------
+
+    private static int status(CommandContext<CommandSourceStack> ctx) {
+        var server = ctx.getSource().getServer();
+        String backend = (CustomPerm.permissions instanceof LuckPermsService) ? "LuckPerms" : "Internal";
+        int totalCmds = server == null ? 0 : server.getCommands().getDispatcher().getRoot().getChildren().size();
+        int exposed = CustomPerm.configManager.getCommands().grantedCommands.size();
+        int aliases = CustomPerm.configManager.getAliases().aliases.size();
+        int grades = CustomPerm.configManager.getGrades().grades.size();
+        int users = CustomPerm.configManager.getGrades().userGrades.size();
+
+        ctx.getSource().sendSuccess(() -> Component.literal("=== CustomPerm Status ===").withStyle(ChatFormatting.AQUA), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Backend            : " + backend), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Dispatcher commands: " + totalCmds + " (vanilla + mods + aliases)"), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Exposed commands   : " + exposed), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Custom aliases     : " + aliases), false);
+        if (!(CustomPerm.permissions instanceof LuckPermsService)) {
+            ctx.getSource().sendSuccess(() -> Component.literal("  Internal grades    : " + grades), false);
+            ctx.getSource().sendSuccess(() -> Component.literal("  Users with grade   : " + users), false);
+        } else {
+            ctx.getSource().sendSuccess(() -> Component.literal("  (Grades & user perms managed by /lp)").withStyle(ChatFormatting.GRAY), false);
+        }
+        return 1;
+    }
+
+    private static int scanAll(CommandContext<CommandSourceStack> ctx) {
+        return scan(ctx, null);
+    }
+
+    private static int scanPattern(CommandContext<CommandSourceStack> ctx) {
+        return scan(ctx, StringArgumentType.getString(ctx, "pattern"));
+    }
+
+    private static int scan(CommandContext<CommandSourceStack> ctx, String pattern) {
+        var server = ctx.getSource().getServer();
+        if (server == null) {
+            ctx.getSource().sendFailure(Component.literal("No server context."));
+            return 0;
+        }
+        Set<String> exposed = CustomPerm.configManager.getCommands().grantedCommands;
+        Set<String> aliasNames = CustomPerm.configManager.getAliases().aliases.keySet();
+
+        List<String> rootNames = new ArrayList<>();
+        for (var node : server.getCommands().getDispatcher().getRoot().getChildren()) {
+            rootNames.add(node.getName());
+        }
+        rootNames.sort(String::compareTo);
+
+        int displayed = 0;
+        for (String name : rootNames) {
+            if (pattern != null && !name.contains(pattern)) continue;
+            String marker;
+            ChatFormatting color;
+            if (name.equals("customperm")) {
+                marker = "[ MOD  ] "; color = ChatFormatting.LIGHT_PURPLE;
+            } else if (aliasNames.contains(name)) {
+                marker = "[ALIAS ] "; color = ChatFormatting.AQUA;
+            } else if (exposed.contains(name)) {
+                marker = "[EXPO  ] "; color = ChatFormatting.GREEN;
+            } else {
+                marker = "[      ] "; color = ChatFormatting.GRAY;
+            }
+            final String row = marker + "/" + name;
+            final ChatFormatting c = color;
+            ctx.getSource().sendSuccess(() -> Component.literal(row).withStyle(c), false);
+            displayed++;
+        }
+        if (displayed == 0) {
+            ctx.getSource().sendFailure(Component.literal("No commands matched" + (pattern != null ? " '" + pattern + "'." : ".")));
+            return 0;
+        }
+        final int finalCount = displayed;
+        ctx.getSource().sendSuccess(() -> Component.literal("--- " + finalCount + " command(s) shown. Legend: EXPO=exposed, ALIAS=custom, MOD=this mod ---").withStyle(ChatFormatting.GRAY), false);
+        return 1;
     }
 
     // ---------------- reload ----------------
