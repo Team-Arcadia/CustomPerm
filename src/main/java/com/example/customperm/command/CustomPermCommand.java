@@ -294,6 +294,7 @@ public class CustomPermCommand {
         }
         CustomPerm.configManager.getAliases().aliases.put(name, steps);
         CustomPerm.configManager.save();
+        refreshAlias(ctx, name);
         resyncCommands(ctx);
         success(ctx, "Alias /" + name + " set with " + steps.size() + " step(s)  (perm: customperm.alias." + name + ")");
         return 1;
@@ -309,6 +310,7 @@ public class CustomPermCommand {
         var aliases = CustomPerm.configManager.getAliases().aliases;
         aliases.computeIfAbsent(name, k -> new ArrayList<>()).add(cmd);
         CustomPerm.configManager.save();
+        refreshAlias(ctx, name);
         resyncCommands(ctx);
         success(ctx, "Appended step #" + (aliases.get(name).size() - 1) + " to /" + name + ": " + cmd);
         return 1;
@@ -329,6 +331,7 @@ public class CustomPermCommand {
         String removed = steps.remove(index);
         if (steps.isEmpty()) CustomPerm.configManager.getAliases().aliases.remove(name);
         CustomPerm.configManager.save();
+        refreshAlias(ctx, name);
         resyncCommands(ctx);
         success(ctx, "Removed step #" + index + " from /" + name + ": " + removed);
         return 1;
@@ -356,9 +359,17 @@ public class CustomPermCommand {
             return 0;
         }
         CustomPerm.configManager.save();
+        refreshAlias(ctx, name);
         resyncCommands(ctx);
         success(ctx, "Removed alias /" + name);
         return 1;
+    }
+
+    private static void refreshAlias(CommandContext<CommandSourceStack> ctx, String name) {
+        var server = ctx.getSource().getServer();
+        if (server != null) {
+            AliasManager.registerOrReplace(server.getCommands().getDispatcher(), name);
+        }
     }
 
     private static int aliasList(CommandContext<CommandSourceStack> ctx) {
@@ -396,7 +407,8 @@ public class CustomPermCommand {
             } catch (Throwable ignored) {}
         }
 
-        ctx.getSource().sendSuccess(() -> Component.literal("=== Debug for /" + cmd + " (" + player.getGameProfile().getName() + ") ==="), false);
+        String backend = (CustomPerm.permissions instanceof LuckPermsService) ? "LuckPerms" : "Internal";
+        ctx.getSource().sendSuccess(() -> Component.literal("=== Debug for /" + cmd + " (" + player.getGameProfile().getName() + ") [backend: " + backend + "] ==="), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Command exists in dispatcher : " + (rootNode != null)), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  In granted-commands list    : " + inGrantedList), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Source has op level 2       : " + op2), false);

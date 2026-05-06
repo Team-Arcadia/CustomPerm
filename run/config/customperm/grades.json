@@ -1,4 +1,16 @@
 {
-  "grades": {},
-  "userGrades": {}
+  "grades": {
+    "vip": {
+      "name": "vip",
+      "permissions": [
+        "customperm.alias.heal",
+        "customperm.alias.fly"
+      ]
+    }
+  },
+  "userGrades": {
+    "380df991-f603-344c-a090-369bad2a924a": [
+      "vip"
+    ]
+  }
 }
