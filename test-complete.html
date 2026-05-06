@@ -1,0 +1,1038 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>CustomPerm — Procédure de test complète</title>
+<style>
+    :root {
+        --bg: #1a1d23;
+        --panel: #242830;
+        --border: #3a3f4a;
+        --text: #e6e8eb;
+        --muted: #9ba3af;
+        --accent: #5b9dd9;
+        --green: #50c878;
+        --red: #e85d75;
+        --yellow: #f0c674;
+        --lp: #6f8ad9;
+        --internal: #c89868;
+    }
+    * { box-sizing: border-box; }
+    body {
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 30px 20px;
+        line-height: 1.6;
+    }
+    h1 {
+        border-bottom: 2px solid var(--accent);
+        padding-bottom: 10px;
+        margin-bottom: 5px;
+    }
+    .subtitle { color: var(--muted); margin-top: 0; }
+    h2 {
+        margin-top: 40px;
+        padding: 10px 15px;
+        background: var(--panel);
+        border-left: 4px solid var(--accent);
+        border-radius: 4px;
+    }
+    .section-banner {
+        margin: 50px 0 25px;
+        padding: 18px 25px;
+        border-radius: 8px;
+        font-size: 1.4em;
+        font-weight: 700;
+        text-align: center;
+        letter-spacing: 0.5px;
+    }
+    .section-banner.lp {
+        background: linear-gradient(135deg, var(--lp) 0%, #4a6dab 100%);
+        color: white;
+        border: 2px solid var(--lp);
+    }
+    .section-banner.internal {
+        background: linear-gradient(135deg, var(--internal) 0%, #a07d4f 100%);
+        color: white;
+        border: 2px solid var(--internal);
+    }
+    .section-banner .label {
+        font-size: 0.6em;
+        font-weight: 500;
+        opacity: 0.85;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        display: block;
+        margin-bottom: 4px;
+    }
+    .test-step {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 15px 20px;
+        margin: 15px 0;
+    }
+    .test-step.passed { border-left: 4px solid var(--green); }
+    .test-step.failed { border-left: 4px solid var(--red); }
+    .test-step.lp-mode { border-right: 3px solid var(--lp); }
+    .test-step.internal-mode { border-right: 3px solid var(--internal); }
+    .step-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 10px;
+    }
+    .step-header input[type=checkbox] {
+        width: 22px; height: 22px;
+        cursor: pointer;
+        accent-color: var(--green);
+    }
+    .step-title { font-weight: 600; font-size: 1.05em; flex: 1; }
+    .badge {
+        font-size: 0.7em;
+        font-weight: 700;
+        padding: 2px 8px;
+        border-radius: 3px;
+        margin-right: 8px;
+        text-transform: uppercase;
+    }
+    .badge.lp { background: var(--lp); color: white; }
+    .badge.internal { background: var(--internal); color: white; }
+    .badge.both { background: var(--accent); color: white; }
+    .badge.crit { background: var(--yellow); color: #000; }
+    .step-status { display: flex; gap: 5px; }
+    .step-status button {
+        padding: 4px 10px;
+        border: 1px solid var(--border);
+        background: var(--bg);
+        color: var(--text);
+        cursor: pointer;
+        border-radius: 3px;
+        font-size: 0.85em;
+    }
+    .step-status button.active-pass { background: var(--green); color: #000; }
+    .step-status button.active-fail { background: var(--red); color: #fff; }
+    pre {
+        background: #0e1014;
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 12px 15px;
+        overflow-x: auto;
+        font-family: "Consolas", "Monaco", monospace;
+        font-size: 0.92em;
+        margin: 8px 0;
+    }
+    pre.console::before {
+        content: "Console serveur";
+        display: block;
+        color: #b6e3c8;
+        font-size: 0.75em;
+        font-weight: 600;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    pre.client::before {
+        content: "Client en jeu";
+        display: block;
+        color: #e3cfb6;
+        font-size: 0.75em;
+        font-weight: 600;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    pre.ps::before {
+        content: "PowerShell";
+        display: block;
+        color: #b6c7e3;
+        font-size: 0.75em;
+        font-weight: 600;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    pre.expected::before {
+        content: "Sortie attendue";
+        display: block;
+        color: var(--accent);
+        font-size: 0.75em;
+        font-weight: 600;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .expected-block {
+        background: rgba(91, 157, 217, 0.1);
+        border-left: 3px solid var(--accent);
+        padding: 10px 14px;
+        margin: 10px 0;
+        font-size: 0.95em;
+    }
+    .danger-block {
+        background: rgba(232, 93, 117, 0.1);
+        border-left: 3px solid var(--red);
+        padding: 10px 14px;
+        margin: 10px 0;
+        font-size: 0.95em;
+    }
+    .capture {
+        background: rgba(160, 100, 200, 0.08);
+        border-left: 3px solid #a064c8;
+        padding: 12px 14px;
+        margin: 12px 0;
+    }
+    .capture label {
+        display: block;
+        font-weight: 600;
+        font-size: 0.9em;
+        color: #c8a4e0;
+        margin-bottom: 6px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .capture textarea {
+        width: 100%;
+        min-height: 100px;
+        background: #0e1014;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 8px 10px;
+        font-family: "Consolas", "Monaco", monospace;
+        font-size: 0.88em;
+        resize: vertical;
+    }
+    .capture textarea:focus { outline: none; border-color: #a064c8; }
+    .pass { color: var(--green); font-weight: 600; }
+    .fail { color: var(--red); font-weight: 600; }
+    .summary {
+        position: sticky;
+        top: 0;
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 12px 18px;
+        margin: 20px 0;
+        display: flex;
+        gap: 15px;
+        align-items: center;
+        flex-wrap: wrap;
+        z-index: 10;
+    }
+    .summary span { font-weight: 600; }
+    .summary .total { color: var(--muted); }
+    .summary .ok { color: var(--green); }
+    .summary .ko { color: var(--red); }
+    .summary .pending { color: var(--yellow); }
+    .summary .lp-cnt { color: var(--lp); }
+    .summary .int-cnt { color: var(--internal); }
+    .summary button {
+        padding: 5px 12px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        cursor: pointer;
+        border-radius: 3px;
+    }
+    .summary button.primary {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+        font-weight: 600;
+    }
+    .note {
+        background: rgba(240, 198, 116, 0.1);
+        border-left: 3px solid var(--yellow);
+        padding: 10px 14px;
+        margin: 12px 0;
+        font-size: 0.95em;
+    }
+    .transition {
+        background: var(--panel);
+        border: 2px dashed var(--yellow);
+        border-radius: 8px;
+        padding: 20px 25px;
+        margin: 40px 0;
+    }
+    .transition h3 {
+        margin: 0 0 12px;
+        color: var(--yellow);
+    }
+    #exportModal {
+        display: none;
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.7);
+        z-index: 100;
+        align-items: center;
+        justify-content: center;
+    }
+    #exportModal.show { display: flex; }
+    #exportModal .modal-inner {
+        background: var(--panel);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 20px;
+        max-width: 800px;
+        width: 90%;
+        max-height: 80vh;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+    }
+    #exportModal textarea {
+        width: 100%;
+        flex: 1;
+        min-height: 400px;
+        background: #0e1014;
+        color: var(--text);
+        border: 1px solid var(--border);
+        border-radius: 3px;
+        padding: 12px;
+        font-family: "Consolas", "Monaco", monospace;
+        font-size: 0.85em;
+    }
+    #exportModal .modal-buttons { display: flex; gap: 10px; justify-content: flex-end; }
+    #exportModal button {
+        padding: 8px 16px;
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        cursor: pointer;
+        border-radius: 3px;
+    }
+    #exportModal button.primary {
+        background: var(--accent);
+        color: white;
+        border-color: var(--accent);
+    }
+    .verdict {
+        background: var(--panel);
+        border: 2px solid var(--green);
+        border-radius: 6px;
+        padding: 20px;
+        margin: 30px 0 20px;
+    }
+    .verdict h2 { margin: 0 0 12px; background: transparent; border: none; padding: 0; }
+    .verdict ul { margin: 5px 0; padding-left: 22px; }
+    .verdict li { margin: 4px 0; }
+    @media print {
+        body { background: white; color: black; max-width: none; }
+        .test-step, .summary, .section-banner, h2, .transition, .verdict {
+            background: #f5f5f5; border-color: #ccc; color: black;
+        }
+        pre { background: #f0f0f0; color: #000; }
+        .summary { position: static; }
+        .step-status { display: none; }
+        .section-banner.lp, .section-banner.internal { color: black; }
+    }
+</style>
+</head>
+<body>
+
+<h1>CustomPerm — Procédure de test complète</h1>
+<p class="subtitle">Validation du mod en mode <strong style="color:var(--lp)">LuckPerms</strong> et en mode <strong style="color:var(--internal)">Internal (sans LP)</strong>.</p>
+
+<div class="summary">
+    <span class="total">Total : <span id="total">0</span></span>
+    <span class="ok">OK : <span id="ok">0</span></span>
+    <span class="ko">KO : <span id="ko">0</span></span>
+    <span class="pending">En attente : <span id="pending">0</span></span>
+    <span style="color:var(--muted);">|</span>
+    <span class="lp-cnt">LP : <span id="lp-ok">0</span>/<span id="lp-tot">0</span></span>
+    <span class="int-cnt">Internal : <span id="int-ok">0</span>/<span id="int-tot">0</span></span>
+    <button class="primary" onclick="exportResults()">Exporter</button>
+    <button onclick="resetAll()">Réinitialiser</button>
+</div>
+
+<div id="exportModal">
+    <div class="modal-inner">
+        <h3 style="margin:0;">Résultats à coller dans le chat</h3>
+        <p style="margin:0;color:var(--muted);font-size:0.9em;">Sélectionne tout (<kbd>Ctrl+A</kbd>), copie (<kbd>Ctrl+C</kbd>), et colle dans la conversation.</p>
+        <textarea id="exportText" readonly></textarea>
+        <div class="modal-buttons">
+            <button onclick="copyExport()">Copier</button>
+            <button onclick="closeExport()">Fermer</button>
+        </div>
+    </div>
+</div>
+
+<!-- ========== PRÉPARATION ========== -->
+<h2>Préparation initiale</h2>
+
+<div class="note">
+    <strong>Avant de commencer :</strong>
+    <ol style="margin:6px 0 0;padding-left:20px;">
+        <li>Stoppe l'éventuel serveur en cours (<code>stop</code> dans la fenêtre PowerShell).</li>
+        <li>Vérifie que <code>run\mods\</code> contient le jar LuckPerms (ex: <code>LuckPerms-NeoForge-5.4.150.jar</code>).</li>
+        <li>Optionnel mais conseillé : reset le monde pour repartir propre.</li>
+    </ol>
+    <pre class="ps">Remove-Item "run\world" -Recurse -Force -ErrorAction SilentlyContinue
+.\gradlew.bat runServer</pre>
+    <p>Une fois le serveur démarré, ouvre une 2e PowerShell et lance le client :</p>
+    <pre class="ps">cd "C:\Users\thefr\Desktop\Mods\CustomPerm"
+.\gradlew.bat runClient</pre>
+    <p>Connecte-toi sur <code>127.0.0.1</code>.</p>
+</div>
+
+<!-- ============================================================ -->
+<!-- ==================== PARTIE 1 — AVEC LP ==================== -->
+<!-- ============================================================ -->
+
+<div class="section-banner lp">
+    <span class="label">Partie 1 sur 2</span>
+    Mode LuckPerms
+</div>
+
+<!-- ========== PHASE A ========== -->
+<h2>Phase A — Démarrage en mode LuckPerms</h2>
+
+<div class="test-step lp-mode" data-id="A.1" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span><span class="badge crit">Critique</span>A.1 — Backend LuckPerms détecté</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <p>Au démarrage, cherche dans les logs serveur :</p>
+    <pre class="expected">[CustomPerm] LuckPerms detected — using LuckPerms backend.
+[CustomPerm] Subscribed to LuckPerms UserDataRecalculateEvent for live command tree resync.
+[CustomPerm] Wrapped N top-level command(s) for permission gating.</pre>
+    <div class="expected-block"><strong>Attendu :</strong> les 3 lignes apparaissent. <code>N &gt; 0</code> (typiquement 80-100).</div>
+    <div class="capture">
+        <label>Combien de commandes wrappées ?</label>
+        <textarea oninput="saveState()" placeholder="Ex: Wrapped 89 top-level commands..."></textarea>
+    </div>
+</div>
+
+<!-- ========== PHASE B ========== -->
+<h2>Phase B — Permission directe sur commande vanilla</h2>
+
+<div class="test-step lp-mode" data-id="B.1" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span>B.1 — Setup baseline non-op</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">deop Dev
+op list</pre>
+    <div class="expected-block"><strong>Attendu :</strong> <code>There are no operators</code>.</div>
+</div>
+
+<div class="test-step lp-mode" data-id="B.2" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span>B.2 — Refus sans permission (baseline)</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="client">/gamemode survival</pre>
+    <div class="expected-block"><strong>Attendu :</strong> <span class="fail">Refus</span> (<code>Unknown or incomplete command</code>).</div>
+</div>
+
+<div class="test-step lp-mode" data-id="B.3" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span>B.3 — Exposer /gamemode + créer le grade VIP</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm command add gamemode
+lp creategroup vip
+lp group vip permission set customperm.command.gamemode true
+lp user Dev parent add vip</pre>
+    <div class="expected-block"><strong>Attendu :</strong> chaque commande répond OK. Voir aussi <code>[CustomPerm] LP user data recalculated for Dev</code>.</div>
+</div>
+
+<div class="test-step lp-mode" data-id="B.4" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span><span class="badge crit">Critique</span>B.4 — Vérification via /customperm debug</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm debug Dev gamemode</pre>
+    <div class="expected-block"><strong>Attendu :</strong> dernière ligne <code>Actual wrapper canUse() : true</code> en VERT.</div>
+    <div class="capture">
+        <label>Sortie complète si problème</label>
+        <textarea oninput="saveState()"></textarea>
+    </div>
+</div>
+
+<div class="test-step lp-mode" data-id="B.5" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span><span class="badge crit">Critique</span>B.5 — /gamemode fonctionne pour un non-op</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="client">/gamemode creative</pre>
+    <div class="expected-block"><strong>Attendu :</strong> <span class="pass">passage en créatif</span>.</div>
+</div>
+
+<!-- ========== PHASE C — ALIASES ========== -->
+<h2>Phase C — Aliases (LP)</h2>
+
+<div class="test-step lp-mode" data-id="C.1" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span>C.1 — Alias simple /fly</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm alias add fly gamemode spectator
+lp group vip permission set customperm.alias.fly true</pre>
+    <pre class="client">/fly</pre>
+    <div class="expected-block"><strong>Attendu :</strong> passage en spectator.</div>
+</div>
+
+<div class="test-step lp-mode" data-id="C.2" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span>C.2 — Macro /heal multi-step</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm alias add heal effect give @s minecraft:instant_health 10 100; effect give @s minecraft:saturation 1 100; say bien soigne
+lp group vip permission set customperm.alias.heal true</pre>
+    <pre class="client">/heal</pre>
+    <div class="expected-block"><strong>Attendu :</strong> les 3 effets s'enchaînent.</div>
+</div>
+
+<div class="test-step lp-mode" data-id="C.3" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span>C.3 — Édition d'alias en jeu (addstep / removestep)</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm alias addstep heal effect give @s minecraft:strength 30 1
+customperm alias steps heal
+customperm alias removestep heal 2
+customperm alias steps heal</pre>
+    <div class="expected-block"><strong>Attendu :</strong> 4 steps après addstep, 3 après removestep, le step #2 (<code>say bien soigne</code>) a disparu.</div>
+</div>
+
+<!-- ========== PHASE D — WILDCARD (LP) ========== -->
+<h2>Phase D — Wildcard (LP)</h2>
+
+<div class="test-step lp-mode" data-id="D.1" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span>D.1 — Wildcard sur plusieurs commandes</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm command add give
+customperm command add effect
+customperm command add time
+lp group vip permission set customperm.command.* true</pre>
+    <pre class="client">/give @s diamond 64
+/effect give @s minecraft:speed 30 5
+/time set day</pre>
+    <div class="expected-block"><strong>Attendu :</strong> les 3 passent. Re-sync auto via l'event LP, pas besoin de reco.</div>
+</div>
+
+<!-- ========== PHASE E — REVOCATION (LP) ========== -->
+<h2>Phase E — Révocation immédiate (LP)</h2>
+
+<div class="test-step lp-mode" data-id="E.1" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span>E.1 — Retirer le grade et tester</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">lp user Dev parent remove vip
+customperm test Dev customperm.command.gamemode</pre>
+    <div class="expected-block"><strong>Attendu :</strong> <code>test</code> retourne DENIED.</div>
+    <pre class="client">/gamemode creative</pre>
+    <div class="expected-block"><strong>Attendu :</strong> refus immédiat. La commande disparaît de l'autocomplétion.</div>
+</div>
+
+<!-- ========== PHASE F — OP EDGE CASE (LP) ========== -->
+<h2>Phase F — Op préserve les droits (LP)</h2>
+
+<div class="test-step lp-mode" data-id="F.1" data-mode="lp">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge lp">LP</span>F.1 — Op bypasse tout</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">op Dev</pre>
+    <pre class="client">/gamemode creative
+/give @s diamond 64</pre>
+    <div class="expected-block"><strong>Attendu :</strong> les deux commandes passent (op level 4 bypasse les checks). On vérifie qu'on n'a pas cassé le comportement vanilla.</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ==================== TRANSITION ==================== -->
+<!-- ============================================================ -->
+
+<div class="transition">
+    <h3>Transition vers le mode Internal (sans LuckPerms)</h3>
+    <ol style="padding-left:20px;">
+        <li>Dans la console serveur, tape <code>stop</code>.</li>
+        <li>Dans une PowerShell, déplace le jar LP hors du dossier mods :
+            <pre class="ps">Move-Item "run\mods\LuckPerms-NeoForge-*.jar" "run\"</pre>
+        </li>
+        <li>Optionnel : reset les configs pour repartir propre :
+            <pre class="ps">Remove-Item "run\config\customperm" -Recurse -Force -ErrorAction SilentlyContinue</pre>
+        </li>
+        <li>Relance le serveur :
+            <pre class="ps">.\gradlew.bat runServer</pre>
+        </li>
+        <li>Reconnecte le client (<code>127.0.0.1</code>).</li>
+    </ol>
+</div>
+
+<!-- ============================================================ -->
+<!-- ==================== PARTIE 2 — SANS LP ==================== -->
+<!-- ============================================================ -->
+
+<div class="section-banner internal">
+    <span class="label">Partie 2 sur 2</span>
+    Mode Internal (sans LuckPerms)
+</div>
+
+<!-- ========== PHASE G ========== -->
+<h2>Phase G — Démarrage en mode Internal</h2>
+
+<div class="test-step internal-mode" data-id="G.1" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span><span class="badge crit">Critique</span>G.1 — Backend Internal détecté</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <p>Au démarrage, cherche :</p>
+    <pre class="expected">[CustomPerm] LuckPerms not present — using internal JSON grade backend.
+[CustomPerm] Wrapped N top-level command(s) for permission gating.</pre>
+    <div class="expected-block">La ligne d'abonnement LP ne doit PAS apparaître (logique, LP n'est plus là).</div>
+    <div class="capture">
+        <label>Combien de commandes wrappées ?</label>
+        <textarea oninput="saveState()"></textarea>
+    </div>
+</div>
+
+<!-- ========== PHASE H — INTERNAL DIRECT ========== -->
+<h2>Phase H — Permission directe sur commande (Internal)</h2>
+
+<div class="test-step internal-mode" data-id="H.1" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span>H.1 — Setup baseline non-op</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">deop Dev</pre>
+    <pre class="client">/gamemode survival</pre>
+    <div class="expected-block"><strong>Attendu :</strong> refus.</div>
+</div>
+
+<div class="test-step internal-mode" data-id="H.2" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span>H.2 — Exposer /gamemode + créer le grade VIP via /customperm</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm command add gamemode
+customperm grade create vip
+customperm grade addperm vip customperm.command.gamemode
+customperm grade assign Dev vip
+customperm grade list</pre>
+    <div class="expected-block"><strong>Attendu :</strong> chaque commande répond OK. <code>grade list</code> affiche <code>Grades: vip</code>.</div>
+</div>
+
+<div class="test-step internal-mode" data-id="H.3" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span><span class="badge crit">Critique</span>H.3 — Vérification via /customperm debug</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm debug Dev gamemode</pre>
+    <div class="expected-block"><strong>Attendu :</strong> dernière ligne en VERT, et la 1re ligne précise <code>[Internal]</code> au lieu de <code>[LuckPerms]</code>.</div>
+    <div class="capture">
+        <label>Sortie complète si problème</label>
+        <textarea oninput="saveState()"></textarea>
+    </div>
+</div>
+
+<div class="test-step internal-mode" data-id="H.4" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span><span class="badge crit">Critique</span>H.4 — /gamemode fonctionne pour un non-op</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="client">/gamemode creative</pre>
+    <div class="expected-block"><strong>Attendu :</strong> passage en créatif. Confirme que le backend interne fait son boulot.</div>
+</div>
+
+<div class="test-step internal-mode" data-id="H.5" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span>H.5 — Persistance JSON</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <p>Vérifie que la config a bien été persistée dans le fichier :</p>
+    <pre class="ps">Get-Content "run\config\customperm\grades.json"</pre>
+    <div class="expected-block"><strong>Attendu :</strong> le fichier contient le grade <code>vip</code> avec sa permission, et l'UUID de Dev avec son grade assigné.</div>
+</div>
+
+<!-- ========== PHASE I — ALIASES (INTERNAL) ========== -->
+<h2>Phase I — Aliases (Internal)</h2>
+
+<div class="test-step internal-mode" data-id="I.1" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span>I.1 — Alias simple /fly</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm alias add fly gamemode spectator
+customperm grade addperm vip customperm.alias.fly</pre>
+    <pre class="client">/fly</pre>
+    <div class="expected-block"><strong>Attendu :</strong> passage en spectator. Le grade <code>vip</code> est étendu avec la perm de l'alias.</div>
+</div>
+
+<div class="test-step internal-mode" data-id="I.2" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span>I.2 — Macro /heal multi-step</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm alias add heal effect give @s minecraft:instant_health 10 100; effect give @s minecraft:saturation 1 100; say bien soigne
+customperm grade addperm vip customperm.alias.heal</pre>
+    <pre class="client">/heal</pre>
+    <div class="expected-block"><strong>Attendu :</strong> les 3 effets s'enchaînent.</div>
+</div>
+
+<!-- ========== PHASE J — WILDCARD (INTERNAL) ========== -->
+<h2>Phase J — Wildcard (Internal)</h2>
+
+<div class="test-step internal-mode" data-id="J.1" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span>J.1 — Wildcard via grade interne</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm command add give
+customperm command add effect
+customperm command add time
+customperm grade addperm vip customperm.command.*</pre>
+    <pre class="client">/give @s diamond 64
+/effect give @s minecraft:speed 30 5
+/time set day</pre>
+    <div class="expected-block"><strong>Attendu :</strong> les 3 passent. Le wildcard <code>customperm.command.*</code> est géré dans <code>GradesConfig.userHasPermission</code>.</div>
+</div>
+
+<!-- ========== PHASE K — REVOCATION (INTERNAL) ========== -->
+<h2>Phase K — Révocation (Internal)</h2>
+
+<div class="test-step internal-mode" data-id="K.1" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span>K.1 — Désassigner le grade</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm grade unassign Dev vip
+customperm test Dev customperm.command.gamemode</pre>
+    <div class="expected-block"><strong>Attendu :</strong> <code>test</code> retourne DENIED.</div>
+    <pre class="client">/gamemode creative</pre>
+    <div class="expected-block"><strong>Attendu :</strong> refus immédiat. <code>resyncCommands</code> est déclenché par <code>grade unassign</code>.</div>
+</div>
+
+<div class="test-step internal-mode" data-id="K.2" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span>K.2 — Suppression de grade</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">customperm grade delete vip
+customperm grade list</pre>
+    <div class="expected-block"><strong>Attendu :</strong> <code>No grades defined.</code></div>
+</div>
+
+<!-- ========== PHASE L — OP EDGE CASE (INTERNAL) ========== -->
+<h2>Phase L — Op préserve les droits (Internal)</h2>
+
+<div class="test-step internal-mode" data-id="L.1" data-mode="internal">
+    <div class="step-header">
+        <input type="checkbox">
+        <div class="step-title"><span class="badge internal">INTERNAL</span>L.1 — Op bypasse tout</div>
+        <div class="step-status">
+            <button onclick="setStatus(this,'pass')">Pass</button>
+            <button onclick="setStatus(this,'fail')">Fail</button>
+        </div>
+    </div>
+    <pre class="console">op Dev</pre>
+    <pre class="client">/gamemode creative
+/give @s diamond 64</pre>
+    <div class="expected-block"><strong>Attendu :</strong> les deux passent (op level 4 bypasse, comportement vanilla préservé).</div>
+</div>
+
+<!-- ============================================================ -->
+<!-- ==================== VERDICT ==================== -->
+<!-- ============================================================ -->
+
+<div class="verdict">
+    <h2>Verdict global</h2>
+    <ul>
+        <li><strong>Tous les tests LP en PASS</strong> → mode LuckPerms validé pour la prod.</li>
+        <li><strong>Tous les tests Internal en PASS</strong> → soft-dependency confirmée, le mod est utilisable sur des serveurs sans LP.</li>
+        <li><strong>Critiques (B.4, B.5, G.1, H.3, H.4) en PASS</strong> → l'essentiel fonctionne. Les autres tests valident les fonctions secondaires.</li>
+        <li><strong>Échec sur un test Internal mais pas LP (ou inversement)</strong> → asymétrie à corriger. Capture la sortie de <code>customperm debug</code> et le contenu de <code>grades.json</code>, je creuse.</li>
+    </ul>
+</div>
+
+<!-- Cleanup section -->
+<div class="note" style="margin-top:30px;">
+    <strong>Une fois la procédure terminée :</strong> remets LP en place pour la prod.
+    <pre class="ps">Move-Item "run\LuckPerms-NeoForge-*.jar" "run\mods\"</pre>
+</div>
+
+<script>
+function setStatus(btn, status) {
+    const step = btn.closest('.test-step');
+    const buttons = step.querySelectorAll('.step-status button');
+    const cb = step.querySelector('input[type=checkbox]');
+    buttons.forEach(b => b.classList.remove('active-pass', 'active-fail'));
+    step.classList.remove('passed', 'failed');
+    if (status === 'pass') {
+        btn.classList.add('active-pass');
+        step.classList.add('passed');
+        cb.checked = true;
+    } else if (status === 'fail') {
+        btn.classList.add('active-fail');
+        step.classList.add('failed');
+        cb.checked = false;
+    }
+    saveState();
+    updateSummary();
+}
+
+function updateSummary() {
+    const steps = document.querySelectorAll('.test-step');
+    let ok = 0, ko = 0, pending = 0;
+    let lpOk = 0, lpTot = 0, intOk = 0, intTot = 0;
+    steps.forEach(s => {
+        const passed = s.classList.contains('passed');
+        const failed = s.classList.contains('failed');
+        if (passed) ok++;
+        else if (failed) ko++;
+        else pending++;
+        if (s.dataset.mode === 'lp') {
+            lpTot++;
+            if (passed) lpOk++;
+        } else if (s.dataset.mode === 'internal') {
+            intTot++;
+            if (passed) intOk++;
+        }
+    });
+    document.getElementById('total').textContent = steps.length;
+    document.getElementById('ok').textContent = ok;
+    document.getElementById('ko').textContent = ko;
+    document.getElementById('pending').textContent = pending;
+    document.getElementById('lp-ok').textContent = lpOk;
+    document.getElementById('lp-tot').textContent = lpTot;
+    document.getElementById('int-ok').textContent = intOk;
+    document.getElementById('int-tot').textContent = intTot;
+}
+
+function resetAll() {
+    if (!confirm('Tout réinitialiser ?')) return;
+    document.querySelectorAll('.test-step').forEach(s => {
+        s.classList.remove('passed', 'failed');
+        s.querySelector('input[type=checkbox]').checked = false;
+        s.querySelectorAll('.step-status button').forEach(b => b.classList.remove('active-pass', 'active-fail'));
+    });
+    document.querySelectorAll('.capture textarea').forEach(t => t.value = '');
+    localStorage.removeItem('customperm-complete-state');
+    updateSummary();
+}
+
+function saveState() {
+    const state = {};
+    document.querySelectorAll('.test-step').forEach(s => {
+        const id = s.dataset.id;
+        const captures = [...s.querySelectorAll('.capture textarea')].map(t => t.value);
+        let status = null;
+        if (s.classList.contains('passed')) status = 'pass';
+        else if (s.classList.contains('failed')) status = 'fail';
+        state[id] = { status, captures };
+    });
+    localStorage.setItem('customperm-complete-state', JSON.stringify(state));
+}
+
+function loadState() {
+    const raw = localStorage.getItem('customperm-complete-state');
+    if (!raw) { updateSummary(); return; }
+    const state = JSON.parse(raw);
+    Object.entries(state).forEach(([id, data]) => {
+        const step = document.querySelector(`.test-step[data-id="${id}"]`);
+        if (!step) return;
+        const status = data.status;
+        const captures = data.captures || [];
+        if (status === 'pass' || status === 'fail') {
+            step.classList.add(status === 'pass' ? 'passed' : 'failed');
+            step.querySelector('input[type=checkbox]').checked = (status === 'pass');
+            const idx = (status === 'pass') ? 0 : 1;
+            const buttons = step.querySelectorAll('.step-status button');
+            if (buttons[idx]) buttons[idx].classList.add(status === 'pass' ? 'active-pass' : 'active-fail');
+        }
+        const textareas = step.querySelectorAll('.capture textarea');
+        captures.forEach((value, i) => { if (textareas[i]) textareas[i].value = value; });
+    });
+    updateSummary();
+}
+
+function exportResults() {
+    const lines = [];
+    const ok = document.getElementById('ok').textContent;
+    const ko = document.getElementById('ko').textContent;
+    const pending = document.getElementById('pending').textContent;
+    const total = document.querySelectorAll('.test-step').length;
+    const lpOk = document.getElementById('lp-ok').textContent;
+    const lpTot = document.getElementById('lp-tot').textContent;
+    const intOk = document.getElementById('int-ok').textContent;
+    const intTot = document.getElementById('int-tot').textContent;
+
+    lines.push('# CustomPerm — Procédure complète');
+    lines.push('');
+    lines.push(`**Bilan global :** ${ok}/${total} OK · ${ko} KO · ${pending} en attente`);
+    lines.push(`**LP :** ${lpOk}/${lpTot} · **Internal :** ${intOk}/${intTot}`);
+    lines.push(`**Date :** ${new Date().toLocaleString('fr-FR')}`);
+    lines.push('');
+
+    let currentPhase = null;
+    document.querySelectorAll('h2, .test-step, .section-banner').forEach(el => {
+        if (el.classList.contains('section-banner')) {
+            const text = el.textContent.trim().replace(/\s+/g, ' ');
+            lines.push('');
+            lines.push(`# ${text}`);
+        } else if (el.tagName === 'H2') {
+            currentPhase = el.textContent.trim();
+            lines.push('');
+            lines.push(`## ${currentPhase}`);
+        } else {
+            const id = el.dataset.id;
+            const titleEl = el.querySelector('.step-title');
+            const title = titleEl ? titleEl.textContent.trim().replace(/^(LP|INTERNAL|Critique)\s*/g, '').replace(/^(LP|INTERNAL|Critique)\s*/g, '') : id;
+            let symbol = '[ ]';
+            if (el.classList.contains('passed')) symbol = '[PASS]';
+            else if (el.classList.contains('failed')) symbol = '[FAIL]';
+            lines.push('');
+            lines.push(`### ${symbol} ${title}`);
+            const captures = el.querySelectorAll('.capture');
+            captures.forEach(c => {
+                const label = c.querySelector('label').textContent.trim();
+                const value = c.querySelector('textarea').value.trim();
+                if (value) {
+                    lines.push('');
+                    lines.push(`**${label}**`);
+                    lines.push('```');
+                    lines.push(value);
+                    lines.push('```');
+                }
+            });
+        }
+    });
+
+    document.getElementById('exportText').value = lines.join('\n');
+    document.getElementById('exportModal').classList.add('show');
+}
+
+function closeExport() {
+    document.getElementById('exportModal').classList.remove('show');
+}
+
+function copyExport() {
+    const ta = document.getElementById('exportText');
+    ta.select();
+    document.execCommand('copy');
+    const btn = event.target;
+    const orig = btn.textContent;
+    btn.textContent = 'Copié !';
+    setTimeout(() => btn.textContent = orig, 1500);
+}
+
+document.querySelectorAll('.test-step .step-header input[type=checkbox]').forEach(cb => {
+    cb.addEventListener('change', () => {
+        const step = cb.closest('.test-step');
+        if (cb.checked) {
+            const passBtn = step.querySelector('.step-status button:first-of-type');
+            setStatus(passBtn, 'pass');
+        } else {
+            step.classList.remove('passed', 'failed');
+            step.querySelectorAll('.step-status button').forEach(b => b.classList.remove('active-pass', 'active-fail'));
+            saveState();
+            updateSummary();
+        }
+    });
+});
+
+loadState();
+</script>
+
+</body>
+</html>

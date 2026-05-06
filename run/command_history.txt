@@ -1,16 +1,3 @@
-/gamemode creative
-/fly
-/gamemode creative
-/fly
-/luckperms DEV
-/lp
-/gamemode creative
-/fly
-/heal
-/gamemode creative
-/fly
-/heal
-/gamemode creative
 /give @s diamond 64
 /effect give @s minecraft:speed 30 5
 /time set day
@@ -40,3 +27,24 @@
 /test
 /fly
 /gamemode creative
+/fly
+/heal
+/gamemode creative
+/heal
+/give Dev minecraft:acacia_log 1
+/effect give Dev minecraft:speed 30 5
+/time set day
+/gamemode creative
+/give @s diamond 64
+/gamemode survival
+/gamemode creative
+/fly
+/give Dev minecraft:acacia_door 4
+/effect give Dev minecraft:speed 1 2
+/time set day
+/gamemode spectator
+/gamemode creative
+/give @a minecraft:diamond_pickaxe 4
+/deop Dev
+/fly
+/heal

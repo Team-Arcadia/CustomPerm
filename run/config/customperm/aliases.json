@@ -7,16 +7,6 @@
       "effect give @s minecraft:instant_health 10 100",
       "effect give @s minecraft:saturation 1 100",
       "say bien soigne"
-    ],
-    "boat": [
-      "/give @s minecraft:acacia_boat"
-    ],
-    "test": [
-      "/gamemode adventure",
-      "/say hello"
-    ],
-    "nathan": [
-      "/gamemode creative"
     ]
   }
 }

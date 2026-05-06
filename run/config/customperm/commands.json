@@ -1,8 +1,5 @@
 {
   "grantedCommands": [
-    "gamemode",
-    "give",
-    "effect",
-    "time"
+    "gamemode"
   ]
 }
