@@ -32,3 +32,11 @@
 /deop Dev
 /fly
 /customperm alias add nathan /gamemode creative
+/gamemode survival
+/deop Dev
+/customperm alias add test /gamemode adventure; /say hello
+/reload
+/deop Dev
+/test
+/fly
+/gamemode creative

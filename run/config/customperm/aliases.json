@@ -12,7 +12,8 @@
       "/give @s minecraft:acacia_boat"
     ],
     "test": [
-      "/tp 0 0 0"
+      "/gamemode adventure",
+      "/say hello"
     ],
     "nathan": [
       "/gamemode creative"
