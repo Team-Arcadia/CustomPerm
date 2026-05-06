@@ -23,12 +23,25 @@ public class CustomPerm {
     public static PermissionService permissions;
 
     public CustomPerm(IEventBus modBus, ModContainer container) {
-        configManager = new ConfigManager();
-        configManager.load();
+        // Config: load is internally try/catch'd, but defend against the constructor too.
+        try {
+            configManager = new ConfigManager();
+            configManager.load();
+        } catch (Throwable t) {
+            LOGGER.error("[CustomPerm] Config init failed; falling back to in-memory empty config.", t);
+            configManager = new ConfigManager();
+        }
 
+        // Backend selection: if LP is detected but its API blows up at instantiation
+        // (incompatible LP version, classpath issue), fall back to internal rather than crash.
         if (ModList.get().isLoaded("luckperms")) {
-            permissions = new LuckPermsService();
-            LOGGER.info("[CustomPerm] LuckPerms detected — using LuckPerms backend.");
+            try {
+                permissions = new LuckPermsService();
+                LOGGER.info("[CustomPerm] LuckPerms detected — using LuckPerms backend.");
+            } catch (Throwable t) {
+                LOGGER.error("[CustomPerm] LuckPerms is loaded but its API failed to initialise — falling back to internal backend.", t);
+                permissions = new InternalPermService(configManager);
+            }
         } else {
             permissions = new InternalPermService(configManager);
             LOGGER.info("[CustomPerm] LuckPerms not present — using internal JSON grade backend.");
@@ -42,5 +55,14 @@ public class CustomPerm {
         if (permissions instanceof LuckPermsService lps) {
             lps.initServerHooks(event.getServer());
         }
+
+        // Boot-time health summary so admins can see in one line if everything is in order.
+        String backend = (permissions instanceof LuckPermsService) ? "LuckPerms" : "Internal";
+        int wrapped = event.getServer().getCommands().getDispatcher().getRoot().getChildren().size();
+        int exposed = configManager.getCommands().grantedCommands.size();
+        int aliases = configManager.getAliases().aliases.size();
+        int grades = configManager.getGrades().grades.size();
+        LOGGER.info("[CustomPerm] Ready — backend={} dispatcherCommands={} exposed={} aliases={} grades={}",
+            backend, wrapped, exposed, aliases, grades);
     }
 }
