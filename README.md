@@ -451,8 +451,6 @@ The jar is produced in `build/libs/customperm-1.0.0.jar`.
 ./gradlew runClient           # dev client
 ```
 
-See `test-complete.html` at the project root for the full interactive test procedure (LP + Internal).
-
 ### Tunable versions
 
 In `gradle.properties`:
@@ -487,7 +485,7 @@ This launches a dedicated Minecraft test server, executes all 10 GameTests, and 
 | `internalMultipleGradesCompose` | Multiple grades on a single user union their perms. |
 | `configRoundtripsThroughDisk` | save() / load() preserve data through real JSON I/O. |
 | `commandExposureGate` | Add/remove on the granted commands list takes immediate effect. |
-| `wrappedCanUseFullFlow` | (Placeholder, see test-complete.html for the integration test.) |
+| `wrappedCanUseFullFlow` | Placeholder slot — a full mock-player flow is not feasible in 1.21.1 GameTests (`makeMockPlayer` returns a non-`ServerPlayer`). Validate end-to-end via the dev environment instead. |
 | `opAlwaysPasses` | An op-level source is always allowed (vanilla preservation). |
 | `aliasRegistersOnLiveDispatcher` | A new alias appears on the live dispatcher without `/reload`. |
 | `aliasRemovesFromDispatcher` | A removed alias disappears from the live dispatcher. |
@@ -502,9 +500,16 @@ Every push to `main` and every pull request triggers `.github/workflows/gametest
 4. Fails the build if any required test fails.
 5. Uploads the run logs as a build artifact on failure for inspection.
 
-### Manual end-to-end procedure
+### Manual validation in dev
 
-For a full LP + Internal deployment validation, open `test-complete.html` in a browser. It is an interactive checklist (24 steps across 12 phases) that records your results and exports a Markdown summary at the end.
+GameTests cover component logic; for a full LP + Internal end-to-end check, run a dev server and client in two terminals:
+
+```bash
+./gradlew runServer    # terminal 1
+./gradlew runClient    # terminal 2 — connect to 127.0.0.1
+```
+
+Then exercise the recipes from [Common workflows](#common-workflows). The in-game diagnostic commands `/customperm debug`, `/customperm test`, `/customperm status`, and `/customperm scan` are designed for live verification.
 
 ---
 

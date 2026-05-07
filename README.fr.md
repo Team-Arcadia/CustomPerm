@@ -451,8 +451,6 @@ Le jar est produit dans `build/libs/customperm-1.0.0.jar`.
 ./gradlew runClient           # client de dev
 ```
 
-Voir `test-complete.html` à la racine pour la procédure de test interactive complète (LP + Internal).
-
 ### Versions ajustables
 
 Dans `gradle.properties` :
@@ -487,7 +485,7 @@ Cette tâche démarre un serveur Minecraft de test dédié, exécute les 10 Game
 | `internalMultipleGradesCompose` | Plusieurs grades sur un même utilisateur cumulent leurs perms. |
 | `configRoundtripsThroughDisk` | save() / load() préservent les données via vrai I/O JSON. |
 | `commandExposureGate` | Add/remove sur la liste des commandes exposées prend effet immédiatement. |
-| `wrappedCanUseFullFlow` | (Placeholder ; voir test-complete.html pour le test d'intégration.) |
+| `wrappedCanUseFullFlow` | Placeholder — le flux end-to-end avec mock player n'est pas faisable en 1.21.1 (`makeMockPlayer` ne retourne pas un `ServerPlayer`). À valider via l'environnement de dev à la place. |
 | `opAlwaysPasses` | Une source op-level passe toujours (préservation vanilla). |
 | `aliasRegistersOnLiveDispatcher` | Un nouvel alias apparaît dans le dispatcher en cours sans `/reload`. |
 | `aliasRemovesFromDispatcher` | Un alias supprimé disparaît du dispatcher en cours. |
@@ -502,9 +500,16 @@ Chaque push sur `main` et chaque pull request déclenche `.github/workflows/game
 4. Fait échouer le build si un test critique échoue.
 5. Upload les logs de run en artifact en cas d'échec, pour inspection.
 
-### Procédure manuelle end-to-end
+### Validation manuelle en dev
 
-Pour une validation complète d'un déploiement LP + Internal, ouvrez `test-complete.html` dans un navigateur. C'est une checklist interactive (24 étapes sur 12 phases) qui sauvegarde votre avancement et exporte un résumé Markdown à la fin.
+Les GameTests couvrent la logique des composants ; pour un test end-to-end complet LP + Internal, lancez un serveur et un client de dev dans deux terminaux :
+
+```bash
+./gradlew runServer    # terminal 1
+./gradlew runClient    # terminal 2 — se connecter sur 127.0.0.1
+```
+
+Puis exécutez les recettes des [Cas d'usage courants](#cas-dusage-courants). Les commandes in-game `/customperm debug`, `/customperm test`, `/customperm status` et `/customperm scan` sont conçues pour la vérification en direct.
 
 ---
 
