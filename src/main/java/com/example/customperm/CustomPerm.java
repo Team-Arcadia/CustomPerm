@@ -49,6 +49,10 @@ public class CustomPerm {
 
         NeoForge.EVENT_BUS.register(CommandTreeRewriter.class);
         NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStarted);
+
+        // GameTest functions registry — only exercised under `gradlew runGameTestServer`
+        // or when the /test command is used on a server with game tests enabled.
+        com.example.customperm.test.CustomPermTestRegistry.init(modBus);
     }
 
     private static void onServerStarted(ServerStartedEvent event) {

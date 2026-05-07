@@ -33,6 +33,10 @@ neoForge {
         }
         client { client() }
         server { server() }
+        gameTestServer {
+            type = 'gameTestServer'
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+        }
     }
 
     mods {
