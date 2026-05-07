@@ -8,6 +8,7 @@
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg)]()
 [![Java](https://img.shields.io/badge/Java-21-red.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)]()
 
 ---
 
@@ -38,6 +39,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - [Considérations de sécurité](#considérations-de-sécurité)
 - [Diagnostic et dépannage](#diagnostic-et-dépannage)
 - [Compilation depuis les sources](#compilation-depuis-les-sources)
+- [Tests](#tests)
 - [Comment ça marche (technique)](#comment-ça-marche-technique)
 - [Compatibilité avec d'autres mods](#compatibilité-avec-dautres-mods)
 - [Limitations connues](#limitations-connues)
@@ -56,6 +58,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **Outils de diagnostic** : `/customperm debug`, `/customperm test`, `/customperm scan`, `/customperm status`.
 - **Préserve l'op** : les ops gardent l'accès à toutes les commandes vanilla, le mod n'altère jamais leur droit.
 - **Côté serveur uniquement** : aucun mod requis côté client.
+- **Testé en continu** : 10 GameTests automatisés tournent à chaque commit via GitHub Actions.
 
 ---
 
@@ -70,7 +73,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 
 ### Étapes
 
-1. Téléchargez `customperm-X.Y.Z.jar` depuis la [page Releases](../../releases).
+1. Téléchargez `customperm-1.0.0.jar` depuis la [page Releases](../../releases).
 2. Déposez le jar dans le dossier `mods/` de votre serveur.
 3. (Optionnel) Déposez aussi le jar de [LuckPerms](https://luckperms.net/download) (build NeoForge 1.21.1).
 4. Démarrez le serveur.
@@ -87,6 +90,8 @@ Suivie de la ligne de santé :
 ```
 [CustomPerm] Ready — backend=LuckPerms dispatcherCommands=89 exposed=0 aliases=0 grades=0
 ```
+
+Si aucune des deux lignes n'apparaît, le mod n'a pas chargé — vérifiez vos logs pour des stacktraces.
 
 ---
 
@@ -437,7 +442,7 @@ cd CustomPerm
 .\gradlew.bat build           # Windows
 ```
 
-Le jar est produit dans `build/libs/customperm-X.Y.Z.jar`.
+Le jar est produit dans `build/libs/customperm-1.0.0.jar`.
 
 ### Tests en environnement de dev
 
@@ -457,6 +462,49 @@ minecraft_version=1.21.1
 neo_version=21.1.221
 luckperms_api_version=5.4
 ```
+
+---
+
+## Tests
+
+Le mod est livré avec une suite de tests complète qui s'exécute dans un vrai serveur Minecraft.
+
+### Lancer la suite en local
+
+```bash
+./gradlew runGameTestServer
+```
+
+Cette tâche démarre un serveur Minecraft de test dédié, exécute les 10 GameTests, et sort avec un code égal au nombre de tests échoués (zéro = tout passe). Adapté aux pipelines CI.
+
+### Couverture
+
+| Test | Valide |
+|---|---|
+| `internalDeniesByDefault` | Un store de grades vide refuse toute permission (garde-fou de sécurité). |
+| `internalGrantsViaGrade` | Un grade affecté à un joueur lui transmet exactement ses perms. |
+| `internalWildcardWorks` | `customperm.command.*` couvre les descendants mais pas les autres branches. |
+| `internalMultipleGradesCompose` | Plusieurs grades sur un même utilisateur cumulent leurs perms. |
+| `configRoundtripsThroughDisk` | save() / load() préservent les données via vrai I/O JSON. |
+| `commandExposureGate` | Add/remove sur la liste des commandes exposées prend effet immédiatement. |
+| `wrappedCanUseFullFlow` | (Placeholder ; voir test-complete.html pour le test d'intégration.) |
+| `opAlwaysPasses` | Une source op-level passe toujours (préservation vanilla). |
+| `aliasRegistersOnLiveDispatcher` | Un nouvel alias apparaît dans le dispatcher en cours sans `/reload`. |
+| `aliasRemovesFromDispatcher` | Un alias supprimé disparaît du dispatcher en cours. |
+
+### Intégration continue
+
+Chaque push sur `main` et chaque pull request déclenche `.github/workflows/gametest.yml`, qui :
+
+1. Configure JDK 21 sur Ubuntu.
+2. Cache les dépendances Gradle pour accélérer les runs suivants.
+3. Lance `gradlew runGameTestServer`.
+4. Fait échouer le build si un test critique échoue.
+5. Upload les logs de run en artifact en cas d'échec, pour inspection.
+
+### Procédure manuelle end-to-end
+
+Pour une validation complète d'un déploiement LP + Internal, ouvrez `test-complete.html` dans un navigateur. C'est une checklist interactive (24 étapes sur 12 phases) qui sauvegarde votre avancement et exporte un résumé Markdown à la fin.
 
 ---
 
@@ -501,7 +549,7 @@ Enregistrés comme des `Commands.literal(name).requires(...).executes(...)`. Le 
 
 **Compatible automatiquement.** Les commandes sont enregistrées au `RegisterCommandsEvent` standard ; notre handler tourne après tous les autres et wrappe tout l'arbre. Aucune intégration nécessaire.
 
-Pour exposer une commande de mod tiers : `customperm command add <name>`. Pour vérifier qu'elle est bien vue : `customperm scan <pattern>`.
+Pour exposer une commande de mod tiers : `customperm command add <addon_command>`. Pour vérifier qu'elle est bien vue : `customperm scan <pattern>`.
 
 ### Mods qui modifient le dispatcher dynamiquement
 

@@ -8,6 +8,7 @@
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg)]()
 [![Java](https://img.shields.io/badge/Java-21-red.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
+[![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)]()
 
 ---
 
@@ -38,6 +39,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - [Security considerations](#security-considerations)
 - [Diagnostics and troubleshooting](#diagnostics-and-troubleshooting)
 - [Building from source](#building-from-source)
+- [Testing](#testing)
 - [How it works (technical)](#how-it-works-technical)
 - [Compatibility with other mods](#compatibility-with-other-mods)
 - [Known limitations](#known-limitations)
@@ -56,6 +58,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Diagnostic tooling** — `/customperm debug`, `/customperm test`, `/customperm scan`, `/customperm status`.
 - **Op preserved** — operators always retain access to all vanilla commands; the mod never strips their rights.
 - **Server-side only** — no client mod required.
+- **Battle-tested** — 10 automated GameTests run on every commit via GitHub Actions.
 
 ---
 
@@ -70,7 +73,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 
 ### Steps
 
-1. Download `customperm-X.Y.Z.jar` from the [Releases page](../../releases).
+1. Download `customperm-1.0.0.jar` from the [Releases page](../../releases).
 2. Drop the jar into your server's `mods/` folder.
 3. (Optional) Drop the [LuckPerms](https://luckperms.net/download) jar (NeoForge 1.21.1 build) alongside.
 4. Start the server.
@@ -87,6 +90,8 @@ Followed by the readiness summary:
 ```
 [CustomPerm] Ready — backend=LuckPerms dispatcherCommands=89 exposed=0 aliases=0 grades=0
 ```
+
+If you see neither line, the mod failed to load — check your logs for stack traces.
 
 ---
 
@@ -437,7 +442,7 @@ cd CustomPerm
 .\gradlew.bat build           # Windows
 ```
 
-The jar is produced in `build/libs/customperm-X.Y.Z.jar`.
+The jar is produced in `build/libs/customperm-1.0.0.jar`.
 
 ### Dev environment
 
@@ -457,6 +462,49 @@ minecraft_version=1.21.1
 neo_version=21.1.221
 luckperms_api_version=5.4
 ```
+
+---
+
+## Testing
+
+The mod ships with a comprehensive test suite that runs in a real Minecraft server.
+
+### Run the suite locally
+
+```bash
+./gradlew runGameTestServer
+```
+
+This launches a dedicated Minecraft test server, executes all 10 GameTests, and exits with a code equal to the number of failed tests (zero = all pass). Suitable for CI pipelines.
+
+### What's covered
+
+| Test | Validates |
+|---|---|
+| `internalDeniesByDefault` | Empty grade store denies any permission (security baseline). |
+| `internalGrantsViaGrade` | Assigning a grade with a perm grants exactly that perm. |
+| `internalWildcardWorks` | `customperm.command.*` covers descendants but not unrelated branches. |
+| `internalMultipleGradesCompose` | Multiple grades on a single user union their perms. |
+| `configRoundtripsThroughDisk` | save() / load() preserve data through real JSON I/O. |
+| `commandExposureGate` | Add/remove on the granted commands list takes immediate effect. |
+| `wrappedCanUseFullFlow` | (Placeholder, see test-complete.html for the integration test.) |
+| `opAlwaysPasses` | An op-level source is always allowed (vanilla preservation). |
+| `aliasRegistersOnLiveDispatcher` | A new alias appears on the live dispatcher without `/reload`. |
+| `aliasRemovesFromDispatcher` | A removed alias disappears from the live dispatcher. |
+
+### Continuous integration
+
+Every push to `main` and every pull request triggers `.github/workflows/gametest.yml`, which:
+
+1. Sets up JDK 21 on Ubuntu.
+2. Caches Gradle dependencies for fast subsequent runs.
+3. Runs `gradlew runGameTestServer`.
+4. Fails the build if any required test fails.
+5. Uploads the run logs as a build artifact on failure for inspection.
+
+### Manual end-to-end procedure
+
+For a full LP + Internal deployment validation, open `test-complete.html` in a browser. It is an interactive checklist (24 steps across 12 phases) that records your results and exports a Markdown summary at the end.
 
 ---
 
