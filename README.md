@@ -90,7 +90,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 
 ### Steps
 
-1. Download `customperm-0.1.0.jar` from the [Releases page](../../releases).
+1. Download the latest CustomPerm release artifact from the [Releases page](../../releases).
 2. Drop the jar into your server's `mods/` folder.
 3. (Optional) Drop the [LuckPerms](https://luckperms.net/download) jar (NeoForge 1.21.1 build) alongside.
 4. Start the server.
@@ -465,7 +465,7 @@ cd CustomPerm
 .\gradlew.bat build           # Windows
 ```
 
-The jar is produced in `build/libs/customperm-0.1.0.jar`.
+Gradle generates the distributable mod artifact during `build`. Generated artifacts are not committed to Git; publish the artifact through GitHub Releases.
 
 ### Dev environment
 
