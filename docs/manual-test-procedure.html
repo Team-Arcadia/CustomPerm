@@ -1,0 +1,761 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CustomPerm - Procedure de test manuel</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --panel: #151b23;
+      --panel-2: #10161f;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --line: #30363d;
+      --ok: #3fb950;
+      --fail: #f85149;
+      --skip: #a5adba;
+      --focus: #58a6ff;
+      --focus-strong: #1f6feb;
+      --code: #0b1220;
+      --input: #0d1117;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.45;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 20px;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 22px 16px 48px;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin: 0 0 8px;
+    }
+
+    h2 {
+      font-size: 18px;
+      margin: 0 0 12px;
+    }
+
+    h3 {
+      font-size: 16px;
+      margin: 0 0 8px;
+    }
+
+    p {
+      margin: 0 0 10px;
+    }
+
+    .topbar {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1fr auto;
+      align-items: start;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button.primary {
+      background: var(--focus-strong);
+      border-color: var(--focus-strong);
+      color: #fff;
+    }
+
+    button:hover {
+      filter: brightness(1.12);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 300px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    aside, section.test, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    aside {
+      position: sticky;
+      top: 116px;
+      padding: 14px;
+    }
+
+    .meta {
+      display: grid;
+      gap: 8px;
+    }
+
+    label {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 9px;
+      font: inherit;
+      color: var(--text);
+      background: var(--input);
+    }
+
+    textarea {
+      min-height: 76px;
+      resize: vertical;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px;
+      background: var(--panel-2);
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 22px;
+    }
+
+    .tests {
+      display: grid;
+      gap: 18px;
+    }
+
+    .category {
+      display: grid;
+      gap: 12px;
+    }
+
+    .category-head {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--focus);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+
+    section.test {
+      padding: 16px;
+    }
+
+    .test-head {
+      display: grid;
+      grid-template-columns: 1fr minmax(180px, 240px);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .status-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .status-row label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--text);
+      cursor: pointer;
+      background: var(--panel-2);
+    }
+
+    .status-row input {
+      width: auto;
+    }
+
+    .steps {
+      margin: 12px 0;
+      padding-left: 22px;
+    }
+
+    .steps li {
+      margin-bottom: 8px;
+    }
+
+    code, pre {
+      background: var(--code);
+      border-radius: 6px;
+    }
+
+    code {
+      padding: 2px 5px;
+    }
+
+    pre {
+      margin: 8px 0;
+      padding: 10px;
+      white-space: pre-wrap;
+      overflow-wrap: anywhere;
+      border: 1px solid var(--line);
+    }
+
+    .expect {
+      border-left: 4px solid var(--focus);
+      padding: 8px 10px;
+      background: rgba(88, 166, 255, 0.09);
+      margin-top: 8px;
+    }
+
+    .notes {
+      margin-top: 10px;
+    }
+
+    .export-box {
+      margin-top: 16px;
+      padding: 14px;
+    }
+
+    #exportText {
+      min-height: 220px;
+      font-family: Consolas, Monaco, monospace;
+      font-size: 13px;
+    }
+
+    @media (max-width: 850px) {
+      header {
+        position: static;
+      }
+
+      .topbar, .grid, .test-head {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        position: static;
+      }
+
+      .actions {
+        justify-content: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <h1>CustomPerm - Procedure de test manuel</h1>
+        <p class="muted">Renseigne les resultats, ajoute les notes utiles, puis exporte le rapport en JSON ou Markdown.</p>
+      </div>
+      <div class="actions">
+        <button type="button" id="saveBtn">Sauvegarder</button>
+        <button type="button" id="exportJsonBtn" class="primary">Exporter JSON</button>
+        <button type="button" id="exportMdBtn">Exporter Markdown</button>
+        <button type="button" id="resetBtn">Reinitialiser</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid">
+      <aside>
+        <h2>Contexte</h2>
+        <div class="meta">
+          <label>Testeur
+            <input id="tester" type="text" placeholder="Nom ou pseudo">
+          </label>
+          <label>Date
+            <input id="date" type="date">
+          </label>
+          <label>Version CustomPerm
+            <input id="version" type="text" placeholder="ex. 0.1.0">
+          </label>
+          <label>Backend
+            <select id="backend">
+              <option value="Internal">Internal</option>
+              <option value="LuckPerms">LuckPerms</option>
+              <option value="Internal fallback from LuckPerms">Internal fallback from LuckPerms</option>
+              <option value="Autre/Inconnu">Autre/Inconnu</option>
+            </select>
+          </label>
+          <label>Joueur non-OP teste
+            <input id="player" type="text" placeholder="Pseudo du joueur">
+          </label>
+          <label>Environnement
+            <textarea id="environment" placeholder="NeoForge, Minecraft, OS, serveur local/dedie, mods charges..."></textarea>
+          </label>
+        </div>
+
+        <div class="summary">
+          <div class="stat"><strong id="passCount">0</strong>OK</div>
+          <div class="stat"><strong id="failCount">0</strong>KO</div>
+          <div class="stat"><strong id="skipCount">0</strong>N/A</div>
+        </div>
+      </aside>
+
+      <div>
+        <div class="tests" id="tests"></div>
+
+        <div class="panel export-box">
+          <h2>Export copiable</h2>
+          <p class="muted">Le contenu apparait ici apres export. Tu peux me coller ce bloc directement.</p>
+          <textarea id="exportText" readonly></textarea>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const tests = [
+      {
+        id: "prep",
+        category: "Sans LuckPerms",
+        title: "Preparation",
+        goal: "Confirmer que le serveur est pret et que le joueur de test est non-OP.",
+        steps: [
+          "Lancer un serveur/client dev avec CustomPerm.",
+          "Mettre le compte admin OP niveau 2 ou plus.",
+          "Executer: /deop <player>",
+          "Executer: /customperm status",
+          "Executer: /customperm scan gamemode"
+        ],
+        expect: "Le backend est affiche. Le joueur de test est non-OP. /gamemode apparait dans le dispatcher."
+      },
+      {
+        id: "dispatcher-basic",
+        category: "Sans LuckPerms",
+        title: "Permission dispatcher basique",
+        goal: "Verifier qu'une commande exposee passe uniquement avec la permission CustomPerm.",
+        steps: [
+          "Avec le joueur non-OP, executer: /gamemode spectator",
+          "Avec l'admin, executer: /customperm command add gamemode",
+          "Executer: /customperm grade create vip",
+          "Executer: /customperm grade addperm vip customperm.command.gamemode",
+          "Executer: /customperm grade assign <player> vip",
+          "Avec le joueur non-OP, executer: /gamemode spectator",
+          "Avec l'admin, executer: /customperm grade removeperm vip customperm.command.gamemode",
+          "Avec le joueur non-OP, reessayer: /gamemode spectator"
+        ],
+        expect: "Refus au depart, autorisation apres grant, refus apres retrait de la permission."
+      },
+      {
+        id: "diagnostics",
+        category: "Sans LuckPerms",
+        title: "Diagnostics status/debug/test",
+        goal: "Verifier que les outils de diagnostic refletent l'etat reel.",
+        steps: [
+          "Executer: /customperm status",
+          "Executer: /customperm test <player> customperm.command.gamemode",
+          "Executer: /customperm debug <player> gamemode"
+        ],
+        expect: "status affiche backend/exposed/aliases/grades. test affiche GRANTED ou DENIED. debug montre dispatcher, expose, op-level, permission et wrapper."
+      },
+      {
+        id: "alias-allowed",
+        category: "Sans LuckPerms",
+        title: "Alias simple autorise",
+        goal: "Verifier qu'un alias accorde s'execute avec ses steps.",
+        steps: [
+          "Executer: /customperm alias add spec gamemode spectator",
+          "Executer: /customperm grade addperm vip customperm.alias.spec",
+          "Executer: /customperm grade assign <player> vip",
+          "Avec le joueur non-OP, executer: /spec",
+          "Executer: /customperm alias steps spec",
+          "Executer: /customperm alias list"
+        ],
+        expect: "Le joueur passe en spectator. L'alias et son step sont listes."
+      },
+      {
+        id: "alias-denied",
+        category: "Sans LuckPerms",
+        title: "Alias refuse sans permission",
+        goal: "Verifier qu'un alias existe mais reste bloque sans customperm.alias.<name>.",
+        steps: [
+          "Executer: /customperm grade removeperm vip customperm.alias.spec",
+          "Avec le joueur non-OP, executer: /spec"
+        ],
+        expect: "Le joueur recoit un refus de permission."
+      },
+      {
+        id: "alias-shadow",
+        category: "Sans LuckPerms",
+        title: "Collision alias avec commande existante",
+        goal: "Verifier le warning quand un alias shadow une commande native.",
+        steps: [
+          "Executer: /customperm alias add gamemode say shadow-test",
+          "Verifier le message admin en jeu.",
+          "Verifier les logs serveur.",
+          "Nettoyer: /customperm alias remove gamemode"
+        ],
+        expect: "Un warning indique que /gamemode shadow une commande existante et necessite customperm.alias.gamemode."
+      },
+      {
+        id: "alias-customperm-guard",
+        category: "Sans LuckPerms",
+        title: "Protection alias customperm",
+        goal: "Verifier que /customperm ne peut pas etre remplace par un alias.",
+        steps: [
+          "Executer: /customperm alias add customperm say nope",
+          "Executer: /customperm alias addstep customperm say nope"
+        ],
+        expect: "Les deux commandes sont refusees."
+      },
+      {
+        id: "scan-sanitize",
+        category: "Sans LuckPerms",
+        title: "Scan et sanitization",
+        goal: "Verifier que les patterns sans resultat ne cassent pas l'affichage.",
+        steps: [
+          "Executer: /customperm scan xyznotacommand",
+          "Si le client l'accepte, tester aussi un pattern avec caractere de couleur Minecraft.",
+          "Observer le message en jeu et les logs."
+        ],
+        expect: "Message No commands matched propre, sans couleur injectee ni affichage casse."
+      },
+      {
+        id: "null-config-reload",
+        category: "Sans LuckPerms",
+        title: "Reload config avec champs null",
+        goal: "Verifier que les configs JSON explicites a null sont normalisees.",
+        steps: [
+          "Dans config/customperm/aliases.json, mettre: {\"aliases\": null}",
+          "Dans config/customperm/commands.json, mettre: {\"grantedCommands\": null}",
+          "Executer: /customperm reload",
+          "Executer: /customperm status",
+          "Executer: /customperm command list",
+          "Executer: /customperm alias list"
+        ],
+        expect: "Pas de crash. Reload reussi. Les collections sont vides mais non cassees."
+      },
+      {
+        id: "luckperms-active",
+        category: "Avec LuckPerms",
+        title: "LuckPerms actif",
+        goal: "Verifier l'integration LP quand LuckPerms compatible est installe.",
+        steps: [
+          "Lancer le serveur avec LuckPerms compatible.",
+          "Executer: /customperm status",
+          "Executer: /customperm command add gamemode",
+          "Executer: /lp user <player> permission set customperm.command.gamemode true",
+          "Avec le joueur non-OP, executer: /gamemode spectator",
+          "Executer: /customperm grade create testlp"
+        ],
+        expect: "Backend LuckPerms. La permission LP autorise /gamemode. Les commandes grade internes demandent d'utiliser /lp."
+      },
+      {
+        id: "luckperms-resync",
+        category: "Avec LuckPerms",
+        title: "Resync apres changement LuckPerms",
+        goal: "Verifier que le tree de commandes client est renvoye apres changement de permission LP.",
+        steps: [
+          "Lancer le serveur avec LuckPerms compatible et un joueur non-OP connecte.",
+          "Executer: /customperm command add gamemode",
+          "Executer: /lp user <player> permission unset customperm.command.gamemode",
+          "Avec le joueur non-OP, verifier que /gamemode n'est pas utilisable.",
+          "Executer: /lp user <player> permission set customperm.command.gamemode true",
+          "Sans reconnecter le joueur, verifier que /gamemode devient visible/utilisable.",
+          "Executer: /lp user <player> permission unset customperm.command.gamemode"
+        ],
+        expect: "La permission LP prend effet sans reconnexion. Les logs indiquent le resync si l'event LP est recu."
+      },
+      {
+        id: "luckperms-internal-grade-block",
+        category: "Avec LuckPerms",
+        title: "Blocage des grades internes avec LuckPerms actif",
+        goal: "Verifier que les commandes grade internes ne modifient pas l'etat quand LP est actif.",
+        steps: [
+          "Executer: /customperm status",
+          "Verifier que le backend est LuckPerms.",
+          "Executer: /customperm grade create blockedlp",
+          "Executer: /customperm grade list"
+        ],
+        expect: "La creation est refusee avec un message invitant a utiliser /lp. Le grade blockedlp n'apparait pas."
+      },
+      {
+        id: "cleanup",
+        category: "Sans LuckPerms",
+        title: "Nettoyage final",
+        goal: "Remettre l'environnement dans un etat propre.",
+        steps: [
+          "Executer: /customperm command remove gamemode",
+          "Executer: /customperm alias remove spec",
+          "Executer: /customperm grade delete vip",
+          "Executer: /customperm status"
+        ],
+        expect: "Plus de commande exposee ni alias/grade de test, sauf elements volontairement conserves."
+      }
+    ];
+
+    const stateKey = "customperm-manual-test-results";
+    const testsRoot = document.getElementById("tests");
+    const exportText = document.getElementById("exportText");
+
+    function escapeHtml(value) {
+      return String(value)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function renderTests() {
+      const categories = [...new Set(tests.map(test => test.category))];
+      testsRoot.innerHTML = categories.map(category => {
+        const categoryTests = tests.filter(test => test.category === category);
+        const description = category === "Avec LuckPerms"
+          ? "A executer uniquement sur une instance ou LuckPerms compatible est charge."
+          : "A executer sur une instance CustomPerm sans LuckPerms charge.";
+
+        return `
+          <div class="category">
+            <div class="category-head">
+              <h2>${escapeHtml(category)}</h2>
+              <p class="muted">${escapeHtml(description)}</p>
+            </div>
+            ${categoryTests.map(test => `
+              <section class="test" data-test="${test.id}">
+                <div class="test-head">
+                  <div>
+                    <h2>${escapeHtml(test.title)}</h2>
+                    <p class="muted">${escapeHtml(test.goal)}</p>
+                  </div>
+                  <div class="status-row" role="radiogroup" aria-label="Resultat ${escapeHtml(test.title)}">
+                    ${["OK", "KO", "N/A"].map(status => `
+                      <label>
+                        <input type="radio" name="status-${test.id}" value="${status}">
+                        ${status}
+                      </label>
+                    `).join("")}
+                  </div>
+                </div>
+                <ol class="steps">
+                  ${test.steps.map(step => `<li>${formatStep(step)}</li>`).join("")}
+                </ol>
+                <div class="expect"><strong>Attendu :</strong> ${escapeHtml(test.expect)}</div>
+                <label class="notes">Resultat observe / notes
+                  <textarea data-note="${test.id}" placeholder="Ce qui s'est passe, message exact, logs utiles, capture referencee..."></textarea>
+                </label>
+              </section>
+            `).join("")}
+          </div>
+        `;
+      }).join("");
+    }
+
+    function formatStep(step) {
+      const escaped = escapeHtml(step);
+      if (!escaped.includes(": /")) return escaped;
+      return escaped.replace(/: (\/[^<]+)/, (_, command) => `:<pre>${command}</pre>`);
+    }
+
+    function getMeta() {
+      return {
+        tester: document.getElementById("tester").value.trim(),
+        date: document.getElementById("date").value,
+        version: document.getElementById("version").value.trim(),
+        backend: document.getElementById("backend").value,
+        player: document.getElementById("player").value.trim(),
+        environment: document.getElementById("environment").value.trim()
+      };
+    }
+
+    function setMeta(meta) {
+      for (const [key, value] of Object.entries(meta || {})) {
+        const field = document.getElementById(key);
+        if (field) field.value = value || "";
+      }
+    }
+
+    function collectResults() {
+      return {
+        exportedAt: new Date().toISOString(),
+        meta: getMeta(),
+        tests: tests.map(test => {
+          const checked = document.querySelector(`input[name="status-${test.id}"]:checked`);
+          const note = document.querySelector(`[data-note="${test.id}"]`).value.trim();
+          return {
+            id: test.id,
+            category: test.category,
+            title: test.title,
+            status: checked ? checked.value : "Non renseigne",
+            expected: test.expect,
+            notes: note
+          };
+        })
+      };
+    }
+
+    function applyResults(data) {
+      setMeta(data.meta);
+      for (const result of data.tests || []) {
+        const radio = document.querySelector(`input[name="status-${result.id}"][value="${result.status}"]`);
+        if (radio) radio.checked = true;
+        const note = document.querySelector(`[data-note="${result.id}"]`);
+        if (note) note.value = result.notes || "";
+      }
+      updateSummary();
+    }
+
+    function save() {
+      localStorage.setItem(stateKey, JSON.stringify(collectResults()));
+      updateSummary();
+    }
+
+    function load() {
+      const raw = localStorage.getItem(stateKey);
+      if (raw) {
+        applyResults(JSON.parse(raw));
+      } else {
+        document.getElementById("date").value = new Date().toISOString().slice(0, 10);
+      }
+    }
+
+    function updateSummary() {
+      const results = collectResults().tests;
+      document.getElementById("passCount").textContent = results.filter(t => t.status === "OK").length;
+      document.getElementById("failCount").textContent = results.filter(t => t.status === "KO").length;
+      document.getElementById("skipCount").textContent = results.filter(t => t.status === "N/A").length;
+    }
+
+    function toMarkdown(data) {
+      const lines = [
+        "# Rapport de test manuel CustomPerm",
+        "",
+        `- Testeur: ${data.meta.tester || "Non renseigne"}`,
+        `- Date: ${data.meta.date || "Non renseignee"}`,
+        `- Version: ${data.meta.version || "Non renseignee"}`,
+        `- Backend: ${data.meta.backend || "Non renseigne"}`,
+        `- Joueur non-OP: ${data.meta.player || "Non renseigne"}`,
+        `- Export: ${data.exportedAt}`,
+        "",
+        "## Environnement",
+        "",
+        data.meta.environment || "Non renseigne",
+        "",
+        "## Resultats",
+        ""
+      ];
+
+      const categories = [...new Set(data.tests.map(test => test.category || "Sans categorie"))];
+      for (const category of categories) {
+        lines.push(`### ${category}`);
+        lines.push("");
+        for (const test of data.tests.filter(item => (item.category || "Sans categorie") === category)) {
+          lines.push(`#### ${test.title}`);
+          lines.push("");
+          lines.push(`- Statut: ${test.status}`);
+          lines.push(`- Attendu: ${test.expected}`);
+          lines.push(`- Notes: ${test.notes || "Aucune"}`);
+          lines.push("");
+        }
+      }
+      return lines.join("\n");
+    }
+
+    function download(filename, content, type) {
+      const blob = new Blob([content], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      link.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function exportJson() {
+      save();
+      const data = collectResults();
+      const text = JSON.stringify(data, null, 2);
+      exportText.value = text;
+      download("customperm-manual-test-results.json", text, "application/json");
+    }
+
+    function exportMarkdown() {
+      save();
+      const data = collectResults();
+      const text = toMarkdown(data);
+      exportText.value = text;
+      download("customperm-manual-test-results.md", text, "text/markdown");
+    }
+
+    function resetAll() {
+      if (!confirm("Reinitialiser tous les resultats de cette page ?")) return;
+      localStorage.removeItem(stateKey);
+      document.querySelectorAll("input[type='text'], textarea").forEach(field => field.value = "");
+      document.querySelectorAll("input[type='radio']").forEach(field => field.checked = false);
+      document.getElementById("backend").value = "Internal";
+      document.getElementById("date").value = new Date().toISOString().slice(0, 10);
+      exportText.value = "";
+      updateSummary();
+    }
+
+    renderTests();
+    load();
+    updateSummary();
+
+    document.addEventListener("change", event => {
+      if (event.target.matches("input, textarea, select")) save();
+    });
+    document.addEventListener("input", event => {
+      if (event.target.matches("input, textarea")) save();
+    });
+    document.getElementById("saveBtn").addEventListener("click", save);
+    document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
+    document.getElementById("exportMdBtn").addEventListener("click", exportMarkdown);
+    document.getElementById("resetBtn").addEventListener("click", resetAll);
+  </script>
+</body>
+</html>

@@ -78,6 +78,10 @@ crash-reports/
 hs_err_pid*
 replay_pid*
 gametest-output.txt
+customperm-manual-test-results*.json
+customperm-manual-test-results*.md
+docs/customperm-manual-test-results*.json
+docs/customperm-manual-test-results*.md
 
 # ============================================================
 # Local config overrides
@@ -99,6 +103,11 @@ local.properties
 tmp/
 
 # ============================================================
+# Local or unreferenced media
+# ============================================================
+logo.jpg
+
+# ============================================================
 # BlueJ
 # ============================================================
 *.ctxt
@@ -111,6 +120,12 @@ tmp/
 # ============================================================
 # BMad (AI agent framework)
 # ============================================================
+.agents/
 _bmad/
 _bmad-output/
 .claude/
+
+# ============================================================
+# Codex / local agent runtime state
+# ============================================================
+.codex/

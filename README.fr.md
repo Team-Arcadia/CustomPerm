@@ -8,7 +8,7 @@
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg)]()
 [![Java](https://img.shields.io/badge/Java-21-red.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/version-0.1.0-brightgreen.svg)]()
 
 ---
 
@@ -49,16 +49,33 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 
 ## Fonctionnalités
 
-- **Permissions granulaires sur n'importe quelle commande** vanilla ou de mod tiers, sans modification de leur code.
-- **Soft-dependency LuckPerms** : utilise LP automatiquement s'il est présent, fallback transparent sur un système interne sinon.
-- **Wildcards** : `customperm.command.*` couvre toutes les commandes exposées.
-- **Aliases et macros** : créer des commandes nommées librement (`/fly`, `/heal`, `/spawn`...) qui exécutent une ou plusieurs commandes.
-- **Hot-reload** : tous les changements s'appliquent immédiatement, pas besoin de `/reload` ni de redémarrage.
-- **Re-synchronisation auto** : quand une perm change via LuckPerms, l'arbre de commandes du joueur est rafraîchi automatiquement.
-- **Outils de diagnostic** : `/customperm debug`, `/customperm test`, `/customperm scan`, `/customperm status`.
-- **Préserve l'op** : les ops gardent l'accès à toutes les commandes vanilla, le mod n'altère jamais leur droit.
-- **Côté serveur uniquement** : aucun mod requis côté client.
-- **Testé en continu** : 10 GameTests automatisés tournent à chaque commit via GitHub Actions.
+- **Permissions granulaires par commande** : exposez n'importe quelle commande racine vanilla ou de mod tiers avec `/customperm command add <name>`.
+- **Modèle deny-by-default** : aucune commande n'est exposée par défaut ; une commande non exposée garde son comportement vanilla ou moddé.
+- **Backend JSON interne** : gestion des grades, assignations joueurs et nodes de permission sans plugin externe.
+- **Backend LuckPerms** : utilisation automatique de LuckPerms lorsqu'une version compatible est installée.
+- **Contrôle de version LuckPerms** : LuckPerms `5.4.150+` requis ; les versions trop anciennes ou prerelease sont refusées par sécurité.
+- **Fallback permanent si LP se dégrade** : si LuckPerms devient indisponible au runtime, CustomPerm bascule sur le backend interne au lieu de casser les checks de commandes.
+- **Visibilité du backend** : logs de boot, `/customperm status`, `/customperm debug` et `/customperm test` indiquent Internal, LuckPerms ou Internal fallback from LuckPerms.
+- **RBAC multi-grades** : un joueur peut avoir plusieurs grades internes ; les permissions sont résolues par union des grades assignés.
+- **DENY explicite** : les grades internes supportent `deniedPermissions`, et tout DENY correspondant l'emporte sur les ALLOW.
+- **Wildcards de permissions** : `*`, `customperm.command.*` et `customperm.alias.*` sont supportés.
+- **Aliases et macros** : créez des commandes racine personnalisées (`/fly`, `/heal`, `/starter`) qui exécutent une ou plusieurs commandes configurées.
+- **Edition des steps d'alias** : ajout, suppression et inspection de steps individuels avec indices 0-based.
+- **Elévation des aliases** : les steps d'alias s'exécutent avec op level 4 pour permettre aux macros signées par l'admin d'appeler des commandes op-only.
+- **Garde-fous sur les aliases** : `/customperm` est réservé, les steps vides sont ignorés, les aliases sans step sont refusés, et le shadow d'une commande existante émet un warning.
+- **Enregistrement runtime des aliases** : ajout, remplacement ou retrait d'alias sur le dispatcher vivant sans redémarrage serveur.
+- **Wrapping du command tree** : les commandes racine Brigadier sont clonées et wrappées pour appliquer les permissions CustomPerm sur les commandes exposées.
+- **Préservation des ops** : les sources réellement op level 2+ gardent toujours l'accès ; le mod ne retire pas les droits opérateur.
+- **Re-sync du command tree client** : après changement interne ou event LuckPerms, les joueurs concernés reçoivent un arbre de commandes à jour.
+- **Hot-reload atomique** : `/customperm reload` charge `grades.json`, `aliases.json` et `commands.json` en transaction ; un JSON invalide conserve le snapshot précédent.
+- **Création et normalisation automatique des configs** : fichiers manquants, `{}`, champs inconnus et collections explicitement `null` sont normalisés vers des structures vides sûres.
+- **Backups automatiques** : les reloads réussis écrivent des backups horodatés et conservent les trois dernières sauvegardes par fichier.
+- **Lectures concurrentes sûres** : le snapshot actif est stocké dans un `AtomicReference`, sans lock sur le hot path de permission.
+- **Diagnostics** : `/customperm status`, `/customperm scan`, `/customperm debug` et `/customperm test` couvrent l'inspection runtime et le dépannage.
+- **Procédure de test manuel** : `docs/manual-test-procedure.html` fournit une checklist thème sombre avec export JSON/Markdown pour validation release.
+- **Baseline de performance** : les benchmarks JMH documentent la résolution de permissions et la lecture concurrente du snapshot dans `docs/performance-baseline.md`.
+- **Checks CI release** : GitHub Actions lance les GameTests, construit le jar distribuable et vérifie les métadonnées requises du jar.
+- **Côté serveur uniquement** : aucun mod n'est requis côté client.
 
 ---
 
@@ -73,7 +90,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 
 ### Étapes
 
-1. Téléchargez `customperm-1.0.0.jar` depuis la [page Releases](../../releases).
+1. Téléchargez `customperm-0.1.0.jar` depuis la [page Releases](../../releases).
 2. Déposez le jar dans le dossier `mods/` de votre serveur.
 3. (Optionnel) Déposez aussi le jar de [LuckPerms](https://luckperms.net/download) (build NeoForge 1.21.1).
 4. Démarrez le serveur.
@@ -153,6 +170,7 @@ Crée des commandes personnalisées qui exécutent une ou plusieurs commandes. L
 ### Grades (système interne, sans LuckPerms)
 
 Ces commandes sont **bloquées si LuckPerms est actif** — utilisez `/lp` à la place.
+Elles gèrent les nodes ALLOW. Les nodes DENY internes sont stockés dans `grades.json` via `deniedPermissions`.
 
 | Commande | Effet |
 |---|---|
@@ -182,6 +200,7 @@ CustomPerm utilise un schéma de nodes hiérarchique compatible LuckPerms (et so
 
 | Node | Effet |
 |---|---|
+| `*` | Wildcard global du backend interne. À utiliser avec précaution. |
 | `customperm.command.<name>` | Autorise la commande `<name>` (si elle a été exposée). Ex: `customperm.command.gamemode` |
 | `customperm.command.*` | Wildcard : couvre toutes les commandes exposées. |
 | `customperm.alias.<name>` | Autorise l'alias `<name>`. Ex: `customperm.alias.fly` |
@@ -231,11 +250,13 @@ Grades et assignations utilisateurs.
   "grades": {
     "vip": {
       "name": "vip",
-      "permissions": ["customperm.command.gamemode", "customperm.alias.fly"]
+      "permissions": ["customperm.command.gamemode", "customperm.alias.fly"],
+      "deniedPermissions": []
     },
     "staff": {
       "name": "staff",
-      "permissions": ["customperm.command.*", "customperm.alias.*"]
+      "permissions": ["customperm.command.*", "customperm.alias.*"],
+      "deniedPermissions": ["customperm.command.op"]
     }
   },
   "userGrades": {
@@ -246,6 +267,8 @@ Grades et assignations utilisateurs.
 ```
 
 Avec LuckPerms actif, ce fichier est ignoré (les perms passent par LP).
+
+`deniedPermissions` est utilisé uniquement par le backend interne. Un DENY correspondant l'emporte sur n'importe quel ALLOW provenant des grades assignés.
 
 ---
 
@@ -442,7 +465,7 @@ cd CustomPerm
 .\gradlew.bat build           # Windows
 ```
 
-Le jar est produit dans `build/libs/customperm-1.0.0.jar`.
+Le jar est produit dans `build/libs/customperm-0.1.0.jar`.
 
 ### Tests en environnement de dev
 
@@ -465,7 +488,7 @@ luckperms_api_version=5.4
 
 ## Tests
 
-Le mod est livré avec une suite de tests complète qui s'exécute dans un vrai serveur Minecraft.
+Le mod est livré avec trois niveaux de validation : tests JUnit purs, GameTests NeoForge et checklist manuelle de release.
 
 ### Lancer la suite en local
 
@@ -473,22 +496,34 @@ Le mod est livré avec une suite de tests complète qui s'exécute dans un vrai 
 ./gradlew runGameTestServer
 ```
 
-Cette tâche démarre un serveur Minecraft de test dédié, exécute les 10 GameTests, et sort avec un code égal au nombre de tests échoués (zéro = tout passe). Adapté aux pipelines CI.
+Cette tâche démarre un serveur Minecraft de test dédié, exécute les GameTests enregistrés, et sort avec un code égal au nombre de tests échoués (zéro = tout passe). Adapté aux pipelines CI.
+
+Les tests Java purs se lancent avec :
+
+```bash
+./gradlew test
+```
+
+Les benchmarks de performance se lancent avec :
+
+```bash
+./gradlew jmh
+```
 
 ### Couverture
 
-| Test | Valide |
+| Zone | Valide |
 |---|---|
-| `internalDeniesByDefault` | Un store de grades vide refuse toute permission (garde-fou de sécurité). |
-| `internalGrantsViaGrade` | Un grade affecté à un joueur lui transmet exactement ses perms. |
-| `internalWildcardWorks` | `customperm.command.*` couvre les descendants mais pas les autres branches. |
-| `internalMultipleGradesCompose` | Plusieurs grades sur un même utilisateur cumulent leurs perms. |
-| `configRoundtripsThroughDisk` | save() / load() préservent les données via vrai I/O JSON. |
-| `commandExposureGate` | Add/remove sur la liste des commandes exposées prend effet immédiatement. |
-| `wrappedCanUseFullFlow` | Placeholder — le flux end-to-end avec mock player n'est pas faisable en 1.21.1 (`makeMockPlayer` ne retourne pas un `ServerPlayer`). À valider via l'environnement de dev à la place. |
-| `opAlwaysPasses` | Une source op-level passe toujours (préservation vanilla). |
-| `aliasRegistersOnLiveDispatcher` | Un nouvel alias apparaît dans le dispatcher en cours sans `/reload`. |
-| `aliasRemovesFromDispatcher` | Un alias supprimé disparaît du dispatcher en cours. |
+| Résolution de permissions | Deny par défaut, ALLOW direct, wildcard ALLOW, wildcard global, DENY explicite, DENY-over-ALLOW entre plusieurs grades. |
+| Grades internes | Création/listage/suppression de grades, assignation/désassignation joueurs, prévention des doublons, cascade lors de la suppression d'un grade. |
+| Exposition de commandes | Ajout/retrait/listage de commandes exposées, changements idempotents, commandes non exposées refusées par CustomPerm. |
+| Config aliases | Création, overwrite, suppression, listage, ordre des aliases, parsing par `;`, steps vides ignorés. |
+| Exécution aliases | Forme du node de permission, exécution op level 4, ordre des steps, continuation après erreur, filtrage des steps vides. |
+| Config manager | Lectures atomiques du snapshot, rejet de reload concurrent, rollback après JSON invalide, création et rotation des backups. |
+| Compatibilité config | Fichiers manquants, fichiers `{}`, collections explicitement `null`, champs futurs inconnus, configs partielles. |
+| Sélection LuckPerms | Backend interne sans LP, parsing de versions, version minimale, sélection stable du backend. |
+| GameTests | Dispatcher live, gates d'exposition, ajout/retrait live d'alias, hot reload, rollback JSON corrompu, repush du command tree. |
+| Performance | `PermissionResolver.resolve()` et lecture concurrente du snapshot config via JMH. |
 
 ### Intégration continue
 
@@ -497,8 +532,10 @@ Chaque push sur `main` et chaque pull request déclenche `.github/workflows/game
 1. Configure JDK 21 sur Ubuntu.
 2. Cache les dépendances Gradle pour accélérer les runs suivants.
 3. Lance `gradlew runGameTestServer`.
-4. Fait échouer le build si un test critique échoue.
-5. Upload les logs de run en artifact en cas d'échec, pour inspection.
+4. Construit le jar distribuable avec `gradlew build`.
+5. Vérifie que le jar contient `META-INF/neoforge.mods.toml` et `META-INF/MANIFEST.MF`.
+6. Fait échouer le build si un test ou contrôle jar échoue.
+7. Upload les logs de run en artifact en cas d'échec, pour inspection.
 
 ### Validation manuelle en dev
 
@@ -511,6 +548,8 @@ Les GameTests couvrent la logique des composants ; pour un test end-to-end compl
 
 Puis exécutez les recettes des [Cas d'usage courants](#cas-dusage-courants). Les commandes in-game `/customperm debug`, `/customperm test`, `/customperm status` et `/customperm scan` sont conçues pour la vérification en direct.
 
+Pour les validations de release, ouvrez `docs/manual-test-procedure.html` dans un navigateur. La page fournit une checklist thème sombre séparée entre scénarios Internal et LuckPerms, avec export JSON ou Markdown.
+
 ---
 
 ## Comment ça marche (technique)
@@ -520,9 +559,9 @@ Puis exécutez les recettes des [Cas d'usage courants](#cas-dusage-courants). Le
 Au `RegisterCommandsEvent`, le mod parcourt toutes les commandes de Brigadier et **clone** chaque node racine en un nouveau `LiteralCommandNode` dont le `requires` enchaîne :
 
 ```
-1. Le requirement original (op-level vanilla) — pour préserver le comportement op
-2. Sinon, vérifier que la commande est dans la liste exposée
-3. Sinon, demander au PermissionService si le joueur a customperm.command.<root>
+1. Si la commande n'est pas exposée, conserver le requirement vanilla/moddé original
+2. Si la commande est exposée et que la source est op level 2+, autoriser
+3. Sinon, demander au PermissionService si la source a customperm.command.<root>
 ```
 
 Les nodes clonés sont insérés dans les `Map` internes (`children`/`literals`/`arguments`) du root via reflection. Cette approche évite les pièges du JIT inlining sur les champs `final`.
@@ -534,7 +573,17 @@ Les nodes clonés sont insérés dans les `Map` internes (`children`/`literals`/
 - `LuckPermsService` : interroge LP via son API publique (`LuckPermsProvider.get()`).
 - `InternalPermService` : lit les grades dans `grades.json`.
 
-La sélection se fait au boot via `ModList.get().isLoaded("luckperms")`.
+La sélection se fait au boot via `ModList.get().isLoaded("luckperms")` avec contrôle de version minimale (`5.4.150+`). Si LuckPerms est absent, incompatible, échoue à l'initialisation, ou lève plus tard pendant un check de permission, CustomPerm utilise le backend/fallback interne.
+
+Le resolver interne applique cet ordre :
+
+```
+1. Joueur ou node null => false
+2. Aucun grade assigné => false
+3. Un node deniedPermissions correspondant => false
+4. Un node permissions correspondant => true
+5. Sinon => false
+```
 
 ### Re-synchronisation
 

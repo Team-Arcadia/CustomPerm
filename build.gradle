@@ -3,6 +3,7 @@ plugins {
     id 'eclipse'
     id 'idea'
     id 'net.neoforged.moddev' version '1.0.21'
+    id 'me.champeau.jmh'     version '0.7.3'
 }
 
 version = mod_version
@@ -15,6 +16,13 @@ repositories {
     mavenLocal()
     maven { name = 'LuckPerms';  url = 'https://repo.lucko.me/' }
     maven { name = 'ParchmentMC'; url = 'https://maven.parchmentmc.org' }
+}
+
+sourceSets {
+    gameTest {
+        compileClasspath += sourceSets.main.output + configurations.compileClasspath
+        runtimeClasspath += sourceSets.main.output + configurations.runtimeClasspath
+    }
 }
 
 neoForge {
@@ -42,6 +50,7 @@ neoForge {
     mods {
         "${mod_id}" {
             sourceSet sourceSets.main
+            sourceSet sourceSets.gameTest
         }
     }
 }
@@ -49,6 +58,52 @@ neoForge {
 dependencies {
     // LuckPerms is a soft dependency — present at compile, not required at runtime.
     compileOnly "net.luckperms:api:${luckperms_api_version}"
+
+    // GameTest source set depends on main output
+    gameTestImplementation sourceSets.main.output
+
+    // JMH benchmarks depend on main compiled classes only (no transitive NeoForge deps).
+    // files() évite le conflit Gson entre testImplementation:2.11.0 et NeoForge:strictly 2.10.1.
+    // Les benchmarks n'utilisent que des classes pur-Java (PermissionResolver, GradesConfig).
+    jmhImplementation files(sourceSets.main.output.classesDirs)
+
+    // JUnit 5 — tests unitaires purs Java (sans NeoForge)
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.0'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+    // SLF4J pour tests unitaires (ConfigManager utilise LoggerFactory hors NeoForge)
+    testImplementation 'org.slf4j:slf4j-api:2.0.9'
+    testRuntimeOnly 'org.slf4j:slf4j-simple:2.0.9'
+
+    // Gson pour tests unitaires (transitive de NeoForge, pas exposée au classpath test)
+    testImplementation 'com.google.code.gson:gson:2.11.0'
+}
+
+test {
+    useJUnitPlatform()
+}
+
+// jmhJar regroupe le runtime NeoForge (>65535 entries) — zip64 obligatoire.
+tasks.named('jmhJar', Jar) { zip64 = true }
+
+// Résout le conflit Gson entre testImplementation:2.11.0 et NeoForge strictly:2.10.1
+// uniquement sur le classpath JMH (n'affecte pas les tests JUnit5).
+configurations.named('jmhRuntimeClasspath') {
+    resolutionStrategy.force 'com.google.code.gson:gson:2.10.1'
+}
+
+// JMH microbenchmarks — hot paths (story 6-3 — NFR1, NFR4, AR1, AR11)
+// Ne PAS ajouter sourceSet sourceSets.jmh dans neoForge.mods : les benchmarks
+// tournent dans un JVM autonome sans NeoForge.
+jmh {
+    jmhVersion       = '1.37'
+    warmupIterations = 3
+    iterations       = 5
+    fork             = 3
+    // benchmarkMode omis — chaque classe déclare son propre @BenchmarkMode (P1 review fix)
+    // project.buildDir déprécié depuis Gradle 7.1 → project.layout.buildDirectory (P2 review fix)
+    resultsFile      = project.layout.buildDirectory.file("results/jmh/results.json").get().asFile
+    resultFormat     = 'JSON'
 }
 
 tasks.named('processResources', ProcessResources).configure {
