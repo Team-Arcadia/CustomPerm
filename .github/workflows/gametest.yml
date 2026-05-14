@@ -40,6 +40,18 @@ jobs:
         # The task's exit code = number of failed required tests.
         # Non-zero will fail the job automatically.
 
+      - name: Build distributable jar
+        run: ./gradlew build --no-daemon
+
+      - name: Verify distributable jar contents
+        shell: bash
+        run: |
+          set -euo pipefail
+          jar_file="$(ls build/libs/customperm-*.jar | head -n 1)"
+          test -n "$jar_file"
+          jar tf "$jar_file" | grep -Fx 'META-INF/neoforge.mods.toml'
+          jar tf "$jar_file" | grep -Fx 'META-INF/MANIFEST.MF'
+
       - name: Upload logs on failure
         if: failure()
         uses: actions/upload-artifact@v4
