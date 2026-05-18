@@ -4,6 +4,8 @@ import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.command.AliasManager;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.perm.InternalPermService;
+import com.arcadia.customperm.perm.PermissionService;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.tree.CommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.gametest.framework.GameTest;
@@ -131,6 +133,38 @@ public class Customperm {
     }
 
     // Group 4 — End-to-end with the live dispatcher
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void gradeDeleteRemovesEmptyUserAssignments(GameTestHelper helper) {
+        GradesConfig grades = freshGrades();
+        GradesConfig.Grade vip = new GradesConfig.Grade();
+        vip.name = "vip";
+        grades.grades.put("vip", vip);
+        UUID uuid = UUID.randomUUID();
+        grades.userGrades.put(uuid.toString(), new ArrayList<>(List.of("vip")));
+
+        var server = helper.getLevel().getServer();
+        PermissionService previousPermissions = CustomPerm.permissions;
+        try {
+            CustomPerm.permissions = new InternalPermService(CustomPerm.configManager);
+            int result = server.getCommands().getDispatcher().execute(
+                    "customperm grade delete vip",
+                    server.createCommandSourceStack());
+            if (result != 1)
+                fail("Expected /customperm grade delete vip to succeed, got result " + result);
+        } catch (CommandSyntaxException e) {
+            fail("Command syntax error while deleting grade: " + e.getMessage());
+        } finally {
+            CustomPerm.permissions = previousPermissions;
+        }
+
+        if (grades.grades.containsKey("vip"))
+            fail("Grade vip was not deleted.");
+        if (grades.userGrades.containsKey(uuid.toString()))
+            fail("Deleting the only assigned grade must remove the now-empty userGrades entry.");
+
+        helper.succeed();
+    }
+
     /**
      * End-to-end with a real player would require {@code (ServerPlayer) helper.makeMockPlayer(...)},
      * but {@code GameTestHelper.makeMockPlayer} in 1.21.1 returns an anonymous Player subclass

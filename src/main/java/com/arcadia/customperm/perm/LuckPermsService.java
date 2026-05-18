@@ -42,8 +42,8 @@ public class LuckPermsService implements PermissionService {
 
     @Override
     public boolean hasPermission(CommandSourceStack source, String node) {
-        // AC3 : une fois dégradé, délégation permanente vers fallback — LP n'est plus consulté.
-        if (degraded.get()) return safeCallFallback(source, node);
+        // AC3 : une fois dégradé, LP n'est plus consulté.
+        if (degraded.get()) return handleUnavailable(source, node);
 
         if (!(source.getEntity() instanceof ServerPlayer player)) return false;
         try {
@@ -58,11 +58,23 @@ public class LuckPermsService implements PermissionService {
             // compareAndSet garantit que WARN + bascule n'ont lieu qu'une seule fois (AC2, P1).
             if (degraded.compareAndSet(false, true)) {
                 // P3 : throwable attaché pour que la cause LP soit visible dans les logs.
-                CustomPerm.LOGGER.warn("[CustomPerm] LuckPerms unavailable — switching permanently to internal backend.", t);
+                String mode = CustomPerm.configManager.getSettings().luckPermsFallbackMode;
+                if (CustomPerm.configManager.getSettings().useInternalLuckPermsFallback()) {
+                    CustomPerm.LOGGER.warn("[CustomPerm] LuckPerms unavailable — switching permanently to internal backend (luckPermsFallbackMode=internal).", t);
+                } else {
+                    CustomPerm.LOGGER.warn("[CustomPerm] LuckPerms unavailable — failing closed (luckPermsFallbackMode={}).", mode, t);
+                }
             }
-            // AC4/AC5 : délégation immédiate au fallback pour cette requête aussi.
+            // AC4/AC5 : politique de fallback appliquée immédiatement à cette requête aussi.
+            return handleUnavailable(source, node);
+        }
+    }
+
+    private boolean handleUnavailable(CommandSourceStack source, String node) {
+        if (CustomPerm.configManager.getSettings().useInternalLuckPermsFallback()) {
             return safeCallFallback(source, node);
         }
+        return false;
     }
 
     /**

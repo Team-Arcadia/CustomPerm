@@ -18,6 +18,7 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -166,7 +167,7 @@ public class CustomPermCommand {
 
     private static int commandRemove(CommandContext<CommandSourceStack> ctx) {
         String name = StringArgumentType.getString(ctx, "name");
-        boolean removed = CustomPerm.configManager.getCommands().grantedCommands.remove(name);
+        boolean removed = CustomPerm.configManager.getCommands().removeCommand(name);
         if (!removed) {
             ctx.getSource().sendFailure(Component.literal("Command /" + name + " is not currently exposed."));
             return 0;
@@ -215,7 +216,7 @@ public class CustomPermCommand {
             ctx.getSource().sendFailure(Component.literal("No such grade: " + name));
             return 0;
         }
-        g.userGrades.values().forEach(list -> list.remove(name));
+        removeGradeFromUsers(g, name);
         CustomPerm.configManager.save();
         resyncCommands(ctx);
         success(ctx, "Deleted grade " + name);
@@ -298,6 +299,9 @@ public class CustomPermCommand {
             ctx.getSource().sendSuccess(
                 () -> Component.literal(pn + " is not assigned to " + gn + " — no change."), false);
             return 1;
+        }
+        if (list.isEmpty()) {
+            CustomPerm.configManager.getGrades().userGrades.remove(player.getUUID().toString());
         }
         CustomPerm.configManager.save();
         resyncPlayer(ctx, player);
@@ -489,7 +493,7 @@ public class CustomPermCommand {
         boolean op4 = source.hasPermission(4);
         String permNode = "customperm.command." + cmd;
         boolean permGranted = PermissionService.get().hasPermission(source, permNode);
-        boolean shouldPass = op2 || (inGrantedList && permGranted);
+        boolean preserveOriginalRequires = CustomPerm.configManager.getCommands().shouldPreserveOriginalRequires(cmd);
 
         var rootNode = server.getCommands().getDispatcher().getRoot().getChildren()
             .stream().filter(n -> n.getName().equals(cmd)).findFirst().orElse(null);
@@ -500,6 +504,10 @@ public class CustomPermCommand {
             } catch (Throwable ignored) {}
         }
 
+        boolean customPermAllows = op2 || (inGrantedList && permGranted);
+        boolean comparableDecision = !inGrantedList || !preserveOriginalRequires;
+        boolean shouldPass = inGrantedList ? customPermAllows : actualWrapper;
+
         String backend = CustomPerm.backendLabel();
         ctx.getSource().sendSuccess(() -> Component.literal(
             "=== Debug for /" + cmd + " (" + player.getGameProfile().getName() + ") [backend: " + backend + "] ==="), false);
@@ -508,11 +516,13 @@ public class CustomPermCommand {
         ctx.getSource().sendSuccess(() -> Component.literal("  Source has op level 2       : " + op2), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Source has op level 4       : " + op4), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  PermService says " + permNode + " : " + permGranted), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("  Logical decision (computed) : " + shouldPass), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Preserve original requires : " + preserveOriginalRequires), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Logical decision (computed) : "
+                + (comparableDecision ? Boolean.toString(shouldPass) : "requires original predicate")), false);
         boolean finalActualWrapper = actualWrapper;
         ctx.getSource().sendSuccess(() -> Component.literal("  Actual wrapper canUse()     : " + finalActualWrapper).withStyle(
-            finalActualWrapper == shouldPass ? ChatFormatting.GREEN : ChatFormatting.RED), false);
-        if (finalActualWrapper != shouldPass) {
+            !comparableDecision || finalActualWrapper == shouldPass ? ChatFormatting.GREEN : ChatFormatting.RED), false);
+        if (comparableDecision && finalActualWrapper != shouldPass) {
             ctx.getSource().sendSuccess(() -> Component.literal(
                 "  >>> MISMATCH — wrapper does not match expected logic <<<").withStyle(ChatFormatting.RED), false);
         }
@@ -547,9 +557,11 @@ public class CustomPermCommand {
         int aliases = CustomPerm.configManager.getAliases().aliases.size();
         int grades = CustomPerm.configManager.getGrades().grades.size();
         int users = CustomPerm.configManager.getGrades().userGrades.size();
+        String lpFallbackMode = CustomPerm.configManager.getSettings().luckPermsFallbackMode;
 
         ctx.getSource().sendSuccess(() -> Component.literal("=== CustomPerm Status ===").withStyle(ChatFormatting.AQUA), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Backend            : " + backend), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  LP fallback mode   : " + lpFallbackMode), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Dispatcher commands: " + totalCmds + " (vanilla + mods + aliases)"), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Exposed commands   : " + exposed), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Custom aliases     : " + aliases), false);
@@ -666,6 +678,22 @@ public class CustomPermCommand {
             return true;
         }
         return false;
+    }
+
+    private static void removeGradeFromUsers(GradesConfig grades, String gradeName) {
+        Iterator<java.util.Map.Entry<String, List<String>>> iterator = grades.userGrades.entrySet().iterator();
+        while (iterator.hasNext()) {
+            var entry = iterator.next();
+            List<String> assigned = entry.getValue();
+            if (assigned == null) {
+                iterator.remove();
+                continue;
+            }
+            assigned.removeIf(gradeName::equals);
+            if (assigned.isEmpty()) {
+                iterator.remove();
+            }
+        }
     }
 
     private static void success(CommandContext<CommandSourceStack> ctx, String msg) {

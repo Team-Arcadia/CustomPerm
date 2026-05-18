@@ -67,7 +67,7 @@ public class HotReloadTest {
         try {
             // Ensure files are on disk and get the grades.json path
             CustomPerm.configManager.save();
-            Path gradesPath = FMLPaths.CONFIGDIR.get().resolve("customperm").resolve("grades.json");
+            Path gradesPath = FMLPaths.CONFIGDIR.get().resolve("arcadia").resolve("customperm").resolve("grades.json");
             String validContent = Files.readString(gradesPath);
 
             // Capture snapshot before corruption

@@ -76,6 +76,41 @@ public class AliasExecutionTest {
     }
 
     /**
+     * Regression: an alias may temporarily shadow a vanilla/modded command. Removing
+     * that alias must restore the original command node instead of deleting it from
+     * the live dispatcher.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void aliasShadowRemovalRestoresOriginalCommand(GameTestHelper helper) {
+        var aliasesCfg = CustomPerm.configManager.getAliases();
+        String shadowedName = "gamemode";
+        var server = helper.getLevel().getServer();
+        var dispatcher = server.getCommands().getDispatcher();
+
+        CommandNode<CommandSourceStack> original = Customperm.findRoot(server, shadowedName);
+        if (original == null)
+            fail("Setup failed — /gamemode is missing before alias shadow test.");
+
+        aliasesCfg.aliases.put(shadowedName, new ArrayList<>(List.of("say shadow-test")));
+        AliasManager.registerOrReplace(dispatcher, shadowedName);
+        CommandNode<CommandSourceStack> aliasNode = Customperm.findRoot(server, shadowedName);
+        if (aliasNode == null)
+            fail("Setup failed — shadow alias /gamemode was not registered.");
+        if (aliasNode == original)
+            fail("Setup failed — /gamemode was not shadowed by alias node.");
+
+        aliasesCfg.aliases.remove(shadowedName);
+        AliasManager.registerOrReplace(dispatcher, shadowedName);
+        CommandNode<CommandSourceStack> restored = Customperm.findRoot(server, shadowedName);
+        if (restored == null)
+            fail("Removing shadow alias deleted /gamemode from dispatcher.");
+        if (restored != original)
+            fail("Removing shadow alias did not restore the original /gamemode node.");
+
+        helper.succeed();
+    }
+
+    /**
      * AC: the alias node's requirements pass for a server source (op level 4),
      * confirming that the elevated execution path is accessible.
      *

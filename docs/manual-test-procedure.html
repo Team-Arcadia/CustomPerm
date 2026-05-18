@@ -252,11 +252,25 @@
       border: 1px solid var(--line);
     }
 
-    .expect {
+    .expect, .cleanup {
       border-left: 4px solid var(--focus);
       padding: 8px 10px;
       background: rgba(88, 166, 255, 0.09);
       margin-top: 8px;
+    }
+
+    .cleanup {
+      border-left-color: var(--skip);
+      background: rgba(165, 173, 186, 0.08);
+    }
+
+    .expect ul, .cleanup ol {
+      margin: 8px 0 0;
+      padding-left: 22px;
+    }
+
+    .expect li, .cleanup li {
+      margin-bottom: 6px;
     }
 
     .notes {
@@ -321,13 +335,14 @@
             <input id="date" type="date">
           </label>
           <label>Version CustomPerm
-            <input id="version" type="text" placeholder="ex. 0.1.0">
+            <input id="version" type="text" placeholder="ex. 1.0.0-rc.1">
           </label>
           <label>Backend
             <select id="backend">
               <option value="Internal">Internal</option>
               <option value="LuckPerms">LuckPerms</option>
               <option value="Internal fallback from LuckPerms">Internal fallback from LuckPerms</option>
+              <option value="Deny - LuckPerms unavailable">Deny - LuckPerms unavailable</option>
               <option value="Autre/Inconnu">Autre/Inconnu</option>
             </select>
           </label>
@@ -375,6 +390,45 @@
         expect: "Le backend est affiche. Le joueur de test est non-OP. /gamemode apparait dans le dispatcher."
       },
       {
+        id: "config-first-boot",
+        category: "Sans LuckPerms",
+        title: "Premier demarrage et fichiers config",
+        goal: "Verifier que le mod cree tous les fichiers au nouvel emplacement serveur.",
+        steps: [
+          "Arreter le serveur.",
+          "Sauvegarder puis supprimer le dossier de test config/arcadia/customperm s'il existe.",
+          "Verifier que config/customperm n'est pas utilise pour ce test.",
+          "Relancer le serveur sans LuckPerms.",
+          "Verifier la presence de config/arcadia/customperm/grades.json.",
+          "Verifier la presence de config/arcadia/customperm/aliases.json.",
+          "Verifier la presence de config/arcadia/customperm/commands.json.",
+          "Verifier la presence de config/arcadia/customperm/settings.json.",
+          "Executer: /customperm status"
+        ],
+        expect: "Les 4 fichiers sont crees dans config/arcadia/customperm. Le backend est Internal. LP fallback mode vaut deny."
+      },
+      {
+        id: "legacy-config-migration",
+        category: "Sans LuckPerms",
+        title: "Migration ancien dossier config",
+        goal: "Verifier la migration non destructive depuis config/customperm vers config/arcadia/customperm.",
+        steps: [
+          "Important: executer ce test sur une instance de test fraiche, avant le test Premier demarrage, ou apres suppression complete de config/arcadia/customperm serveur arrete.",
+          "Arreter le serveur.",
+          "Verifier que le processus serveur est bien arrete.",
+          "Supprimer completement le dossier config/arcadia/customperm.",
+          "Verifier manuellement que config/arcadia/customperm n'existe plus avant de relancer.",
+          "Creer config/customperm avec grades.json, aliases.json, commands.json et settings.json valides.",
+          "Dans config/customperm/settings.json, mettre: {\"luckPermsFallbackMode\":\"internal\"}",
+          "Relancer le serveur.",
+          "Verifier que config/arcadia/customperm existe.",
+          "Verifier que les 4 fichiers ont ete copies.",
+          "Verifier que les anciens fichiers existent encore dans config/customperm.",
+          "Executer: /customperm status"
+        ],
+        expect: "La migration copie les fichiers connus vers le nouveau dossier sans supprimer l'ancien. status affiche LP fallback mode: internal."
+      },
+      {
         id: "dispatcher-basic",
         category: "Sans LuckPerms",
         title: "Permission dispatcher basique",
@@ -401,7 +455,7 @@
           "Executer: /customperm test <player> customperm.command.gamemode",
           "Executer: /customperm debug <player> gamemode"
         ],
-        expect: "status affiche backend/exposed/aliases/grades. test affiche GRANTED ou DENIED. debug montre dispatcher, expose, op-level, permission et wrapper."
+        expect: "status affiche backend/exposed/aliases/grades et LP fallback mode. test affiche GRANTED ou DENIED. debug montre dispatcher, expose, op-level, permission, preserveOriginalRequires et wrapper."
       },
       {
         id: "alias-allowed",
@@ -471,14 +525,97 @@
         title: "Reload config avec champs null",
         goal: "Verifier que les configs JSON explicites a null sont normalisees.",
         steps: [
-          "Dans config/customperm/aliases.json, mettre: {\"aliases\": null}",
-          "Dans config/customperm/commands.json, mettre: {\"grantedCommands\": null}",
+          "Dans config/arcadia/customperm/aliases.json, mettre: {\"aliases\": null}",
+          "Dans config/arcadia/customperm/commands.json, mettre: {\"grantedCommands\": null, \"preserveOriginalRequires\": null}",
+          "Dans config/arcadia/customperm/settings.json, mettre: {\"luckPermsFallbackMode\": \"deny\"}",
           "Executer: /customperm reload",
           "Executer: /customperm status",
           "Executer: /customperm command list",
           "Executer: /customperm alias list"
         ],
-        expect: "Pas de crash. Reload reussi. Les collections sont vides mais non cassees."
+        expect: "Pas de crash. Reload reussi. Les collections sont vides mais non cassees. status affiche LP fallback mode: deny."
+      },
+      {
+        id: "settings-invalid-normalization",
+        category: "Sans LuckPerms",
+        title: "Settings invalides normalises",
+        goal: "Verifier qu'une valeur invalide de luckPermsFallbackMode est normalisee en deny.",
+        steps: [
+          "Dans config/arcadia/customperm/aliases.json, mettre un JSON valide: {\"aliases\": {}}",
+          "Dans config/arcadia/customperm/commands.json, mettre un JSON valide: {\"grantedCommands\": [], \"preserveOriginalRequires\": {}}",
+          "Dans config/arcadia/customperm/settings.json, mettre: {\"luckPermsFallbackMode\":\"unsafe\"}",
+          "Executer: /customperm reload",
+          "Executer: /customperm status",
+          "Ouvrir config/arcadia/customperm/settings.json apres reload"
+        ],
+        expect: "Reload reussi. status affiche LP fallback mode: deny. settings.json est reecrit avec luckPermsFallbackMode deny."
+      },
+      {
+        id: "backup-four-files",
+        category: "Sans LuckPerms",
+        title: "Backups des 4 fichiers",
+        goal: "Verifier que les backups couvrent grades, aliases, commands et settings.",
+        steps: [
+          "Verifier que grades.json, aliases.json, commands.json et settings.json sont tous du JSON valide.",
+          "Au besoin, remettre aliases.json a {\"aliases\": {}} et commands.json a {\"grantedCommands\": [], \"preserveOriginalRequires\": {}}.",
+          "Executer: /customperm reload",
+          "Ouvrir config/arcadia/customperm/backup.",
+          "Verifier la presence d'un .bak recent pour grades.json.",
+          "Verifier la presence d'un .bak recent pour aliases.json.",
+          "Verifier la presence d'un .bak recent pour commands.json.",
+          "Verifier la presence d'un .bak recent pour settings.json.",
+          "Executer plusieurs reloads si necessaire pour verifier la rotation."
+        ],
+        expect: "Chaque fichier de config a un backup. La rotation conserve les 3 derniers backups par fichier."
+      },
+      {
+        id: "preserve-original-requires",
+        category: "Sans LuckPerms",
+        title: "Preserve original requires par commande",
+        goal: "Verifier que commands.json accepte preserveOriginalRequires et que /customperm debug le signale.",
+        steps: [
+          "Dans config/arcadia/customperm/commands.json, mettre: {\"grantedCommands\":[\"gamemode\"],\"preserveOriginalRequires\":{\"gamemode\":false}}",
+          "Executer: /customperm reload",
+          "Executer: /customperm debug <player> gamemode",
+          "Verifier que Preserve original requires vaut false.",
+          "Remplacer ensuite par: {\"grantedCommands\":[\"gamemode\"],\"preserveOriginalRequires\":{\"gamemode\":true}}",
+          "Executer: /customperm reload",
+          "Executer: /customperm debug <player> gamemode"
+        ],
+        expect: "debug reflete true/false selon commands.json. Avec true, la commande exige aussi le requires original."
+      },
+      {
+        id: "preserve-original-false-allows-vanilla-delegation",
+        category: "Sans LuckPerms",
+        title: "requires original false sur commande vanilla",
+        goal: "Verifier que preserveOriginalRequires=false conserve la delegation CustomPerm pour une commande vanilla op-only.",
+        steps: [
+          "Dans config/arcadia/customperm/commands.json, mettre: {\"grantedCommands\":[\"gamemode\"],\"preserveOriginalRequires\":{\"gamemode\":false}}",
+          "Executer: /customperm reload",
+          "Executer: /customperm grade create vip",
+          "Executer: /customperm grade addperm vip customperm.command.gamemode",
+          "Executer: /customperm grade assign <player> vip",
+          "Verifier que <player> est non-OP.",
+          "Avec <player>, executer: /gamemode spectator",
+          "Executer: /customperm debug <player> gamemode"
+        ],
+        expect: "Le non-OP peut utiliser /gamemode grace a CustomPerm. debug affiche Preserve original requires false."
+      },
+      {
+        id: "preserve-original-true-denies-vanilla-delegation",
+        category: "Sans LuckPerms",
+        title: "requires original true sur commande vanilla",
+        goal: "Verifier que preserveOriginalRequires=true impose aussi la restriction vanilla originale.",
+        steps: [
+          "Dans config/arcadia/customperm/commands.json, mettre: {\"grantedCommands\":[\"gamemode\"],\"preserveOriginalRequires\":{\"gamemode\":true}}",
+          "Executer: /customperm reload",
+          "Verifier que <player> a encore customperm.command.gamemode via son grade.",
+          "Verifier que <player> est non-OP.",
+          "Avec <player>, executer: /gamemode spectator",
+          "Executer: /customperm debug <player> gamemode",
+          "Remettre preserveOriginalRequires.gamemode a false si ce serveur doit deleguer /gamemode aux non-OP."
+        ],
+        expect: "Le non-OP est refuse malgre la permission CustomPerm, car le requires vanilla original exige op. debug affiche Preserve original requires true."
       },
       {
         id: "luckperms-active",
@@ -496,6 +633,39 @@
         expect: "Backend LuckPerms. La permission LP autorise /gamemode. Les commandes grade internes demandent d'utiliser /lp."
       },
       {
+        id: "luckperms-preserve-original-false",
+        category: "Avec LuckPerms",
+        title: "LuckPerms avec requires original false",
+        goal: "Verifier que LuckPerms peut deleguer une commande vanilla quand preserveOriginalRequires=false.",
+        steps: [
+          "Lancer le serveur avec LuckPerms compatible.",
+          "Dans config/arcadia/customperm/commands.json, mettre: {\"grantedCommands\":[\"gamemode\"],\"preserveOriginalRequires\":{\"gamemode\":false}}",
+          "Dans config/arcadia/customperm/settings.json, mettre: {\"luckPermsFallbackMode\":\"deny\"}",
+          "Executer: /customperm reload",
+          "Executer: /lp user <player> permission set customperm.command.gamemode true",
+          "Verifier que <player> est non-OP.",
+          "Avec <player>, executer: /gamemode spectator",
+          "Executer: /customperm debug <player> gamemode"
+        ],
+        expect: "Le non-OP peut utiliser /gamemode via LuckPerms. debug affiche Preserve original requires false."
+      },
+      {
+        id: "luckperms-preserve-original-true",
+        category: "Avec LuckPerms",
+        title: "LuckPerms avec requires original true",
+        goal: "Verifier que preserveOriginalRequires=true preserve la restriction originale meme avec une permission LP.",
+        steps: [
+          "Lancer le serveur avec LuckPerms compatible.",
+          "Dans config/arcadia/customperm/commands.json, mettre: {\"grantedCommands\":[\"gamemode\"],\"preserveOriginalRequires\":{\"gamemode\":true}}",
+          "Executer: /customperm reload",
+          "Executer: /lp user <player> permission set customperm.command.gamemode true",
+          "Verifier que <player> est non-OP.",
+          "Avec <player>, executer: /gamemode spectator",
+          "Executer: /customperm debug <player> gamemode"
+        ],
+        expect: "Le non-OP est refuse car le requires vanilla original reste obligatoire. debug affiche Preserve original requires true."
+      },
+      {
         id: "luckperms-resync",
         category: "Avec LuckPerms",
         title: "Resync apres changement LuckPerms",
@@ -510,6 +680,37 @@
           "Executer: /lp user <player> permission unset customperm.command.gamemode"
         ],
         expect: "La permission LP prend effet sans reconnexion. Les logs indiquent le resync si l'event LP est recu."
+      },
+      {
+        id: "luckperms-fail-closed-startup",
+        category: "Avec LuckPerms",
+        title: "Fallback LuckPerms deny au demarrage",
+        goal: "Verifier le mode fail-closed quand LuckPerms est present mais inutilisable ou incompatible.",
+        steps: [
+          "Arreter le serveur.",
+          "Dans config/arcadia/customperm/settings.json, mettre: {\"luckPermsFallbackMode\":\"deny\"}",
+          "Installer volontairement une version LuckPerms incompatible, ou creer un environnement de test ou l'API LP echoue a l'initialisation.",
+          "Relancer le serveur.",
+          "Executer: /customperm status",
+          "Avec <player>, verifier qu'une permission customperm.command.* n'autorise pas une commande exposee."
+        ],
+        expect: "Le backend indique un mode deny/LuckPerms unavailable. Les checks CustomPerm retournent refuse au lieu de tomber sur grades.json. Si aucun LP incompatible n'est disponible, marquer N/A."
+      },
+      {
+        id: "luckperms-internal-fallback-startup",
+        category: "Avec LuckPerms",
+        title: "Fallback LuckPerms internal au demarrage",
+        goal: "Verifier le mode compatibilite internal quand LuckPerms est present mais inutilisable ou incompatible.",
+        steps: [
+          "Arreter le serveur.",
+          "Dans config/arcadia/customperm/settings.json, mettre: {\"luckPermsFallbackMode\":\"internal\"}",
+          "Preparer grades.json avec un grade accordant customperm.command.gamemode a <player>.",
+          "Installer volontairement une version LuckPerms incompatible, ou creer un environnement de test ou l'API LP echoue a l'initialisation.",
+          "Relancer le serveur.",
+          "Executer: /customperm status",
+          "Avec <player>, tester /gamemode spectator si gamemode est expose et preserveOriginalRequires=false."
+        ],
+        expect: "Le backend indique Internal fallback from LuckPerms ou Internal selon le point d'echec. La permission interne fonctionne seulement en mode internal. Si aucun LP incompatible n'est disponible, marquer N/A."
       },
       {
         id: "luckperms-internal-grade-block",
@@ -584,7 +785,18 @@
                 <ol class="steps">
                   ${test.steps.map(step => `<li>${formatStep(step)}</li>`).join("")}
                 </ol>
-                <div class="expect"><strong>Attendu :</strong> ${escapeHtml(test.expect)}</div>
+                <div class="expect">
+                  <strong>Resultats attendus detailles :</strong>
+                  <ul>
+                    ${expectedDetails(test).map(item => `<li>${formatStep(item)}</li>`).join("")}
+                  </ul>
+                </div>
+                <div class="cleanup">
+                  <strong>Nettoyage detaille :</strong>
+                  <ol>
+                    ${cleanupSteps(test).map(step => `<li>${formatStep(step)}</li>`).join("")}
+                  </ol>
+                </div>
                 <label class="notes">Resultat observe / notes
                   <textarea data-note="${test.id}" placeholder="Ce qui s'est passe, message exact, logs utiles, capture referencee..."></textarea>
                 </label>
@@ -599,6 +811,289 @@
       const escaped = escapeHtml(step);
       if (!escaped.includes(": /")) return escaped;
       return escaped.replace(/: (\/[^<]+)/, (_, command) => `:<pre>${command}</pre>`);
+    }
+
+    function expectedDetails(test) {
+      const common = {
+        prep: [
+          "Le serveur demarre sans erreur CustomPerm critique.",
+          "/customperm status affiche Backend: Internal pour les tests sans LuckPerms.",
+          "/customperm scan gamemode liste /gamemode dans le dispatcher.",
+          "Le joueur de test est non-OP avant les tests de permission."
+        ],
+        "config-first-boot": [
+          "Le dossier config/arcadia/customperm est cree automatiquement.",
+          "grades.json, aliases.json, commands.json et settings.json existent.",
+          "settings.json contient luckPermsFallbackMode normalise a deny.",
+          "/customperm status affiche Backend: Internal et LP fallback mode: deny."
+        ],
+        "legacy-config-migration": [
+          "Le test n'est valide que si config/arcadia/customperm n'existait plus avant le redemarrage.",
+          "Les 4 fichiers connus sont copies depuis config/customperm vers config/arcadia/customperm.",
+          "Le dossier config/customperm et ses fichiers source restent presents.",
+          "Le serveur utilise le nouveau dossier config/arcadia/customperm.",
+          "/customperm status affiche LP fallback mode: internal si settings.json migre contenait internal."
+        ],
+        "dispatcher-basic": [
+          "Avant exposition/grant, le joueur non-OP ne peut pas utiliser /gamemode.",
+          "Apres /customperm command add gamemode et ajout de customperm.command.gamemode au grade vip, le joueur peut utiliser /gamemode.",
+          "Apres retrait de customperm.command.gamemode, le joueur est de nouveau refuse.",
+          "Aucun droit OP reel n'est donne au joueur pendant le test."
+        ],
+        diagnostics: [
+          "/customperm status affiche Backend, LP fallback mode, Dispatcher commands, Exposed commands, Custom aliases, Internal grades et Users with grade.",
+          "/customperm test affiche GRANTED si le node est accorde, DENIED sinon.",
+          "/customperm debug indique si la commande existe dans le dispatcher, si elle est exposee, les niveaux OP, la permission, Preserve original requires et Actual wrapper canUse().",
+          "Si Actual wrapper canUse() diverge de la decision attendue hors cas preserveOriginalRequires=true, noter KO avec les lignes debug completes."
+        ],
+        "alias-allowed": [
+          "L'alias /spec apparait et execute son step.",
+          "Le joueur non-OP peut utiliser /spec uniquement avec customperm.alias.spec.",
+          "/customperm alias steps spec liste le step gamemode spectator.",
+          "/customperm alias list liste /spec avec son nombre de steps."
+        ],
+        "alias-denied": [
+          "Apres retrait de customperm.alias.spec, /spec existe encore mais refuse le joueur non-OP.",
+          "Le refus ne donne pas de permission supplementaire au joueur.",
+          "Aucun crash ni erreur serveur n'est produit."
+        ],
+        "alias-shadow": [
+          "L'ajout d'un alias /gamemode affiche un warning de shadow en jeu.",
+          "Les logs serveur indiquent que l'alias shadow une commande existante.",
+          "Apres /customperm alias remove gamemode, /gamemode est de nouveau present dans le dispatcher.",
+          "/customperm debug <player> gamemode ne doit pas afficher Command exists in dispatcher : false apres nettoyage."
+        ],
+        "alias-customperm-guard": [
+          "La creation d'un alias nomme customperm est refusee.",
+          "L'ajout d'un step a un alias customperm est refuse.",
+          "/customperm reste la commande d'administration originale."
+        ],
+        "scan-sanitize": [
+          "Un pattern sans resultat affiche No commands matched proprement.",
+          "Aucun code couleur ou caractere de controle ne casse l'affichage.",
+          "Les logs ne contiennent pas d'exception liee au scan."
+        ],
+        "null-config-reload": [
+          "/customperm reload reussit.",
+          "aliases:null est normalise en map vide.",
+          "grantedCommands:null et preserveOriginalRequires:null sont normalises en collections vides.",
+          "LP fallback mode reste deny.",
+          "/customperm command list et /customperm alias list ne crashent pas."
+        ],
+        "settings-invalid-normalization": [
+          "/customperm reload reussit avec settings.json contenant une valeur inconnue.",
+          "/customperm status affiche LP fallback mode: deny.",
+          "settings.json est reecrit avec luckPermsFallbackMode deny.",
+          "Aucun autre fichier JSON invalide ne doit faire echouer ce test."
+        ],
+        "backup-four-files": [
+          "Un reload reussi cree un backup horodate pour grades.json.",
+          "Un reload reussi cree un backup horodate pour aliases.json.",
+          "Un reload reussi cree un backup horodate pour commands.json.",
+          "Un reload reussi cree un backup horodate pour settings.json.",
+          "Apres plusieurs reloads, seuls les 3 derniers backups par fichier sont conserves."
+        ],
+        "preserve-original-requires": [
+          "Avec preserveOriginalRequires.gamemode=false, /customperm debug affiche Preserve original requires : false.",
+          "Avec preserveOriginalRequires.gamemode=true, /customperm debug affiche Preserve original requires : true.",
+          "Le reload doit appliquer la modification de commands.json sans redemarrage serveur."
+        ],
+        "preserve-original-false-allows-vanilla-delegation": [
+          "Le joueur non-OP avec customperm.command.gamemode peut utiliser /gamemode.",
+          "/customperm debug affiche Command exists in dispatcher : true.",
+          "/customperm debug affiche Preserve original requires : false.",
+          "/customperm debug affiche Actual wrapper canUse() : true."
+        ],
+        "preserve-original-true-denies-vanilla-delegation": [
+          "Le joueur non-OP avec customperm.command.gamemode est refuse par /gamemode.",
+          "/customperm debug affiche Command exists in dispatcher : true.",
+          "/customperm debug affiche Preserve original requires : true.",
+          "Le refus est attendu car le requires vanilla original exige OP."
+        ],
+        "luckperms-active": [
+          "/customperm status affiche Backend: LuckPerms.",
+          "La permission LP customperm.command.gamemode autorise /gamemode si preserveOriginalRequires.gamemode=false.",
+          "/customperm grade create testlp est refuse avec un message demandant d'utiliser /lp.",
+          "Aucune modification de grade interne ne doit etre appliquee quand LuckPerms est actif."
+        ],
+        "luckperms-preserve-original-false": [
+          "Backend: LuckPerms.",
+          "Le joueur non-OP avec permission LP customperm.command.gamemode peut utiliser /gamemode.",
+          "debug affiche Preserve original requires : false et Actual wrapper canUse() : true."
+        ],
+        "luckperms-preserve-original-true": [
+          "Backend: LuckPerms.",
+          "Le joueur non-OP avec permission LP customperm.command.gamemode reste refuse par /gamemode.",
+          "debug affiche Preserve original requires : true.",
+          "Le refus vient du requires vanilla original."
+        ],
+        "luckperms-resync": [
+          "Apres unset LP, /gamemode n'est pas utilisable par le joueur non-OP.",
+          "Apres set LP, /gamemode devient utilisable sans reconnexion.",
+          "Les logs indiquent le resync si l'event LuckPerms est recu."
+        ],
+        "luckperms-fail-closed-startup": [
+          "Avec luckPermsFallbackMode=deny et LP indisponible/incompatible, le backend indique Deny - LuckPerms unavailable.",
+          "Les checks CustomPerm retournent false.",
+          "grades.json ne doit pas accorder de permission en mode deny.",
+          "Si aucun environnement LP incompatible n'est disponible, marquer N/A."
+        ],
+        "luckperms-internal-fallback-startup": [
+          "Avec luckPermsFallbackMode=internal et LP indisponible/incompatible, le backend indique Internal fallback from LuckPerms ou Internal selon le point d'echec.",
+          "Les permissions de grades.json sont utilisees uniquement en mode internal.",
+          "Le meme scenario en mode deny doit rester refuse.",
+          "Si aucun environnement LP incompatible n'est disponible, marquer N/A."
+        ],
+        "luckperms-internal-grade-block": [
+          "Backend: LuckPerms.",
+          "/customperm grade create blockedlp est refuse.",
+          "/customperm grade list ne montre pas blockedlp.",
+          "Le message oriente vers /lp."
+        ],
+        cleanup: [
+          "Exposed commands vaut 0.",
+          "Custom aliases vaut 0.",
+          "Internal grades vaut 0.",
+          "Users with grade vaut 0.",
+          "commands.json ne contient plus d'entree preserveOriginalRequires pour gamemode.",
+          "/gamemode existe encore dans le dispatcher apres suppression des alias de test."
+        ]
+      };
+      return common[test.id] || [test.expect];
+    }
+
+    function cleanupSteps(test) {
+      const steps = {
+        prep: [
+          "Ne rien supprimer si ce test a seulement lu l'etat.",
+          "Verifier que <player> reste non-OP pour la suite."
+        ],
+        "config-first-boot": [
+          "Conserver le dossier config/arcadia/customperm cree pour les tests suivants.",
+          "Ne pas restaurer l'ancien dossier avant la fin de la procedure."
+        ],
+        "legacy-config-migration": [
+          "Supprimer ou archiver le dossier de test config/customperm pour eviter une nouvelle migration involontaire.",
+          "Conserver config/arcadia/customperm comme source de verite.",
+          "Remettre settings.json a {\"luckPermsFallbackMode\":\"deny\"} si le test suivant n'a pas besoin de internal."
+        ],
+        "dispatcher-basic": [
+          "Executer: /customperm grade removeperm vip customperm.command.gamemode",
+          "Executer: /customperm grade unassign <player> vip",
+          "Executer: /customperm grade delete vip",
+          "Executer: /customperm command remove gamemode",
+          "Executer: /customperm status et verifier Exposed commands: 0, Internal grades: 0, Users with grade: 0."
+        ],
+        diagnostics: [
+          "Aucune action si le test n'a fait que lire l'etat.",
+          "Si des commandes/grades ont ete ajoutes pour rendre le test lisible, les retirer avant de continuer."
+        ],
+        "alias-allowed": [
+          "Executer: /customperm grade removeperm vip customperm.alias.spec",
+          "Executer: /customperm grade unassign <player> vip",
+          "Executer: /customperm alias remove spec",
+          "Executer: /customperm status et verifier Custom aliases: 0."
+        ],
+        "alias-denied": [
+          "Executer: /customperm alias remove spec si l'alias existe encore.",
+          "Executer: /customperm grade delete vip si le grade de test existe encore."
+        ],
+        "alias-shadow": [
+          "Executer: /customperm alias remove gamemode.",
+          "Executer: /customperm debug <player> gamemode.",
+          "Verifier Command exists in dispatcher : true.",
+          "Si /gamemode reste absent, redemarrer le serveur avant de continuer et marquer KO."
+        ],
+        "alias-customperm-guard": [
+          "Aucune suppression attendue, car les commandes doivent etre refusees.",
+          "Executer /customperm status pour verifier que Custom aliases n'a pas augmente."
+        ],
+        "scan-sanitize": [
+          "Aucune action."
+        ],
+        "null-config-reload": [
+          "Remettre aliases.json a {\"aliases\": {}}.",
+          "Remettre commands.json a {\"grantedCommands\": [], \"preserveOriginalRequires\": {}}.",
+          "Remettre settings.json a {\"luckPermsFallbackMode\":\"deny\"}.",
+          "Executer: /customperm reload."
+        ],
+        "settings-invalid-normalization": [
+          "Verifier que settings.json est maintenant normalise en deny.",
+          "Remettre aliases.json et commands.json a des JSON valides si vous les avez modifies.",
+          "Executer: /customperm reload."
+        ],
+        "backup-four-files": [
+          "Ne pas supprimer les backups de validation.",
+          "Si le dossier backup a ete pollue par de nombreux essais, conserver les 3 derniers par fichier et archiver/supprimer le reste hors procedure."
+        ],
+        "preserve-original-requires": [
+          "Remettre commands.json a {\"grantedCommands\": [], \"preserveOriginalRequires\": {}}.",
+          "Executer: /customperm reload.",
+          "Verifier /customperm command list."
+        ],
+        "preserve-original-false-allows-vanilla-delegation": [
+          "Executer: /customperm grade unassign <player> vip.",
+          "Executer: /customperm grade delete vip.",
+          "Remettre commands.json a {\"grantedCommands\": [], \"preserveOriginalRequires\": {}}.",
+          "Executer: /customperm reload.",
+          "Verifier Exposed commands: 0, Internal grades: 0, Users with grade: 0."
+        ],
+        "preserve-original-true-denies-vanilla-delegation": [
+          "Executer: /customperm grade unassign <player> vip si necessaire.",
+          "Executer: /customperm grade delete vip si necessaire.",
+          "Remettre commands.json a {\"grantedCommands\": [], \"preserveOriginalRequires\": {}}.",
+          "Executer: /customperm reload."
+        ],
+        "luckperms-active": [
+          "Executer: /lp user <player> permission unset customperm.command.gamemode.",
+          "Executer: /customperm command remove gamemode.",
+          "Verifier que /customperm grade list ne contient pas testlp."
+        ],
+        "luckperms-preserve-original-false": [
+          "Executer: /lp user <player> permission unset customperm.command.gamemode.",
+          "Remettre commands.json a {\"grantedCommands\": [], \"preserveOriginalRequires\": {}}.",
+          "Executer: /customperm reload."
+        ],
+        "luckperms-preserve-original-true": [
+          "Executer: /lp user <player> permission unset customperm.command.gamemode.",
+          "Remettre commands.json a {\"grantedCommands\": [], \"preserveOriginalRequires\": {}}.",
+          "Executer: /customperm reload."
+        ],
+        "luckperms-resync": [
+          "Executer: /lp user <player> permission unset customperm.command.gamemode.",
+          "Executer: /customperm command remove gamemode.",
+          "Verifier que le joueur ne conserve pas la permission LP."
+        ],
+        "luckperms-fail-closed-startup": [
+          "Restaurer une version LuckPerms compatible ou retirer le jar de test incompatible.",
+          "Remettre settings.json a {\"luckPermsFallbackMode\":\"deny\"}.",
+          "Redemarrer le serveur et verifier que le backend attendu est revenu."
+        ],
+        "luckperms-internal-fallback-startup": [
+          "Restaurer une version LuckPerms compatible ou retirer le jar de test incompatible.",
+          "Supprimer les grades/userGrades crees uniquement pour le fallback internal.",
+          "Remettre settings.json a {\"luckPermsFallbackMode\":\"deny\"}.",
+          "Redemarrer le serveur."
+        ],
+        "luckperms-internal-grade-block": [
+          "Aucune suppression attendue si la creation blockedlp a bien ete refusee.",
+          "Si blockedlp existe, supprimer manuellement l'entree dans grades.json puis executer /customperm reload."
+        ],
+        cleanup: [
+          "Executer: /customperm command remove gamemode si encore expose.",
+          "Executer: /customperm alias remove spec si encore present.",
+          "Executer: /customperm alias remove gamemode si encore present.",
+          "Executer: /customperm grade unassign <player> vip si le joueur a encore vip.",
+          "Executer: /customperm grade delete vip si le grade existe.",
+          "Remettre aliases.json a {\"aliases\": {}}.",
+          "Remettre commands.json a {\"grantedCommands\": [], \"preserveOriginalRequires\": {}}.",
+          "Remettre settings.json a {\"luckPermsFallbackMode\":\"deny\"}.",
+          "Executer: /customperm reload.",
+          "Ouvrir commands.json et verifier preserveOriginalRequires vide.",
+          "Executer: /customperm status et verifier Exposed commands: 0, Custom aliases: 0, Internal grades: 0, Users with grade: 0."
+        ]
+      };
+      return steps[test.id] || ["Aucune action de nettoyage specifique. Verifier /customperm status si le test a modifie la config."];
     }
 
     function getMeta() {
@@ -631,7 +1126,8 @@
             category: test.category,
             title: test.title,
             status: checked ? checked.value : "Non renseigne",
-            expected: test.expect,
+            expected: expectedDetails(test),
+            cleanup: cleanupSteps(test),
             notes: note
           };
         })
@@ -697,7 +1193,14 @@
           lines.push(`#### ${test.title}`);
           lines.push("");
           lines.push(`- Statut: ${test.status}`);
-          lines.push(`- Attendu: ${test.expected}`);
+          lines.push("- Attendu:");
+          for (const item of Array.isArray(test.expected) ? test.expected : [test.expected]) {
+            lines.push(`  - ${item}`);
+          }
+          lines.push("- Nettoyage:");
+          for (const item of Array.isArray(test.cleanup) ? test.cleanup : ["Non renseigne"]) {
+            lines.push(`  - ${item}`);
+          }
           lines.push(`- Notes: ${test.notes || "Aucune"}`);
           lines.push("");
         }

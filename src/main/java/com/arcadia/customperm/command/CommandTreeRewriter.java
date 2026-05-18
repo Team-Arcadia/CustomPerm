@@ -116,11 +116,17 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
 
         Predicate<CommandSourceStack> origReq = original.getRequirement();
         Predicate<CommandSourceStack> wrappedReq = source -> {
+            boolean originalAllows = origReq == null || origReq.test(source);
             if (!CustomPerm.configManager.getCommands().grantedCommands.contains(rootName)) {
-                return origReq == null || origReq.test(source);
+                return originalAllows;
             }
-            if (source.hasPermission(2)) return true;
-            return PermissionService.get().hasPermission(source, "customperm.command." + rootName);
+            boolean customPermAllows = source.hasPermission(2)
+                    || PermissionService.get().hasPermission(source, "customperm.command." + rootName);
+            if (!customPermAllows) return false;
+            if (CustomPerm.configManager.getCommands().shouldPreserveOriginalRequires(rootName)) {
+                return originalAllows;
+            }
+            return true;
         };
 
         CommandNode<CommandSourceStack> wrapped;

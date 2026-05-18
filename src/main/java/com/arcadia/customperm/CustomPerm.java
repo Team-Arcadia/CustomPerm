@@ -3,6 +3,7 @@ package com.arcadia.customperm;
 import com.arcadia.customperm.command.CommandTreeRewriter;
 import com.arcadia.customperm.command.ICommandTreeReloader;
 import com.arcadia.customperm.config.ConfigManager;
+import com.arcadia.customperm.perm.DenyPermissionService;
 import com.arcadia.customperm.perm.InternalPermService;
 import com.arcadia.customperm.perm.LuckPermsService;
 import com.arcadia.customperm.perm.PermissionService;
@@ -54,15 +55,15 @@ public class CustomPerm {
                     .filter(m -> m.getModId().equals("luckperms"))
                     .findFirst().map(m -> m.getVersion().toString()).orElse("unknown");
             if (!VersionUtils.isVersionAtLeast(lpVer, MIN_LUCKPERMS_MAJOR, MIN_LUCKPERMS_MINOR, MIN_LUCKPERMS_PATCH)) {
-                LOGGER.warn("[CustomPerm] LuckPerms version {} is below minimum {} — using internal backend.", lpVer, MIN_LUCKPERMS_VERSION);
-                permissions = internalBackend;
+                permissions = unavailableLuckPermsBackend(internalBackend,
+                        "LuckPerms version " + lpVer + " is below minimum " + MIN_LUCKPERMS_VERSION);
             } else {
                 try {
                     permissions = new LuckPermsService(internalBackend);
                     LOGGER.info("[CustomPerm] LuckPerms detected — using LuckPerms backend.");
                 } catch (Throwable t) {
-                    LOGGER.error("[CustomPerm] LuckPerms is loaded but its API failed to initialise — falling back to internal backend.", t);
-                    permissions = internalBackend;
+                    LOGGER.error("[CustomPerm] LuckPerms is loaded but its API failed to initialise.", t);
+                    permissions = unavailableLuckPermsBackend(internalBackend, "LuckPerms API failed to initialise");
                 }
             }
         } else {
@@ -76,6 +77,16 @@ public class CustomPerm {
 
         NeoForge.EVENT_BUS.register(CommandTreeRewriter.class);
         NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStarted);
+    }
+
+    private static PermissionService unavailableLuckPermsBackend(InternalPermService internalBackend, String reason) {
+        if (configManager.getSettings().useInternalLuckPermsFallback()) {
+            LOGGER.warn("[CustomPerm] {} — using internal backend (luckPermsFallbackMode=internal).", reason);
+            return internalBackend;
+        }
+        LOGGER.error("[CustomPerm] {} — failing closed (luckPermsFallbackMode={}).",
+                reason, configManager.getSettings().luckPermsFallbackMode);
+        return new DenyPermissionService();
     }
 
     private static void onServerStarted(ServerStartedEvent event) {
@@ -95,7 +106,15 @@ public class CustomPerm {
 
     public static String backendLabel() {
         if (permissions instanceof LuckPermsService lps) {
-            return lps.isDegraded() ? "Internal — fallback from LuckPerms" : "LuckPerms";
+            if (lps.isDegraded()) {
+                return configManager.getSettings().useInternalLuckPermsFallback()
+                        ? "Internal — fallback from LuckPerms"
+                        : "Deny — LuckPerms unavailable";
+            }
+            return "LuckPerms";
+        }
+        if (permissions instanceof DenyPermissionService) {
+            return "Deny — LuckPerms unavailable";
         }
         return "Internal";
     }
