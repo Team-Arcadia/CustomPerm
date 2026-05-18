@@ -429,7 +429,7 @@ Inspect `commands.json`, `aliases.json`, and (in internal mode) `grades.json` pe
 ### The mod isn't loading
 
 - Check the boot log — the line `[CustomPerm] Ready —` must appear.
-- If LP is present but its initialisation throws, the mod falls back to Internal with an error log. Check that your LP version is compatible.
+- If LP is present but its initialisation throws, `settings.json` decides the behavior: `deny` fails closed by default, `internal` falls back to `grades.json`. Check that your LP version is compatible.
 
 ### An exposed command doesn't work for an authorized player
 
