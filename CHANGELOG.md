@@ -11,17 +11,82 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 Stable public release.
 
-This version brings together the finalization work for the mod: planned features,
-review-driven fixes, tests, documentation, benchmarks, manual validation,
-security hardening, and official release preparation.
+This version stabilizes the intermediate `0.9.0` release for official public
+distribution. It focuses on security hardening, final configuration paths,
+release documentation, validation, and fixes found during manual testing.
+
+### Added
+
+- **Final configuration layout**
+  - Server configuration now lives in `config/arcadia/customperm/`.
+  - Non-destructive migration from the old `config/customperm/` directory to `config/arcadia/customperm/` when the new directory does not exist yet.
+  - New `settings.json` file.
+  - `settings.json` supports `luckPermsFallbackMode`:
+    - `deny`: default and recommended for public servers.
+    - `internal`: compatibility mode that falls back to `grades.json`.
+
+- **Security hardening**
+  - Configurable fail-closed LuckPerms fallback when LuckPerms is present but incompatible, fails to initialize, or becomes unavailable during a permission check.
+  - New deny backend for LuckPerms failure cases when `luckPermsFallbackMode` is `deny`.
+  - New per-command `preserveOriginalRequires` map in `commands.json`.
+  - Exposed commands can now preserve their original Brigadier `requires` predicate in addition to requiring the CustomPerm permission node.
+
+- **Manual validation**
+  - Expanded dark HTML manual test procedure with detailed expected results.
+  - Added cleanup phases to manual tests.
+  - Added dedicated scenarios with and without LuckPerms.
+  - Added checks for LuckPerms fallback modes, config migration, backup behavior, and `preserveOriginalRequires`.
+
+### Fixed
+
+- Removing an alias that shadows an existing command now restores the original command in the dispatcher.
+- Removing an exposed command also removes its `preserveOriginalRequires` entry.
+- Deleting a grade, or unassigning a player's last grade, now removes the empty `userGrades` entry.
+- LuckPerms initialization and runtime failure handling now follows the configured fallback mode instead of always falling back to the internal backend.
+- README troubleshooting now documents the actual LuckPerms fallback behavior.
+- README version badges now show `1.0.0`.
+
+### Changed
+
+- `gradle.properties` now sets `mod_version=1.0.0`.
+- README files document `config/arcadia/customperm/`, `settings.json`, `luckPermsFallbackMode`, and `preserveOriginalRequires`.
+- `CHANGELOG.md` is now written in English to match the primary README and public release notes.
+- Release notes and documentation now treat `0.9.0` as the intermediate feature release and `1.0.0` as the stable public release.
+
+### Validation
+
+- `./gradlew clean build --no-daemon`: passed.
+- `./gradlew runGameTestServer --no-daemon`: 28/28 required GameTests passed.
+- Generated jar: `customperm-1.0.0.jar`.
+- Jar verification: `META-INF/MANIFEST.MF` and `META-INF/neoforge.mods.toml` present.
+- Manual test procedure: 24/24 tests passed.
+- Tested with LuckPerms `5.4.150`.
+- GitHub tag: `v1.0.0`.
+
+### Compatibility
+
+| Component | Version |
+|-----------|---------|
+| Minecraft | 1.21.1 |
+| NeoForge | 21.1.221+ (`[21.1.0,)`) |
+| Java | 21 |
+| LuckPerms | 5.4.150+ (optional) |
+
+---
+
+## [0.9.0] - 2026-05-14
+
+Intermediate feature release.
+
+This version introduced most of the code, mechanics, and operational behavior of
+CustomPerm. It added the internal permission system, command exposure, aliases,
+LuckPerms integration, diagnostics, automated tests, benchmarks, CI checks, and
+the first complete documentation pass.
 
 ### Added
 
 - **Configuration and hot-reload**
-  - Automatic creation of `config/arcadia/customperm/grades.json`, `aliases.json`, `commands.json`, and `settings.json`.
-  - Non-destructive migration from the old `config/customperm/` directory to `config/arcadia/customperm/` when the new directory does not exist yet.
-  - `settings.json` with `luckPermsFallbackMode` (`deny` by default, `internal` for compatibility mode).
-  - `commands.json` with per-command `preserveOriginalRequires`.
+  - Automatic creation of `config/customperm/grades.json`, `aliases.json`, and `commands.json`.
   - `ConfigManager` with an atomic snapshot through `AtomicReference`.
   - Transactional `/customperm reload`: invalid JSON keeps the previous active snapshot.
   - Timestamped configuration backups with rotation of the latest 3 backups.
@@ -65,7 +130,7 @@ security hardening, and official release preparation.
   - Minimum LuckPerms version: `5.4.150+`.
   - Consistent rejection of prerelease-style versions such as `5.4.150-SNAPSHOT`.
   - Internal backend when LuckPerms is absent.
-  - Configurable fallback when LuckPerms is incompatible, fails to initialize, or becomes unavailable during a permission check.
+  - Internal fallback when LuckPerms is incompatible, fails to initialize, or becomes unavailable during a permission check.
   - Subscription to `UserDataRecalculateEvent` to resend the command tree to the affected player.
   - Internal `grade` commands are blocked while LuckPerms is active, with guidance to use `/lp`.
 
@@ -74,12 +139,12 @@ security hardening, and official release preparation.
   - `/customperm test <player> <node>` with `GRANTED` / `DENIED` verdict.
   - `/customperm debug <player> <command>` with dispatcher, exposure, op-level, permission service, and wrapper decision details.
   - `/customperm scan [pattern]` with `EXPO`, `ALIAS`, and `MOD` markers.
-  - Centralized backend labels: `Internal`, `LuckPerms`, `Internal - fallback from LuckPerms`, and deny mode.
+  - Centralized backend labels: `Internal`, `LuckPerms`, and `Internal - fallback from LuckPerms`.
 
 - **Tests and quality**
   - JUnit 5 suite covering permissions, config, grades, aliases, LuckPerms versioning, and JSON compatibility.
   - Dynamically registered NeoForge GameTest suite.
-  - 28 required GameTests validated.
+  - 26 required GameTests validated.
   - JMH benchmarks for `PermissionResolver.resolve()` and concurrent config snapshot reads.
   - Performance baseline documented in `docs/performance-baseline.md`.
   - Dark HTML manual test procedure in `docs/manual-test-procedure.html` with JSON/Markdown export.
@@ -106,25 +171,21 @@ security hardening, and official release preparation.
 - Separator-only aliases (`";;;"`) are covered by a regression test.
 - JMH is configured with `fork = 3` and consistently annotated benchmarks.
 - CI verifies `META-INF/neoforge.mods.toml` and `META-INF/MANIFEST.MF` in the jar.
-- Removing an alias that shadows an existing command now restores the original command in the dispatcher.
-- Removing an exposed command also removes its `preserveOriginalRequires` entry.
-- Deleting a grade, or unassigning a player's last grade, now removes the empty `userGrades` entry.
 
 ### Changed
 
-- `gradle.properties` now sets `mod_version=1.0.0`.
+- `gradle.properties` set `mod_version=0.9.0`.
 - README files no longer reference generated artifacts ignored by Git; they point to GitHub Releases.
 - `.gitignore` excludes local tooling artifacts, test exports, logs, builds, and unreferenced local media.
-- `CHANGELOG.md` now separates the initial base (`0.1.0`) from the stable release (`1.0.0`).
+- `CHANGELOG.md` separated the initial base (`0.1.0`) from the intermediate feature release (`0.9.0`).
 
 ### Validation
 
 - `./gradlew clean build --no-daemon`: passed.
-- `./gradlew runGameTestServer --no-daemon`: 28/28 required GameTests passed.
-- Generated jar: `customperm-1.0.0.jar`.
+- `./gradlew runGameTestServer --no-daemon`: 26/26 required GameTests passed.
+- Generated jar: `customperm-0.9.0.jar`.
 - Jar verification: `META-INF/MANIFEST.MF` and `META-INF/neoforge.mods.toml` present.
-- Manual test procedure: 24/24 tests passed.
-- GitHub tag: `v1.0.0`.
+- GitHub tag: `v0.9.0`.
 
 ### Compatibility
 
@@ -137,14 +198,15 @@ security hardening, and official release preparation.
 
 ---
 
-## [0.1.0] - initial base
+## [0.1.0] - 2026-05-10
 
-Initial project base before the structuring and finalization work.
+Initial project base before the intermediate feature release and final stable
+release.
 
 This version represents the existing foundation before the complete delivery.
 It is kept as the historical baseline, but it does not include the full set of
 guarantees, tests, diagnostics, integrations, and documentation delivered in
-`1.0.0`.
+`0.9.0` and `1.0.0`.
 
 ### Included
 
@@ -156,7 +218,7 @@ guarantees, tests, diagnostics, integrations, and documentation delivered in
 
 ### Limitations
 
-- Feature set incomplete compared with the final scope.
+- Feature set incomplete compared with the intermediate and stable release scope.
 - Test coverage incomplete.
 - Benchmarks and performance baseline absent.
 - Release jar CI incomplete.
