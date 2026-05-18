@@ -429,7 +429,7 @@ Inspectez les fichiers `commands.json`, `aliases.json`, et (en mode interne) `gr
 ### Le mod ne charge pas
 
 - Vérifiez le log de boot — la ligne `[CustomPerm] Ready —` doit apparaître.
-- Si LP est présent mais l'init échoue, le mod fallback sur Internal avec un log d'erreur. Vérifiez que votre version de LP est compatible.
+- Si LP est présent mais l'init échoue, `settings.json` décide le comportement : `deny` refuse les permissions par défaut, `internal` bascule sur `grades.json`. Vérifiez que votre version de LP est compatible.
 
 ### Une commande exposée ne marche pas pour un joueur autorisé
 
