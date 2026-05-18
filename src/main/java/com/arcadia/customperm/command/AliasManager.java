@@ -11,8 +11,11 @@ import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 
 import java.lang.reflect.Field;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Registers admin-defined aliases. Each alias is a top-level literal that delegates
@@ -32,6 +35,8 @@ public class AliasManager {
     private static final Field CHILDREN_FIELD;
     private static final Field LITERALS_FIELD;
     private static final Field ARGUMENTS_FIELD;
+    private static final Map<String, CommandNode<CommandSourceStack>> SHADOWED_ORIGINALS = new HashMap<>();
+    private static final Set<String> REGISTERED_ALIASES = new HashSet<>();
 
     static {
         try {
@@ -49,7 +54,7 @@ public class AliasManager {
     public static void registerAll(CommandDispatcher<CommandSourceStack> dispatcher) {
         AliasesConfig cfg = CustomPerm.configManager.getAliases();
         for (Map.Entry<String, List<String>> entry : cfg.aliases.entrySet()) {
-            registerOne(dispatcher, entry.getKey(), entry.getValue());
+            registerOrReplace(dispatcher, entry.getKey());
         }
     }
 
@@ -59,11 +64,27 @@ public class AliasManager {
      * was just deleted from config).
      */
     public static void registerOrReplace(CommandDispatcher<CommandSourceStack> dispatcher, String aliasName) {
-        removeFromRoot(dispatcher.getRoot(), aliasName);
+        CommandNode<CommandSourceStack> root = dispatcher.getRoot();
+        CommandNode<CommandSourceStack> existing = root.getChild(aliasName);
 
         List<String> steps = CustomPerm.configManager.getAliases().aliases.get(aliasName);
         if (steps != null && !steps.isEmpty()) {
+            if (existing != null
+                    && !REGISTERED_ALIASES.contains(aliasName)
+                    && !SHADOWED_ORIGINALS.containsKey(aliasName)) {
+                SHADOWED_ORIGINALS.put(aliasName, existing);
+            }
+            removeFromRoot(root, aliasName);
             registerOne(dispatcher, aliasName, steps);
+            REGISTERED_ALIASES.add(aliasName);
+        } else {
+            if (REGISTERED_ALIASES.remove(aliasName)) {
+                removeFromRoot(root, aliasName);
+            }
+            CommandNode<CommandSourceStack> original = SHADOWED_ORIGINALS.remove(aliasName);
+            if (original != null) {
+                putInRoot(root, aliasName, original);
+            }
         }
     }
 
@@ -108,6 +129,29 @@ public class AliasManager {
             arguments.remove(name);
         } catch (IllegalAccessException e) {
             CustomPerm.LOGGER.warn("[CustomPerm] Could not remove alias /{} from dispatcher: {}", name, e.getMessage());
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void putInRoot(CommandNode<CommandSourceStack> root, String name, CommandNode<CommandSourceStack> node) {
+        try {
+            Map<String, CommandNode<CommandSourceStack>> children =
+                (Map<String, CommandNode<CommandSourceStack>>) CHILDREN_FIELD.get(root);
+            Map<String, LiteralCommandNode<CommandSourceStack>> literals =
+                (Map<String, LiteralCommandNode<CommandSourceStack>>) LITERALS_FIELD.get(root);
+            Map<String, ArgumentCommandNode<CommandSourceStack, ?>> arguments =
+                (Map<String, ArgumentCommandNode<CommandSourceStack, ?>>) ARGUMENTS_FIELD.get(root);
+
+            children.put(name, node);
+            if (node instanceof LiteralCommandNode<CommandSourceStack> literal) {
+                literals.put(name, literal);
+                arguments.remove(name);
+            } else if (node instanceof ArgumentCommandNode<CommandSourceStack, ?> argument) {
+                arguments.put(name, argument);
+                literals.remove(name);
+            }
+        } catch (IllegalAccessException e) {
+            CustomPerm.LOGGER.warn("[CustomPerm] Could not restore shadowed command /{}: {}", name, e.getMessage());
         }
     }
 }

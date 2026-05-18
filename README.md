@@ -54,8 +54,8 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Internal JSON backend** — manage grades, player assignments and permission nodes without any external permissions plugin.
 - **LuckPerms backend** — automatically uses LuckPerms when a compatible version is installed.
 - **LuckPerms version gate** — requires LuckPerms `5.4.150+`; older or prerelease-style versions are rejected for safety.
-- **Permanent LP degradation fallback** — if LuckPerms becomes unavailable at runtime, CustomPerm switches to the internal backend instead of crashing command checks.
-- **Backend visibility** — boot logs and `/customperm status`, `/customperm debug`, `/customperm test` report whether the active backend is Internal, LuckPerms, or Internal fallback from LuckPerms.
+- **Configurable LP degradation fallback** — if LuckPerms becomes unavailable at runtime, `settings.json` controls whether CustomPerm fails closed (`deny`, default) or switches to the internal backend (`internal`).
+- **Backend visibility** — boot logs and `/customperm status`, `/customperm debug`, `/customperm test` report whether the active backend is Internal, LuckPerms, Internal fallback from LuckPerms, or deny mode.
 - **Multi-grade RBAC** — a player can hold multiple internal grades; permissions are resolved as a union of all assigned grades.
 - **Explicit DENY support** — internal grades support `deniedPermissions`, and any matching DENY overrides ALLOW.
 - **Wildcard permission nodes** — `*`, `customperm.command.*`, and `customperm.alias.*` are supported.
@@ -67,7 +67,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Command tree wrapping** — Brigadier root commands are cloned and wrapped so exposed commands can be gated by CustomPerm permissions.
 - **OP preservation** — real op-level 2+ sources always retain access; the mod does not strip operator rights.
 - **Client command-tree re-sync** — after internal changes or LuckPerms recalculation events, affected players receive an updated command tree.
-- **Atomic hot-reload** — `/customperm reload` loads `grades.json`, `aliases.json`, and `commands.json` as one transaction; invalid JSON keeps the previous snapshot.
+- **Atomic hot-reload** — `/customperm reload` loads `grades.json`, `aliases.json`, `commands.json`, and `settings.json` as one transaction; invalid JSON keeps the previous snapshot.
 - **Automatic config creation and normalization** — missing files, `{}` files, unknown fields, and explicit `null` collections are normalized into safe empty structures.
 - **Automatic config backups** — successful reloads write timestamped backups and keep the latest three backups per config file.
 - **Concurrent-safe config reads** — the active config snapshot is held in an `AtomicReference`, avoiding locks on permission hot paths.
@@ -212,7 +212,7 @@ CustomPerm uses a hierarchical node scheme compatible with LuckPerms (and with t
 
 ## Configuration files
 
-Stored in `config/customperm/`. Auto-created on first launch and editable on the fly (use `/customperm reload` to apply).
+Stored in `config/arcadia/customperm/`. Auto-created on first launch and editable on the fly (use `/customperm reload` to apply). If an older `config/customperm/` directory exists and the new directory does not, CustomPerm copies the known config files into the new location without deleting the old files.
 
 ### `commands.json`
 
@@ -220,9 +220,31 @@ Set of commands exposed to the system.
 
 ```json
 {
-  "grantedCommands": ["gamemode", "give", "effect", "tp"]
+  "grantedCommands": ["gamemode", "time", "adminpanel"],
+  "preserveOriginalRequires": {
+    "gamemode": false,
+    "time": false,
+    "adminpanel": true
+  }
 }
 ```
+
+`preserveOriginalRequires` is optional per command. Missing entries default to `false` to preserve the historical CustomPerm behavior. Set it to `true` for sensitive modded commands whose original Brigadier `requires` predicate must remain mandatory in addition to the CustomPerm permission node.
+
+### `settings.json`
+
+Runtime safety settings.
+
+```json
+{
+  "luckPermsFallbackMode": "deny"
+}
+```
+
+`luckPermsFallbackMode` accepts:
+
+- `deny`: default and recommended for public servers. If LuckPerms is loaded but unavailable, CustomPerm permission checks return false.
+- `internal`: compatibility mode. If LuckPerms is loaded but unavailable, CustomPerm falls back to `grades.json`.
 
 ### `aliases.json`
 
@@ -573,7 +595,7 @@ Cloned nodes are inserted into the root's internal `Map` fields (`children`/`lit
 - `LuckPermsService`: queries LP via the public API (`LuckPermsProvider.get()`).
 - `InternalPermService`: looks up grades in `grades.json`.
 
-Selection happens at boot through `ModList.get().isLoaded("luckperms")` plus a minimum version check (`5.4.150+`). If LuckPerms is absent, incompatible, fails to initialise, or later throws during permission checks, CustomPerm uses the internal backend/fallback.
+Selection happens at boot through `ModList.get().isLoaded("luckperms")` plus a minimum version check (`5.4.150+`). If LuckPerms is absent, CustomPerm uses the internal backend. If LuckPerms is present but incompatible, fails to initialise, or later throws during permission checks, `settings.json` decides the fallback: `deny` fails closed, `internal` uses `grades.json`.
 
 The internal resolver applies this order:
 

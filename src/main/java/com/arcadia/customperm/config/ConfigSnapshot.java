@@ -9,5 +9,6 @@ package com.arcadia.customperm.config;
 public record ConfigSnapshot(
         GradesConfig grades,
         AliasesConfig aliases,
-        CommandsConfig commands
+        CommandsConfig commands,
+        SettingsConfig settings
 ) {}

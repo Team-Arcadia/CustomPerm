@@ -97,7 +97,7 @@ class ConfigManagerTest {
 
     @Test
     void shouldCreateBackupFiles_afterSuccessfulLoad() throws Exception {
-        // Arrange & Act — un load() réussi doit créer 3 fichiers .bak dans backup/
+        // Arrange & Act — un load() réussi doit créer un .bak par fichier de config dans backup/
         ConfigManager mgr = new ConfigManager(tempDir);
         mgr.load();
 
@@ -111,8 +111,30 @@ class ConfigManagerTest {
                     .filter(p -> p.getFileName().toString().endsWith(".bak"))
                     .count();
         }
-        assertEquals(3L, backupCount,
-                "Exactement 3 fichiers .bak doivent être créés (grades, aliases, commands)");
+        assertEquals(4L, backupCount,
+                "Exactement 4 fichiers .bak doivent être créés (grades, aliases, commands, settings)");
+    }
+
+    @Test
+    void shouldMigrateLegacyConfigDirectory_whenNewDirectoryDoesNotExist() throws Exception {
+        Path legacyDir = tempDir.resolve("customperm");
+        Path newDir = tempDir.resolve("arcadia").resolve("customperm");
+        Files.createDirectories(legacyDir);
+        Files.writeString(legacyDir.resolve("grades.json"),
+                "{\"grades\":{\"vip\":{\"permissions\":[\"customperm.test\"]}}}");
+        Files.writeString(legacyDir.resolve("aliases.json"), "{\"aliases\":{}}");
+        Files.writeString(legacyDir.resolve("commands.json"), "{\"grantedCommands\":[\"spawn\"]}");
+        Files.writeString(legacyDir.resolve("settings.json"), "{\"luckPermsFallbackMode\":\"internal\"}");
+
+        ConfigManager mgr = new ConfigManager(newDir, legacyDir);
+
+        assertTrue(mgr.load(), "load() doit migrer l'ancien dossier de configuration");
+        assertTrue(Files.exists(newDir.resolve("grades.json")), "grades.json doit être copié vers le nouveau dossier");
+        assertTrue(Files.exists(newDir.resolve("settings.json")), "settings.json doit être copié vers le nouveau dossier");
+        assertTrue(Files.exists(legacyDir.resolve("grades.json")), "la migration ne doit pas supprimer l'ancien fichier");
+        assertTrue(mgr.getGrades().grades.containsKey("vip"), "la config migrée doit être chargée");
+        assertTrue(mgr.getCommands().grantedCommands.contains("spawn"), "commands.json migré doit être chargé");
+        assertEquals("internal", mgr.getSettings().luckPermsFallbackMode, "settings.json migré doit être chargé");
     }
 
     @Test

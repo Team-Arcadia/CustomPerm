@@ -97,4 +97,35 @@ class CommandsConfigTest {
         assertFalse(cfg.grantedCommands.contains("ban"),
                 "Une commande retirée ne doit plus être dans grantedCommands");
     }
+
+    @Test
+    void shouldDefaultToNotPreservingOriginalRequires_whenCommandHasNoOverride() {
+        CommandsConfig cfg = freshConfig();
+
+        assertFalse(cfg.shouldPreserveOriginalRequires("gamemode"),
+                "Sans override explicite, le comportement historique doit être conservé");
+    }
+
+    @Test
+    void shouldPreserveOriginalRequires_whenCommandOverrideIsTrue() {
+        CommandsConfig cfg = freshConfig();
+        cfg.preserveOriginalRequires.put("adminpanel", true);
+
+        assertTrue(cfg.shouldPreserveOriginalRequires("adminpanel"));
+        assertFalse(cfg.shouldPreserveOriginalRequires("gamemode"));
+    }
+
+    @Test
+    void shouldRemovePreserveOriginalRequiresOverride_whenCommandRemoved() {
+        CommandsConfig cfg = freshConfig();
+        cfg.grantedCommands.add("gamemode");
+        cfg.preserveOriginalRequires.put("gamemode", true);
+
+        boolean removed = cfg.removeCommand("gamemode");
+
+        assertTrue(removed);
+        assertFalse(cfg.grantedCommands.contains("gamemode"));
+        assertFalse(cfg.preserveOriginalRequires.containsKey("gamemode"),
+                "Retirer une commande exposee doit aussi nettoyer son override preserveOriginalRequires");
+    }
 }

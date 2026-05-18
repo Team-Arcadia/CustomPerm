@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -24,9 +25,11 @@ public class ConfigManager {
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss");
 
     private final Path dir;
+    private final Path legacyDir;
     private final Path gradesFile;
     private final Path aliasesFile;
     private final Path commandsFile;
+    private final Path settingsFile;
 
     private final AtomicReference<ConfigSnapshot> configRef;
     // package-private pour accès depuis les tests unitaires (même package)
@@ -34,18 +37,26 @@ public class ConfigManager {
 
     /** Constructeur production — chemin résolu via FMLPaths. */
     public ConfigManager() {
-        this(FMLPaths.CONFIGDIR.get().resolve("customperm"));
+        this(
+                FMLPaths.CONFIGDIR.get().resolve("arcadia").resolve("customperm"),
+                FMLPaths.CONFIGDIR.get().resolve("customperm"));
     }
 
     /** Constructeur injectable pour tests unitaires (pas d'import NeoForge requis dans les tests). */
     ConfigManager(Path dir) {
+        this(dir, null);
+    }
+
+    ConfigManager(Path dir, Path legacyDir) {
         this.dir = dir;
+        this.legacyDir = legacyDir;
         this.gradesFile   = dir.resolve("grades.json");
         this.aliasesFile  = dir.resolve("aliases.json");
         this.commandsFile = dir.resolve("commands.json");
+        this.settingsFile = dir.resolve("settings.json");
         // snapshot vide initial — remplacé par load()
         this.configRef = new AtomicReference<>(
-                new ConfigSnapshot(new GradesConfig(), new AliasesConfig(), new CommandsConfig()));
+                new ConfigSnapshot(new GradesConfig(), new AliasesConfig(), new CommandsConfig(), new SettingsConfig()));
     }
 
     /**
@@ -62,11 +73,13 @@ public class ConfigManager {
             return false;
         }
         try {
+            migrateLegacyConfigIfNeeded();
             Files.createDirectories(dir);
 
             GradesConfig   grades   = new GradesConfig();
             AliasesConfig  aliases  = new AliasesConfig();
             CommandsConfig commands = new CommandsConfig();
+            SettingsConfig settings = new SettingsConfig();
 
             // Parsing avec catch individuel par fichier — INVARIANT-401 :
             // si un fichier est invalide, on retourne false AVANT configRef.set(),
@@ -111,10 +124,25 @@ public class ConfigManager {
                     anyInvalid = true;
                 }
             }
+            if (Files.exists(settingsFile)) {
+                try {
+                    SettingsConfig parsed = GSON.fromJson(Files.readString(settingsFile), SettingsConfig.class);
+                    if (parsed != null) { settings = parsed; settings.normalize(); }
+                    else {
+                        LOGGER.warn("[CustomPerm] Configuration reload failed — settings.json is empty or null. Keeping previous config.");
+                        anyInvalid = true;
+                    }
+                } catch (Exception e) {
+                    LOGGER.warn("[CustomPerm] Configuration reload failed — invalid JSON in settings.json. Keeping previous config.");
+                    anyInvalid = true;
+                }
+            } else {
+                settings.normalize();
+            }
             if (anyInvalid) return false;
 
             // Tous les fichiers sont valides — mise à jour atomique du snapshot
-            configRef.set(new ConfigSnapshot(grades, aliases, commands));
+            configRef.set(new ConfigSnapshot(grades, aliases, commands, settings));
             if (!save()) return false;
             writeBackup();   // AR10 — backup après chargement réussi
             return true;
@@ -127,6 +155,27 @@ public class ConfigManager {
         }
     }
 
+    private void migrateLegacyConfigIfNeeded() throws IOException {
+        if (legacyDir == null || Files.exists(dir) || !Files.isDirectory(legacyDir)) {
+            return;
+        }
+
+        Files.createDirectories(dir);
+        copyLegacyConfigFile("grades.json");
+        copyLegacyConfigFile("aliases.json");
+        copyLegacyConfigFile("commands.json");
+        copyLegacyConfigFile("settings.json");
+        LOGGER.info("[CustomPerm] Migrated legacy config from {} to {}", legacyDir, dir);
+    }
+
+    private void copyLegacyConfigFile(String fileName) throws IOException {
+        Path source = legacyDir.resolve(fileName);
+        Path target = dir.resolve(fileName);
+        if (Files.isRegularFile(source) && !Files.exists(target)) {
+            Files.copy(source, target, StandardCopyOption.COPY_ATTRIBUTES);
+        }
+    }
+
     public boolean save() {
         ConfigSnapshot snap = configRef.get();
         try {
@@ -134,6 +183,7 @@ public class ConfigManager {
             Files.writeString(gradesFile,   GSON.toJson(snap.grades()));
             Files.writeString(aliasesFile,  GSON.toJson(snap.aliases()));
             Files.writeString(commandsFile, GSON.toJson(snap.commands()));
+            Files.writeString(settingsFile, GSON.toJson(snap.settings()));
             return true;
         } catch (IOException e) {
             LOGGER.error("[CustomPerm] Failed to save config", e);
@@ -142,7 +192,7 @@ public class ConfigManager {
     }
 
     /**
-     * Écrit une backup horodatée des 3 fichiers de config dans {@code backup/}.
+     * Écrit une backup horodatée des fichiers de config dans {@code backup/}.
      * Non-fatale : un échec logge un WARN mais ne remet pas en cause le chargement.
      * Appelée uniquement après un {@link #load()} réussi.
      */
@@ -156,11 +206,13 @@ public class ConfigManager {
             Files.writeString(backupDir.resolve("grades.json."   + timestamp + ".bak"), GSON.toJson(snap.grades()));
             Files.writeString(backupDir.resolve("aliases.json."  + timestamp + ".bak"), GSON.toJson(snap.aliases()));
             Files.writeString(backupDir.resolve("commands.json." + timestamp + ".bak"), GSON.toJson(snap.commands()));
+            Files.writeString(backupDir.resolve("settings.json." + timestamp + ".bak"), GSON.toJson(snap.settings()));
 
             // Rotation AR10 : conserver les 3 dernières backups par fichier
             rotateBackups(backupDir, "grades.json");
             rotateBackups(backupDir, "aliases.json");
             rotateBackups(backupDir, "commands.json");
+            rotateBackups(backupDir, "settings.json");
 
         } catch (IOException e) {
             LOGGER.warn("[CustomPerm] Failed to write config backup: {}", e.getMessage());
@@ -203,4 +255,5 @@ public class ConfigManager {
     public GradesConfig   getGrades()   { return configRef.get().grades(); }
     public AliasesConfig  getAliases()  { return configRef.get().aliases(); }
     public CommandsConfig getCommands() { return configRef.get().commands(); }
+    public SettingsConfig getSettings() { return configRef.get().settings(); }
 }

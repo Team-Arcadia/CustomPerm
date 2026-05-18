@@ -7,26 +7,22 @@ Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
 
 ---
 
-## [1.0.0] — YANKED
+## [1.0.0] — 2026-05-18
 
-> Ce tag git (`c74b360`) était prématuré : le mod n'était pas encore finalisé
-> et ne correspond à aucune release publique stable. La version publiée issue
-> du travail de finalisation est **[0.9.0]**.
-
----
-
-## [0.9.0] — 2026-05-14
-
-Release de finalisation.
+Release publique stable.
 
 Cette version regroupe le travail de finalisation du mod : implémentation des
 fonctionnalités prévues, corrections issues des revues, tests, documentation,
-benchmarks, procédure de validation manuelle et préparation release.
+benchmarks, procédure de validation manuelle, durcissement sécurité et préparation
+pour publication officielle.
 
 ### Ajouté
 
 - **Configuration et hot-reload**
-  - Création automatique de `config/customperm/grades.json`, `aliases.json` et `commands.json`.
+  - Création automatique de `config/arcadia/customperm/grades.json`, `aliases.json`, `commands.json` et `settings.json`.
+  - Migration non destructive depuis l'ancien dossier `config/customperm/` vers `config/arcadia/customperm/` quand le nouveau dossier n'existe pas encore.
+  - `settings.json` avec `luckPermsFallbackMode` (`deny` par défaut, `internal` en mode compatibilité).
+  - `commands.json` avec `preserveOriginalRequires` par commande.
   - `ConfigManager` avec snapshot atomique via `AtomicReference`.
   - `/customperm reload` transactionnel : si un fichier JSON est invalide, l'ancien snapshot reste actif.
   - Backups horodatés des fichiers de configuration avec rotation des 3 dernières sauvegardes.
@@ -69,8 +65,8 @@ benchmarks, procédure de validation manuelle et préparation release.
   - Sélection du backend LuckPerms si disponible et compatible.
   - Version minimale LuckPerms `5.4.150+`.
   - Refus cohérent des versions prerelease type `5.4.150-SNAPSHOT`.
-  - Fallback vers backend interne si LuckPerms est absent, incompatible ou échoue à l'initialisation.
-  - Fallback permanent vers backend interne si LuckPerms devient indisponible pendant un check.
+  - Backend interne si LuckPerms est absent.
+  - Fallback configurable si LuckPerms est incompatible, échoue à l'initialisation ou devient indisponible pendant un check.
   - Subscription à `UserDataRecalculateEvent` pour renvoyer le command tree au joueur concerné.
   - Blocage des commandes `grade` internes lorsque LuckPerms est actif, avec message d'orientation vers `/lp`.
 
@@ -111,21 +107,25 @@ benchmarks, procédure de validation manuelle et préparation release.
 - Les aliases tout-séparateurs (`";;;"`) sont couverts par test de régression.
 - JMH configuré avec `fork = 3` et benchmarks annotés de façon cohérente.
 - CI vérifie la présence de `META-INF/neoforge.mods.toml` et `META-INF/MANIFEST.MF` dans le jar.
+- Suppression d'un alias qui shadow une commande existante restaure maintenant la commande originale dans le dispatcher.
+- Suppression d'une commande exposée nettoie aussi son entrée `preserveOriginalRequires`.
+- Suppression ou retrait du dernier grade d'un joueur nettoie l'entrée `userGrades` devenue vide.
 
 ### Changé
 
-- `gradle.properties` définit maintenant `mod_version=0.9.0`.
+- `gradle.properties` définit maintenant `mod_version=1.0.0`.
 - Les README ne référencent plus d'artefact généré ignoré par Git ; ils pointent vers GitHub Releases.
 - `.gitignore` ignore les artefacts locaux d'outillage, exports de tests, logs, builds et média local non référencé.
-- `CHANGELOG.md` sépare désormais la base initiale (`0.1.0`) de la version finalisée (`0.9.0`).
+- `CHANGELOG.md` sépare désormais la base initiale (`0.1.0`) de la release stable (`1.0.0`).
 
 ### Validation
 
 - `./gradlew clean build --no-daemon` : succès.
-- `./gradlew runGameTestServer --no-daemon` : 26/26 GameTests requis passés.
-- Jar généré : `customperm-0.9.0.jar`.
+- `./gradlew runGameTestServer --no-daemon` : 28/28 GameTests requis passés.
+- Jar généré : `customperm-1.0.0.jar`.
 - Vérification jar : `META-INF/MANIFEST.MF` et `META-INF/neoforge.mods.toml` présents.
-- Tag GitHub `v0.9.0` créé et poussé.
+- Procédure de test manuel : 24/24 tests OK.
+- Tag GitHub prévu : `v1.0.0`.
 
 ### Compatibilité
 
@@ -144,7 +144,7 @@ Base initiale du mod avant le travail de structuration et de finalisation.
 
 Cette version correspond au socle existant avant la livraison complète.
 Elle sert de base historique, mais elle ne contient pas l'ensemble des garanties,
-tests, diagnostics, intégrations et documents livrés en `0.9.0`.
+tests, diagnostics, intégrations et documents livrés en `1.0.0`.
 
 ### Inclus
 
@@ -199,3 +199,4 @@ en **moins d'une semaine**. Procédure :
 > Note : le mod ne contient pas de couche d'abstraction multi-version. Le refactoring
 > multi-version ne doit être introduit que lors d'un portage vers une version majeure
 > différente de NeoForge.
+

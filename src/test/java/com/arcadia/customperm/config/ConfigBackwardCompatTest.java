@@ -13,7 +13,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * <p>Vérifie que :</p>
  * <ul>
- *   <li>un JSON vide {@code {}} est accepté pour chacun des trois fichiers</li>
+ *   <li>un JSON vide {@code {}} est accepté pour chacun des fichiers</li>
  *   <li>des fichiers absents donnent des configs par défaut (collections vides, non null)</li>
  *   <li>des champs JSON inconnus (ajoutés dans une future version) sont ignorés sans erreur</li>
  * </ul>
@@ -54,6 +54,10 @@ class ConfigBackwardCompatTest {
         CommandsConfig commands = mgr.getCommands();
         assertNotNull(commands.grantedCommands, "commands.grantedCommands ne doit pas être null");
         assertTrue(commands.grantedCommands.isEmpty(), "commands.grantedCommands doit être vide");
+
+        SettingsConfig settings = mgr.getSettings();
+        assertEquals("deny", settings.luckPermsFallbackMode,
+                "luckPermsFallbackMode doit être deny par défaut");
     }
 
     // -------------------------------------------------------------------------
@@ -125,6 +129,42 @@ class ConfigBackwardCompatTest {
         CommandsConfig commands = mgr.getCommands();
         assertNotNull(commands.grantedCommands, "commands.grantedCommands ne doit pas rester null après normalisation");
         assertTrue(commands.grantedCommands.isEmpty());
+    }
+
+    @Test
+    void shouldLoadCommandsConfig_whenPreserveOriginalRequiresIsPresent() throws Exception {
+        Files.writeString(tempDir.resolve("commands.json"),
+                "{\"grantedCommands\":[\"gamemode\",\"adminpanel\"],\"preserveOriginalRequires\":{\"gamemode\":false,\"adminpanel\":true}}");
+        ConfigManager mgr = new ConfigManager(tempDir);
+
+        boolean loaded = mgr.load();
+
+        assertTrue(loaded, "load() doit lire preserveOriginalRequires");
+        CommandsConfig commands = mgr.getCommands();
+        assertFalse(commands.shouldPreserveOriginalRequires("gamemode"));
+        assertTrue(commands.shouldPreserveOriginalRequires("adminpanel"));
+    }
+
+    @Test
+    void shouldLoadSettingsConfig_whenSettingsJsonIsPresent() throws Exception {
+        Files.writeString(tempDir.resolve("settings.json"), "{\"luckPermsFallbackMode\":\"internal\"}");
+        ConfigManager mgr = new ConfigManager(tempDir);
+
+        boolean loaded = mgr.load();
+
+        assertTrue(loaded, "load() doit lire settings.json");
+        assertEquals("internal", mgr.getSettings().luckPermsFallbackMode);
+    }
+
+    @Test
+    void shouldNormalizeSettingsConfigToDeny_whenFallbackModeIsInvalid() throws Exception {
+        Files.writeString(tempDir.resolve("settings.json"), "{\"luckPermsFallbackMode\":\"unsafe\"}");
+        ConfigManager mgr = new ConfigManager(tempDir);
+
+        boolean loaded = mgr.load();
+
+        assertTrue(loaded, "load() doit normaliser un mode invalide sans rejeter la config");
+        assertEquals("deny", mgr.getSettings().luckPermsFallbackMode);
     }
 
     // -------------------------------------------------------------------------
