@@ -1,187 +1,187 @@
 # Changelog
 
-Toutes les modifications notables de ce projet sont documentées dans ce fichier.
+All notable changes to this project are documented in this file.
 
-Format : [Keep a Changelog](https://keepachangelog.com/fr/1.0.0/)  
-Versioning : [Semantic Versioning](https://semver.org/lang/fr/)
+Format: [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)  
+Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
-## [1.0.0] — 2026-05-18
+## [1.0.0] - 2026-05-18
 
-Release publique stable.
+Stable public release.
 
-Cette version regroupe le travail de finalisation du mod : implémentation des
-fonctionnalités prévues, corrections issues des revues, tests, documentation,
-benchmarks, procédure de validation manuelle, durcissement sécurité et préparation
-pour publication officielle.
+This version brings together the finalization work for the mod: planned features,
+review-driven fixes, tests, documentation, benchmarks, manual validation,
+security hardening, and official release preparation.
 
-### Ajouté
+### Added
 
-- **Configuration et hot-reload**
-  - Création automatique de `config/arcadia/customperm/grades.json`, `aliases.json`, `commands.json` et `settings.json`.
-  - Migration non destructive depuis l'ancien dossier `config/customperm/` vers `config/arcadia/customperm/` quand le nouveau dossier n'existe pas encore.
-  - `settings.json` avec `luckPermsFallbackMode` (`deny` par défaut, `internal` en mode compatibilité).
-  - `commands.json` avec `preserveOriginalRequires` par commande.
-  - `ConfigManager` avec snapshot atomique via `AtomicReference`.
-  - `/customperm reload` transactionnel : si un fichier JSON est invalide, l'ancien snapshot reste actif.
-  - Backups horodatés des fichiers de configuration avec rotation des 3 dernières sauvegardes.
-  - Normalisation des fichiers manquants, `{}`, champs inconnus et collections explicitement `null`.
+- **Configuration and hot-reload**
+  - Automatic creation of `config/arcadia/customperm/grades.json`, `aliases.json`, `commands.json`, and `settings.json`.
+  - Non-destructive migration from the old `config/customperm/` directory to `config/arcadia/customperm/` when the new directory does not exist yet.
+  - `settings.json` with `luckPermsFallbackMode` (`deny` by default, `internal` for compatibility mode).
+  - `commands.json` with per-command `preserveOriginalRequires`.
+  - `ConfigManager` with an atomic snapshot through `AtomicReference`.
+  - Transactional `/customperm reload`: invalid JSON keeps the previous active snapshot.
+  - Timestamped configuration backups with rotation of the latest 3 backups.
+  - Normalization for missing files, `{}` files, unknown fields, and explicit `null` collections.
 
-- **Moteur de permissions interne**
-  - `PermissionResolver` pur Java, sans dépendance Minecraft/NeoForge.
-  - Résolution multi-grades.
-  - `DENY` explicite prioritaire sur `ALLOW`.
-  - Wildcards `*`, `customperm.command.*`, `customperm.alias.*`.
-  - Modèle deny-by-default.
+- **Internal permission engine**
+  - Pure Java `PermissionResolver`, independent from Minecraft/NeoForge APIs.
+  - Multi-grade resolution.
+  - Explicit `DENY` priority over `ALLOW`.
+  - Wildcards: `*`, `customperm.command.*`, and `customperm.alias.*`.
+  - Deny-by-default permission model.
 
-- **Gestion des grades**
+- **Grade management**
   - `/customperm grade create/delete/list`.
   - `/customperm grade addperm/removeperm`.
   - `/customperm grade assign/unassign`.
-  - Persistance JSON des grades et assignations joueurs.
-  - Déduplication des assignations de grade.
-  - Suppression en cascade d'un grade dans les assignations joueurs.
+  - JSON persistence for grades and player assignments.
+  - Grade assignment deduplication.
+  - Cascade removal of deleted grades from player assignments.
 
-- **Exposition de commandes**
+- **Command exposure**
   - `/customperm command add/remove/list`.
-  - Commandes non exposées conservant leur comportement vanilla/moddé.
-  - Wrapping Brigadier des commandes racine via `CommandTreeRewriter`.
-  - Préservation de l'accès opérateur réel op level 2+.
-  - Re-synchronisation du command tree client après changement de configuration.
+  - Non-exposed commands keep their vanilla/modded behavior.
+  - Brigadier root command wrapping through `CommandTreeRewriter`.
+  - Preservation of real op level 2+ access.
+  - Client command-tree resync after configuration changes.
 
-- **Aliases et macros**
+- **Aliases and macros**
   - `/customperm alias add/remove/list`.
   - `/customperm alias addstep/removestep/steps`.
-  - Parsing des steps séparés par `;`.
-  - Exécution séquentielle des steps avec op level 4.
-  - Continuation après erreur d'un step.
-  - Ajout/retrait/remplacement d'aliases sur le dispatcher vivant.
-  - Protection du nom réservé `customperm`.
-  - Warning lorsqu'un alias shadow une commande existante.
+  - Step parsing with `;` separators.
+  - Sequential step execution with op level 4.
+  - Continuation after a step error.
+  - Live alias add/remove/replace on the dispatcher.
+  - Reserved-name protection for `customperm`.
+  - Warning when an alias shadows an existing command.
 
-- **Intégration LuckPerms**
-  - Détection automatique de LuckPerms.
-  - Sélection du backend LuckPerms si disponible et compatible.
-  - Version minimale LuckPerms `5.4.150+`.
-  - Refus cohérent des versions prerelease type `5.4.150-SNAPSHOT`.
-  - Backend interne si LuckPerms est absent.
-  - Fallback configurable si LuckPerms est incompatible, échoue à l'initialisation ou devient indisponible pendant un check.
-  - Subscription à `UserDataRecalculateEvent` pour renvoyer le command tree au joueur concerné.
-  - Blocage des commandes `grade` internes lorsque LuckPerms est actif, avec message d'orientation vers `/lp`.
+- **LuckPerms integration**
+  - Automatic LuckPerms detection.
+  - LuckPerms backend selection when available and compatible.
+  - Minimum LuckPerms version: `5.4.150+`.
+  - Consistent rejection of prerelease-style versions such as `5.4.150-SNAPSHOT`.
+  - Internal backend when LuckPerms is absent.
+  - Configurable fallback when LuckPerms is incompatible, fails to initialize, or becomes unavailable during a permission check.
+  - Subscription to `UserDataRecalculateEvent` to resend the command tree to the affected player.
+  - Internal `grade` commands are blocked while LuckPerms is active, with guidance to use `/lp`.
 
-- **Diagnostics et observabilité**
-  - `/customperm status` avec backend, commandes dispatcher, commandes exposées, aliases, grades et utilisateurs avec grade.
-  - `/customperm test <player> <node>` avec verdict `GRANTED` / `DENIED`.
-  - `/customperm debug <player> <command>` avec rapport dispatcher, exposition, op-level, permission service et décision wrapper.
-  - `/customperm scan [pattern]` avec marqueurs `EXPO`, `ALIAS`, `MOD`.
-  - Libellé backend centralisé : `Internal`, `LuckPerms`, `Internal — fallback from LuckPerms`.
+- **Diagnostics and observability**
+  - `/customperm status` with backend, dispatcher commands, exposed commands, aliases, grades, and users with grades.
+  - `/customperm test <player> <node>` with `GRANTED` / `DENIED` verdict.
+  - `/customperm debug <player> <command>` with dispatcher, exposure, op-level, permission service, and wrapper decision details.
+  - `/customperm scan [pattern]` with `EXPO`, `ALIAS`, and `MOD` markers.
+  - Centralized backend labels: `Internal`, `LuckPerms`, `Internal - fallback from LuckPerms`, and deny mode.
 
-- **Tests et qualité**
-  - Suite JUnit 5 couvrant permissions, config, grades, aliases, LuckPerms versioning et compatibilité JSON.
-  - Suite NeoForge GameTest enregistrée dynamiquement.
-  - 26 GameTests requis validés.
-  - Benchmarks JMH pour `PermissionResolver.resolve()` et lecture concurrente du snapshot config.
-  - Baseline performance documentée dans `docs/performance-baseline.md`.
-  - Procédure de test manuel HTML sombre dans `docs/manual-test-procedure.html` avec export JSON/Markdown.
-  - CI GitHub Actions lançant GameTests, build Gradle et vérification du contenu jar.
+- **Tests and quality**
+  - JUnit 5 suite covering permissions, config, grades, aliases, LuckPerms versioning, and JSON compatibility.
+  - Dynamically registered NeoForge GameTest suite.
+  - 28 required GameTests validated.
+  - JMH benchmarks for `PermissionResolver.resolve()` and concurrent config snapshot reads.
+  - Performance baseline documented in `docs/performance-baseline.md`.
+  - Dark HTML manual test procedure in `docs/manual-test-procedure.html` with JSON/Markdown export.
+  - GitHub Actions CI running GameTests, Gradle build, and jar content verification.
 
-- **Documentation release**
-  - README anglais et français mis à jour pour lister les fonctionnalités réelles du mod.
-  - Documentation du fonctionnement interne : dispatcher wrapping, backend pluggable, re-sync, aliases.
-  - Documentation des limites connues.
-  - Processus NFR14 de portage NeoForge.
+- **Release documentation**
+  - English and French README files updated to list the mod's actual functionality.
+  - Internal behavior documentation: dispatcher wrapping, pluggable backend, command-tree resync, aliases.
+  - Known limitations documentation.
+  - NFR14 NeoForge porting process.
 
-### Corrigé
+### Fixed
 
-- Ajout de `AliasesConfig.normalize()` et `CommandsConfig.normalize()` pour éviter les NPE avec JSON explicitement `null`.
-- Stack traces conservées lors d'échecs de wrapping dispatcher.
-- Les nodes enfants inconnus dans Brigadier sont ignorés avec warning au lieu d'être greffés tels quels dans l'arbre cloné.
-- Les commandes exposées ne bypassent plus CustomPerm lorsque le prédicat Brigadier original est always-true.
-- `LuckPermsService.hooksReady` rendu `volatile`.
-- Logs améliorés pour les échecs fallback et subscription LuckPerms.
-- Guard final si la sélection backend aboutit à `permissions == null`.
-- Registration GameTest : skip explicite des méthodes `@GameTest` non `public static`.
-- `/customperm scan` sanitise le pattern affiché en cas d'absence de résultat.
-- `alias addstep customperm` est rejeté comme nom réservé.
-- Les aliases tout-séparateurs (`";;;"`) sont couverts par test de régression.
-- JMH configuré avec `fork = 3` et benchmarks annotés de façon cohérente.
-- CI vérifie la présence de `META-INF/neoforge.mods.toml` et `META-INF/MANIFEST.MF` dans le jar.
-- Suppression d'un alias qui shadow une commande existante restaure maintenant la commande originale dans le dispatcher.
-- Suppression d'une commande exposée nettoie aussi son entrée `preserveOriginalRequires`.
-- Suppression ou retrait du dernier grade d'un joueur nettoie l'entrée `userGrades` devenue vide.
+- Added `AliasesConfig.normalize()` and `CommandsConfig.normalize()` to avoid NPEs with explicit JSON `null` values.
+- Preserved stack traces for dispatcher wrapping failures.
+- Unknown Brigadier child nodes are ignored with a warning instead of being grafted into the cloned tree.
+- Exposed commands no longer bypass CustomPerm when the original Brigadier predicate is always true.
+- `LuckPermsService.hooksReady` is now `volatile`.
+- Improved logs for fallback failures and LuckPerms subscription failures.
+- Added final guard when backend selection results in `permissions == null`.
+- GameTest registration now explicitly skips non-`public static` `@GameTest` methods.
+- `/customperm scan` sanitizes the displayed pattern when no result is found.
+- `alias addstep customperm` is rejected as a reserved name.
+- Separator-only aliases (`";;;"`) are covered by a regression test.
+- JMH is configured with `fork = 3` and consistently annotated benchmarks.
+- CI verifies `META-INF/neoforge.mods.toml` and `META-INF/MANIFEST.MF` in the jar.
+- Removing an alias that shadows an existing command now restores the original command in the dispatcher.
+- Removing an exposed command also removes its `preserveOriginalRequires` entry.
+- Deleting a grade, or unassigning a player's last grade, now removes the empty `userGrades` entry.
 
-### Changé
+### Changed
 
-- `gradle.properties` définit maintenant `mod_version=1.0.0`.
-- Les README ne référencent plus d'artefact généré ignoré par Git ; ils pointent vers GitHub Releases.
-- `.gitignore` ignore les artefacts locaux d'outillage, exports de tests, logs, builds et média local non référencé.
-- `CHANGELOG.md` sépare désormais la base initiale (`0.1.0`) de la release stable (`1.0.0`).
+- `gradle.properties` now sets `mod_version=1.0.0`.
+- README files no longer reference generated artifacts ignored by Git; they point to GitHub Releases.
+- `.gitignore` excludes local tooling artifacts, test exports, logs, builds, and unreferenced local media.
+- `CHANGELOG.md` now separates the initial base (`0.1.0`) from the stable release (`1.0.0`).
 
 ### Validation
 
-- `./gradlew clean build --no-daemon` : succès.
-- `./gradlew runGameTestServer --no-daemon` : 28/28 GameTests requis passés.
-- Jar généré : `customperm-1.0.0.jar`.
-- Vérification jar : `META-INF/MANIFEST.MF` et `META-INF/neoforge.mods.toml` présents.
-- Procédure de test manuel : 24/24 tests OK.
-- Tag GitHub prévu : `v1.0.0`.
+- `./gradlew clean build --no-daemon`: passed.
+- `./gradlew runGameTestServer --no-daemon`: 28/28 required GameTests passed.
+- Generated jar: `customperm-1.0.0.jar`.
+- Jar verification: `META-INF/MANIFEST.MF` and `META-INF/neoforge.mods.toml` present.
+- Manual test procedure: 24/24 tests passed.
+- GitHub tag: `v1.0.0`.
 
-### Compatibilité
+### Compatibility
 
-| Composant | Version |
+| Component | Version |
 |-----------|---------|
 | Minecraft | 1.21.1 |
 | NeoForge | 21.1.221+ (`[21.1.0,)`) |
 | Java | 21 |
-| LuckPerms | 5.4.150+ (optionnel) |
+| LuckPerms | 5.4.150+ (optional) |
 
 ---
 
-## [0.1.0] — base initiale
+## [0.1.0] - initial base
 
-Base initiale du mod avant le travail de structuration et de finalisation.
+Initial project base before the structuring and finalization work.
 
-Cette version correspond au socle existant avant la livraison complète.
-Elle sert de base historique, mais elle ne contient pas l'ensemble des garanties,
-tests, diagnostics, intégrations et documents livrés en `1.0.0`.
+This version represents the existing foundation before the complete delivery.
+It is kept as the historical baseline, but it does not include the full set of
+guarantees, tests, diagnostics, integrations, and documentation delivered in
+`1.0.0`.
 
-### Inclus
+### Included
 
-- Structure de projet NeoForge/Gradle.
-- Déclaration du mod CustomPerm.
-- Premières classes de configuration, permissions, commandes et aliases.
-- Première intégration du concept de permissions granulaires pour commandes Minecraft.
-- Premiers fichiers README/licence/projet.
+- NeoForge/Gradle project structure.
+- CustomPerm mod declaration.
+- First configuration, permission, command, and alias classes.
+- Initial integration of granular permission concepts for Minecraft commands.
+- Initial README, license, and project files.
 
-### Limites
+### Limitations
 
-- Fonctionnalités incomplètes par rapport au périmètre final.
-- Couverture de tests incomplète.
-- Benchmarks et baseline performance absents.
-- CI release jar incomplète.
-- Documentation fonctionnelle et procédure de test manuel non finalisées.
+- Feature set incomplete compared with the final scope.
+- Test coverage incomplete.
+- Benchmarks and performance baseline absent.
+- Release jar CI incomplete.
+- Functional documentation and manual test procedure not finalized.
 
 ---
 
-## Processus de mise à jour vers une nouvelle version NeoForge (NFR14)
+## NeoForge Version Update Process (NFR14)
 
-Lorsqu'une nouvelle version stable de NeoForge est publiée, la mise à jour doit être livrée
-en **moins d'une semaine**. Procédure :
+When a new stable NeoForge version is released, the update should be delivered
+in **less than one week**. Procedure:
 
-1. Modifier `gradle.properties` à la racine du projet :
+1. Update `gradle.properties` at the project root:
 
    ```properties
-   minecraft_version=<nouvelle-version-mc>
-   minecraft_version_range=[<nouvelle-version-mc>, <prochaine-majeure>)
-   neo_version=<nouvelle-version-neo>
-   neo_version_range=[<nouvelle-version-neo-majeure.mineure.0>,)
-   mod_version=<nouvelle-version-mod>
+   minecraft_version=<new-mc-version>
+   minecraft_version_range=[<new-mc-version>, <next-major>)
+   neo_version=<new-neo-version>
+   neo_version_range=[<new-neo-major-minor.0>,)
+   mod_version=<new-mod-version>
    ```
 
-2. Vérifier la compatibilité des API NeoForge à partir des release notes NeoForge.
+2. Check NeoForge API compatibility from the NeoForge release notes.
 
-3. Exécuter la suite complète :
+3. Run the full suite:
 
    ```bash
    ./gradlew cleanTest test
@@ -189,14 +189,13 @@ en **moins d'une semaine**. Procédure :
    ./gradlew build
    ```
 
-4. Si tous les tests passent, ajouter une entrée dans ce `CHANGELOG.md`.
+4. If all tests pass, add an entry to this `CHANGELOG.md`.
 
-5. Mettre à jour les badges, versions, liens de téléchargement et exemples dans
-   `README.md` et `README.fr.md`.
+5. Update badges, versions, download links, and examples in `README.md` and
+   `README.fr.md`.
 
-6. Créer le tag Git correspondant et publier l'artefact via GitHub Releases.
+6. Create the matching Git tag and publish the artifact through GitHub Releases.
 
-> Note : le mod ne contient pas de couche d'abstraction multi-version. Le refactoring
-> multi-version ne doit être introduit que lors d'un portage vers une version majeure
-> différente de NeoForge.
-
+> Note: the mod does not include a multi-version abstraction layer. Multi-version
+> refactoring should only be introduced when porting to a different major
+> NeoForge version.
