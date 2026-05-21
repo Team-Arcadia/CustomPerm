@@ -1,0 +1,996 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CustomPerm - Procedure serveur lourdement modde avec LuckPerms</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --panel: #151b23;
+      --panel-2: #10161f;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --line: #30363d;
+      --ok: #3fb950;
+      --fail: #f85149;
+      --skip: #a5adba;
+      --warn: #d29922;
+      --focus: #58a6ff;
+      --focus-strong: #1f6feb;
+      --input: #0d1117;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.45;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 20px;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 22px 16px 48px;
+    }
+
+    h1 { font-size: 24px; margin: 0 0 8px; }
+    h2 { font-size: 18px; margin: 0 0 12px; }
+    h3 { font-size: 16px; margin: 0 0 8px; }
+    p { margin: 0 0 10px; }
+
+    .topbar {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1fr auto;
+      align-items: start;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button.primary {
+      background: var(--focus-strong);
+      border-color: var(--focus-strong);
+      color: #fff;
+    }
+
+    button:hover { filter: brightness(1.12); }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 320px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    aside, section.test, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    aside {
+      position: sticky;
+      top: 116px;
+      padding: 14px;
+    }
+
+    .meta { display: grid; gap: 8px; }
+
+    label {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 9px;
+      font: inherit;
+      color: var(--text);
+      background: var(--input);
+    }
+
+    textarea {
+      min-height: 76px;
+      resize: vertical;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px;
+      background: var(--panel-2);
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 22px;
+    }
+
+    .tests { display: grid; gap: 18px; }
+    .category { display: grid; gap: 12px; }
+
+    .category-head {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--focus);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+
+    section.test { padding: 16px; }
+
+    .test-head {
+      display: grid;
+      grid-template-columns: 1fr minmax(180px, 240px);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .status-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .status-row label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--text);
+      background: var(--panel-2);
+      cursor: pointer;
+    }
+
+    .status-row input { width: auto; }
+
+    .steps, .expect, .cleanup, .warning {
+      border-left: 4px solid var(--focus);
+      background: rgba(88, 166, 255, 0.08);
+      padding: 9px 10px;
+      margin-top: 10px;
+    }
+
+    .expect {
+      border-left-color: var(--ok);
+      background: rgba(63, 185, 80, 0.08);
+    }
+
+    .cleanup {
+      border-left-color: var(--skip);
+      background: rgba(165, 173, 186, 0.08);
+    }
+
+    .warning {
+      border-left-color: var(--warn);
+      background: rgba(210, 153, 34, 0.08);
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .fields .wide { grid-column: 1 / -1; }
+
+    ul, ol {
+      margin: 8px 0 0;
+      padding-left: 22px;
+    }
+
+    li { margin-bottom: 5px; }
+
+    code {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 4px;
+    }
+
+    .panel {
+      padding: 16px;
+      margin-top: 18px;
+    }
+
+    .export-box textarea {
+      min-height: 260px;
+      font-family: Consolas, monospace;
+      white-space: pre;
+    }
+
+    @media (max-width: 900px) {
+      header { position: static; }
+      .topbar, .grid, .test-head, .fields { grid-template-columns: 1fr; }
+      aside { position: static; }
+      .actions { justify-content: flex-start; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="topbar">
+      <div>
+        <h1>CustomPerm - Procedure serveur lourdement modde avec LuckPerms</h1>
+        <p class="muted">Procedure pour tester CustomPerm uniquement avec LuckPerms et le LP Editor. Renseigne les resultats, ajoute les logs utiles, puis exporte le rapport.</p>
+      </div>
+      <div class="actions">
+        <button type="button" id="saveBtn">Sauvegarder</button>
+        <button type="button" id="exportJsonBtn" class="primary">Exporter JSON</button>
+        <button type="button" id="exportMdBtn">Exporter Markdown</button>
+        <button type="button" id="resetBtn">Reinitialiser</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid">
+      <aside>
+        <h2>Contexte</h2>
+        <div class="meta">
+          <label>Testeur
+            <input id="tester" type="text" placeholder="Nom ou pseudo">
+          </label>
+          <label>Date
+            <input id="date" type="date">
+          </label>
+          <label>Version CustomPerm
+            <input id="version" type="text" value="1.0.0">
+          </label>
+          <label>Backend attendu
+            <input id="backend" type="text" value="LuckPerms" readonly>
+          </label>
+          <label>LP Editor
+            <select id="lpEditorUsed">
+              <option value="Oui">Oui</option>
+              <option value="Non">Non</option>
+            </select>
+          </label>
+          <label>Joueur admin/op
+            <input id="adminPlayer" type="text" placeholder="Pseudo admin">
+          </label>
+          <label>Joueur non-OP teste
+            <input id="player" type="text" placeholder="Pseudo joueur non-op">
+          </label>
+          <label>Second joueur non-OP
+            <input id="secondPlayer" type="text" placeholder="Optionnel">
+          </label>
+          <label>Environnement
+            <textarea id="environment" placeholder="NeoForge, Minecraft, Java, LuckPerms, lien/session LP editor, nombre de mods, modpack, serveur local/dedie..."></textarea>
+          </label>
+        </div>
+
+        <div class="summary">
+          <div class="stat"><strong id="doneCount">0/0</strong>Faits</div>
+          <div class="stat"><strong id="passCount">0</strong>OK</div>
+          <div class="stat"><strong id="failCount">0</strong>KO</div>
+          <div class="stat"><strong id="skipCount">0</strong>N/A</div>
+        </div>
+        <p class="muted" style="margin-top:12px;">Cette procedure exclut volontairement le backend interne CustomPerm. Toutes les permissions de test doivent etre accordees et retirees via LuckPerms / LP Editor.</p>
+      </aside>
+
+      <div>
+        <div class="tests" id="tests"></div>
+
+        <div class="panel">
+          <h2>Conclusion</h2>
+          <div class="fields">
+            <label>Utilisable sur ce serveur ?
+              <select id="finalUsable">
+                <option value="">Non renseigne</option>
+                <option>Oui</option>
+                <option>Non</option>
+                <option>A confirmer</option>
+              </select>
+            </label>
+            <label>Risque restant
+              <select id="finalRisk">
+                <option value="">Non renseigne</option>
+                <option>Faible</option>
+                <option>Moyen</option>
+                <option>Eleve</option>
+              </select>
+            </label>
+            <label class="wide">Risques restants
+              <textarea id="remainingRisks"></textarea>
+            </label>
+            <label class="wide">Commandes modded a documenter specifiquement
+              <textarea id="commandsToDocument"></textarea>
+            </label>
+            <label class="wide">Recommandations avant production
+              <textarea id="productionRecommendations"></textarea>
+            </label>
+          </div>
+        </div>
+
+        <div class="panel export-box">
+          <h2>Export copiable</h2>
+          <p class="muted">Le contenu apparait ici apres export. Tu peux me coller ce bloc directement.</p>
+          <textarea id="exportText" readonly></textarea>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script>
+    const tests = [
+      {
+        id: "prep-backup",
+        category: "Preparation",
+        title: "Sauvegarde et contexte serveur",
+        goal: "Eviter de tester une commande destructive sur un serveur non sauvegarde.",
+        steps: [
+          "Arreter le serveur.",
+          "Sauvegarder world/ ou la dimension de test.",
+          "Sauvegarder config/arcadia/customperm/.",
+          "Sauvegarder config/luckperms/.",
+          "Redemarrer le serveur.",
+          "Verifier que LuckPerms est installe et charge.",
+          "Verifier que le joueur de test est non-OP: /deop <player>.",
+          "Ouvrir le LP Editor: /lp editor.",
+          "Creer ou identifier un groupe de test LuckPerms dedie, par exemple customperm-test.",
+          "Assigner temporairement le joueur de test a ce groupe si tu veux tester via groupe plutot que permissions directes."
+        ],
+        expect: "Sauvegardes effectuees, serveur redemarre, LuckPerms actif, LP Editor accessible, joueur de test non-OP, admin op niveau 2+, groupe de test identifie si utilise.",
+        cleanup: [
+          "Conserver les sauvegardes jusqu'a validation finale.",
+          "Noter le chemin exact de la sauvegarde dans les notes.",
+          "Le groupe de test LuckPerms sera nettoye en fin de procedure."
+        ]
+      },
+      {
+        id: "boot-status",
+        category: "Preparation",
+        title: "Boot et backend CustomPerm",
+        goal: "Verifier que CustomPerm demarre proprement dans le pack modde.",
+        steps: [
+          "Demarrer le serveur lourdement modde.",
+          "Verifier latest.log.",
+          "Executer: /customperm status.",
+          "Noter le backend, le mode fallback LP, le nombre de commandes dispatcher et aliases.",
+          "Verifier que le backend affiche LuckPerms."
+        ],
+        expect: "Ligne Ready presente, backend LuckPerms, aucune stacktrace CustomPerm, status repond sans erreur.",
+        cleanup: [
+          "Aucun nettoyage requis."
+        ]
+      },
+      {
+        id: "scan-global",
+        category: "Inventaire commandes",
+        title: "Scan global du dispatcher",
+        goal: "Verifier que le scan reste utilisable avec beaucoup de commandes modded.",
+        steps: [
+          "Executer: /customperm scan.",
+          "Observer le temps de reponse.",
+          "Verifier que des commandes vanilla et modded apparaissent.",
+          "Verifier que le serveur ne freeze pas."
+        ],
+        expect: "Scan termine sans crash, sans freeze notable, commandes CustomPerm presentes, commandes modded visibles.",
+        cleanup: [
+          "Aucun nettoyage requis."
+        ]
+      },
+      {
+        id: "scan-target-mods",
+        category: "Inventaire commandes",
+        title: "Scan cible de mods importants",
+        goal: "Identifier les commandes modded candidates pour les tests.",
+        steps: [
+          "Choisir 3 a 5 mods importants du serveur.",
+          "Executer des scans cibles, par exemple: /customperm scan world, /customperm scan claim, /customperm scan admin, /customperm scan shop.",
+          "Noter les commandes non sensibles candidates.",
+          "Noter les commandes sensibles candidates."
+        ],
+        expect: "Les commandes candidates sont identifiees ou leur absence est expliquee par un nom different.",
+        cleanup: [
+          "Aucun nettoyage requis."
+        ]
+      },
+      {
+        id: "vanilla-gamemode",
+        category: "Commande vanilla",
+        title: "Exposition de /gamemode",
+        goal: "Valider le chemin de base avec un vrai joueur non-OP.",
+        steps: [
+          "Avec le joueur non-OP, tenter: /gamemode spectator.",
+          "Avec l'admin, executer: /customperm command add gamemode.",
+          "Dans le LP Editor, donner customperm.command.gamemode au joueur ou a un groupe de test.",
+          "Appliquer les changements LP Editor.",
+          "Verifier avec: /lp user <player> permission check customperm.command.gamemode.",
+          "Avec le joueur non-OP, executer: /gamemode spectator.",
+          "Tester une autre commande op non exposee."
+        ],
+        expect: "Le joueur peut executer /gamemode spectator sans etre op. Une commande op non exposee reste bloquee.",
+        cleanup: [
+          "Dans le LP Editor, retirer customperm.command.gamemode du joueur ou du groupe de test.",
+          "Appliquer les changements LP Editor.",
+          "Executer: /customperm command remove gamemode.",
+          "Verifier: /customperm command list."
+        ]
+      },
+      {
+        id: "modded-safe-command",
+        category: "Commande modded",
+        title: "Commande modded non sensible",
+        goal: "Verifier une commande modded a faible risque.",
+        steps: [
+          "Choisir une commande modded non destructive: info, guide, menu, shop, claim non-admin.",
+          "Executer: /customperm command add <commande>.",
+          "Dans le LP Editor, donner customperm.command.<commande> au joueur non-OP ou a un groupe de test.",
+          "Appliquer les changements LP Editor.",
+          "Verifier avec: /lp user <player> permission check customperm.command.<commande>.",
+          "Avec le joueur, executer: /<commande>.",
+          "Verifier l'autocomplete apres resync ou reconnexion si necessaire.",
+          "Executer: /customperm debug <player> <commande>."
+        ],
+        expect: "La commande fonctionne uniquement pour le joueur autorise, sans donner acces a d'autres commandes.",
+        cleanup: [
+          "Dans le LP Editor, retirer customperm.command.<commande>.",
+          "Appliquer les changements LP Editor.",
+          "Executer: /customperm command remove <commande>.",
+          "Verifier que le joueur perd l'acces."
+        ]
+      },
+      {
+        id: "modded-sensitive-preserve",
+        category: "Commande modded",
+        title: "Commande sensible avec preserveOriginalRequires",
+        goal: "Verifier qu'une commande modded sensible conserve ses controles natifs.",
+        steps: [
+          "Choisir une commande sensible mais testable en securite: adminpanel, claim admin, economie admin, protection, outil monde.",
+          "Executer: /customperm command add <commande>.",
+          "Dans le LP Editor, donner customperm.command.<commande> au joueur non-OP ou a un groupe de test.",
+          "Appliquer les changements LP Editor.",
+          "Dans config/arcadia/customperm/commands.json, mettre preserveOriginalRequires.<commande> a true.",
+          "Executer: /customperm reload.",
+          "Tester la commande sans permission native du mod cible.",
+          "Si le mod cible a une permission native, l'accorder via LP Editor puis retester.",
+          "Executer: /customperm debug <player> <commande>."
+        ],
+        expect: "Le joueur doit avoir la permission CustomPerm et satisfaire le requires original. Sans permission native requise, la commande sensible reste bloquee.",
+        cleanup: [
+          "Dans le LP Editor, retirer la permission CustomPerm.",
+          "Dans le LP Editor, retirer la permission native du mod cible.",
+          "Appliquer les changements LP Editor.",
+          "Executer: /customperm command remove <commande>.",
+          "Verifier que preserveOriginalRequires.<commande> est supprime ou le retirer manuellement.",
+          "Executer: /customperm reload."
+        ]
+      },
+      {
+        id: "worldedit-equivalent",
+        category: "Commande modded",
+        title: "WorldEdit ou commande monde equivalente",
+        goal: "Verifier une commande lourde uniquement en zone de test.",
+        steps: [
+          "Choisir une zone de test sauvegardee.",
+          "Scanner les commandes candidates: /customperm scan wand, /customperm scan pos, /customperm scan set.",
+          "Exposer une seule commande cible.",
+          "Activer preserveOriginalRequires pour cette commande.",
+          "Dans le LP Editor, donner customperm.command.<commande> au joueur.",
+          "Appliquer les changements LP Editor.",
+          "Tester sans permission native WorldEdit/mod cible.",
+          "Accorder la permission native necessaire via LP Editor, puis retester.",
+          "Verifier la zone apres execution."
+        ],
+        expect: "La commande ne fonctionne que si CustomPerm et le mod cible autorisent l'action. Aucune modification non controlee.",
+        cleanup: [
+          "Dans le LP Editor, retirer toutes les permissions de test.",
+          "Appliquer les changements LP Editor.",
+          "Retirer la commande exposee.",
+          "Restaurer la zone de test si une modification a ete faite.",
+          "Executer: /customperm reload si un fichier config a ete modifie."
+        ]
+      },
+      {
+        id: "alias-simple",
+        category: "Aliases",
+        title: "Alias simple",
+        goal: "Verifier qu'un alias fonctionne sans donner acces direct a la commande interne.",
+        steps: [
+          "Executer: /customperm alias add spec gamemode spectator.",
+          "Dans le LP Editor, donner customperm.alias.spec au joueur non-OP ou a un groupe de test.",
+          "Appliquer les changements LP Editor.",
+          "Verifier avec: /lp user <player> permission check customperm.alias.spec.",
+          "Avec le joueur, executer: /spec.",
+          "Verifier que /gamemode direct n'est accessible que si la commande/permission directe est aussi accordee.",
+          "Executer: /customperm debug <player> spec."
+        ],
+        expect: "L'alias fonctionne, l'acces direct a /gamemode reste separe, autocomplete coherent apres resync/reconnexion.",
+        cleanup: [
+          "Executer: /customperm alias remove spec.",
+          "Dans le LP Editor, retirer customperm.alias.spec.",
+          "Appliquer les changements LP Editor.",
+          "Verifier: /customperm alias list."
+        ]
+      },
+      {
+        id: "alias-multistep",
+        category: "Aliases",
+        title: "Alias multi-step non destructif",
+        goal: "Verifier les macros avec plusieurs commandes dans un pack modde.",
+        steps: [
+          "Creer un alias multi-step non destructif, par exemple: say Welcome; effect give <player> minecraft:glowing 5 1.",
+          "Dans le LP Editor, donner customperm.alias.<alias> au joueur ou a un groupe de test.",
+          "Appliquer les changements LP Editor.",
+          "Executer l'alias avec le joueur.",
+          "Verifier l'ordre d'execution et l'absence de crash.",
+          "Executer: /customperm alias steps <alias>."
+        ],
+        expect: "Les steps s'executent dans l'ordre. Si un step echoue, le serveur reste stable et le comportement est note.",
+        cleanup: [
+          "Executer: /customperm alias remove <alias>.",
+          "Dans le LP Editor, retirer customperm.alias.<alias>.",
+          "Appliquer les changements LP Editor."
+        ]
+      },
+      {
+        id: "two-player-isolation",
+        category: "Multi-joueur",
+        title: "Isolation entre deux joueurs",
+        goal: "Verifier qu'une permission donnee a un joueur ne fuite pas vers un autre.",
+        steps: [
+          "Dans le LP Editor, donner customperm.command.<commande_test> uniquement au joueur de test.",
+          "Appliquer les changements LP Editor.",
+          "Ne rien donner au second joueur.",
+          "Les deux joueurs tentent la meme commande.",
+          "Comparer execution et autocomplete.",
+          "Executer debug pour les deux joueurs."
+        ],
+        expect: "Le joueur autorise passe. Le second joueur est refuse. Les command trees divergent correctement apres resync/reconnexion.",
+        cleanup: [
+          "Dans le LP Editor, retirer la permission du joueur de test.",
+          "Appliquer les changements LP Editor.",
+          "Retirer la commande exposee si elle est uniquement de test."
+        ]
+      },
+      {
+        id: "hot-permission-change",
+        category: "Multi-joueur",
+        title: "Changement de permission a chaud",
+        goal: "Verifier la perte d'acces pendant que les joueurs restent connectes.",
+        steps: [
+          "Dans le LP Editor, donner une permission au joueur de test et appliquer.",
+          "Verifier que la commande fonctionne.",
+          "Dans le LP Editor, retirer la permission pendant que le joueur est connecte et appliquer.",
+          "Attendre le resync LuckPerms.",
+          "Le joueur retente la commande.",
+          "Le second joueur reste connecte pendant le test."
+        ],
+        expect: "Le joueur perd l'acces sans redemarrage serveur. Le second joueur n'est pas affecte.",
+        cleanup: [
+          "Verifier dans le LP Editor que toutes les permissions de test sont retirees."
+        ]
+      },
+      {
+        id: "reload-valid",
+        category: "Reload config",
+        title: "Reload valide",
+        goal: "Verifier que la config se recharge proprement dans le pack modde.",
+        steps: [
+          "Modifier un fichier JSON valide dans config/arcadia/customperm/.",
+          "Executer: /customperm reload.",
+          "Verifier: /customperm status.",
+          "Verifier la creation de backups."
+        ],
+        expect: "Reload reussi, changement applique, backups crees, aucun impact negatif sur les autres mods.",
+        cleanup: [
+          "Restaurer la config souhaitee apres le test si necessaire."
+        ]
+      },
+      {
+        id: "reload-invalid",
+        category: "Reload config",
+        title: "Reload invalide",
+        goal: "Verifier que le snapshot precedent reste actif si un JSON est invalide.",
+        steps: [
+          "Introduire volontairement une erreur JSON dans un fichier de test.",
+          "Executer: /customperm reload.",
+          "Tester une permission qui fonctionnait avant.",
+          "Verifier latest.log."
+        ],
+        expect: "Reload refuse, serveur stable, ancien snapshot conserve, permissions existantes toujours operationnelles.",
+        cleanup: [
+          "Restaurer le JSON valide.",
+          "Executer: /customperm reload.",
+          "Verifier que le reload reussit."
+        ]
+      },
+      {
+        id: "non-exposed-regression",
+        category: "Regression",
+        title: "Commandes non exposees",
+        goal: "Verifier que CustomPerm ne casse pas les commandes non exposees.",
+        steps: [
+          "Choisir 5 commandes vanilla ou modded non exposees.",
+          "Le joueur de test tente chaque commande.",
+          "Comparer avec le comportement attendu vanilla/mod cible.",
+          "Executer /customperm debug sur au moins deux commandes."
+        ],
+        expect: "CustomPerm ne donne pas acces a une commande non exposee et ne bloque pas une commande publique deja accessible.",
+        cleanup: [
+          "Aucun nettoyage requis si aucune permission n'a ete ajoutee."
+        ]
+      },
+      {
+        id: "light-real-load",
+        category: "Regression",
+        title: "Charge legere en conditions reelles",
+        goal: "Observer CustomPerm pendant plusieurs actions normales simultanees.",
+        steps: [
+          "Le second joueur se connecte et se deconnecte.",
+          "Dans le LP Editor, ajouter puis retirer une permission et appliquer les changements.",
+          "L'admin execute: /customperm scan.",
+          "Le joueur execute un alias.",
+          "Le joueur execute une commande modded exposee.",
+          "Verifier latest.log apres la sequence."
+        ],
+        expect: "Aucun crash, pas de freeze notable, pas de permission accordee par erreur, logs propres.",
+        cleanup: [
+          "Dans le LP Editor, verifier que toutes les permissions temporaires sont retirees.",
+          "Retirer toutes les commandes exposees et aliases temporaires."
+        ]
+      },
+      {
+        id: "final-cleanup",
+        category: "Nettoyage",
+        title: "Nettoyage final",
+        goal: "S'assurer que le serveur revient a son etat initial.",
+        steps: [
+          "Dans le LP Editor, retirer toutes les permissions LuckPerms temporaires.",
+          "Appliquer les changements LP Editor.",
+          "Supprimer le groupe de test LuckPerms si tu en as cree un pour la procedure.",
+          "Supprimer les aliases de test.",
+          "Retirer les commandes exposees uniquement pour le test.",
+          "Verifier commands.json, aliases.json et settings.json.",
+          "Executer: /customperm command list.",
+          "Executer: /customperm alias list.",
+          "Executer: /customperm status."
+        ],
+        expect: "Aucune commande sensible de test exposee, aucun alias dangereux, aucun joueur de test avec permission temporaire.",
+        cleanup: [
+          "Archiver l'export JSON/Markdown.",
+          "Archiver les logs pertinents.",
+          "Conserver les sauvegardes jusqu'a validation finale."
+        ]
+      }
+    ];
+
+    const statuses = ["OK", "KO", "N/A"];
+    const storageKey = "customperm-heavy-modded-manual-test-v1";
+
+    function todayIso() {
+      const now = new Date();
+      const offset = now.getTimezoneOffset();
+      return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[char]));
+    }
+
+    function groupedTests() {
+      return tests.reduce((acc, test) => {
+        if (!acc[test.category]) acc[test.category] = [];
+        acc[test.category].push(test);
+        return acc;
+      }, {});
+    }
+
+    function renderTests() {
+      const root = document.getElementById("tests");
+      const groups = groupedTests();
+      root.innerHTML = Object.entries(groups).map(([category, items]) => `
+        <div class="category">
+          <div class="category-head">
+            <h2>${escapeHtml(category)}</h2>
+          </div>
+          ${items.map(renderTest).join("")}
+        </div>
+      `).join("");
+    }
+
+    function renderList(items) {
+      return `<ol>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`;
+    }
+
+    function renderTest(test) {
+      return `
+        <section class="test" data-test-id="${escapeHtml(test.id)}">
+          <div class="test-head">
+            <div>
+              <h3>${escapeHtml(test.title)}</h3>
+              <p class="muted">${escapeHtml(test.goal)}</p>
+            </div>
+            <div>
+              <label>Resultat
+                <div class="status-row">
+                  ${statuses.map((status) => `
+                    <label>
+                      <input type="radio" name="status-${escapeHtml(test.id)}" value="${escapeHtml(status)}">
+                      ${escapeHtml(status)}
+                    </label>
+                  `).join("")}
+                </div>
+              </label>
+            </div>
+          </div>
+          <div class="warning">
+            <strong>Point de vigilance</strong>
+            <p>Sur serveur modde, ne teste pas une commande destructive hors zone sauvegardee. Active <code>preserveOriginalRequires</code> pour les commandes sensibles.</p>
+          </div>
+          <div class="steps">
+            <strong>Etapes</strong>
+            ${renderList(test.steps)}
+          </div>
+          <div class="expect">
+            <strong>Resultat attendu</strong>
+            <p>${escapeHtml(test.expect)}</p>
+          </div>
+          <div class="cleanup">
+            <strong>Nettoyage detaille</strong>
+            ${renderList(test.cleanup)}
+          </div>
+          <div class="fields">
+            <label>Commande/mod cible
+              <input data-field="target" data-test="${escapeHtml(test.id)}" type="text" placeholder="ex. gamemode, adminpanel, WorldEdit //wand">
+            </label>
+            <label>Performance observee
+              <input data-field="performance" data-test="${escapeHtml(test.id)}" type="text" placeholder="ex. instantane, leger lag, freeze 2s">
+            </label>
+            <label class="wide">Notes / resultat observe / logs utiles
+              <textarea data-field="notes" data-test="${escapeHtml(test.id)}"></textarea>
+            </label>
+            <label class="wide">Nettoyage effectue
+              <textarea data-field="cleanupDone" data-test="${escapeHtml(test.id)}"></textarea>
+            </label>
+          </div>
+        </section>
+      `;
+    }
+
+    function contextPayload() {
+      return {
+        tester: document.getElementById("tester").value,
+        date: document.getElementById("date").value,
+        version: document.getElementById("version").value,
+        backend: document.getElementById("backend").value,
+        lpEditorUsed: document.getElementById("lpEditorUsed").value,
+        adminPlayer: document.getElementById("adminPlayer").value,
+        player: document.getElementById("player").value,
+        secondPlayer: document.getElementById("secondPlayer").value,
+        environment: document.getElementById("environment").value,
+        finalUsable: document.getElementById("finalUsable").value,
+        finalRisk: document.getElementById("finalRisk").value,
+        remainingRisks: document.getElementById("remainingRisks").value,
+        commandsToDocument: document.getElementById("commandsToDocument").value,
+        productionRecommendations: document.getElementById("productionRecommendations").value
+      };
+    }
+
+    function testResult(test) {
+      const status = document.querySelector(`input[name="status-${CSS.escape(test.id)}"]:checked`);
+      const fields = {};
+      document.querySelectorAll(`[data-test="${CSS.escape(test.id)}"]`).forEach((input) => {
+        fields[input.dataset.field] = input.value;
+      });
+      return {
+        id: test.id,
+        category: test.category,
+        title: test.title,
+        status: status ? status.value : "",
+        target: fields.target || "",
+        performance: fields.performance || "",
+        notes: fields.notes || "",
+        cleanupDone: fields.cleanupDone || ""
+      };
+    }
+
+    function buildPayload() {
+      const results = tests.map(testResult);
+      const counts = { OK: 0, KO: 0, "N/A": 0, empty: 0, completed: 0, total: results.length };
+      results.forEach((result) => {
+        if (result.status) {
+          counts[result.status] += 1;
+          counts.completed += 1;
+        } else {
+          counts.empty += 1;
+        }
+      });
+      return {
+        schema: "customperm-heavy-modded-manual-test-v1",
+        exportedAt: new Date().toISOString(),
+        context: contextPayload(),
+        summary: counts,
+        tests: results
+      };
+    }
+
+    function updateCounts() {
+      const payload = buildPayload();
+      document.getElementById("doneCount").textContent = `${payload.summary.completed}/${payload.summary.total}`;
+      document.getElementById("passCount").textContent = payload.summary.OK;
+      document.getElementById("failCount").textContent = payload.summary.KO;
+      document.getElementById("skipCount").textContent = payload.summary["N/A"];
+    }
+
+    function exportJson() {
+      const text = JSON.stringify(buildPayload(), null, 2);
+      document.getElementById("exportText").value = text;
+      download("customperm-heavy-modded-test-results.json", text, "application/json");
+    }
+
+    function exportMarkdown() {
+      const payload = buildPayload();
+      const lines = [
+        "# CustomPerm - Heavy Modded Server Test Results",
+        "",
+        `- Tester: ${payload.context.tester || ""}`,
+        `- Date: ${payload.context.date || ""}`,
+        `- CustomPerm: ${payload.context.version || ""}`,
+        `- Backend: ${payload.context.backend || ""}`,
+        `- LP Editor used: ${payload.context.lpEditorUsed || ""}`,
+        `- Admin: ${payload.context.adminPlayer || ""}`,
+        `- Player: ${payload.context.player || ""}`,
+        `- Second player: ${payload.context.secondPlayer || ""}`,
+        `- Environment: ${payload.context.environment || ""}`,
+        `- Final usable: ${payload.context.finalUsable || ""}`,
+        `- Remaining risk: ${payload.context.finalRisk || ""}`,
+        "",
+        "## Summary",
+        "",
+        `- OK: ${payload.summary.OK}`,
+        `- KO: ${payload.summary.KO}`,
+        `- N/A: ${payload.summary["N/A"]}`,
+        `- Empty: ${payload.summary.empty}`,
+        "",
+        "## Tests",
+        ""
+      ];
+      for (const result of payload.tests) {
+        lines.push(`### ${result.category} - ${result.title}`);
+        lines.push("");
+        lines.push(`- Status: ${result.status || ""}`);
+        lines.push(`- Target: ${result.target || ""}`);
+        lines.push(`- Performance: ${result.performance || ""}`);
+        lines.push(`- Notes: ${result.notes || ""}`);
+        lines.push(`- Cleanup done: ${result.cleanupDone || ""}`);
+        lines.push("");
+      }
+      lines.push("## Final Notes");
+      lines.push("");
+      lines.push(`- Remaining risks: ${payload.context.remainingRisks || ""}`);
+      lines.push(`- Commands to document: ${payload.context.commandsToDocument || ""}`);
+      lines.push(`- Production recommendations: ${payload.context.productionRecommendations || ""}`);
+      const text = lines.join("\n");
+      document.getElementById("exportText").value = text;
+      download("customperm-heavy-modded-test-results.md", text, "text/markdown");
+    }
+
+    function download(filename, text, type) {
+      const blob = new Blob([text], { type });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function saveState() {
+      localStorage.setItem(storageKey, JSON.stringify(buildPayload()));
+      alert("Sauvegarde locale effectuee.");
+    }
+
+    function restoreState() {
+      const raw = localStorage.getItem(storageKey);
+      if (!raw) return;
+      try {
+        const payload = JSON.parse(raw);
+        const ctx = payload.context || {};
+        for (const [key, value] of Object.entries(ctx)) {
+          const field = document.getElementById(key);
+          if (field) field.value = value || "";
+        }
+        for (const result of payload.tests || []) {
+          if (result.status) {
+            const radio = document.querySelector(`input[name="status-${CSS.escape(result.id)}"][value="${CSS.escape(result.status)}"]`);
+            if (radio) radio.checked = true;
+          }
+          for (const fieldName of ["target", "performance", "notes", "cleanupDone"]) {
+            const field = document.querySelector(`[data-test="${CSS.escape(result.id)}"][data-field="${fieldName}"]`);
+            if (field) field.value = result[fieldName] || "";
+          }
+        }
+      } catch (error) {
+        console.warn("Impossible de restaurer la sauvegarde locale", error);
+      }
+    }
+
+    function resetAll() {
+      if (!confirm("Reinitialiser tous les champs ?")) return;
+      localStorage.removeItem(storageKey);
+      document.querySelectorAll("input, textarea, select").forEach((field) => {
+        if (field.type === "radio" || field.type === "checkbox") field.checked = false;
+        else field.value = "";
+      });
+      document.getElementById("date").value = todayIso();
+      document.getElementById("version").value = "1.0.0";
+      updateCounts();
+      document.getElementById("exportText").value = "";
+    }
+
+    renderTests();
+    document.getElementById("date").value = todayIso();
+    restoreState();
+    updateCounts();
+
+    document.addEventListener("change", updateCounts);
+    document.addEventListener("input", updateCounts);
+    document.getElementById("saveBtn").addEventListener("click", saveState);
+    document.getElementById("exportJsonBtn").addEventListener("click", exportJson);
+    document.getElementById("exportMdBtn").addEventListener("click", exportMarkdown);
+    document.getElementById("resetBtn").addEventListener("click", resetAll);
+  </script>
+</body>
+</html>

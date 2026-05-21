@@ -1,0 +1,772 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CustomPerm - Server Setup Guide</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0e1117;
+      --panel: #151a23;
+      --panel-2: #1b2230;
+      --text: #e8edf5;
+      --muted: #a9b4c3;
+      --line: #2b3444;
+      --accent: #7dd3fc;
+      --accent-2: #a7f3d0;
+      --warn: #facc15;
+      --danger: #fb7185;
+      --code: #0a0d12;
+      --shadow: rgba(0, 0, 0, 0.35);
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.55;
+      color: var(--text);
+      background: var(--bg);
+    }
+
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    .layout {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr);
+      min-height: 100vh;
+    }
+
+    aside {
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      padding: 28px 22px;
+      overflow: auto;
+      background: #0b0e14;
+      border-right: 1px solid var(--line);
+    }
+
+    main {
+      max-width: 1080px;
+      width: 100%;
+      padding: 48px 48px 80px;
+    }
+
+    .brand {
+      display: grid;
+      gap: 6px;
+      margin-bottom: 28px;
+    }
+
+    .brand strong {
+      font-size: 1.1rem;
+      letter-spacing: 0;
+    }
+
+    .brand span {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    nav {
+      display: grid;
+      gap: 6px;
+    }
+
+    nav a {
+      display: block;
+      padding: 8px 10px;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    nav a:hover {
+      color: var(--text);
+      background: var(--panel);
+      text-decoration: none;
+    }
+
+    h1, h2, h3 {
+      line-height: 1.18;
+      letter-spacing: 0;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: clamp(2rem, 4vw, 3.4rem);
+      margin-bottom: 14px;
+    }
+
+    h2 {
+      font-size: 1.65rem;
+      margin: 56px 0 18px;
+      padding-top: 8px;
+    }
+
+    h3 {
+      font-size: 1.15rem;
+      margin: 28px 0 12px;
+    }
+
+    p { margin: 0 0 14px; color: var(--muted); }
+
+    ul, ol {
+      margin: 0 0 18px 22px;
+      padding: 0;
+      color: var(--muted);
+    }
+
+    li { margin: 5px 0; }
+
+    .lead {
+      max-width: 760px;
+      color: #cdd6e4;
+      font-size: 1.08rem;
+    }
+
+    .hero {
+      padding-bottom: 28px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .badges {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 22px;
+    }
+
+    .badge {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      color: var(--text);
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 0.86rem;
+    }
+
+    section {
+      border-bottom: 1px solid var(--line);
+      padding-bottom: 36px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 16px;
+      margin: 18px 0;
+    }
+
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 18px;
+      box-shadow: 0 12px 30px var(--shadow);
+    }
+
+    .card h3 { margin-top: 0; }
+
+    .callout {
+      margin: 18px 0;
+      padding: 14px 16px;
+      border-left: 4px solid var(--accent);
+      background: var(--panel);
+      border-radius: 6px;
+      color: var(--muted);
+    }
+
+    .callout strong { color: var(--text); }
+    .callout.warn { border-left-color: var(--warn); }
+    .callout.danger { border-left-color: var(--danger); }
+    .callout.ok { border-left-color: var(--accent-2); }
+
+    code {
+      font-family: "JetBrains Mono", "Cascadia Code", Consolas, monospace;
+      font-size: 0.92em;
+      color: #dbeafe;
+      background: rgba(125, 211, 252, 0.1);
+      border: 1px solid rgba(125, 211, 252, 0.18);
+      border-radius: 5px;
+      padding: 1px 5px;
+    }
+
+    pre {
+      position: relative;
+      overflow: auto;
+      margin: 12px 0 20px;
+      padding: 16px;
+      background: var(--code);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      color: #e5edf7;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03);
+    }
+
+    pre code {
+      display: block;
+      padding: 0;
+      color: inherit;
+      background: transparent;
+      border: 0;
+      white-space: pre;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 22px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    th, td {
+      padding: 10px 12px;
+      text-align: left;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--text);
+      background: var(--panel-2);
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .top-link {
+      display: inline-block;
+      margin-top: 8px;
+      font-size: 0.9rem;
+      color: var(--muted);
+    }
+
+    @media (max-width: 880px) {
+      .layout { grid-template-columns: 1fr; }
+      aside {
+        position: relative;
+        height: auto;
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+      nav {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      main { padding: 34px 20px 64px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    @media print {
+      body { background: #fff; color: #111; }
+      aside { display: none; }
+      .layout { display: block; }
+      main { max-width: none; padding: 0; }
+      section { break-inside: avoid; }
+      pre, .card, .callout { box-shadow: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="layout" id="top">
+    <aside>
+      <div class="brand">
+        <strong>CustomPerm</strong>
+        <span>Server setup guide</span>
+      </div>
+      <nav aria-label="Navigation">
+        <a href="#requirements">Requirements</a>
+        <a href="#concepts">Key concepts</a>
+        <a href="#luckperms">With LuckPerms</a>
+        <a href="#aliases-lp">Aliases with LuckPerms</a>
+        <a href="#preserve">preserveOriginalRequires</a>
+        <a href="#internal">Without LuckPerms</a>
+        <a href="#config">Configuration files</a>
+        <a href="#security">Security</a>
+        <a href="#commands">Admin commands</a>
+        <a href="#workflows">Workflows</a>
+        <a href="#troubleshooting">Troubleshooting</a>
+        <a href="#best-practices">Best practices</a>
+      </nav>
+    </aside>
+
+    <main>
+      <header class="hero">
+        <h1>CustomPerm Server Setup Guide</h1>
+        <p class="lead">Complete setup guide for installing CustomPerm, exposing commands, creating aliases, managing grades, and assigning permissions on a Minecraft server.</p>
+        <div class="badges">
+          <span class="badge">Minecraft 1.21.1</span>
+          <span class="badge">NeoForge 21.1.221+</span>
+          <span class="badge">Java 21</span>
+          <span class="badge">CustomPerm 1.0.2</span>
+          <span class="badge">LuckPerms optional</span>
+        </div>
+      </header>
+
+      <section id="requirements">
+        <h2>Requirements</h2>
+        <ul>
+          <li>Minecraft <code>1.21.1</code></li>
+          <li>NeoForge <code>21.1.221+</code></li>
+          <li>Java <code>21</code></li>
+          <li>CustomPerm installed in the server <code>mods/</code> folder</li>
+          <li>Optional but recommended: LuckPerms <code>5.4.150+</code></li>
+        </ul>
+
+        <h3>Installation</h3>
+        <ol>
+          <li>Stop the server.</li>
+          <li>Place the CustomPerm jar in the server <code>mods/</code> folder.</li>
+          <li>Optional: place the LuckPerms NeoForge jar in the same folder.</li>
+          <li>Start the server once.</li>
+        </ol>
+
+        <pre><code>mods/customperm-1.0.2.jar
+mods/LuckPerms-NeoForge-5.4.x.jar</code></pre>
+
+        <p>CustomPerm creates its config folder on first launch:</p>
+        <pre><code>config/arcadia/customperm/</code></pre>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+
+      <section id="concepts">
+        <h2>Key Concepts</h2>
+        <div class="grid">
+          <article class="card">
+            <h3>Exposed Commands</h3>
+            <p>A command must be exposed before CustomPerm can grant it to non-op players.</p>
+            <pre><code>/customperm command add gamemode</code></pre>
+            <p>This creates the permission node:</p>
+            <pre><code>customperm.command.gamemode</code></pre>
+          </article>
+
+          <article class="card">
+            <h3>Aliases</h3>
+            <p>Aliases are custom commands that run one or more internal command steps.</p>
+            <pre><code>/customperm alias add up tp ~ ~100 ~</code></pre>
+            <p>This creates:</p>
+            <pre><code>/up
+customperm.alias.up</code></pre>
+          </article>
+        </div>
+
+        <div class="callout ok">
+          <strong>Important:</strong> for aliases, the player only needs the alias permission. For example, <code>customperm.alias.up</code> is enough to use <code>/up</code>; the player does not also need <code>customperm.command.tp</code>.
+        </div>
+
+        <h3>Permission Nodes</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>Node</th>
+              <th>Meaning</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>customperm.command.&lt;command&gt;</code></td>
+              <td>Grants access to an exposed command.</td>
+            </tr>
+            <tr>
+              <td><code>customperm.alias.&lt;alias&gt;</code></td>
+              <td>Grants access to a CustomPerm alias.</td>
+            </tr>
+            <tr>
+              <td><code>customperm.command.*</code></td>
+              <td>Grants access to every exposed command.</td>
+            </tr>
+            <tr>
+              <td><code>customperm.alias.*</code></td>
+              <td>Grants access to every alias.</td>
+            </tr>
+          </tbody>
+        </table>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+
+      <section id="luckperms">
+        <h2>Setup With LuckPerms</h2>
+        <p>This is the recommended setup for public or production servers. LuckPerms handles groups, users, inheritance, contexts, and storage. CustomPerm exposes commands and checks LuckPerms permissions.</p>
+
+        <div class="callout">
+          <strong>Note:</strong> this section shows the in-game command workflow. The same LuckPerms group, user, inheritance, and permission changes can also be made through the LuckPerms web editor.
+        </div>
+
+        <h3>1. Confirm LuckPerms Is Active</h3>
+        <pre><code>/customperm status</code></pre>
+        <p>Expected backend:</p>
+        <pre><code>backend=LuckPerms</code></pre>
+
+        <h3>2. Configure LuckPerms Fallback Mode</h3>
+        <p>Open:</p>
+        <pre><code>config/arcadia/customperm/settings.json</code></pre>
+        <p>Recommended for public servers:</p>
+        <pre><code>{
+  "luckPermsFallbackMode": "deny"
+}</code></pre>
+        <p>Available modes:</p>
+        <pre><code>deny
+internal</code></pre>
+        <div class="callout warn">
+          <strong>Recommendation:</strong> use <code>deny</code> on production servers. If LuckPerms fails, permissions fail closed instead of falling back silently.
+        </div>
+        <pre><code>/customperm reload</code></pre>
+
+        <h3>3. Expose a Command</h3>
+        <pre><code>/customperm command add gamemode</code></pre>
+        <p>Permission node:</p>
+        <pre><code>customperm.command.gamemode</code></pre>
+
+        <h3>4. Create a LuckPerms Group</h3>
+        <pre><code>/lp creategroup vip</code></pre>
+
+        <h3>5. Grant the Permission</h3>
+        <pre><code>/lp group vip permission set customperm.command.gamemode true</code></pre>
+
+        <h3>6. Assign the Group</h3>
+        <pre><code>/lp user Steve parent add vip</code></pre>
+
+        <h3>7. Test</h3>
+        <pre><code>/customperm test Steve customperm.command.gamemode
+/lp user Steve permission check customperm.command.gamemode</code></pre>
+        <p>Expected: <code>GRANTED</code> from CustomPerm and <code>true</code> from LuckPerms.</p>
+
+        <h3>8. Debug</h3>
+        <pre><code>/customperm debug Steve gamemode</code></pre>
+        <p>Check that the command exists, is exposed, the permission service says true, and the wrapper decision is true.</p>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+
+      <section id="aliases-lp">
+        <h2>Aliases With LuckPerms</h2>
+        <p>Aliases are the safest way to grant narrow actions without exposing a full command.</p>
+
+        <h3>Allow Spectator Mode Only</h3>
+        <pre><code>/customperm alias add spec gamemode spectator
+/lp group vip permission set customperm.alias.spec true</code></pre>
+        <p>Players use:</p>
+        <pre><code>/spec</code></pre>
+        <p>They do not need <code>customperm.command.gamemode</code>.</p>
+
+        <h3>Create an /up Alias</h3>
+        <pre><code>/customperm alias add up tp ~ ~100 ~
+/lp group vip permission set customperm.alias.up true</code></pre>
+        <p>Players use:</p>
+        <pre><code>/up</code></pre>
+
+        <h3>Create a /pingtest Alias</h3>
+        <pre><code>/customperm alias add pingtest say ping
+/lp user Steve permission set customperm.alias.pingtest true</code></pre>
+        <p>Players use:</p>
+        <pre><code>/pingtest</code></pre>
+        <p>Expected result:</p>
+        <pre><code>[Server] ping</code></pre>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+
+      <section id="preserve">
+        <h2>preserveOriginalRequires</h2>
+        <p>Some commands have their own internal permission checks. CustomPerm can either replace the original requirement or preserve it in addition to the CustomPerm permission.</p>
+
+        <div class="callout ok">
+          <strong>Default state:</strong> commands default to <code>false</code>. If a command is not listed in <code>preserveOriginalRequires</code>, CustomPerm does not preserve the original Brigadier requirement once the command is exposed and the CustomPerm permission passes.
+        </div>
+
+        <p>Configured in:</p>
+        <pre><code>config/arcadia/customperm/commands.json</code></pre>
+
+        <pre><code>{
+  "grantedCommands": ["gamemode", "time", "adminpanel"],
+  "preserveOriginalRequires": {
+    "gamemode": false,
+    "time": false,
+    "adminpanel": true
+  }
+}</code></pre>
+
+        <table>
+          <thead>
+            <tr>
+              <th>Command</th>
+              <th>Behavior</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>gamemode: false</code></td>
+              <td>CustomPerm permission is enough.</td>
+            </tr>
+            <tr>
+              <td><code>time: false</code></td>
+              <td>CustomPerm permission is enough.</td>
+            </tr>
+            <tr>
+              <td><code>adminpanel: true</code></td>
+              <td>CustomPerm permission and original command requirement are both required.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout">
+          Use <code>true</code> for sensitive mod commands that already have their own security model. Use <code>false</code> when CustomPerm should explicitly grant access.
+        </div>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+
+      <section id="internal">
+        <h2>Setup Without LuckPerms</h2>
+        <p>If LuckPerms is not installed, CustomPerm uses its internal JSON grade system.</p>
+
+        <div class="callout warn">
+          Internal grade commands are disabled when LuckPerms is active. If LuckPerms is installed, follow the <a href="#luckperms">Setup With LuckPerms</a> section instead.
+        </div>
+
+        <h3>1. Confirm Internal Backend</h3>
+        <pre><code>/customperm status</code></pre>
+        <p>Expected backend:</p>
+        <pre><code>backend=Internal</code></pre>
+
+        <h3>2. Create a Grade</h3>
+        <pre><code>/customperm grade create vip</code></pre>
+
+        <h3>3. Expose a Command</h3>
+        <pre><code>/customperm command add gamemode</code></pre>
+
+        <h3>4. Add Permission to the Grade</h3>
+        <pre><code>/customperm grade addperm vip customperm.command.gamemode</code></pre>
+
+        <h3>5. Assign the Grade</h3>
+        <pre><code>/customperm grade assign Steve vip</code></pre>
+
+        <h3>6. Test</h3>
+        <pre><code>/customperm test Steve customperm.command.gamemode</code></pre>
+        <p>Expected: <code>GRANTED</code>.</p>
+
+        <h3>Internal Staff Grade Example</h3>
+        <pre><code>/customperm grade create staff
+/customperm command add gamemode
+/customperm command add time
+/customperm command add weather
+/customperm command add tp
+/customperm grade addperm staff customperm.command.gamemode
+/customperm grade addperm staff customperm.command.time
+/customperm grade addperm staff customperm.command.weather
+/customperm grade addperm staff customperm.command.tp
+/customperm grade assign Steve staff</code></pre>
+
+        <h3>Internal Alias Grade Example</h3>
+        <pre><code>/customperm alias add spec gamemode spectator
+/customperm alias add up tp ~ ~100 ~
+/customperm alias add pingtest say ping
+/customperm grade create helper
+/customperm grade addperm helper customperm.alias.spec
+/customperm grade addperm helper customperm.alias.up
+/customperm grade addperm helper customperm.alias.pingtest
+/customperm grade assign Steve helper</code></pre>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+
+      <section id="config">
+        <h2>Configuration Files</h2>
+        <h3>commands.json</h3>
+        <pre><code>{
+  "grantedCommands": ["gamemode", "time", "tp"],
+  "preserveOriginalRequires": {
+    "gamemode": false,
+    "time": false,
+    "tp": false
+  }
+}</code></pre>
+
+        <h3>aliases.json</h3>
+        <pre><code>{
+  "aliases": {
+    "spec": ["gamemode spectator"],
+    "up": ["tp ~ ~100 ~"],
+    "pingtest": ["say ping"]
+  }
+}</code></pre>
+        <p>The leading slash is optional in alias steps:</p>
+        <pre><code>"pingtest": ["say ping"]
+"pingtest": ["/say ping"]</code></pre>
+
+        <h3>grades.json</h3>
+        <p>Used only when LuckPerms is not active.</p>
+        <pre><code>{
+  "grades": {
+    "vip": {
+      "name": "vip",
+      "permissions": [
+        "customperm.command.gamemode",
+        "customperm.alias.up"
+      ]
+    }
+  },
+  "userGrades": {
+    "550e8400-e29b-41d4-a716-446655440000": ["vip"]
+  }
+}</code></pre>
+
+        <h3>settings.json</h3>
+        <pre><code>{
+  "luckPermsFallbackMode": "deny"
+}</code></pre>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+
+      <section id="security">
+        <h2>Security</h2>
+        <div class="callout danger">
+          <strong>Aliases execute internal steps with elevated authority.</strong> This is required for controlled shortcuts like <code>/up</code>, but every alias must be reviewed carefully.
+        </div>
+
+        <p>Avoid aliases containing dangerous commands unless every player with access is fully trusted.</p>
+        <pre><code>op
+deop
+stop
+ban
+pardon
+whitelist
+reload
+save-off
+gamerule
+data modify</code></pre>
+
+        <h3>Prefer Narrow Aliases</h3>
+        <p>Better:</p>
+        <pre><code>/customperm alias add spec gamemode spectator</code></pre>
+        <p>Riskier:</p>
+        <pre><code>/customperm command add gamemode</code></pre>
+        <p><code>customperm.command.gamemode</code> grants access to every gamemode option.</p>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+
+      <section id="commands">
+        <h2>Useful Admin Commands</h2>
+        <table>
+          <thead>
+            <tr>
+              <th>Command</th>
+              <th>Purpose</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><code>/customperm status</code></td>
+              <td>Shows backend, exposed commands, aliases, and grades.</td>
+            </tr>
+            <tr>
+              <td><code>/customperm reload</code></td>
+              <td>Reloads config files from disk.</td>
+            </tr>
+            <tr>
+              <td><code>/customperm test &lt;player&gt; &lt;node&gt;</code></td>
+              <td>Checks whether a player has a permission node.</td>
+            </tr>
+            <tr>
+              <td><code>/customperm debug &lt;player&gt; &lt;command&gt;</code></td>
+              <td>Explains why a command is allowed or denied.</td>
+            </tr>
+            <tr>
+              <td><code>/customperm scan [pattern]</code></td>
+              <td>Lists commands in the dispatcher. Use a filter on heavily modded servers.</td>
+            </tr>
+          </tbody>
+        </table>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+
+      <section id="workflows">
+        <h2>Common Workflows</h2>
+        <h3>Give /gamemode to VIP With LuckPerms</h3>
+        <pre><code>/customperm command add gamemode
+/lp creategroup vip
+/lp group vip permission set customperm.command.gamemode true
+/lp user Steve parent add vip</code></pre>
+
+        <h3>Give /gamemode to VIP Without LuckPerms</h3>
+        <pre><code>/customperm command add gamemode
+/customperm grade create vip
+/customperm grade addperm vip customperm.command.gamemode
+/customperm grade assign Steve vip</code></pre>
+
+        <h3>Create /up With LuckPerms</h3>
+        <pre><code>/customperm alias add up tp ~ ~100 ~
+/lp group vip permission set customperm.alias.up true</code></pre>
+
+        <h3>Create /up Without LuckPerms</h3>
+        <pre><code>/customperm alias add up tp ~ ~100 ~
+/customperm grade create vip
+/customperm grade addperm vip customperm.alias.up
+/customperm grade assign Steve vip</code></pre>
+
+        <h3>Create /spec With LuckPerms</h3>
+        <pre><code>/customperm alias add spec gamemode spectator
+/lp group vip permission set customperm.alias.spec true</code></pre>
+
+        <h3>Create /spec Without LuckPerms</h3>
+        <pre><code>/customperm alias add spec gamemode spectator
+/customperm grade create vip
+/customperm grade addperm vip customperm.alias.spec
+/customperm grade assign Steve vip</code></pre>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+
+      <section id="troubleshooting">
+        <h2>Troubleshooting</h2>
+        <h3>The Player Cannot See the Command</h3>
+        <pre><code>/customperm reload
+/lp user Steve permission check customperm.command.gamemode
+/lp user Steve permission check customperm.alias.up</code></pre>
+        <p>The player may need to reconnect if the client command tree did not refresh.</p>
+
+        <h3>The Command Appears but Fails</h3>
+        <pre><code>/customperm debug Steve gamemode</code></pre>
+        <p>Check whether the command exists, is exposed, is allowed by CustomPerm, or blocked by <code>preserveOriginalRequires</code>.</p>
+
+        <h3>An Alias Appears but Fails Internally</h3>
+        <pre><code>/customperm alias steps up
+/customperm test Steve customperm.alias.up</code></pre>
+        <p>Expected alias step for <code>/up</code>:</p>
+        <pre><code>#0: tp ~ ~100 ~</code></pre>
+        <p>The player does not need direct permission for the internal command.</p>
+
+        <h3>LuckPerms Says True but CustomPerm Denies</h3>
+        <pre><code>/lp user Steve permission info customperm.alias.up
+/lp user Steve permission check customperm.alias.up
+/customperm test Steve customperm.alias.up</code></pre>
+        <p>Compare LuckPerms contexts with the server/world where the player is testing.</p>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+
+      <section id="best-practices">
+        <h2>Best Practices</h2>
+        <ul>
+          <li>Use LuckPerms for production servers.</li>
+          <li>Set <code>luckPermsFallbackMode</code> to <code>deny</code>.</li>
+          <li>Prefer aliases for narrow actions.</li>
+          <li>Avoid exposing dangerous commands like <code>op</code>, <code>stop</code>, <code>ban</code>, <code>whitelist</code>, and <code>reload</code>.</li>
+          <li>Use explicit permission nodes instead of wildcards.</li>
+          <li>Use <code>preserveOriginalRequires: true</code> for sensitive mod commands.</li>
+          <li>Test permissions with a real non-op player before using them on a public server.</li>
+          <li>Audit aliases regularly with <code>/customperm alias list</code> and <code>/customperm alias steps &lt;alias&gt;</code>.</li>
+        </ul>
+
+        <h3>Production Default</h3>
+        <pre><code>{
+  "luckPermsFallbackMode": "deny"
+}</code></pre>
+        <a class="top-link" href="#top">Back to top</a>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

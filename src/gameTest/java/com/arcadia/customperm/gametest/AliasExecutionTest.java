@@ -146,10 +146,8 @@ public class AliasExecutionTest {
      * AC: alias with multiple steps executes all of them without halting on any individual
      * step result — the no-halt guarantee.
      *
-     * Verifies: 2 steps registered → executed count = 2 (both ran, no premature halt).
-     * {@code performPrefixedCommand} catches {@code CommandSyntaxException} internally and
-     * returns 0 for failed commands without throwing, so {@code executed++} increments for
-     * every attempted step. Count = 2 confirms both steps were attempted.
+     * Verifies: an invalid first step does not prevent the valid second step from running.
+     * The return value counts successful steps only.
      */
     @GameTest(template = TEMPLATE, timeoutTicks = 200)
     public static void aliasNoHaltOnError(GameTestHelper helper) {
@@ -158,8 +156,8 @@ public class AliasExecutionTest {
         var server = helper.getLevel().getServer();
         var dispatcher = server.getCommands().getDispatcher();
 
-        // Two steps — both should execute (no-halt guarantee)
-        aliasesCfg.aliases.put(testName, new ArrayList<>(List.of("say step_a", "say step_b")));
+        // First step fails, second step must still execute (no-halt guarantee)
+        aliasesCfg.aliases.put(testName, new ArrayList<>(List.of("_customperm_missing_command", "say step_b")));
         AliasManager.registerOrReplace(dispatcher, testName);
 
         // Execute via Brigadier dispatcher (returns the executes-handler result = `executed` count).
@@ -174,15 +172,89 @@ public class AliasExecutionTest {
                 fail("Alias command syntax error: " + e.getMessage());
                 return; // unreachable
             }
-            if (result != 2)
-                fail("Expected 2 steps executed (no-halt), got " + result
-                    + ". Both steps must run even if one fails.");
+            if (result != 1)
+                fail("Expected 1 successful step after one failed step (no-halt), got " + result + ".");
 
             helper.succeed();
         } finally {
             // Always clean up the test alias from the live dispatcher (F3)
             aliasesCfg.aliases.remove(testName);
             AliasManager.registerOrReplace(dispatcher, testName);
+        }
+    }
+
+    /**
+     * Regression: alias steps may be stored with a leading slash. They must execute
+     * the same as plain dispatcher commands.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void aliasStepWithLeadingSlashExecutes(GameTestHelper helper) {
+        var aliasesCfg = CustomPerm.configManager.getAliases();
+        String testName = "_gt_slash_step";
+        var server = helper.getLevel().getServer();
+        var dispatcher = server.getCommands().getDispatcher();
+
+        aliasesCfg.aliases.put(testName, new ArrayList<>(List.of("/say slash_step")));
+        AliasManager.registerOrReplace(dispatcher, testName);
+
+        CommandSourceStack src = server.createCommandSourceStack();
+        try {
+            int result;
+            try {
+                result = server.getCommands().getDispatcher().execute(testName, src);
+            } catch (CommandSyntaxException e) {
+                fail("Alias command syntax error: " + e.getMessage());
+                return; // unreachable
+            }
+            if (result != 1)
+                fail("Expected leading-slash alias step to execute once, got " + result + ".");
+
+            helper.succeed();
+        } finally {
+            aliasesCfg.aliases.remove(testName);
+            AliasManager.registerOrReplace(dispatcher, testName);
+        }
+    }
+
+    /**
+     * Regression: internal alias steps must not require the player to also hold
+     * customperm.command.<step>. Once the alias permission passes, its steps run
+     * through the original command node with the elevated source.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void aliasStepUsesOriginalCommandNode(GameTestHelper helper) {
+        var aliasesCfg = CustomPerm.configManager.getAliases();
+        var commandsCfg = CustomPerm.configManager.getCommands();
+        String testName = "_gt_original_step";
+        var server = helper.getLevel().getServer();
+        var dispatcher = server.getCommands().getDispatcher();
+
+        boolean hadSay = commandsCfg.grantedCommands.contains("say");
+        commandsCfg.grantedCommands.remove("say");
+        aliasesCfg.aliases.put(testName, new ArrayList<>(List.of("say original_step")));
+        AliasManager.registerOrReplace(dispatcher, testName);
+
+        CommandSourceStack src = server.createCommandSourceStack();
+        try {
+            int result;
+            try {
+                result = dispatcher.execute(testName, src);
+            } catch (CommandSyntaxException e) {
+                fail("Alias command syntax error: " + e.getMessage());
+                return; // unreachable
+            }
+            if (result != 1)
+                fail("Expected alias step to execute through original /say node, got " + result + ".");
+
+            helper.succeed();
+        } finally {
+            aliasesCfg.aliases.remove(testName);
+            AliasManager.registerOrReplace(dispatcher, testName);
+            if (hadSay) {
+                commandsCfg.grantedCommands.add("say");
+            } else {
+                commandsCfg.grantedCommands.remove("say");
+            }
         }
     }
 

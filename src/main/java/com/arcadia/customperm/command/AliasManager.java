@@ -4,11 +4,13 @@ import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.AliasesConfig;
 import com.arcadia.customperm.perm.PermissionService;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -95,23 +97,50 @@ public class AliasManager {
         dispatcher.register(
             Commands.literal(alias)
                 .requires(src -> src.hasPermission(2) || PermissionService.get().hasPermission(src, permNode))
-                .executes(ctx -> {
-                    var server = ctx.getSource().getServer();
-                    // Elevate to op-level 4 so steps that delegate to op-only commands work.
-                    var elevated = ctx.getSource().withPermission(4);
-                    int executed = 0;
-                    for (String step : steps) {
-                        if (step == null || step.isBlank()) continue;
-                        try {
-                            server.getCommands().performPrefixedCommand(elevated, step);
-                            executed++;
-                        } catch (Throwable t) {
-                            CustomPerm.LOGGER.warn("[CustomPerm] alias /{} step `{}` threw: {}", alias, step, t.toString());
-                        }
-                    }
-                    return executed;
-                })
+                .executes(ctx -> executeAlias(ctx.getSource(), alias, steps))
         );
+    }
+
+    static int executeAlias(CommandSourceStack source, String alias, List<String> steps) {
+        var server = source.getServer();
+        if (server == null) {
+            source.sendFailure(Component.literal("[CustomPerm] Alias /" + alias + " failed: no server context."));
+            return 0;
+        }
+
+        // Elevate to op-level 4 so steps that delegate to op-only commands work.
+        var elevated = source.withPermission(4);
+        int executed = 0;
+        for (String step : steps) {
+            String command = normalizeStep(step);
+            if (command.isEmpty()) continue;
+
+            try {
+                if (!CommandTreeRewriter.executeOriginalCommand(elevated, command)) {
+                    server.getCommands().getDispatcher().execute(command, elevated);
+                }
+                executed++;
+            } catch (CommandSyntaxException e) {
+                source.sendFailure(Component.literal("[CustomPerm] Alias /" + alias
+                    + " step failed: " + command + " (" + e.getMessage() + ")"));
+                CustomPerm.LOGGER.warn("[CustomPerm] alias /{} step `{}` failed: {}", alias, command, e.getMessage());
+            } catch (Throwable t) {
+                source.sendFailure(Component.literal("[CustomPerm] Alias /" + alias
+                    + " step threw: " + command + " (" + t.getClass().getSimpleName() + ")"));
+                CustomPerm.LOGGER.warn("[CustomPerm] alias /{} step `{}` threw", alias, command, t);
+            }
+        }
+        return executed;
+    }
+
+    static String normalizeStep(String step) {
+        if (step == null) return "";
+
+        String command = step.strip();
+        while (command.startsWith("/")) {
+            command = command.substring(1).strip();
+        }
+        return command;
     }
 
     @SuppressWarnings("unchecked")

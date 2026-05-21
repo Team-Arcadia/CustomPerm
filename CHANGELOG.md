@@ -7,6 +7,32 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.0.2] - 2026-05-21
+
+Patch release.
+
+### Fixed
+
+- Alias steps now execute directly through the server command dispatcher with an op-level 4 source.
+- Alias steps now bypass CustomPerm's command wrapper and use the original command node when the step targets a wrapped command.
+- Alias steps now accept an optional leading `/`, so both `say ping` and `/say ping` are valid in alias definitions.
+- Failed alias steps are now reported and logged while later steps continue to run.
+- Alias execution now returns the number of successful steps instead of counting failed attempts as executed.
+
+### Changed
+
+- `gradle.properties` now sets `mod_version=1.0.2`.
+- README version badges now show `1.0.2`.
+
+### Validation
+
+- `./gradlew test --no-daemon`: passed.
+- `./gradlew runGameTestServer --no-daemon`: 30/30 required GameTests passed.
+- `./gradlew clean build --no-daemon`: passed.
+- Generated jar: `customperm-1.0.2.jar`.
+
+---
+
 ## [1.0.0] - 2026-05-18
 
 Stable public release.

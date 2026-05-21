@@ -14,6 +14,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -44,6 +45,7 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
     private static final Field CHILDREN_FIELD;
     private static final Field LITERALS_FIELD;
     private static final Field ARGUMENTS_FIELD;
+    private static final Map<String, CommandNode<CommandSourceStack>> ORIGINAL_ROOTS = new HashMap<>();
 
     static {
         try {
@@ -94,6 +96,7 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             String name = original.getName();
             if (skipRoots.contains(name)) continue;
             try {
+                ORIGINAL_ROOTS.putIfAbsent(name, original);
                 IdentityHashMap<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> visited = new IdentityHashMap<>();
                 CommandNode<CommandSourceStack> wrappedRoot = wrapRecursive(original, name, visited);
                 if (wrappedRoot == original) continue;  // unknown type, skip
@@ -105,6 +108,30 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         }
 
         CustomPerm.LOGGER.info("[CustomPerm] Wrapped {} top-level command(s) for permission gating.", wrapped);
+    }
+
+    static boolean executeOriginalCommand(CommandSourceStack source, String command) throws Exception {
+        String rootName = commandRoot(command);
+        if (rootName.isEmpty()) return false;
+
+        CommandNode<CommandSourceStack> original = ORIGINAL_ROOTS.get(rootName);
+        if (original == null) return false;
+
+        CommandDispatcher<CommandSourceStack> dispatcher = new CommandDispatcher<>();
+        dispatcher.getRoot().addChild(original);
+        dispatcher.execute(command, source);
+        return true;
+    }
+
+    private static String commandRoot(String command) {
+        String trimmed = command == null ? "" : command.strip();
+        if (trimmed.isEmpty()) return "";
+
+        int end = 0;
+        while (end < trimmed.length() && !Character.isWhitespace(trimmed.charAt(end))) {
+            end++;
+        }
+        return trimmed.substring(0, end);
     }
 
     private static CommandNode<CommandSourceStack> wrapRecursive(
