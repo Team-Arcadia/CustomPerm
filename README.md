@@ -8,7 +8,7 @@
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg)]()
 [![Java](https://img.shields.io/badge/Java-21-red.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.0-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/version-1.0.2-brightgreen.svg)]()
 
 ---
 
@@ -615,7 +615,7 @@ For changes via `/customperm` (internal mode), `sendCommands` is invoked directl
 
 ### Aliases
 
-Registered as `Commands.literal(name).requires(...).executes(...)`. The `executes` iterates the steps and calls `server.getCommands().performPrefixedCommand(elevatedSource, step)` for each, using a `CommandSourceStack` whose `permissionLevel = 4`.
+Registered as `Commands.literal(name).requires(...).executes(...)`. The `executes` normalizes each step, strips any leading `/`, and executes the step through the original command node when CustomPerm has wrapped that command, using a `CommandSourceStack` whose `permissionLevel = 4`. Failed steps are reported and logged, but later steps still run.
 
 ---
 

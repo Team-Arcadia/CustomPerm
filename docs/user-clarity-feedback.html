@@ -1,0 +1,1063 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CustomPerm - Retour utilisateur sur la clarte</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0d1117;
+      --panel: #151b23;
+      --panel-2: #10161f;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --line: #30363d;
+      --ok: #3fb950;
+      --warn: #d29922;
+      --fail: #f85149;
+      --blocked: #ff7b72;
+      --focus: #58a6ff;
+      --focus-strong: #1f6feb;
+      --input: #0d1117;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Arial, Helvetica, sans-serif;
+      line-height: 1.45;
+    }
+
+    header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+      padding: 20px;
+      position: sticky;
+      top: 0;
+      z-index: 5;
+    }
+
+    main {
+      max-width: 1180px;
+      margin: 0 auto;
+      padding: 22px 16px 48px;
+    }
+
+    h1 {
+      font-size: 24px;
+      margin: 0 0 8px;
+    }
+
+    h2 {
+      font-size: 18px;
+      margin: 0 0 12px;
+    }
+
+    h3 {
+      font-size: 16px;
+      margin: 0 0 8px;
+    }
+
+    p {
+      margin: 0 0 10px;
+    }
+
+    .topbar {
+      max-width: 1180px;
+      margin: 0 auto;
+      display: grid;
+      gap: 14px;
+      grid-template-columns: 1fr auto;
+      align-items: start;
+    }
+
+    .muted {
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      justify-content: flex-end;
+    }
+
+    button {
+      border: 1px solid var(--line);
+      background: var(--panel-2);
+      color: var(--text);
+      padding: 9px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 14px;
+    }
+
+    button.primary {
+      background: var(--focus-strong);
+      border-color: var(--focus-strong);
+      color: #fff;
+    }
+
+    button:hover {
+      filter: brightness(1.12);
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 310px 1fr;
+      gap: 16px;
+      align-items: start;
+    }
+
+    aside, section.task, .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+    }
+
+    aside {
+      position: sticky;
+      top: 116px;
+      padding: 14px;
+    }
+
+    .meta {
+      display: grid;
+      gap: 8px;
+    }
+
+    label {
+      display: grid;
+      gap: 4px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px 9px;
+      font: inherit;
+      color: var(--text);
+      background: var(--input);
+    }
+
+    textarea {
+      min-height: 84px;
+      resize: vertical;
+    }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 8px;
+      background: var(--panel-2);
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 22px;
+    }
+
+    .content {
+      display: grid;
+      gap: 18px;
+    }
+
+    .phase {
+      display: grid;
+      gap: 12px;
+    }
+
+    .phase-head {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--focus);
+      border-radius: 8px;
+      padding: 14px 16px;
+    }
+
+    section.task {
+      padding: 16px;
+    }
+
+    .task-head {
+      display: grid;
+      grid-template-columns: 1fr minmax(200px, 250px);
+      gap: 12px;
+      align-items: start;
+    }
+
+    .rating-row {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 6px;
+    }
+
+    .rating-row label {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 8px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--text);
+      background: var(--panel-2);
+      cursor: pointer;
+    }
+
+    .rating-row input {
+      width: auto;
+    }
+
+    .prompt, .expected, .observe {
+      border-left: 4px solid var(--focus);
+      background: rgba(88, 166, 255, 0.08);
+      padding: 9px 10px;
+      margin-top: 10px;
+    }
+
+    .expected {
+      border-left-color: var(--ok);
+      background: rgba(63, 185, 80, 0.08);
+    }
+
+    .observe {
+      border-left-color: var(--warn);
+      background: rgba(210, 153, 34, 0.08);
+    }
+
+    .fields {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .fields .wide {
+      grid-column: 1 / -1;
+    }
+
+    ul, ol {
+      margin: 8px 0 0;
+      padding-left: 22px;
+    }
+
+    li {
+      margin-bottom: 5px;
+    }
+
+    code {
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 4px;
+      padding: 1px 4px;
+    }
+
+    pre {
+      white-space: pre-wrap;
+      word-break: break-word;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      min-height: 160px;
+      max-height: 420px;
+      overflow: auto;
+    }
+
+    .panel {
+      padding: 16px;
+    }
+
+    .small {
+      font-size: 12px;
+    }
+
+    body.tester-mode .observer-only {
+      display: none;
+    }
+
+    .mode-note {
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--focus);
+      border-radius: 6px;
+      background: var(--panel-2);
+      padding: 8px;
+      margin-top: 12px;
+    }
+
+    @media (max-width: 900px) {
+      header {
+        position: static;
+      }
+
+      .topbar, .grid, .task-head, .fields {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        position: static;
+      }
+    }
+  </style>
+</head>
+<body class="tester-mode">
+  <header>
+    <div class="topbar">
+      <div>
+        <h1>CustomPerm - Retour utilisateur sur la clarte</h1>
+        <p class="muted">Procedure non technique pour evaluer si la description, le README et les concepts du mod sont compréhensibles par un admin serveur.</p>
+      </div>
+      <div class="actions">
+        <button type="button" id="toggleObserver">Afficher aide observateur</button>
+        <button type="button" id="copyJson">Copier JSON</button>
+        <button type="button" id="downloadJson" class="primary">Exporter JSON</button>
+        <button type="button" id="resetForm">Reinitialiser</button>
+      </div>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid">
+      <aside>
+        <h2>Contexte testeur</h2>
+        <div class="meta">
+          <label>Nom ou identifiant du testeur
+            <input id="testerName" type="text" placeholder="ex. Admin serveur 1">
+          </label>
+          <label>Date
+            <input id="testDate" type="date">
+          </label>
+          <label>Experience admin Minecraft
+            <select id="adminExperience">
+              <option value="">Non renseigne</option>
+              <option>Debutant</option>
+              <option>Intermediaire</option>
+              <option>Avance</option>
+            </select>
+          </label>
+          <label>Experience LuckPerms
+            <select id="luckpermsExperience">
+              <option value="">Non renseigne</option>
+              <option>Aucune</option>
+              <option>Basique</option>
+              <option>Bonne</option>
+              <option>Avancee</option>
+            </select>
+          </label>
+          <label>Support utilise
+            <select id="materialUsed">
+              <option>Page CurseForge uniquement</option>
+              <option>README uniquement</option>
+              <option>CurseForge + README</option>
+              <option>Serveur de test + documentation</option>
+              <option>Autre</option>
+            </select>
+          </label>
+          <label>Observateur
+            <input id="observerName" type="text" placeholder="ex. Quentin">
+          </label>
+          <label>Notes globales
+            <textarea id="globalNotes" placeholder="Contexte, remarques avant test, conditions particulieres..."></textarea>
+          </label>
+          <label>Contraintes d'accessibilite connues
+            <textarea id="accessibilityContext" placeholder="ex. mobile, basse vision, lecteur d'ecran, non-anglophone, fatigue cognitive..."></textarea>
+          </label>
+        </div>
+
+        <div class="summary">
+          <div class="stat"><strong id="completedCount">0</strong><span class="muted">taches notees</span></div>
+          <div class="stat"><strong id="blockedCount">0</strong><span class="muted">bloquantes</span></div>
+        </div>
+        <p class="muted small" style="margin-top:12px;">Echelle : Clear, Minor friction, Confusing, Blocked. Ne pas aider le testeur sauf blocage complet.</p>
+        <div class="mode-note">
+          <strong>Mode testeur actif</strong>
+          <p class="muted small">Par defaut, seules les questions sont visibles. Les criteres attendus et notes d'observation sont reserves a l'observateur.</p>
+        </div>
+      </aside>
+
+      <div class="content" id="tasks"></div>
+    </div>
+
+    <section class="panel" style="margin-top:18px;">
+      <h2>Interview finale</h2>
+      <div class="fields">
+        <label class="wide">Partie la plus claire
+          <textarea id="finalClearest"></textarea>
+        </label>
+        <label class="wide">Partie la plus confuse
+          <textarea id="finalMostConfusing"></textarea>
+        </label>
+        <label class="wide">Termes ou concepts mal compris
+          <textarea id="finalUnclearTerms"></textarea>
+        </label>
+        <label class="wide">Information attendue plus tot
+          <textarea id="finalExpectedEarlier"></textarea>
+        </label>
+        <label>Le testeur installerait-il le mod sur un vrai serveur ?
+          <select id="finalInstallConfidence">
+            <option value="">Non renseigne</option>
+            <option>Oui</option>
+            <option>Non</option>
+            <option>Peut-etre</option>
+          </select>
+        </label>
+        <label>Confiance globale
+          <select id="finalConfidenceLevel">
+            <option value="">Non renseigne</option>
+            <option>Haute</option>
+            <option>Moyenne</option>
+            <option>Faible</option>
+          </select>
+        </label>
+        <label class="wide">Pourquoi ?
+          <textarea id="finalReason"></textarea>
+        </label>
+        <label class="wide">Ameliorations proposees
+          <textarea id="finalImprovements"></textarea>
+        </label>
+        <label class="wide">Barriere d'accessibilite principale
+          <textarea id="finalAccessibilityBarrier" placeholder="Lisibilite, navigation, vocabulaire, mobile, lecteur d'ecran, surcharge cognitive..."></textarea>
+        </label>
+      </div>
+    </section>
+
+    <section class="panel" style="margin-top:18px;">
+      <h2>Export JSON</h2>
+      <p class="muted">Le JSON ci-dessous est genere a partir des champs remplis. Utilisez "Exporter JSON" pour telecharger le fichier ou "Copier JSON" pour le coller dans une conversation.</p>
+      <pre id="jsonPreview">{}</pre>
+    </section>
+  </main>
+
+  <script>
+    const phases = [
+      {
+        name: "Phase 1 - Premiere impression",
+        goal: "Verifier si le testeur comprend rapidement la promesse du mod.",
+        tasks: [
+          {
+            id: "one_sentence",
+            title: "Expliquer le mod en une phrase",
+            prompt: "Apres 2 minutes de lecture de la description CurseForge, expliquez ce que fait CustomPerm en une phrase.",
+            expected: [
+              "Mentionne l'acces a certaines commandes pour des joueurs non-op.",
+              "Comprend que LuckPerms est optionnel.",
+              "Ne reduit pas le mod a un remplacement complet de LuckPerms."
+            ],
+            observe: [
+              "Noter la phrase exacte du testeur.",
+              "Relever les suppositions incorrectes.",
+              "Identifier le passage qui a cree la confusion."
+            ]
+          },
+          {
+            id: "target_user",
+            title: "Identifier l'utilisateur cible",
+            prompt: "Selon vous, qui devrait utiliser ce mod ?",
+            expected: [
+              "Admins ou proprietaires de serveurs.",
+              "Serveurs qui veulent donner un acces partiel a des commandes.",
+              "Comprend que le mod est cote serveur."
+            ],
+            observe: [
+              "Le testeur pense-t-il que le mod est client-side ?",
+              "Le cas d'usage est-il clair ?"
+            ]
+          }
+        ]
+      },
+      {
+        name: "Phase 2 - Installation et configuration",
+        goal: "Verifier si les prerequis et l'emplacement des fichiers sont clairs.",
+        tasks: [
+          {
+            id: "requirements",
+            title: "Trouver les prerequis",
+            prompt: "Quelles versions de Minecraft, NeoForge, Java et LuckPerms sont necessaires ?",
+            expected: [
+              "Minecraft 1.21.1.",
+              "NeoForge 21.1.221+.",
+              "Java 21.",
+              "LuckPerms 5.4.150+ optionnel."
+            ],
+            observe: [
+              "Le testeur pense-t-il que LuckPerms est obligatoire ?",
+              "Les versions sont-elles faciles a trouver ?"
+            ]
+          },
+          {
+            id: "config_location",
+            title: "Trouver les fichiers de config",
+            prompt: "Apres installation, ou chercheriez-vous les fichiers de configuration ? Que se passe-t-il avec un ancien dossier config/customperm ?",
+            expected: [
+              "Nouveau dossier : config/arcadia/customperm/.",
+              "Migration non destructive depuis config/customperm si le nouveau dossier n'existe pas.",
+              "Comprend que l'ancien dossier n'est pas supprime."
+            ],
+            observe: [
+              "Le nouveau chemin est-il retenu ?",
+              "La migration est-elle comprise ?"
+            ]
+          }
+        ]
+      },
+      {
+        name: "Phase 3 - Usage de base",
+        goal: "Verifier si le modele expose-command puis permission est compris.",
+        tasks: [
+          {
+            id: "grant_with_luckperms",
+            title: "Donner /gamemode avec LuckPerms",
+            prompt: "Vous voulez qu'un VIP utilise /gamemode sans etre op. Que faites-vous si LuckPerms est installe ?",
+            expected: [
+              "Executer /customperm command add gamemode.",
+              "Donner customperm.command.gamemode via LuckPerms.",
+              "Assigner le joueur au groupe."
+            ],
+            observe: [
+              "Le testeur oublie-t-il l'etape command add ?",
+              "Le format de node est-il clair ?"
+            ]
+          },
+          {
+            id: "grant_without_luckperms",
+            title: "Donner /gamemode sans LuckPerms",
+            prompt: "Meme scenario, mais LuckPerms n'est pas installe. Que faites-vous ?",
+            expected: [
+              "Creer un grade interne.",
+              "Ajouter customperm.command.gamemode au grade.",
+              "Assigner le grade au joueur."
+            ],
+            observe: [
+              "Confusion entre grades internes et groupes LuckPerms ?",
+              "Le chemin sans LuckPerms parait-il clair ?"
+            ]
+          }
+        ]
+      },
+      {
+        name: "Phase 4 - Modele mental",
+        goal: "Verifier la comprehension des concepts fondamentaux.",
+        tasks: [
+          {
+            id: "command_exposure",
+            title: "Expliquer l'exposition de commande",
+            prompt: "Que fait exactement /customperm command add gamemode ?",
+            expected: [
+              "Expose la commande au systeme CustomPerm.",
+              "Ne donne pas automatiquement l'acces a tout le monde.",
+              "Le joueur doit aussi avoir customperm.command.gamemode.",
+              "Les ops gardent leur acces."
+            ],
+            observe: [
+              "Le testeur croit-il que command add donne directement la permission ?",
+              "Le modele en deux etapes est-il compris ?"
+            ]
+          },
+          {
+            id: "permission_nodes",
+            title: "Comprendre les nodes",
+            prompt: "Quelle permission donner pour /time ? Et pour un alias /spawn ?",
+            expected: [
+              "customperm.command.time.",
+              "customperm.alias.spawn.",
+              "Comprend les wildcards customperm.command.* et customperm.alias.*."
+            ],
+            observe: [
+              "Le schema de nommage parait-il previsible ?",
+              "Les wildcards sont-elles comprises ?"
+            ]
+          }
+        ]
+      },
+      {
+        name: "Phase 5 - Securite",
+        goal: "Verifier si les risques principaux sont compris avant usage reel.",
+        tasks: [
+          {
+            id: "alias_risk",
+            title: "Comprendre le risque des aliases",
+            prompt: "Est-ce securise de creer un alias qui execute op @s ?",
+            expected: [
+              "Non.",
+              "Les aliases executent leurs steps avec une autorite elevee.",
+              "Les commandes dangereuses ne doivent pas etre placees dans un alias."
+            ],
+            observe: [
+              "L'avertissement est-il assez visible ?",
+              "Le testeur comprend-il le risque op-4 ?"
+            ]
+          },
+          {
+            id: "wildcard_risk",
+            title: "Comprendre le risque wildcard",
+            prompt: "Que peut-il arriver si vous donnez customperm.command.* a un groupe ?",
+            expected: [
+              "Cela couvre toutes les commandes exposees.",
+              "Si /op ou /whitelist sont exposees, le wildcard les couvre aussi.",
+              "Les nodes explicites sont plus sures pour les commandes sensibles."
+            ],
+            observe: [
+              "Le risque wildcard est-il evident ?",
+              "Le testeur comprend-il le lien avec les commandes exposees ?"
+            ]
+          },
+          {
+            id: "luckperms_fallback",
+            title: "Comprendre le fallback LuckPerms",
+            prompt: "Si LuckPerms est installe mais devient indisponible, que se passe-t-il par defaut ? Que fait le mode internal ?",
+            expected: [
+              "Par defaut : deny.",
+              "Les checks echouent en fail-closed.",
+              "internal bascule vers grades.json.",
+              "deny est recommande pour serveur public."
+            ],
+            observe: [
+              "deny vs internal est-il clair ?",
+              "Le testeur comprend-il pourquoi deny est plus sur ?"
+            ]
+          },
+          {
+            id: "preserve_original_requires",
+            title: "Comprendre preserveOriginalRequires",
+            prompt: "Que fait preserveOriginalRequires: true ? Quand l'utiliser ?",
+            expected: [
+              "Le joueur doit avoir la permission CustomPerm.",
+              "Le predicate Brigadier original doit aussi passer.",
+              "Utile pour les commandes modded sensibles."
+            ],
+            observe: [
+              "Le nom est-il comprehensible ?",
+              "L'exemple adminpanel aide-t-il ?",
+              "Le testeur sait-il quand l'activer ?"
+            ]
+          }
+        ]
+      },
+      {
+        name: "Phase 6 - Diagnostic",
+        goal: "Verifier si le testeur sait quoi faire quand quelque chose ne marche pas.",
+        tasks: [
+          {
+            id: "permission_troubleshooting",
+            title: "Permission donnee mais commande bloquee",
+            prompt: "Un joueur a customperm.command.gamemode, mais /gamemode ne marche pas. Que verifiez-vous ?",
+            expected: [
+              "Verifier que /customperm command add gamemode a ete execute.",
+              "Utiliser /customperm debug <player> gamemode.",
+              "Verifier /customperm status.",
+              "Verifier l'assignation LuckPerms ou grade interne.",
+              "Verifier preserveOriginalRequires."
+            ],
+            observe: [
+              "Le testeur trouve-t-il /customperm debug ?",
+              "Le concept de commande exposee manquante est-il compris ?"
+            ]
+          },
+          {
+            id: "autocomplete_troubleshooting",
+            title: "Commande absente de l'autocomplete",
+            prompt: "Un joueur devrait avoir acces, mais ne voit pas la commande en autocomplete. Que faites-vous ?",
+            expected: [
+              "Les permissions peuvent necessiter un resync du command tree.",
+              "LuckPerms devrait auto-resync.",
+              "Essayer /customperm reload.",
+              "Le joueur peut se reconnecter si necessaire."
+            ],
+            observe: [
+              "Le chemin de diagnostic est-il clair ?",
+              "La documentation promet-elle trop d'automatisme ?"
+            ]
+          }
+        ]
+      },
+      {
+        name: "Phase 7 - Navigation documentation",
+        goal: "Mesurer la vitesse a laquelle les reponses importantes sont trouvees.",
+        tasks: [
+          {
+            id: "find_answers",
+            title: "Trouver rapidement les reponses",
+            prompt: "Trouvez : chemin config, node pour /give, creation d'alias, version LuckPerms, commande debug, sens de preserveOriginalRequires.",
+            expected: [
+              "config/arcadia/customperm/.",
+              "customperm.command.give.",
+              "/customperm alias add.",
+              "LuckPerms 5.4.150+.",
+              "/customperm debug <player> <command>.",
+              "Conserve le predicate Brigadier original en plus de la permission CustomPerm."
+            ],
+            observe: [
+              "Mesurer le temps de recherche.",
+              "Noter si la reponse vient de CurseForge ou README.",
+              "Noter les sections difficiles a trouver."
+            ]
+          }
+        ]
+      },
+      {
+        name: "Phase 8 - Accessibilite et utilisabilite",
+        goal: "Evaluer si la documentation et la page sont utilisables par des profils varies, pas seulement techniquement claires.",
+        tasks: [
+          {
+            id: "readability_density",
+            title: "Lisibilite et densite du texte",
+            prompt: "Lisez les sections Why this mod, Features et Security considerations. Le texte vous parait-il lisible, trop dense ou trop long ?",
+            expected: [
+              "Le testeur peut scanner les points importants sans lire toute la page.",
+              "Les phrases sont assez courtes.",
+              "Les avertissements critiques ressortent visuellement.",
+              "Les sections longues ne provoquent pas de surcharge immediate."
+            ],
+            observe: [
+              "Le testeur saute-t-il des passages importants ?",
+              "Les blocs de texte sont-ils trop longs ?",
+              "Les informations de securite sont-elles vues spontanement ?"
+            ]
+          },
+          {
+            id: "visual_navigation",
+            title: "Navigation visuelle",
+            prompt: "Sans utiliser la recherche du navigateur, trouvez les sections Configuration, Permission nodes, Diagnostics et Known limitations.",
+            expected: [
+              "Les titres permettent de trouver les sections rapidement.",
+              "Les tableaux et listes sont faciles a parcourir.",
+              "Le testeur comprend la hierarchie des sections."
+            ],
+            observe: [
+              "Le testeur se perd-il dans la page ?",
+              "Les titres sont-ils assez explicites ?",
+              "Les sections importantes sont-elles trop basses dans la page ?"
+            ]
+          },
+          {
+            id: "technical_vocabulary",
+            title: "Accessibilite du vocabulaire technique",
+            prompt: "Expliquez avec vos mots : backend, fallback, permission node, dispatcher, Brigadier, requires.",
+            expected: [
+              "Les termes essentiels comme permission node et fallback sont compris.",
+              "Les termes avances comme dispatcher, Brigadier et requires peuvent necessiter une definition.",
+              "Le testeur sait quand il peut ignorer un terme avance."
+            ],
+            observe: [
+              "Quels termes bloquent la comprehension ?",
+              "Un glossaire serait-il utile ?",
+              "Les termes anglais posent-ils probleme a un public francophone ?"
+            ]
+          },
+          {
+            id: "copy_actionability",
+            title: "Facilite a copier et adapter les commandes",
+            prompt: "Choisissez un exemple de commande et expliquez ce que vous devez remplacer dans <player>, <command>, <grade> ou les exemples JSON.",
+            expected: [
+              "Le testeur comprend que les valeurs entre chevrons sont des placeholders.",
+              "Les commandes sont faciles a copier.",
+              "Les exemples JSON sont assez lisibles pour etre adaptes."
+            ],
+            observe: [
+              "Les chevrons sont-ils compris comme placeholders ?",
+              "Les exemples sur une seule ligne sont-ils difficiles a adapter ?",
+              "Le testeur sait-il ou coller chaque configuration ?"
+            ]
+          },
+          {
+            id: "mobile_and_layout",
+            title: "Utilisation mobile ou petite fenetre",
+            prompt: "Ouvrez la documentation dans une petite fenetre ou sur mobile. Les tableaux, listes et exemples restent-ils utilisables ?",
+            expected: [
+              "Le contenu reste lisible sans zoom excessif.",
+              "Les tableaux ne masquent pas d'informations importantes.",
+              "Les commandes longues restent comprehensibles."
+            ],
+            observe: [
+              "Y a-t-il du scroll horizontal genant ?",
+              "Les tableaux deviennent-ils difficiles a lire ?",
+              "Les commandes longues sont-elles coupees de facon confuse ?"
+            ]
+          },
+          {
+            id: "language_accessibility",
+            title: "Accessibilite linguistique",
+            prompt: "Pour votre public serveur, l'anglais de la page est-il suffisant ? La documentation francaise est-elle assez visible ?",
+            expected: [
+              "Le testeur sait qu'une documentation francaise existe si elle est necessaire.",
+              "Les termes critiques sont assez clairs en anglais.",
+              "Le niveau de langue ne bloque pas l'installation."
+            ],
+            observe: [
+              "Le testeur demanderait-il une version francaise de la page CurseForge ?",
+              "Certains termes devraient-ils etre expliques en deux langues ?",
+              "Le public vise est-il a l'aise avec les commandes anglaises ?"
+            ]
+          },
+          {
+            id: "assistive_technology",
+            title: "Structure pour lecteurs d'ecran ou navigation clavier",
+            prompt: "Si possible, naviguez seulement au clavier ou avec un lecteur d'ecran. Les titres, listes, tableaux et champs sont-ils parcourables logiquement ?",
+            expected: [
+              "La navigation suit un ordre logique.",
+              "Les titres de sections donnent assez de contexte.",
+              "Les tableaux ont des en-tetes comprehensibles.",
+              "Les actions importantes ne dependent pas uniquement de la couleur."
+            ],
+            observe: [
+              "La navigation clavier bloque-t-elle quelque part ?",
+              "Les tableaux sont-ils comprehensibles sans vue visuelle complete ?",
+              "Les icones, couleurs ou styles portent-ils une information non textuelle ?"
+            ]
+          }
+        ]
+      }
+    ];
+
+    const ratings = ["Clear", "Minor friction", "Confusing", "Blocked"];
+
+    function todayIso() {
+      const now = new Date();
+      const offset = now.getTimezoneOffset();
+      return new Date(now.getTime() - offset * 60000).toISOString().slice(0, 10);
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>"']/g, (char) => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&#039;"
+      }[char]));
+    }
+
+    function taskById(id) {
+      for (const phase of phases) {
+        const task = phase.tasks.find((candidate) => candidate.id === id);
+        if (task) return task;
+      }
+      return null;
+    }
+
+    function renderTasks() {
+      const root = document.getElementById("tasks");
+      root.innerHTML = phases.map((phase) => `
+        <div class="phase">
+          <div class="phase-head">
+            <h2>${escapeHtml(phase.name)}</h2>
+            <p class="muted">${escapeHtml(phase.goal)}</p>
+          </div>
+          ${phase.tasks.map(renderTask).join("")}
+        </div>
+      `).join("");
+    }
+
+    function renderTask(task) {
+      return `
+        <section class="task" data-task-id="${escapeHtml(task.id)}">
+          <div class="task-head">
+            <div>
+              <h3>${escapeHtml(task.title)}</h3>
+              <div class="prompt">
+                <strong>Question a poser</strong>
+                <p>${escapeHtml(task.prompt)}</p>
+              </div>
+            </div>
+            <div>
+              <label>Note de clarte
+                <div class="rating-row">
+                  ${ratings.map((rating) => `
+                    <label>
+                      <input type="radio" name="rating-${escapeHtml(task.id)}" value="${escapeHtml(rating)}">
+                      ${escapeHtml(rating)}
+                    </label>
+                  `).join("")}
+                </div>
+              </label>
+            </div>
+          </div>
+          <div class="expected observer-only">
+            <strong>Ce qui devrait etre compris</strong>
+            <ul>${task.expected.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+          </div>
+          <div class="observe observer-only">
+            <strong>A observer</strong>
+            <ul>${task.observe.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>
+          </div>
+          <div class="fields">
+            <label>Reponse exacte ou resume du testeur
+              <textarea data-field="answer" data-task="${escapeHtml(task.id)}"></textarea>
+            </label>
+            <label>Temps pour trouver/repondre
+              <input data-field="timeToAnswer" data-task="${escapeHtml(task.id)}" type="text" placeholder="ex. 45s, 2min, non trouve">
+            </label>
+            <label class="wide">Confusions, hesitations, citations utiles
+              <textarea data-field="confusionNotes" data-task="${escapeHtml(task.id)}"></textarea>
+            </label>
+            <label class="wide">Suggestion d'amelioration documentation/UI
+              <textarea data-field="improvementSuggestion" data-task="${escapeHtml(task.id)}"></textarea>
+            </label>
+          </div>
+        </section>
+      `;
+    }
+
+    function getValue(id) {
+      return document.getElementById(id).value;
+    }
+
+    function getTaskResult(task) {
+      const rating = document.querySelector(`input[name="rating-${CSS.escape(task.id)}"]:checked`);
+      const fields = {};
+      document.querySelectorAll(`[data-task="${CSS.escape(task.id)}"]`).forEach((input) => {
+        fields[input.dataset.field] = input.value;
+      });
+      return {
+        id: task.id,
+        title: task.title,
+        rating: rating ? rating.value : "",
+        answer: fields.answer || "",
+        timeToAnswer: fields.timeToAnswer || "",
+        confusionNotes: fields.confusionNotes || "",
+        improvementSuggestion: fields.improvementSuggestion || ""
+      };
+    }
+
+    function buildPayload() {
+      const flatTasks = phases.flatMap((phase) => phase.tasks.map((task) => ({
+        phase: phase.name,
+        ...getTaskResult(task)
+      })));
+      return {
+        schema: "customperm-user-clarity-feedback-v1",
+        exportedAt: new Date().toISOString(),
+        context: {
+          testerName: getValue("testerName"),
+          testDate: getValue("testDate"),
+          adminExperience: getValue("adminExperience"),
+          luckpermsExperience: getValue("luckpermsExperience"),
+          materialUsed: getValue("materialUsed"),
+          observerName: getValue("observerName"),
+          globalNotes: getValue("globalNotes"),
+          accessibilityContext: getValue("accessibilityContext")
+        },
+        tasks: flatTasks,
+        finalInterview: {
+          clearestPart: getValue("finalClearest"),
+          mostConfusingPart: getValue("finalMostConfusing"),
+          unclearTerms: getValue("finalUnclearTerms"),
+          expectedEarlier: getValue("finalExpectedEarlier"),
+          installConfidence: getValue("finalInstallConfidence"),
+          confidenceLevel: getValue("finalConfidenceLevel"),
+          reason: getValue("finalReason"),
+          improvements: getValue("finalImprovements"),
+          accessibilityBarrier: getValue("finalAccessibilityBarrier")
+        },
+        summary: summarize(flatTasks)
+      };
+    }
+
+    function summarize(tasks) {
+      const counts = ratings.reduce((acc, rating) => {
+        acc[rating] = 0;
+        return acc;
+      }, {});
+      let completed = 0;
+      tasks.forEach((task) => {
+        if (task.rating) {
+          completed += 1;
+          counts[task.rating] += 1;
+        }
+      });
+      return {
+        totalTasks: tasks.length,
+        completedTasks: completed,
+        ratings: counts,
+        blockedTasks: tasks.filter((task) => task.rating === "Blocked").map((task) => task.id),
+        confusingTasks: tasks.filter((task) => task.rating === "Confusing").map((task) => task.id)
+      };
+    }
+
+    function updatePreview() {
+      const payload = buildPayload();
+      document.getElementById("jsonPreview").textContent = JSON.stringify(payload, null, 2);
+      document.getElementById("completedCount").textContent = payload.summary.completedTasks;
+      document.getElementById("blockedCount").textContent = payload.summary.ratings.Blocked;
+    }
+
+    function downloadJson() {
+      const payload = buildPayload();
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const safeName = (payload.context.testerName || "tester").replace(/[^a-z0-9_-]+/gi, "-").replace(/^-|-$/g, "");
+      const date = payload.context.testDate || todayIso();
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `customperm-user-clarity-${safeName}-${date}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    async function copyJson() {
+      const text = JSON.stringify(buildPayload(), null, 2);
+      await navigator.clipboard.writeText(text);
+      alert("JSON copie dans le presse-papiers.");
+    }
+
+    function resetForm() {
+      if (!confirm("Reinitialiser tous les champs ?")) return;
+      document.querySelectorAll("input, textarea, select").forEach((field) => {
+        if (field.type === "radio" || field.type === "checkbox") {
+          field.checked = false;
+        } else {
+          field.value = "";
+        }
+      });
+      document.getElementById("testDate").value = todayIso();
+      updatePreview();
+    }
+
+    function toggleObserverMode() {
+      const testerMode = document.body.classList.toggle("tester-mode");
+      document.getElementById("toggleObserver").textContent = testerMode
+        ? "Afficher aide observateur"
+        : "Masquer aide observateur";
+      const modeTitle = document.querySelector(".mode-note strong");
+      const modeText = document.querySelector(".mode-note p");
+      if (testerMode) {
+        modeTitle.textContent = "Mode testeur actif";
+        modeText.textContent = "Par defaut, seules les questions sont visibles. Les criteres attendus et notes d'observation sont reserves a l'observateur.";
+      } else {
+        modeTitle.textContent = "Mode observateur actif";
+        modeText.textContent = "Les criteres attendus et notes d'observation sont visibles. Ne pas laisser le testeur lire ces blocs pendant le test.";
+      }
+    }
+
+    renderTasks();
+    document.getElementById("testDate").value = todayIso();
+    document.addEventListener("input", updatePreview);
+    document.addEventListener("change", updatePreview);
+    document.getElementById("toggleObserver").addEventListener("click", toggleObserverMode);
+    document.getElementById("downloadJson").addEventListener("click", downloadJson);
+    document.getElementById("copyJson").addEventListener("click", copyJson);
+    document.getElementById("resetForm").addEventListener("click", resetForm);
+    updatePreview();
+  </script>
+</body>
+</html>

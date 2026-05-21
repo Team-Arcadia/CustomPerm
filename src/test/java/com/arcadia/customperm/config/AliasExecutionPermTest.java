@@ -15,7 +15,7 @@ import static org.junit.jupiter.api.Assertions.*;
  *
  * Limites intentionnelles (déférées à É6.2 GameTest) :
  *   - Vérification de INVARIANT-503 (requires entity + isOp) : nécessite MinecraftServer
- *   - Exécution réelle de performPrefixedCommand : nécessite CommandDispatcher Minecraft
+ *   - Exécution réelle via le CommandDispatcher Minecraft : nécessite CommandDispatcher Minecraft
  *   - Résolution @s : nécessite ServerPlayer + World
  */
 class AliasExecutionPermTest {
