@@ -306,7 +306,7 @@
           <span class="badge">Minecraft 1.21.1</span>
           <span class="badge">NeoForge 21.1.221+</span>
           <span class="badge">Java 21</span>
-          <span class="badge">CustomPerm 1.0.2</span>
+          <span class="badge">CustomPerm 1.0.3</span>
           <span class="badge">LuckPerms optional</span>
         </div>
       </header>
@@ -329,7 +329,7 @@
           <li>Start the server once.</li>
         </ol>
 
-        <pre><code>mods/customperm-1.0.2.jar
+        <pre><code>mods/customperm-1.0.3.jar
 mods/LuckPerms-NeoForge-5.4.x.jar</code></pre>
 
         <p>CustomPerm creates its config folder on first launch:</p>
@@ -394,7 +394,7 @@ customperm.alias.up</code></pre>
 
       <section id="luckperms">
         <h2>Setup With LuckPerms</h2>
-        <p>This is the recommended setup for public or production servers. LuckPerms handles groups, users, inheritance, contexts, and storage. CustomPerm exposes commands and checks LuckPerms permissions.</p>
+        <p>This is the recommended setup for public or production servers. LuckPerms handles groups, users, inheritance, contexts, storage, and normal command permissions. With LuckPerms active, CustomPerm direct command exposure is disabled and CustomPerm is used for aliases.</p>
 
         <div class="callout">
           <strong>Note:</strong> this section shows the in-game command workflow. The same LuckPerms group, user, inheritance, and permission changes can also be made through the LuckPerms web editor.
@@ -420,28 +420,25 @@ internal</code></pre>
         </div>
         <pre><code>/customperm reload</code></pre>
 
-        <h3>3. Expose a Command</h3>
-        <pre><code>/customperm command add gamemode</code></pre>
-        <p>Permission node:</p>
-        <pre><code>customperm.command.gamemode</code></pre>
-
-        <h3>4. Create a LuckPerms Group</h3>
+        <h3>3. Create a LuckPerms Group</h3>
         <pre><code>/lp creategroup vip</code></pre>
 
-        <h3>5. Grant the Permission</h3>
-        <pre><code>/lp group vip permission set customperm.command.gamemode true</code></pre>
+        <h3>4. Create a Controlled Alias</h3>
+        <pre><code>/customperm alias add spec gamemode spectator</code></pre>
+
+        <h3>5. Grant the Alias Permission</h3>
+        <pre><code>/lp group vip permission set customperm.alias.spec true</code></pre>
 
         <h3>6. Assign the Group</h3>
         <pre><code>/lp user Steve parent add vip</code></pre>
 
         <h3>7. Test</h3>
-        <pre><code>/customperm test Steve customperm.command.gamemode
-/lp user Steve permission check customperm.command.gamemode</code></pre>
+        <pre><code>/customperm test Steve customperm.alias.spec
+/lp user Steve permission check customperm.alias.spec</code></pre>
         <p>Expected: <code>GRANTED</code> from CustomPerm and <code>true</code> from LuckPerms.</p>
 
-        <h3>8. Debug</h3>
-        <pre><code>/customperm debug Steve gamemode</code></pre>
-        <p>Check that the command exists, is exposed, the permission service says true, and the wrapper decision is true.</p>
+        <h3>8. Manage Normal Commands</h3>
+        <p>Manage direct vanilla and modded command permissions through LuckPerms. <code>/customperm command add/remove</code> is intentionally disabled while LuckPerms is active.</p>
         <a class="top-link" href="#top">Back to top</a>
       </section>
 
@@ -474,7 +471,7 @@ internal</code></pre>
 
       <section id="preserve">
         <h2>preserveOriginalRequires</h2>
-        <p>Some commands have their own internal permission checks. CustomPerm can either replace the original requirement or preserve it in addition to the CustomPerm permission.</p>
+        <p>This setting applies only to direct command exposure through the internal backend, when LuckPerms is not active. Some commands have their own internal permission checks. CustomPerm can either replace the original requirement or preserve it in addition to the CustomPerm permission.</p>
 
         <div class="callout ok">
           <strong>Default state:</strong> commands default to <code>false</code>. If a command is not listed in <code>preserveOriginalRequires</code>, CustomPerm does not preserve the original Brigadier requirement once the command is exposed and the CustomPerm permission passes.
@@ -577,6 +574,7 @@ internal</code></pre>
       <section id="config">
         <h2>Configuration Files</h2>
         <h3>commands.json</h3>
+        <p>Direct command entries are used only when LuckPerms is not installed. When LuckPerms is installed, the file remains on disk but its direct command entries are ignored.</p>
         <pre><code>{
   "grantedCommands": ["gamemode", "time", "tp"],
   "preserveOriginalRequires": {
@@ -687,10 +685,7 @@ data modify</code></pre>
       <section id="workflows">
         <h2>Common Workflows</h2>
         <h3>Give /gamemode to VIP With LuckPerms</h3>
-        <pre><code>/customperm command add gamemode
-/lp creategroup vip
-/lp group vip permission set customperm.command.gamemode true
-/lp user Steve parent add vip</code></pre>
+        <p>Configure the server's normal <code>/gamemode</code> permission directly through LuckPerms. CustomPerm does not wrap direct commands while LuckPerms is active.</p>
 
         <h3>Give /gamemode to VIP Without LuckPerms</h3>
         <pre><code>/customperm command add gamemode

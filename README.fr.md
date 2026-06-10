@@ -8,7 +8,7 @@
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg)]()
 [![Java](https://img.shields.io/badge/Java-21-red.svg)]()
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.2-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/version-1.0.3-brightgreen.svg)]()
 
 ---
 
@@ -22,7 +22,7 @@ CustomPerm permet de donner **précisément** les commandes que vous voulez à d
 - Donner `/give` à un grade VIP sans qu'ils puissent `/ban` ? Possible.
 - Créer des macros (alias) qui chaînent plusieurs commandes en une seule ? Possible.
 
-Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fournit son propre système de grades stocké en JSON.
+Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fournit son propre système de grades stocké en JSON. Avec LuckPerms installé, les permissions des commandes normales restent entièrement gérées par LuckPerms et CustomPerm fournit les aliases contrôlés. Sans LuckPerms, CustomPerm permet aussi l'exposition directe des commandes via ses grades internes.
 
 ---
 
@@ -49,7 +49,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 
 ## Fonctionnalités
 
-- **Permissions granulaires par commande** : exposez n'importe quelle commande racine vanilla ou de mod tiers avec `/customperm command add <name>`.
+- **Permissions granulaires sans LuckPerms** : le backend interne peut exposer une commande racine vanilla ou de mod tiers avec `/customperm command add <name>`.
 - **Modèle deny-by-default** : aucune commande n'est exposée par défaut ; une commande non exposée garde son comportement vanilla ou moddé.
 - **Backend JSON interne** : gestion des grades, assignations joueurs et nodes de permission sans plugin externe.
 - **Backend LuckPerms** : utilisation automatique de LuckPerms lorsqu'une version compatible est installée.
@@ -64,7 +64,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **Elévation des aliases** : les steps d'alias s'exécutent avec op level 4 pour permettre aux macros signées par l'admin d'appeler des commandes op-only.
 - **Garde-fous sur les aliases** : `/customperm` est réservé, les steps vides sont ignorés, les aliases sans step sont refusés, et le shadow d'une commande existante émet un warning.
 - **Enregistrement runtime des aliases** : ajout, remplacement ou retrait d'alias sur le dispatcher vivant sans redémarrage serveur.
-- **Wrapping du command tree** : les commandes racine Brigadier sont clonées et wrappées pour appliquer les permissions CustomPerm sur les commandes exposées.
+- **Politique adaptée au backend** : avec LuckPerms actif, l'exposition directe des commandes est désactivée et LuckPerms garde le contrôle des commandes normales ; les aliases CustomPerm restent actifs.
 - **Préservation des ops** : les sources réellement op level 2+ gardent toujours l'accès ; le mod ne retire pas les droits opérateur.
 - **Re-sync du command tree client** : après changement interne ou event LuckPerms, les joueurs concernés reçoivent un arbre de commandes à jour.
 - **Hot-reload atomique** : `/customperm reload` charge `grades.json`, `aliases.json`, `commands.json` et `settings.json` en transaction ; un JSON invalide conserve le snapshot précédent.
@@ -118,13 +118,12 @@ Si aucune des deux lignes n'apparaît, le mod n'a pas chargé — vérifiez vos 
 
 ```
 # Console serveur
-customperm command add gamemode
-lp creategroup vip
-lp group vip permission set customperm.command.gamemode true
+customperm alias add spec gamemode spectator
+lp group vip permission set customperm.alias.spec true
 lp user Steve parent add vip
 ```
 
-`Steve` peut maintenant faire `/gamemode creative` même sans être op.
+`Steve` peut maintenant utiliser `/spec` sans recevoir l'accès direct à `/gamemode`.
 
 ### Sans LuckPerms (système interne)
 
@@ -145,6 +144,8 @@ Même résultat : `Steve` peut utiliser `/gamemode`.
 Toutes les commandes admin sont sous `/customperm` et **requièrent op level 2**.
 
 ### Exposition des commandes
+
+Cette fonctionnalité est disponible uniquement lorsque LuckPerms n'est pas actif. Avec LuckPerms actif, `/customperm command add/remove` est refusé : gérez les commandes normales via LuckPerms et utilisez CustomPerm pour les aliases.
 
 Définit quelles commandes sont éligibles au système de permissions. Une commande non-exposée garde son comportement vanilla (op-only).
 
@@ -201,12 +202,12 @@ CustomPerm utilise un schéma de nodes hiérarchique compatible LuckPerms (et so
 | Node | Effet |
 |---|---|
 | `*` | Wildcard global du backend interne. À utiliser avec précaution. |
-| `customperm.command.<name>` | Autorise la commande `<name>` (si elle a été exposée). Ex: `customperm.command.gamemode` |
-| `customperm.command.*` | Wildcard : couvre toutes les commandes exposées. |
+| `customperm.command.<name>` | Autorise `<name>` via le backend interne (uniquement si elle est exposée et que LuckPerms n'est pas actif). |
+| `customperm.command.*` | Wildcard du backend interne couvrant les commandes exposées. |
 | `customperm.alias.<name>` | Autorise l'alias `<name>`. Ex: `customperm.alias.fly` |
 | `customperm.alias.*` | Wildcard alias. |
 
-> ⚠️ **Important** : `customperm.command.<name>` ne donne accès à `<name>` que si elle a été préalablement exposée par `/customperm command add <name>`. Sinon, la commande reste op-only quelles que soient les perms.
+> ⚠️ **Important** : les permissions de commandes directes CustomPerm sont désactivées lorsque LuckPerms est actif. Utilisez LuckPerms pour les commandes normales et `customperm.alias.<name>` pour les aliases CustomPerm.
 
 ---
 
@@ -217,6 +218,8 @@ Stockés dans `config/arcadia/customperm/`. Auto-créés au premier lancement, m
 ### `commands.json`
 
 Liste des commandes exposées au système.
+
+Ce fichier sert à l'exposition directe des commandes uniquement lorsque LuckPerms n'est pas installé. Lorsque LuckPerms est installé, ses entrées restent sur disque mais sont ignorées.
 
 ```json
 {
@@ -300,10 +303,8 @@ Avec LuckPerms actif, ce fichier est ignoré (les perms passent par LP).
 
 **Avec LuckPerms** :
 ```
-customperm command add gamemode
-lp creategroup vip
-lp group vip permission set customperm.command.gamemode true
-lp user <pseudo> parent add vip
+# Configurez directement dans LuckPerms la permission normale de /gamemode.
+# CustomPerm ne wrappe pas les commandes directes lorsque LuckPerms est actif.
 ```
 
 **Sans LuckPerms** :
@@ -330,12 +331,12 @@ lp group vip permission set customperm.alias.heal true
 
 ### Donner accès à plusieurs commandes d'un coup (wildcard)
 
+Sans LuckPerms :
 ```
 customperm command add gamemode
 customperm command add give
 customperm command add tp
 customperm command add effect
-lp group staff permission set customperm.command.* true       # OU
 customperm grade addperm staff customperm.command.*
 ```
 

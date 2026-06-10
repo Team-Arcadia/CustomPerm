@@ -14,6 +14,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 import java.lang.reflect.Field;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
@@ -46,6 +47,8 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
     private static final Field LITERALS_FIELD;
     private static final Field ARGUMENTS_FIELD;
     private static final Map<String, CommandNode<CommandSourceStack>> ORIGINAL_ROOTS = new HashMap<>();
+    private static final Set<CommandNode<CommandSourceStack>> WRAPPED_NODES =
+        Collections.newSetFromMap(new IdentityHashMap<>());
 
     static {
         try {
@@ -74,7 +77,8 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
      */
     @Override
     public void onConfigReload(ConfigSnapshot snapshot, MinecraftServer server) {
-        CustomPerm.LOGGER.info("[CustomPerm] CommandTreeRewriter.onConfigReload — predicates are dynamic, no re-wrap required.");
+        int repaired = repair(server);
+        CustomPerm.LOGGER.info("[CustomPerm] CommandTreeRewriter.onConfigReload — repaired {} command wrapper(s).", repaired);
     }
 
     @SubscribeEvent
@@ -83,6 +87,20 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
 
         CustomPermCommand.register(dispatcher);
         AliasManager.registerAll(dispatcher);
+
+        int wrapped = wrapUnwrappedRoots(dispatcher);
+        CustomPerm.LOGGER.info("[CustomPerm] Wrapped {} top-level command(s) for permission gating.", wrapped);
+    }
+
+    public static int repair(MinecraftServer server) {
+        if (server == null) return 0;
+        return wrapUnwrappedRoots(server.getCommands().getDispatcher());
+    }
+
+    private static int wrapUnwrappedRoots(CommandDispatcher<CommandSourceStack> dispatcher) {
+        if (!CustomPerm.isDirectCommandExposureEnabled()) {
+            return 0;
+        }
 
         Set<String> skipRoots = new HashSet<>();
         skipRoots.add("customperm");
@@ -95,8 +113,9 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         for (CommandNode<CommandSourceStack> original : originals) {
             String name = original.getName();
             if (skipRoots.contains(name)) continue;
+            if (WRAPPED_NODES.contains(original)) continue;
             try {
-                ORIGINAL_ROOTS.putIfAbsent(name, original);
+                ORIGINAL_ROOTS.put(name, original);
                 IdentityHashMap<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> visited = new IdentityHashMap<>();
                 CommandNode<CommandSourceStack> wrappedRoot = wrapRecursive(original, name, visited);
                 if (wrappedRoot == original) continue;  // unknown type, skip
@@ -107,7 +126,7 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             }
         }
 
-        CustomPerm.LOGGER.info("[CustomPerm] Wrapped {} top-level command(s) for permission gating.", wrapped);
+        return wrapped;
     }
 
     static boolean executeOriginalCommand(CommandSourceStack source, String command) throws Exception {
@@ -144,6 +163,9 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         Predicate<CommandSourceStack> origReq = original.getRequirement();
         Predicate<CommandSourceStack> wrappedReq = source -> {
             boolean originalAllows = origReq == null || origReq.test(source);
+            if (!CustomPerm.isDirectCommandExposureEnabled()) {
+                return originalAllows;
+            }
             if (!CustomPerm.configManager.getCommands().grantedCommands.contains(rootName)) {
                 return originalAllows;
             }
@@ -173,6 +195,7 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         }
 
         visited.put(original, wrapped);
+        WRAPPED_NODES.add(wrapped);
 
         for (CommandNode<CommandSourceStack> child : original.getChildren()) {
             CommandNode<CommandSourceStack> wrappedChild = wrapRecursive(child, rootName, visited);

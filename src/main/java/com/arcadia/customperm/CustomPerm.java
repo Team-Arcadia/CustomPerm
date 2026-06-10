@@ -97,7 +97,7 @@ public class CustomPerm {
         // Boot-time health summary so admins can see in one line if everything is in order.
         String backend = backendLabel();
         int wrapped = event.getServer().getCommands().getDispatcher().getRoot().getChildren().size();
-        int exposed = configManager.getCommands().grantedCommands.size();
+        int exposed = isDirectCommandExposureEnabled() ? configManager.getCommands().grantedCommands.size() : 0;
         int aliases = configManager.getAliases().aliases.size();
         int grades = configManager.getGrades().grades.size();
         LOGGER.info("[CustomPerm] Ready — backend={} dispatcherCommands={} exposed={} aliases={} grades={}",
@@ -121,5 +121,13 @@ public class CustomPerm {
 
     public static boolean isLuckPermsActive() {
         return permissions instanceof LuckPermsService lps && !lps.isDegraded();
+    }
+
+    public static boolean isLuckPermsPresent() {
+        return ModList.get().isLoaded("luckperms");
+    }
+
+    public static boolean isDirectCommandExposureEnabled() {
+        return !isLuckPermsPresent();
     }
 }
