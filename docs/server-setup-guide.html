@@ -306,7 +306,7 @@
           <span class="badge">Minecraft 1.21.1</span>
           <span class="badge">NeoForge 21.1.221+</span>
           <span class="badge">Java 21</span>
-          <span class="badge">CustomPerm 1.0.3</span>
+          <span class="badge">CustomPerm 1.0.4</span>
           <span class="badge">LuckPerms optional</span>
         </div>
       </header>
@@ -329,7 +329,7 @@
           <li>Start the server once.</li>
         </ol>
 
-        <pre><code>mods/customperm-1.0.3.jar
+        <pre><code>mods/customperm-1.0.4.jar
 mods/LuckPerms-NeoForge-5.4.x.jar</code></pre>
 
         <p>CustomPerm creates its config folder on first launch:</p>
@@ -394,7 +394,7 @@ customperm.alias.up</code></pre>
 
       <section id="luckperms">
         <h2>Setup With LuckPerms</h2>
-        <p>This is the recommended setup for public or production servers. LuckPerms handles groups, users, inheritance, contexts, storage, and normal command permissions. With LuckPerms active, CustomPerm direct command exposure is disabled and CustomPerm is used for aliases.</p>
+        <p>This is the recommended setup for public or production servers. LuckPerms handles groups, users, inheritance, contexts, storage, and CustomPerm alias permission nodes. With LuckPerms installed, CustomPerm direct command exposure is disabled and CustomPerm is used for controlled aliases.</p>
 
         <div class="callout">
           <strong>Note:</strong> this section shows the in-game command workflow. The same LuckPerms group, user, inheritance, and permission changes can also be made through the LuckPerms web editor.
@@ -438,7 +438,7 @@ internal</code></pre>
         <p>Expected: <code>GRANTED</code> from CustomPerm and <code>true</code> from LuckPerms.</p>
 
         <h3>8. Manage Normal Commands</h3>
-        <p>Manage direct vanilla and modded command permissions through LuckPerms. <code>/customperm command add/remove</code> is intentionally disabled while LuckPerms is active.</p>
+        <p><code>/customperm command add/remove</code> is intentionally disabled while LuckPerms is installed. LuckPerms can manage commands exposed through a compatible mod permission integration, but it does not automatically bypass vanilla Brigadier requirements on NeoForge. For a narrow vanilla action, create a CustomPerm alias and grant its <code>customperm.alias.&lt;name&gt;</code> node through LuckPerms.</p>
         <a class="top-link" href="#top">Back to top</a>
       </section>
 
@@ -595,6 +595,7 @@ internal</code></pre>
         <p>The leading slash is optional in alias steps:</p>
         <pre><code>"pingtest": ["say ping"]
 "pingtest": ["/say ping"]</code></pre>
+        <p>After editing this file, run <code>/customperm reload</code>. Added aliases are registered, removed aliases are deleted, and edited step lists replace the old runtime definition.</p>
 
         <h3>grades.json</h3>
         <p>Used only when LuckPerms is not active.</p>
@@ -625,6 +626,7 @@ internal</code></pre>
         <div class="callout danger">
           <strong>Aliases execute internal steps with elevated authority.</strong> This is required for controlled shortcuts like <code>/up</code>, but every alias must be reviewed carefully.
         </div>
+        <p>Direct or indirect recursive alias chains are stopped at nesting depth 8. This protects the server thread from a stack overflow, but recursive definitions are still configuration errors and should be removed.</p>
 
         <p>Avoid aliases containing dangerous commands unless every player with access is fully trusted.</p>
         <pre><code>op
@@ -685,7 +687,10 @@ data modify</code></pre>
       <section id="workflows">
         <h2>Common Workflows</h2>
         <h3>Give /gamemode to VIP With LuckPerms</h3>
-        <p>Configure the server's normal <code>/gamemode</code> permission directly through LuckPerms. CustomPerm does not wrap direct commands while LuckPerms is active.</p>
+        <p>Create a controlled alias and grant its permission through LuckPerms:</p>
+        <pre><code>/customperm alias add spec gamemode spectator
+/lp group vip permission set customperm.alias.spec true</code></pre>
+        <p>This grants spectator mode only. LuckPerms alone does not bypass the vanilla <code>/gamemode</code> Brigadier requirement on NeoForge.</p>
 
         <h3>Give /gamemode to VIP Without LuckPerms</h3>
         <pre><code>/customperm command add gamemode
@@ -719,7 +724,6 @@ data modify</code></pre>
         <h2>Troubleshooting</h2>
         <h3>The Player Cannot See the Command</h3>
         <pre><code>/customperm reload
-/lp user Steve permission check customperm.command.gamemode
 /lp user Steve permission check customperm.alias.up</code></pre>
         <p>The player may need to reconnect if the client command tree did not refresh.</p>
 
@@ -753,6 +757,7 @@ data modify</code></pre>
           <li>Use <code>preserveOriginalRequires: true</code> for sensitive mod commands.</li>
           <li>Test permissions with a real non-op player before using them on a public server.</li>
           <li>Audit aliases regularly with <code>/customperm alias list</code> and <code>/customperm alias steps &lt;alias&gt;</code>.</li>
+          <li>Run <code>/customperm reload</code> after editing JSON files and confirm changed steps with <code>/customperm alias steps &lt;alias&gt;</code>.</li>
         </ul>
 
         <h3>Production Default</h3>
