@@ -7,6 +7,29 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [Unreleased]
+
+Hardening pass from the full-mod audit.
+
+### Fixed
+
+- `/customperm reload` now applies `aliases.json` changes to the live dispatcher: aliases added to the file are registered, aliases removed from the file are unregistered (restoring any shadowed command), and edited steps take effect (the execution closure previously kept running the steps captured at registration time).
+- Alias execution is now guarded against recursive alias chains (an alias invoking itself or a cycle) with a maximum nesting depth of 8, instead of recursing to a `StackOverflowError` with an op-4 source.
+- Static dispatcher state (`ORIGINAL_ROOTS`, `WRAPPED_NODES`, `SHADOWED_ORIGINALS`, `REGISTERED_ALIASES`) is now cleared on every `RegisterCommandsEvent` and on server stop, instead of leaking old command trees across `/reload` and same-JVM server restarts and restoring stale shadowed nodes from a previous server instance.
+- Removing an alias that shadowed an exposed command now re-wraps the restored command immediately instead of leaving its permission nodes inert until the next reload.
+- Config files are now written atomically (temp file + move), so a crash mid-save can no longer truncate `grades.json`/`aliases.json`/`commands.json`/`settings.json`.
+- Alias step normalization now strips a single leading slash instead of all of them, so commands whose root literal starts with `/` (WorldEdit-style `//wand`) can be used as alias steps.
+- `/customperm alias addstep` now emits the same shadowing warning as `alias add` when it creates a new alias that shadows an existing command.
+- Permission nodes passed to `/customperm grade addperm|removeperm` are now trimmed.
+- Fatal JVM errors (`Error`) thrown by an alias step are now rethrown instead of being swallowed, matching the project-wide error policy.
+
+### Changed
+
+- `CommandTreeRewriter` now subscribes to `RegisterCommandsEvent` at `EventPriority.LOWEST` and runs a catch-up `repair()` at `ServerStartedEvent`, so commands registered by other mods' handlers after CustomPerm's are still wrapped at boot.
+- Direct command exposure is now keyed on the *selected backend* instead of the mere presence of the LuckPerms mod: with an outdated/broken LuckPerms and `luckPermsFallbackMode=internal`, internal grades can gate exposed commands again.
+
+---
+
 ## [1.0.3] - 2026-06-10
 
 Backend policy update.
