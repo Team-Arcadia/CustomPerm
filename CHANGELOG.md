@@ -7,6 +7,31 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [1.0.3] - 2026-06-10
+
+Backend policy update.
+
+### Changed
+
+- Direct CustomPerm command exposure is disabled while LuckPerms is active.
+- LuckPerms now retains full control of normal vanilla and modded command permissions.
+- CustomPerm aliases remain available with LuckPerms and continue to use `customperm.alias.<name>` nodes.
+- `/customperm command add/remove` now explains that direct commands must be managed through LuckPerms.
+- `/customperm status`, `/customperm debug`, and `/customperm scan` now report the effective direct-command policy.
+- Direct command exposure and `customperm.command.*` remain available with the internal backend when LuckPerms is absent.
+- Runtime command-tree repair remains available for the internal backend.
+
+### Validation
+
+- `./gradlew test --no-daemon`: passed.
+- `./gradlew runGameTestServer --no-daemon`: 32/32 required GameTests passed.
+- `./gradlew clean build --no-daemon`: passed.
+- LuckPerms startup verified with zero CustomPerm direct-command wrappers.
+- Alias execution verified with LuckPerms active.
+- Generated jar: `customperm-1.0.3.jar`.
+
+---
+
 ## [1.0.2] - 2026-05-21
 
 Patch release.

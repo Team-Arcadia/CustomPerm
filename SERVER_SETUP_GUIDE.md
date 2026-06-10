@@ -18,7 +18,7 @@ Complete setup guide for installing CustomPerm, exposing commands, creating alia
 4. Start the server once.
 
 ```text
-mods/customperm-1.0.2.jar
+mods/customperm-1.0.3.jar
 mods/LuckPerms-NeoForge-5.4.x.jar
 ```
 
@@ -65,7 +65,7 @@ Important: for aliases, the player only needs the alias permission. For example,
 
 | Node | Meaning |
 |------|---------|
-| `customperm.command.<command>` | Grants access to an exposed command. |
+| `customperm.command.<command>` | Grants access to an exposed command when the internal backend is active. |
 | `customperm.alias.<alias>` | Grants access to a CustomPerm alias. |
 | `customperm.command.*` | Grants access to every exposed command. |
 | `customperm.alias.*` | Grants access to every alias. |
@@ -74,7 +74,7 @@ Use wildcards carefully on public servers.
 
 ## Setup With LuckPerms
 
-This is the recommended setup for public or production servers. LuckPerms handles groups, users, inheritance, contexts, and storage. CustomPerm exposes commands and checks LuckPerms permissions.
+This is the recommended setup for public or production servers. LuckPerms handles groups, users, inheritance, contexts, storage, and normal command permissions. With LuckPerms active, CustomPerm direct command exposure is disabled and CustomPerm is used for aliases.
 
 Note: this section shows the in-game command workflow. The same LuckPerms group, user, inheritance, and permission changes can also be made through the LuckPerms web editor.
 
@@ -123,28 +123,22 @@ After editing:
 /customperm reload
 ```
 
-### 3. Expose a Command
-
-```mcfunction
-/customperm command add gamemode
-```
-
-Permission node:
-
-```text
-customperm.command.gamemode
-```
-
-### 4. Create a LuckPerms Group
+### 3. Create a LuckPerms Group
 
 ```mcfunction
 /lp creategroup vip
 ```
 
-### 5. Grant the Permission
+### 4. Create a Controlled Alias
 
 ```mcfunction
-/lp group vip permission set customperm.command.gamemode true
+/customperm alias add spec gamemode spectator
+```
+
+### 5. Grant the Alias Permission
+
+```mcfunction
+/lp group vip permission set customperm.alias.spec true
 ```
 
 ### 6. Assign the Group
@@ -153,24 +147,20 @@ customperm.command.gamemode
 /lp user Steve parent add vip
 ```
 
-Now Steve can use `/gamemode` without being op.
+Now Steve can use `/spec` without receiving direct access to `/gamemode`.
 
 ### 7. Test the Permission
 
 ```mcfunction
-/customperm test Steve customperm.command.gamemode
-/lp user Steve permission check customperm.command.gamemode
+/customperm test Steve customperm.alias.spec
+/lp user Steve permission check customperm.alias.spec
 ```
 
 Expected: `GRANTED` from CustomPerm and `true` from LuckPerms.
 
-### 8. Debug a Command
+### 8. Manage Normal Commands
 
-```mcfunction
-/customperm debug Steve gamemode
-```
-
-Check that the command exists, is exposed, the permission service says true, and the wrapper decision is true.
+Manage direct vanilla and modded command permissions through LuckPerms. `/customperm command add/remove` is intentionally disabled while LuckPerms is active.
 
 ## Aliases With LuckPerms
 
@@ -225,7 +215,7 @@ Expected result:
 
 ## preserveOriginalRequires
 
-Some commands have their own internal permission checks. CustomPerm can either replace the original requirement or preserve it in addition to the CustomPerm permission.
+This setting applies only to direct command exposure through the internal backend, when LuckPerms is not active. Some commands have their own internal permission checks. CustomPerm can either replace the original requirement or preserve it in addition to the CustomPerm permission.
 
 Default state: commands default to `false`. If a command is not listed in `preserveOriginalRequires`, CustomPerm does not preserve the original Brigadier requirement once the command is exposed and the CustomPerm permission passes.
 
@@ -348,6 +338,8 @@ Expected: `GRANTED`.
 
 Stores exposed commands and command safety options.
 
+Direct command entries are used only when LuckPerms is not installed. When LuckPerms is installed, the file remains on disk but its direct command entries are ignored.
+
 ```json
 {
   "grantedCommands": ["gamemode", "time", "tp"],
@@ -466,12 +458,7 @@ Riskier:
 
 ### Give /gamemode to VIP With LuckPerms
 
-```mcfunction
-/customperm command add gamemode
-/lp creategroup vip
-/lp group vip permission set customperm.command.gamemode true
-/lp user Steve parent add vip
-```
+Configure the server's normal `/gamemode` permission directly through LuckPerms. CustomPerm does not wrap direct commands while LuckPerms is active.
 
 ### Give /gamemode to VIP Without LuckPerms
 
