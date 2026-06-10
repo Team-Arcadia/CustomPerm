@@ -112,6 +112,7 @@ logo.jpg
 # ============================================================
 docs/*
 !docs/server-setup-guide.html
+!docs/LUCKPERMS_COMPATIBILITY_AUDIT.md
 
 # ============================================================
 # BlueJ

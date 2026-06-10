@@ -3,6 +3,7 @@ package com.arcadia.customperm.perm;
 import com.arcadia.customperm.CustomPerm;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
+import net.luckperms.api.event.EventSubscription;
 import net.luckperms.api.event.user.UserDataRecalculateEvent;
 import net.luckperms.api.model.user.User;
 import net.minecraft.commands.CommandSourceStack;
@@ -25,7 +26,14 @@ public class LuckPermsService implements PermissionService {
      */
     private final AtomicBoolean degraded = new AtomicBoolean(false);
 
-    private volatile boolean hooksReady = false;
+    /**
+     * Abonnement LP actif — conservé pour pouvoir le fermer proprement à l'arrêt du serveur.
+     * Sans close(), l'abonnement survit au cycle de vie du serveur : la lambda garde une
+     * référence vers l'ancien MinecraftServer (fuite mémoire) et, au démarrage suivant dans
+     * la même JVM, le resync pointe vers un serveur mort.
+     */
+    private final Object hooksLock = new Object();
+    private volatile ServerHooks serverHooks;
 
     public LuckPermsService(InternalPermService fallback) {
         // P7 : fail-fast si fallback null — NPE tardif lors d'une vraie défaillance LP serait bien pire.
@@ -98,24 +106,60 @@ public class LuckPermsService implements PermissionService {
      * until the player reconnects or the server reloads.
      */
     public void initServerHooks(MinecraftServer server) {
-        if (hooksReady) return;
-        try {
-            LuckPerms api = LuckPermsProvider.get();
-            api.getEventBus().subscribe(UserDataRecalculateEvent.class, event -> {
-                UUID uuid = event.getUser().getUniqueId();
-                // LP events fire off-thread; schedule the resync on the server thread.
-                server.execute(() -> {
-                    ServerPlayer player = server.getPlayerList().getPlayer(uuid);
-                    if (player != null) {
-                        CustomPerm.LOGGER.info("[CustomPerm] LP user data recalculated for {}, resending command tree.", player.getGameProfile().getName());
-                        server.getCommands().sendCommands(player);
-                    }
-                });
-            });
-            hooksReady = true;
-            CustomPerm.LOGGER.info("[CustomPerm] Subscribed to LuckPerms UserDataRecalculateEvent for live command tree resync.");
-        } catch (Throwable t) {
-            CustomPerm.LOGGER.warn("[CustomPerm] Could not subscribe LP events; permission checks may still work but live command tree resync is disabled.", t);
+        synchronized (hooksLock) {
+            if (serverHooks != null) return;
+            try {
+                LuckPerms api = LuckPermsProvider.get();
+                ResyncCoordinator coordinator = new ResyncCoordinator();
+                EventSubscription<UserDataRecalculateEvent> subscription =
+                    api.getEventBus().subscribe(UserDataRecalculateEvent.class, event -> {
+                        UUID uuid = event.getUser().getUniqueId();
+                        if (!coordinator.schedule(uuid)) return;
+                        // LP events fire off-thread; schedule the resync on the server thread.
+                        server.execute(() -> {
+                            if (!coordinator.complete(uuid)) return;
+                            ServerPlayer player = server.getPlayerList().getPlayer(uuid);
+                            if (player != null) {
+                                CustomPerm.LOGGER.debug("[CustomPerm] LP user data recalculated for {}, resending command tree.", player.getGameProfile().getName());
+                                server.getCommands().sendCommands(player);
+                            }
+                        });
+                    });
+                serverHooks = new ServerHooks(subscription, coordinator);
+                CustomPerm.LOGGER.info("[CustomPerm] Subscribed to LuckPerms UserDataRecalculateEvent for live command tree resync.");
+            } catch (Throwable t) {
+                CustomPerm.LOGGER.warn("[CustomPerm] Could not subscribe LP events; permission checks may still work but live command tree resync is disabled.", t);
+            }
         }
+    }
+
+    /**
+     * Ferme l'abonnement LP au moment où le serveur s'arrête, pour que :
+     * 1) la lambda ne retienne pas l'ancien MinecraftServer (fuite mémoire),
+     * 2) un redémarrage de serveur dans la même JVM ré-abonne avec le bon serveur.
+     */
+    public void closeServerHooks() {
+        ServerHooks hooks;
+        synchronized (hooksLock) {
+            hooks = serverHooks;
+            serverHooks = null;
+            if (hooks != null) {
+                hooks.coordinator().close();
+            }
+        }
+
+        if (hooks != null) {
+            try {
+                hooks.subscription().close();
+                CustomPerm.LOGGER.info("[CustomPerm] Unsubscribed from LuckPerms UserDataRecalculateEvent (server stopped).");
+            } catch (Throwable t) {
+                CustomPerm.LOGGER.warn("[CustomPerm] Failed to close LuckPerms event subscription.", t);
+            }
+        }
+    }
+
+    private record ServerHooks(
+            EventSubscription<UserDataRecalculateEvent> subscription,
+            ResyncCoordinator coordinator) {
     }
 }
