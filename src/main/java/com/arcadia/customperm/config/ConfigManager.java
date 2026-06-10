@@ -7,6 +7,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -180,14 +181,29 @@ public class ConfigManager {
         ConfigSnapshot snap = configRef.get();
         try {
             Files.createDirectories(dir);
-            Files.writeString(gradesFile,   GSON.toJson(snap.grades()));
-            Files.writeString(aliasesFile,  GSON.toJson(snap.aliases()));
-            Files.writeString(commandsFile, GSON.toJson(snap.commands()));
-            Files.writeString(settingsFile, GSON.toJson(snap.settings()));
+            writeAtomically(gradesFile,   GSON.toJson(snap.grades()));
+            writeAtomically(aliasesFile,  GSON.toJson(snap.aliases()));
+            writeAtomically(commandsFile, GSON.toJson(snap.commands()));
+            writeAtomically(settingsFile, GSON.toJson(snap.settings()));
             return true;
         } catch (IOException e) {
             LOGGER.error("[CustomPerm] Failed to save config", e);
             return false;
+        }
+    }
+
+    /**
+     * Écriture atomique : fichier temporaire puis move. Un Files.writeString direct
+     * tronque le fichier avant d'écrire — un crash du serveur au milieu laisserait une
+     * config vide ou tronquée (et load() appelle save(), donc chaque reload est exposé).
+     */
+    private static void writeAtomically(Path target, String content) throws IOException {
+        Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
+        Files.writeString(tmp, content);
+        try {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException e) {
+            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
         }
     }
 

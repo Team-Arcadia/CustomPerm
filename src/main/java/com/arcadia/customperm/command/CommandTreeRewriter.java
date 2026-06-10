@@ -9,6 +9,7 @@ import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
+import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
@@ -77,19 +78,43 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
      */
     @Override
     public void onConfigReload(ConfigSnapshot snapshot, MinecraftServer server) {
+        if (server != null) {
+            // Applique aussi les changements d'aliases.json au dispatcher live : ajouts,
+            // suppressions (avec restauration du nœud shadowé) et steps modifiés. Sans
+            // cela, /customperm reload ne touche que la config en mémoire et les alias
+            // continuent d'exécuter les anciens steps capturés dans leur closure.
+            AliasManager.applyConfig(server.getCommands().getDispatcher());
+        }
+        // repair APRÈS applyConfig : un nœud restauré par la suppression d'un alias
+        // redevient éligible au wrapping s'il est exposé.
         int repaired = repair(server);
         CustomPerm.LOGGER.info("[CustomPerm] CommandTreeRewriter.onConfigReload — repaired {} command wrapper(s).", repaired);
     }
 
-    @SubscribeEvent
+    // LOWEST : maximise la chance de passer après les handlers RegisterCommandsEvent des
+    // autres mods, pour que leurs commandes soient déjà dans le dispatcher au wrapping.
+    // (Filet de sécurité complémentaire : repair() au ServerStartedEvent.)
+    @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
+
+        // Nouveau dispatcher à chaque RegisterCommandsEvent (/reload vanilla, redémarrage
+        // dans la même JVM) : l'état statique référence l'ancien arbre et doit être purgé,
+        // sinon fuite mémoire + restauration de nœuds périmés côté AliasManager.
+        clearServerState();
+        AliasManager.clearServerState();
 
         CustomPermCommand.register(dispatcher);
         AliasManager.registerAll(dispatcher);
 
         int wrapped = wrapUnwrappedRoots(dispatcher);
         CustomPerm.LOGGER.info("[CustomPerm] Wrapped {} top-level command(s) for permission gating.", wrapped);
+    }
+
+    /** Purge l'état statique lié au dispatcher courant — voir onRegisterCommands. */
+    public static void clearServerState() {
+        ORIGINAL_ROOTS.clear();
+        WRAPPED_NODES.clear();
     }
 
     public static int repair(MinecraftServer server) {

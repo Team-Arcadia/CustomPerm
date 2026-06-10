@@ -240,7 +240,8 @@ public class CustomPermCommand {
     private static int gradeAddPerm(CommandContext<CommandSourceStack> ctx) {
         if (warnIfLuckPerms(ctx)) return 0;
         String gradeName = StringArgumentType.getString(ctx, "grade");
-        String node = StringArgumentType.getString(ctx, "node");
+        // trim : greedyString peut embarquer des espaces résiduels — un node " x.y" ne matcherait jamais.
+        String node = StringArgumentType.getString(ctx, "node").trim();
         GradesConfig.Grade grade = CustomPerm.configManager.getGrades().grades.get(gradeName);
         if (grade == null) {
             ctx.getSource().sendFailure(Component.literal("No such grade: " + gradeName));
@@ -261,7 +262,7 @@ public class CustomPermCommand {
     private static int gradeRemovePerm(CommandContext<CommandSourceStack> ctx) {
         if (warnIfLuckPerms(ctx)) return 0;
         String gradeName = StringArgumentType.getString(ctx, "grade");
-        String node = StringArgumentType.getString(ctx, "node");
+        String node = StringArgumentType.getString(ctx, "node").trim();
         GradesConfig.Grade grade = CustomPerm.configManager.getGrades().grades.get(gradeName);
         if (grade == null) {
             ctx.getSource().sendFailure(Component.literal("No such grade: " + gradeName));
@@ -392,10 +393,25 @@ public class CustomPermCommand {
             return 0;
         }
         var aliases = CustomPerm.configManager.getAliases().aliases;
+        // Même avertissement de shadowing que aliasAdd quand addstep crée l'alias.
+        var server = ctx.getSource().getServer();
+        boolean shadowsExisting = !aliases.containsKey(name)
+            && server != null
+            && server.getCommands().getDispatcher().getRoot().getChildren()
+                .stream().anyMatch(n -> n.getName().equals(name));
+
         aliases.computeIfAbsent(name, k -> new ArrayList<>()).add(cmd);
         CustomPerm.configManager.save();
         refreshAlias(ctx, name);
         resyncCommands(ctx);
+
+        if (shadowsExisting) {
+            CustomPerm.LOGGER.warn("[CustomPerm] Alias '{}' shadows vanilla command '{}'", name, name);
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "WARNING: /" + name + " shadows an existing command. Players will need `customperm.alias." + name +
+                "` (not the command's own perm) to use it."
+            ).withStyle(ChatFormatting.YELLOW), true);
+        }
         success(ctx, "Appended step #" + (aliases.get(name).size() - 1) + " to /" + name + ": " + cmd);
         return 1;
     }
@@ -453,6 +469,10 @@ public class CustomPermCommand {
         var server = ctx.getSource().getServer();
         if (server != null) {
             AliasManager.registerOrReplace(server.getCommands().getDispatcher(), name);
+            // Si la suppression d'un alias vient de restaurer une commande shadowée, elle
+            // doit être re-wrappée immédiatement — sinon ses nodes customperm.command.*
+            // restent inopérants jusqu'au prochain reload/redémarrage.
+            CommandTreeRewriter.repair(server);
         }
     }
 

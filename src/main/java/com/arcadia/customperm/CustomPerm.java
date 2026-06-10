@@ -1,5 +1,6 @@
 package com.arcadia.customperm;
 
+import com.arcadia.customperm.command.AliasManager;
 import com.arcadia.customperm.command.CommandTreeRewriter;
 import com.arcadia.customperm.command.ICommandTreeReloader;
 import com.arcadia.customperm.config.ConfigManager;
@@ -15,6 +16,7 @@ import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import org.slf4j.Logger;
 
 @Mod(CustomPerm.MODID)
@@ -77,6 +79,7 @@ public class CustomPerm {
 
         NeoForge.EVENT_BUS.register(CommandTreeRewriter.class);
         NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStopped);
     }
 
     private static PermissionService unavailableLuckPermsBackend(InternalPermService internalBackend, String reason) {
@@ -94,6 +97,14 @@ public class CustomPerm {
             lps.initServerHooks(event.getServer());
         }
 
+        // Filet de sécurité : wrappe les racines enregistrées par des handlers
+        // RegisterCommandsEvent exécutés après le nôtre — l'ordre inter-mods n'est pas
+        // garanti, même en EventPriority.LOWEST.
+        int lateWrapped = CommandTreeRewriter.repair(event.getServer());
+        if (lateWrapped > 0) {
+            LOGGER.info("[CustomPerm] Wrapped {} late-registered command(s) at server start.", lateWrapped);
+        }
+
         // Boot-time health summary so admins can see in one line if everything is in order.
         String backend = backendLabel();
         int wrapped = event.getServer().getCommands().getDispatcher().getRoot().getChildren().size();
@@ -102,6 +113,14 @@ public class CustomPerm {
         int grades = configManager.getGrades().grades.size();
         LOGGER.info("[CustomPerm] Ready — backend={} dispatcherCommands={} exposed={} aliases={} grades={}",
             backend, wrapped, exposed, aliases, grades);
+    }
+
+    private static void onServerStopped(ServerStoppedEvent event) {
+        // Le dispatcher de ce serveur disparaît avec lui : purger l'état statique évite de
+        // retenir l'ancien arbre de commandes (fuite) et d'utiliser des nœuds périmés au
+        // prochain démarrage dans la même JVM.
+        CommandTreeRewriter.clearServerState();
+        AliasManager.clearServerState();
     }
 
     public static String backendLabel() {
@@ -128,6 +147,10 @@ public class CustomPerm {
     }
 
     public static boolean isDirectCommandExposureEnabled() {
-        return !isLuckPermsPresent();
+        // Basé sur le backend réellement sélectionné, pas sur la simple présence du mod LP :
+        // si LP est présent mais trop vieux/cassé et que luckPermsFallbackMode=internal a
+        // activé le backend interne, l'exposition directe doit fonctionner avec lui.
+        // (En mode deny, l'exposition est inerte de toute façon : tout node est refusé.)
+        return !(permissions instanceof LuckPermsService);
     }
 }

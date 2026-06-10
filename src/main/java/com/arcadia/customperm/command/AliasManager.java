@@ -40,6 +40,14 @@ public class AliasManager {
     private static final Map<String, CommandNode<CommandSourceStack>> SHADOWED_ORIGINALS = new HashMap<>();
     private static final Set<String> REGISTERED_ALIASES = new HashSet<>();
 
+    /**
+     * Profondeur maximale d'alias imbriqués. Sans cette garde, un alias qui s'invoque
+     * lui-même (ou un cycle a→b→a) part en récursion infinie avec une source élevée
+     * op-4 jusqu'au StackOverflowError.
+     */
+    static final int MAX_ALIAS_DEPTH = 8;
+    private static final ThreadLocal<Integer> ALIAS_DEPTH = ThreadLocal.withInitial(() -> 0);
+
     static {
         try {
             CHILDREN_FIELD = CommandNode.class.getDeclaredField("children");
@@ -58,6 +66,32 @@ public class AliasManager {
         for (Map.Entry<String, List<String>> entry : cfg.aliases.entrySet()) {
             registerOrReplace(dispatcher, entry.getKey());
         }
+    }
+
+    /**
+     * Synchronise le dispatcher live avec l'état courant de la config (hot-reload É2.6).
+     * Couvre les trois cas qu'un simple registerAll raterait après édition d'aliases.json :
+     * alias ajoutés au fichier, alias supprimés (avec restauration du nœud shadowé), et
+     * steps modifiés — la closure d'exécution capture la liste de steps à l'enregistrement,
+     * donc un re-register est obligatoire pour qu'elle pointe sur les nouveaux steps.
+     */
+    public static void applyConfig(CommandDispatcher<CommandSourceStack> dispatcher) {
+        Set<String> names = new HashSet<>(CustomPerm.configManager.getAliases().aliases.keySet());
+        names.addAll(REGISTERED_ALIASES);
+        for (String name : names) {
+            registerOrReplace(dispatcher, name);
+        }
+    }
+
+    /**
+     * Purge l'état statique lié au dispatcher courant. À appeler quand le dispatcher est
+     * remplacé (RegisterCommandsEvent — /reload, redémarrage) ou détruit (arrêt serveur) :
+     * sinon REGISTERED_ALIASES/SHADOWED_ORIGINALS retiennent des nœuds de l'ancien arbre
+     * (fuite mémoire) et une suppression d'alias restaurerait un nœud périmé.
+     */
+    public static void clearServerState() {
+        SHADOWED_ORIGINALS.clear();
+        REGISTERED_ALIASES.clear();
     }
 
     /**
@@ -108,36 +142,52 @@ public class AliasManager {
             return 0;
         }
 
-        // Elevate to op-level 4 so steps that delegate to op-only commands work.
-        var elevated = source.withPermission(4);
-        int executed = 0;
-        for (String step : steps) {
-            String command = normalizeStep(step);
-            if (command.isEmpty()) continue;
-
-            try {
-                if (!CommandTreeRewriter.executeOriginalCommand(elevated, command)) {
-                    server.getCommands().getDispatcher().execute(command, elevated);
-                }
-                executed++;
-            } catch (CommandSyntaxException e) {
-                source.sendFailure(Component.literal("[CustomPerm] Alias /" + alias
-                    + " step failed: " + command + " (" + e.getMessage() + ")"));
-                CustomPerm.LOGGER.warn("[CustomPerm] alias /{} step `{}` failed: {}", alias, command, e.getMessage());
-            } catch (Throwable t) {
-                source.sendFailure(Component.literal("[CustomPerm] Alias /" + alias
-                    + " step threw: " + command + " (" + t.getClass().getSimpleName() + ")"));
-                CustomPerm.LOGGER.warn("[CustomPerm] alias /{} step `{}` threw", alias, command, t);
-            }
+        int depth = ALIAS_DEPTH.get();
+        if (depth >= MAX_ALIAS_DEPTH) {
+            source.sendFailure(Component.literal("[CustomPerm] Alias /" + alias
+                + " aborted: nested alias depth exceeds " + MAX_ALIAS_DEPTH + " (recursive alias chain?)."));
+            CustomPerm.LOGGER.warn("[CustomPerm] alias /{} aborted at depth {} — recursive alias chain detected.", alias, depth);
+            return 0;
         }
-        return executed;
+        ALIAS_DEPTH.set(depth + 1);
+        try {
+            // Elevate to op-level 4 so steps that delegate to op-only commands work.
+            var elevated = source.withPermission(4);
+            int executed = 0;
+            for (String step : steps) {
+                String command = normalizeStep(step);
+                if (command.isEmpty()) continue;
+
+                try {
+                    if (!CommandTreeRewriter.executeOriginalCommand(elevated, command)) {
+                        server.getCommands().getDispatcher().execute(command, elevated);
+                    }
+                    executed++;
+                } catch (CommandSyntaxException e) {
+                    source.sendFailure(Component.literal("[CustomPerm] Alias /" + alias
+                        + " step failed: " + command + " (" + e.getMessage() + ")"));
+                    CustomPerm.LOGGER.warn("[CustomPerm] alias /{} step `{}` failed: {}", alias, command, e.getMessage());
+                } catch (Throwable t) {
+                    // D1 : ne pas absorber les erreurs JVM fatales (OOM, SOE…) — même politique que LuckPermsService.
+                    if (t instanceof Error e) throw e;
+                    source.sendFailure(Component.literal("[CustomPerm] Alias /" + alias
+                        + " step threw: " + command + " (" + t.getClass().getSimpleName() + ")"));
+                    CustomPerm.LOGGER.warn("[CustomPerm] alias /{} step `{}` threw", alias, command, t);
+                }
+            }
+            return executed;
+        } finally {
+            ALIAS_DEPTH.set(depth);
+        }
     }
 
     static String normalizeStep(String step) {
         if (step == null) return "";
 
         String command = step.strip();
-        while (command.startsWith("/")) {
+        // Un seul slash optionnel : en retirer plusieurs casserait les commandes dont le
+        // littéral racine commence par "/" (style WorldEdit : step "//wand" → "/wand").
+        if (command.startsWith("/")) {
             command = command.substring(1).strip();
         }
         return command;
