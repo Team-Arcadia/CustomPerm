@@ -7,8 +7,8 @@
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green.svg)]()
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg)]()
 [![Java](https://img.shields.io/badge/Java-21-red.svg)]()
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
-[![Version](https://img.shields.io/badge/version-1.0.3-brightgreen.svg)]()
+[![License](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-1.0.4-brightgreen.svg)]()
 
 ---
 
@@ -22,7 +22,7 @@ CustomPerm permet de donner **précisément** les commandes que vous voulez à d
 - Donner `/give` à un grade VIP sans qu'ils puissent `/ban` ? Possible.
 - Créer des macros (alias) qui chaînent plusieurs commandes en une seule ? Possible.
 
-Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fournit son propre système de grades stocké en JSON. Avec LuckPerms installé, les permissions des commandes normales restent entièrement gérées par LuckPerms et CustomPerm fournit les aliases contrôlés. Sans LuckPerms, CustomPerm permet aussi l'exposition directe des commandes via ses grades internes.
+Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fournit son propre système de grades stocké en JSON. Avec LuckPerms installé, CustomPerm utilise LuckPerms pour les nodes de permission des aliases et laisse les commandes normales intactes. Sans LuckPerms, CustomPerm permet aussi l'exposition directe des commandes via ses grades internes.
 
 ---
 
@@ -62,18 +62,16 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **Aliases et macros** : créez des commandes racine personnalisées (`/fly`, `/heal`, `/starter`) qui exécutent une ou plusieurs commandes configurées.
 - **Edition des steps d'alias** : ajout, suppression et inspection de steps individuels avec indices 0-based.
 - **Elévation des aliases** : les steps d'alias s'exécutent avec op level 4 pour permettre aux macros signées par l'admin d'appeler des commandes op-only.
-- **Garde-fous sur les aliases** : `/customperm` est réservé, les steps vides sont ignorés, les aliases sans step sont refusés, et le shadow d'une commande existante émet un warning.
-- **Enregistrement runtime des aliases** : ajout, remplacement ou retrait d'alias sur le dispatcher vivant sans redémarrage serveur.
-- **Politique adaptée au backend** : avec LuckPerms actif, l'exposition directe des commandes est désactivée et LuckPerms garde le contrôle des commandes normales ; les aliases CustomPerm restent actifs.
+- **Garde-fous sur les aliases** : `/customperm` est réservé, les steps vides sont ignorés, les aliases sans step sont refusés, le shadow d'une commande existante émet un warning et les chaînes récursives sont arrêtées à la profondeur 8.
+- **Enregistrement runtime des aliases** : ajout, remplacement ou retrait d'alias sans redémarrage ; `/customperm reload` applique aussi les ajouts, suppressions et changements de steps provenant d'`aliases.json`.
+- **Politique adaptée au backend** : dès que LuckPerms est installé, l'exposition directe CustomPerm est désactivée et seuls les aliases CustomPerm utilisent les nodes LuckPerms.
 - **Préservation des ops** : les sources réellement op level 2+ gardent toujours l'accès ; le mod ne retire pas les droits opérateur.
 - **Re-sync du command tree client** : après changement interne ou event LuckPerms, les joueurs concernés reçoivent un arbre de commandes à jour.
 - **Hot-reload atomique** : `/customperm reload` charge `grades.json`, `aliases.json`, `commands.json` et `settings.json` en transaction ; un JSON invalide conserve le snapshot précédent.
 - **Création et normalisation automatique des configs** : fichiers manquants, `{}`, champs inconnus et collections explicitement `null` sont normalisés vers des structures vides sûres.
 - **Backups automatiques** : les reloads réussis écrivent des backups horodatés et conservent les trois dernières sauvegardes par fichier.
-- **Lectures concurrentes sûres** : le snapshot actif est stocké dans un `AtomicReference`, sans lock sur le hot path de permission.
+- **Accès config concurrent sûr** : le snapshot actif utilise un `AtomicReference` ; les sauvegardes sont sérialisées et chaque fichier est remplacé via un temporaire unique.
 - **Diagnostics** : `/customperm status`, `/customperm scan`, `/customperm debug` et `/customperm test` couvrent l'inspection runtime et le dépannage.
-- **Procédure de test manuel** : `docs/manual-test-procedure.html` fournit une checklist thème sombre avec export JSON/Markdown pour validation release.
-- **Baseline de performance** : les benchmarks JMH documentent la résolution de permissions et la lecture concurrente du snapshot dans `docs/performance-baseline.md`.
 - **Checks CI release** : GitHub Actions lance les GameTests, construit le jar distribuable et vérifie les métadonnées requises du jar.
 - **Côté serveur uniquement** : aucun mod n'est requis côté client.
 
@@ -145,7 +143,7 @@ Toutes les commandes admin sont sous `/customperm` et **requièrent op level 2**
 
 ### Exposition des commandes
 
-Cette fonctionnalité est disponible uniquement lorsque LuckPerms n'est pas actif. Avec LuckPerms actif, `/customperm command add/remove` est refusé : gérez les commandes normales via LuckPerms et utilisez CustomPerm pour les aliases.
+Cette fonctionnalité est disponible uniquement lorsque LuckPerms n'est pas installé. Avec LuckPerms installé, `/customperm command add/remove` est refusé : utilisez l'intégration LuckPerms propre au mod concerné lorsqu'elle existe, ou créez un alias CustomPerm contrôlé.
 
 Définit quelles commandes sont éligibles au système de permissions. Une commande non-exposée garde son comportement vanilla (op-only).
 
@@ -303,9 +301,11 @@ Avec LuckPerms actif, ce fichier est ignoré (les perms passent par LP).
 
 **Avec LuckPerms** :
 ```
-# Configurez directement dans LuckPerms la permission normale de /gamemode.
-# CustomPerm ne wrappe pas les commandes directes lorsque LuckPerms est actif.
+customperm alias add spec gamemode spectator
+lp group vip permission set customperm.alias.spec true
 ```
+
+LuckPerms fournit l'assignation de permission et l'alias contrôlé délègue précisément l'action vanilla voulue. LuckPerms seul ne contourne pas les `requires` Brigadier vanilla sur NeoForge.
 
 **Sans LuckPerms** :
 ```
@@ -389,6 +389,12 @@ Les sélecteurs (`@s`, `@p`, `@a`, etc.) fonctionnent normalement. La source pen
 ### Comportement en cas d'erreur
 
 Si un step échoue, les steps suivants **continuent quand même** (comportement type command-block, prédictible). Les erreurs sont loggées avec le nom de l'alias et le step fautif.
+
+Les aliases récursifs sont bornés. Un cycle direct ou indirect est interrompu lorsque l'exécution imbriquée atteint la profondeur 8, au lieu de provoquer un dépassement de pile sur le thread serveur.
+
+### Recharger les modifications de fichier
+
+Après modification d'`aliases.json`, exécutez `/customperm reload`. Les nouveaux aliases sont enregistrés, les aliases retirés sont supprimés (avec restauration d'une éventuelle commande shadowée) et les listes de steps modifiées remplacent les anciennes.
 
 ### Pourquoi op level 4 pendant l'exécution
 
@@ -541,11 +547,11 @@ Les benchmarks de performance se lancent avec :
 | Grades internes | Création/listage/suppression de grades, assignation/désassignation joueurs, prévention des doublons, cascade lors de la suppression d'un grade. |
 | Exposition de commandes | Ajout/retrait/listage de commandes exposées, changements idempotents, commandes non exposées refusées par CustomPerm. |
 | Config aliases | Création, overwrite, suppression, listage, ordre des aliases, parsing par `;`, steps vides ignorés. |
-| Exécution aliases | Forme du node de permission, exécution op level 4, ordre des steps, continuation après erreur, filtrage des steps vides. |
-| Config manager | Lectures atomiques du snapshot, rejet de reload concurrent, rollback après JSON invalide, création et rotation des backups. |
+| Exécution aliases | Forme du node, exécution op level 4, ordre, continuation après erreur, limite des cycles récursifs, remplacement live des steps. |
+| Config manager | Lectures atomiques du snapshot, sauvegardes atomiques sérialisées, rejet de reload concurrent, rollback après JSON invalide, création et rotation des backups. |
 | Compatibilité config | Fichiers manquants, fichiers `{}`, collections explicitement `null`, champs futurs inconnus, configs partielles. |
 | Sélection LuckPerms | Backend interne sans LP, parsing de versions, version minimale, sélection stable du backend. |
-| GameTests | Dispatcher live, gates d'exposition, ajout/retrait live d'alias, hot reload, rollback JSON corrompu, repush du command tree. |
+| GameTests | Dispatcher live, gates d'exposition, ajout/retrait live d'alias, refresh depuis le fichier, garde récursive, hot reload, rollback JSON corrompu, repush du command tree. |
 | Performance | `PermissionResolver.resolve()` et lecture concurrente du snapshot config via JMH. |
 
 ### Intégration continue
@@ -570,8 +576,6 @@ Les GameTests couvrent la logique des composants ; pour un test end-to-end compl
 ```
 
 Puis exécutez les recettes des [Cas d'usage courants](#cas-dusage-courants). Les commandes in-game `/customperm debug`, `/customperm test`, `/customperm status` et `/customperm scan` sont conçues pour la vérification en direct.
-
-Pour les validations de release, ouvrez `docs/manual-test-procedure.html` dans un navigateur. La page fournit une checklist thème sombre séparée entre scénarios Internal et LuckPerms, avec export JSON ou Markdown.
 
 ---
 
@@ -624,9 +628,9 @@ Enregistrés comme des `Commands.literal(name).requires(...).executes(...)`. Le 
 
 ### Mods qui ajoutent des commandes
 
-**Compatible automatiquement.** Les commandes sont enregistrées au `RegisterCommandsEvent` standard ; notre handler tourne après tous les autres et wrappe tout l'arbre. Aucune intégration nécessaire.
+**Compatible automatiquement en mode interne.** Les commandes enregistrées au `RegisterCommandsEvent` standard sont traitées en priorité `LOWEST`, puis une passe de réparation est exécutée au démarrage du serveur. Aucune intégration dédiée n'est normalement nécessaire.
 
-Pour exposer une commande de mod tiers : `customperm command add <addon_command>`. Pour vérifier qu'elle est bien vue : `customperm scan <pattern>`.
+Sans LuckPerms, exposez une commande de mod tiers avec `customperm command add <addon_command>`. Avec LuckPerms installé, l'exposition directe est désactivée : utilisez l'intégration de permission du mod si elle existe ou créez un alias CustomPerm limité. Pour vérifier la détection : `customperm scan <pattern>`.
 
 ### Mods qui modifient le dispatcher dynamiquement
 
@@ -641,6 +645,8 @@ Cible privilégiée. Toute la machinerie LP standard fonctionne :
 - Web editor
 - Stockage SQL/MySQL/MongoDB
 
+LuckPerms stocke et résout les nodes `customperm.alias.*`. Il ne contourne pas à lui seul les requirements Brigadier vanilla sur NeoForge : pour une action comme le mode spectator, utilisez un alias contrôlé plutôt que d'attendre de `customperm.command.gamemode` qu'il déverrouille `/gamemode`.
+
 ---
 
 ## Limitations connues
@@ -654,7 +660,11 @@ Cible privilégiée. Toute la machinerie LP standard fonctionne :
 
 ## Licence
 
-MIT — voir [LICENSE](LICENSE).
+Copyright (C) 2026 THEFricadelle.
+
+CustomPerm est distribué sous la **GNU General Public License version 3
+uniquement** (`GPL-3.0-only`). Voir [LICENSE](LICENSE) pour le texte complet
+de la licence.
 
 ---
 

@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+---
+
+## [1.0.4] - 2026-06-11
+
 Hardening pass from the full-mod and LuckPerms compatibility audits.
 
 ### Fixed
@@ -18,6 +22,7 @@ Hardening pass from the full-mod and LuckPerms compatibility audits.
 - Static dispatcher state (`ORIGINAL_ROOTS`, `WRAPPED_NODES`, `SHADOWED_ORIGINALS`, `REGISTERED_ALIASES`) is now cleared on every `RegisterCommandsEvent` and on server stop, instead of leaking old command trees across `/reload` and same-JVM server restarts and restoring stale shadowed nodes from a previous server instance.
 - Removing an alias that shadowed an exposed command now re-wraps the restored command immediately instead of leaving its permission nodes inert until the next reload.
 - Config files are now written atomically (temp file + move), so a crash mid-save can no longer truncate `grades.json`/`aliases.json`/`commands.json`/`settings.json`.
+- Atomic config replacement now retries short-lived Windows file-lock conflicts before reporting a save failure.
 - Alias step normalization now strips a single leading slash instead of all of them, so commands whose root literal starts with `/` (WorldEdit-style `//wand`) can be used as alias steps.
 - `/customperm alias addstep` now emits the same shadowing warning as `alias add` when it creates a new alias that shadows an existing command.
 - Permission nodes passed to `/customperm grade addperm|removeperm` are now trimmed.
@@ -28,6 +33,7 @@ Hardening pass from the full-mod and LuckPerms compatibility audits.
 - `CommandTreeRewriter` now subscribes to `RegisterCommandsEvent` at `EventPriority.LOWEST` and runs a catch-up `repair()` at `ServerStartedEvent`, so commands registered by other mods' handlers after CustomPerm's are still wrapped at boot.
 - Direct command exposure remains disabled whenever LuckPerms is installed, including degraded fallback states. LuckPerms owns normal command permissions while CustomPerm aliases remain available.
 - Config saves now use unique temporary files and serialize concurrent writes before replacing each destination file.
+- Project licensing changed from MIT to the GNU General Public License v3.0 only (`GPL-3.0-only`).
 
 - The LuckPerms `UserDataRecalculateEvent` subscription is now closed on server stop and re-created on the next server start, instead of leaking across server lifecycles in the same JVM (stale `MinecraftServer` reference, broken live resync after an embedded restart).
 - Command-tree resyncs triggered by LuckPerms recalculation events are now coalesced per player, so a burst of recalculations (login, group inheritance, sync) sends a single command-tree packet instead of one per event.
@@ -38,6 +44,14 @@ Hardening pass from the full-mod and LuckPerms compatibility audits.
 ### Added
 
 - `docs/LUCKPERMS_COMPATIBILITY_AUDIT.md` — full audit of every LuckPerms touchpoint, including documented-but-unchanged findings (permanent degradation policy, vanilla-command policy with LP installed, version-gate behaviour).
+
+### Validation
+
+- `./gradlew clean build --no-daemon`: passed.
+- `./gradlew runGameTestServer --no-daemon` without LuckPerms: 34/34 required GameTests passed.
+- `./gradlew runGameTestServer --no-daemon` with LuckPerms 5.4.150: 34/34 required GameTests passed.
+- Generated jar metadata verified: CustomPerm `1.0.4`, license `GPL-3.0-only`.
+- Generated jar: `customperm-1.0.4.jar`.
 
 ---
 
