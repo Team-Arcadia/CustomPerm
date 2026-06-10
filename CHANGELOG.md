@@ -7,6 +7,25 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [Unreleased]
+
+LuckPerms compatibility audit.
+
+### Fixed
+
+- The LuckPerms `UserDataRecalculateEvent` subscription is now closed on server stop and re-created on the next server start, instead of leaking across server lifecycles in the same JVM (stale `MinecraftServer` reference, broken live resync after an embedded restart).
+- Command-tree resyncs triggered by LuckPerms recalculation events are now coalesced per player, so a burst of recalculations (login, group inheritance, sync) sends a single command-tree packet instead of one per event.
+
+### Changed
+
+- The per-event LuckPerms recalculation log line is now DEBUG instead of INFO.
+
+### Added
+
+- `docs/LUCKPERMS_COMPATIBILITY_AUDIT.md` — full audit of every LuckPerms touchpoint, including documented-but-unchanged findings (permanent degradation policy, vanilla-command policy with LP installed, version-gate behaviour).
+
+---
+
 ## [1.0.3] - 2026-06-10
 
 Backend policy update.
