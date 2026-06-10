@@ -258,6 +258,74 @@ public class AliasExecutionTest {
         }
     }
 
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void aliasConfigRefreshReplacesCapturedSteps(GameTestHelper helper) {
+        var aliasesCfg = CustomPerm.configManager.getAliases();
+        String testName = "_gt_alias_refresh";
+        var server = helper.getLevel().getServer();
+        var dispatcher = server.getCommands().getDispatcher();
+
+        aliasesCfg.aliases.put(testName, new ArrayList<>(List.of("_customperm_missing_command")));
+        AliasManager.registerOrReplace(dispatcher, testName);
+
+        try {
+            int before = dispatcher.execute(testName, server.createCommandSourceStack());
+            if (before != 0)
+                fail("Invalid pre-reload alias step unexpectedly succeeded.");
+
+            aliasesCfg.aliases.put(testName, new ArrayList<>(List.of("say refreshed_step")));
+            AliasManager.applyConfig(dispatcher);
+
+            int after = dispatcher.execute(testName, server.createCommandSourceStack());
+            if (after != 1)
+                fail("Alias refresh kept the stale captured steps.");
+
+            helper.succeed();
+        } catch (CommandSyntaxException e) {
+            fail("Alias refresh syntax error: " + e.getMessage());
+        } finally {
+            aliasesCfg.aliases.remove(testName);
+            AliasManager.registerOrReplace(dispatcher, testName);
+        }
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void recursiveAliasCycleIsBounded(GameTestHelper helper) {
+        var aliasesCfg = CustomPerm.configManager.getAliases();
+        String first = "_gt_cycle_a";
+        String second = "_gt_cycle_b";
+        var server = helper.getLevel().getServer();
+        var dispatcher = server.getCommands().getDispatcher();
+
+        aliasesCfg.aliases.put(first, new ArrayList<>(List.of(second)));
+        aliasesCfg.aliases.put(second, new ArrayList<>(List.of(first)));
+        AliasManager.registerOrReplace(dispatcher, first);
+        AliasManager.registerOrReplace(dispatcher, second);
+
+        try {
+            assertDoesNotOverflow(dispatcher, first, server.createCommandSourceStack());
+            helper.succeed();
+        } finally {
+            aliasesCfg.aliases.remove(first);
+            aliasesCfg.aliases.remove(second);
+            AliasManager.registerOrReplace(dispatcher, first);
+            AliasManager.registerOrReplace(dispatcher, second);
+        }
+    }
+
+    private static void assertDoesNotOverflow(
+            com.mojang.brigadier.CommandDispatcher<CommandSourceStack> dispatcher,
+            String alias,
+            CommandSourceStack source) {
+        try {
+            dispatcher.execute(alias, source);
+        } catch (CommandSyntaxException e) {
+            fail("Recursive alias syntax error: " + e.getMessage());
+        } catch (StackOverflowError e) {
+            fail("Recursive alias cycle caused a StackOverflowError.");
+        }
+    }
+
     /**
      * Placeholder — verifying that a non-OP player cannot use /customperm requires a real
      * ServerPlayer mock, which is unavailable in MC 1.21.1 GameTest.

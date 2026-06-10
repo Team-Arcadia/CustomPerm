@@ -177,7 +177,7 @@ public class ConfigManager {
         }
     }
 
-    public boolean save() {
+    public synchronized boolean save() {
         ConfigSnapshot snap = configRef.get();
         try {
             Files.createDirectories(dir);
@@ -198,12 +198,19 @@ public class ConfigManager {
      * config vide ou tronquée (et load() appelle save(), donc chaque reload est exposé).
      */
     private static void writeAtomically(Path target, String content) throws IOException {
-        Path tmp = target.resolveSibling(target.getFileName() + ".tmp");
-        Files.writeString(tmp, content);
+        Path tmp = Files.createTempFile(
+                target.getParent(),
+                target.getFileName().toString() + ".",
+                ".tmp");
         try {
-            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-        } catch (AtomicMoveNotSupportedException e) {
-            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+            Files.writeString(tmp, content);
+            try {
+                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(tmp);
         }
     }
 

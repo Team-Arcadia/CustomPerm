@@ -121,6 +121,9 @@ public class CustomPerm {
         // prochain démarrage dans la même JVM.
         CommandTreeRewriter.clearServerState();
         AliasManager.clearServerState();
+        if (permissions instanceof LuckPermsService lps) {
+            lps.closeServerHooks();
+        }
     }
 
     public static String backendLabel() {
@@ -147,10 +150,8 @@ public class CustomPerm {
     }
 
     public static boolean isDirectCommandExposureEnabled() {
-        // Basé sur le backend réellement sélectionné, pas sur la simple présence du mod LP :
-        // si LP est présent mais trop vieux/cassé et que luckPermsFallbackMode=internal a
-        // activé le backend interne, l'exposition directe doit fonctionner avec lui.
-        // (En mode deny, l'exposition est inerte de toute façon : tout node est refusé.)
-        return !(permissions instanceof LuckPermsService);
+        // LuckPerms owns normal command permissions whenever the mod is installed.
+        // CustomPerm keeps aliases active, including when the LP backend is degraded.
+        return !isLuckPermsPresent();
     }
 }

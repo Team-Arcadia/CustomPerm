@@ -9,7 +9,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
-Hardening pass from the full-mod audit.
+Hardening pass from the full-mod and LuckPerms compatibility audits.
 
 ### Fixed
 
@@ -26,7 +26,18 @@ Hardening pass from the full-mod audit.
 ### Changed
 
 - `CommandTreeRewriter` now subscribes to `RegisterCommandsEvent` at `EventPriority.LOWEST` and runs a catch-up `repair()` at `ServerStartedEvent`, so commands registered by other mods' handlers after CustomPerm's are still wrapped at boot.
-- Direct command exposure is now keyed on the *selected backend* instead of the mere presence of the LuckPerms mod: with an outdated/broken LuckPerms and `luckPermsFallbackMode=internal`, internal grades can gate exposed commands again.
+- Direct command exposure remains disabled whenever LuckPerms is installed, including degraded fallback states. LuckPerms owns normal command permissions while CustomPerm aliases remain available.
+- Config saves now use unique temporary files and serialize concurrent writes before replacing each destination file.
+
+- The LuckPerms `UserDataRecalculateEvent` subscription is now closed on server stop and re-created on the next server start, instead of leaking across server lifecycles in the same JVM (stale `MinecraftServer` reference, broken live resync after an embedded restart).
+- Command-tree resyncs triggered by LuckPerms recalculation events are now coalesced per player, so a burst of recalculations (login, group inheritance, sync) sends a single command-tree packet instead of one per event.
+- Pending resync state is now isolated per server lifecycle, preventing an event racing with shutdown from suppressing resyncs after an embedded restart.
+
+- The per-event LuckPerms recalculation log line is now DEBUG instead of INFO.
+
+### Added
+
+- `docs/LUCKPERMS_COMPATIBILITY_AUDIT.md` — full audit of every LuckPerms touchpoint, including documented-but-unchanged findings (permanent degradation policy, vanilla-command policy with LP installed, version-gate behaviour).
 
 ---
 

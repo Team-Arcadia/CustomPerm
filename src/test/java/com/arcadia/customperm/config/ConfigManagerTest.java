@@ -42,6 +42,31 @@ class ConfigManagerTest {
     }
 
     @Test
+    void shouldSerializeConcurrentSaves_withoutLeavingTemporaryFiles() throws Exception {
+        ConfigManager mgr = new ConfigManager(tempDir);
+        assertTrue(mgr.load());
+
+        int threadCount = 16;
+        ExecutorService exec = Executors.newFixedThreadPool(threadCount);
+        List<Future<Boolean>> futures = new ArrayList<>();
+        for (int i = 0; i < threadCount; i++) {
+            futures.add(exec.submit(mgr::save));
+        }
+        exec.shutdown();
+        assertTrue(exec.awaitTermination(10, TimeUnit.SECONDS));
+
+        for (Future<Boolean> future : futures) {
+            assertTrue(future.get(), "Toutes les sauvegardes concurrentes doivent réussir");
+        }
+        assertTrue(mgr.load(), "Les fichiers produits doivent rester lisibles après les sauvegardes");
+
+        try (var stream = Files.list(tempDir)) {
+            assertFalse(stream.anyMatch(path -> path.getFileName().toString().endsWith(".tmp")),
+                    "Aucun fichier temporaire ne doit rester après une sauvegarde réussie");
+        }
+    }
+
+    @Test
     void shouldRejectConcurrentReload_whenReloadInProgress() throws Exception {
         // Arrange
         ConfigManager mgr = new ConfigManager(tempDir);
