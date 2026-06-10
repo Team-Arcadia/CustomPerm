@@ -15,6 +15,7 @@ import net.neoforged.fml.ModList;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
+import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import org.slf4j.Logger;
 
 @Mod(CustomPerm.MODID)
@@ -77,6 +78,7 @@ public class CustomPerm {
 
         NeoForge.EVENT_BUS.register(CommandTreeRewriter.class);
         NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStopped);
     }
 
     private static PermissionService unavailableLuckPermsBackend(InternalPermService internalBackend, String reason) {
@@ -102,6 +104,12 @@ public class CustomPerm {
         int grades = configManager.getGrades().grades.size();
         LOGGER.info("[CustomPerm] Ready — backend={} dispatcherCommands={} exposed={} aliases={} grades={}",
             backend, wrapped, exposed, aliases, grades);
+    }
+
+    private static void onServerStopped(ServerStoppedEvent event) {
+        if (permissions instanceof LuckPermsService lps) {
+            lps.closeServerHooks();
+        }
     }
 
     public static String backendLabel() {
