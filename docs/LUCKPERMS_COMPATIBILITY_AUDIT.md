@@ -26,7 +26,10 @@ opening a second world, or any embedded restart):
 
 **Fix:** the subscription is stored, closed on `ServerStoppedEvent`
 (`LuckPermsService.closeServerHooks()`, wired in `CustomPerm.onServerStopped`), and
-re-created on the next `ServerStartedEvent`.
+re-created on the next `ServerStartedEvent`. Pending resync state is isolated in a
+per-server lifecycle coordinator; closing a lifecycle invalidates already queued work,
+so an event racing with shutdown cannot target the stopped server or suppress the same
+player's resync after restart.
 
 ### F2 — MEDIUM · Resync storm on `UserDataRecalculateEvent`
 
@@ -113,6 +116,8 @@ would need explicit handling.
 ## Verification
 
 - `./gradlew test` — pure-Java unit suite (resolver, configs, version gate).
+- `ResyncCoordinatorTest` covers burst coalescing, queued-work invalidation on close,
+  and reuse of the same player UUID in a new server lifecycle.
 - `./gradlew runGameTestServer` — GameTests pass without LP at runtime (LP is
   `compileOnly`); LP-specific behaviour (F1/F2) requires a dev server with the LP jar in
   `run/mods/` as per README's manual validation section.

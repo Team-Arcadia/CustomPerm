@@ -15,6 +15,7 @@ LuckPerms compatibility audit.
 
 - The LuckPerms `UserDataRecalculateEvent` subscription is now closed on server stop and re-created on the next server start, instead of leaking across server lifecycles in the same JVM (stale `MinecraftServer` reference, broken live resync after an embedded restart).
 - Command-tree resyncs triggered by LuckPerms recalculation events are now coalesced per player, so a burst of recalculations (login, group inheritance, sync) sends a single command-tree packet instead of one per event.
+- Pending resync state is now isolated per server lifecycle, preventing an event racing with shutdown from suppressing resyncs after an embedded restart.
 
 ### Changed
 
