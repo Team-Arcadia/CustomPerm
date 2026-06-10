@@ -21,11 +21,17 @@ Backend policy update.
 - Direct command exposure and `customperm.command.*` remain available with the internal backend when LuckPerms is absent.
 - Runtime command-tree repair remains available for the internal backend.
 
+### Fixed
+
+- GameTests now validate the active backend policy correctly in both clean CI environments without LuckPerms and development environments with LuckPerms installed.
+
 ### Validation
 
 - `./gradlew test --no-daemon`: passed.
-- `./gradlew runGameTestServer --no-daemon`: 32/32 required GameTests passed.
+- `./gradlew runGameTestServer --no-daemon` without LuckPerms: 32/32 required GameTests passed.
+- `./gradlew runGameTestServer --no-daemon` with LuckPerms 5.4.150: 32/32 required GameTests passed.
 - `./gradlew clean build --no-daemon`: passed.
+- GitHub Actions GameTests on Ubuntu with Java 21: passed.
 - LuckPerms startup verified with zero CustomPerm direct-command wrappers.
 - Alias execution verified with LuckPerms active.
 - Generated jar: `customperm-1.0.3.jar`.
