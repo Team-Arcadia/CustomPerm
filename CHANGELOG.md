@@ -9,6 +9,13 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Added
+
+- Per-command execution rate limits for exposed commands and aliases: an admin can cap how many times a single player may run a given command within a sliding time window (e.g. `/customperm ratelimit set observable 10 3600` caps `/observable` at 10 uses per hour per player).
+- `/customperm ratelimit set|enable|disable|remove|list` — configure, toggle, and inspect rate limits. `disable` keeps the configured numbers so a limit can be re-enabled without re-entering them.
+- New `ratelimits.json` config file (per-server, hot-reloadable, backed up alongside `grades.json`/`aliases.json`/`commands.json`/`settings.json`).
+- Rate-limit counters are in-memory only (reset on server restart) and tracked per player and per command; console/command-block invocations are not limited.
+
 ---
 
 ## [1.0.4] - 2026-06-11

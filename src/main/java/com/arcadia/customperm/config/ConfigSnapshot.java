@@ -10,5 +10,6 @@ public record ConfigSnapshot(
         GradesConfig grades,
         AliasesConfig aliases,
         CommandsConfig commands,
-        SettingsConfig settings
+        SettingsConfig settings,
+        RateLimitsConfig rateLimits
 ) {}

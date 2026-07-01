@@ -2,6 +2,7 @@ package com.arcadia.customperm.command;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.AliasesConfig;
+import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.perm.PermissionService;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
@@ -11,6 +12,7 @@ import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -131,7 +133,22 @@ public class AliasManager {
         dispatcher.register(
             Commands.literal(alias)
                 .requires(src -> src.hasPermission(2) || PermissionService.get().hasPermission(src, permNode))
-                .executes(ctx -> executeAlias(ctx.getSource(), alias, steps))
+                .executes(ctx -> {
+                    CommandSourceStack source = ctx.getSource();
+                    RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(alias);
+                    if (rule != null && rule.enabled && source.getEntity() instanceof ServerPlayer player) {
+                        RateLimiter.Result result = RateLimiter.tryAcquire(
+                            alias, player.getUUID(), rule.maxExecutions, rule.windowSeconds);
+                        if (!result.allowed()) {
+                            source.sendFailure(Component.literal(
+                                "[CustomPerm] Rate limit reached for /" + alias + " — try again in "
+                                    + result.retryAfterSeconds() + "s (max " + rule.maxExecutions
+                                    + " per " + rule.windowSeconds + "s)."));
+                            return 0;
+                        }
+                    }
+                    return executeAlias(source, alias, steps);
+                })
         );
     }
 

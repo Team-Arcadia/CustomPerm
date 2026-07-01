@@ -34,6 +34,7 @@ public class ConfigManager {
     private final Path aliasesFile;
     private final Path commandsFile;
     private final Path settingsFile;
+    private final Path rateLimitsFile;
 
     private final AtomicReference<ConfigSnapshot> configRef;
     // package-private pour accès depuis les tests unitaires (même package)
@@ -54,13 +55,14 @@ public class ConfigManager {
     ConfigManager(Path dir, Path legacyDir) {
         this.dir = dir;
         this.legacyDir = legacyDir;
-        this.gradesFile   = dir.resolve("grades.json");
-        this.aliasesFile  = dir.resolve("aliases.json");
-        this.commandsFile = dir.resolve("commands.json");
-        this.settingsFile = dir.resolve("settings.json");
+        this.gradesFile      = dir.resolve("grades.json");
+        this.aliasesFile     = dir.resolve("aliases.json");
+        this.commandsFile    = dir.resolve("commands.json");
+        this.settingsFile    = dir.resolve("settings.json");
+        this.rateLimitsFile  = dir.resolve("ratelimits.json");
         // snapshot vide initial — remplacé par load()
         this.configRef = new AtomicReference<>(
-                new ConfigSnapshot(new GradesConfig(), new AliasesConfig(), new CommandsConfig(), new SettingsConfig()));
+                new ConfigSnapshot(new GradesConfig(), new AliasesConfig(), new CommandsConfig(), new SettingsConfig(), new RateLimitsConfig()));
     }
 
     /**
@@ -80,10 +82,11 @@ public class ConfigManager {
             migrateLegacyConfigIfNeeded();
             Files.createDirectories(dir);
 
-            GradesConfig   grades   = new GradesConfig();
-            AliasesConfig  aliases  = new AliasesConfig();
-            CommandsConfig commands = new CommandsConfig();
-            SettingsConfig settings = new SettingsConfig();
+            GradesConfig     grades     = new GradesConfig();
+            AliasesConfig    aliases    = new AliasesConfig();
+            CommandsConfig   commands   = new CommandsConfig();
+            SettingsConfig   settings   = new SettingsConfig();
+            RateLimitsConfig rateLimits = new RateLimitsConfig();
 
             // Parsing avec catch individuel par fichier — INVARIANT-401 :
             // si un fichier est invalide, on retourne false AVANT configRef.set(),
@@ -143,10 +146,25 @@ public class ConfigManager {
             } else {
                 settings.normalize();
             }
+            if (Files.exists(rateLimitsFile)) {
+                try {
+                    RateLimitsConfig parsed = GSON.fromJson(Files.readString(rateLimitsFile), RateLimitsConfig.class);
+                    if (parsed != null) { rateLimits = parsed; rateLimits.normalize(); }
+                    else {
+                        LOGGER.warn("[CustomPerm] Configuration reload failed — ratelimits.json is empty or null. Keeping previous config.");
+                        anyInvalid = true;
+                    }
+                } catch (Exception e) {
+                    LOGGER.warn("[CustomPerm] Configuration reload failed — invalid JSON in ratelimits.json. Keeping previous config.");
+                    anyInvalid = true;
+                }
+            } else {
+                rateLimits.normalize();
+            }
             if (anyInvalid) return false;
 
             // Tous les fichiers sont valides — mise à jour atomique du snapshot
-            configRef.set(new ConfigSnapshot(grades, aliases, commands, settings));
+            configRef.set(new ConfigSnapshot(grades, aliases, commands, settings, rateLimits));
             if (!save()) return false;
             writeBackup();   // AR10 — backup après chargement réussi
             return true;
@@ -169,6 +187,7 @@ public class ConfigManager {
         copyLegacyConfigFile("aliases.json");
         copyLegacyConfigFile("commands.json");
         copyLegacyConfigFile("settings.json");
+        copyLegacyConfigFile("ratelimits.json");
         LOGGER.info("[CustomPerm] Migrated legacy config from {} to {}", legacyDir, dir);
     }
 
@@ -184,10 +203,11 @@ public class ConfigManager {
         ConfigSnapshot snap = configRef.get();
         try {
             Files.createDirectories(dir);
-            writeAtomically(gradesFile,   GSON.toJson(snap.grades()));
-            writeAtomically(aliasesFile,  GSON.toJson(snap.aliases()));
-            writeAtomically(commandsFile, GSON.toJson(snap.commands()));
-            writeAtomically(settingsFile, GSON.toJson(snap.settings()));
+            writeAtomically(gradesFile,     GSON.toJson(snap.grades()));
+            writeAtomically(aliasesFile,    GSON.toJson(snap.aliases()));
+            writeAtomically(commandsFile,   GSON.toJson(snap.commands()));
+            writeAtomically(settingsFile,   GSON.toJson(snap.settings()));
+            writeAtomically(rateLimitsFile, GSON.toJson(snap.rateLimits()));
             return true;
         } catch (IOException e) {
             LOGGER.error("[CustomPerm] Failed to save config", e);
@@ -249,16 +269,18 @@ public class ConfigManager {
             Files.createDirectories(backupDir);
             ConfigSnapshot snap = configRef.get();
 
-            Files.writeString(backupDir.resolve("grades.json."   + timestamp + ".bak"), GSON.toJson(snap.grades()));
-            Files.writeString(backupDir.resolve("aliases.json."  + timestamp + ".bak"), GSON.toJson(snap.aliases()));
-            Files.writeString(backupDir.resolve("commands.json." + timestamp + ".bak"), GSON.toJson(snap.commands()));
-            Files.writeString(backupDir.resolve("settings.json." + timestamp + ".bak"), GSON.toJson(snap.settings()));
+            Files.writeString(backupDir.resolve("grades.json."     + timestamp + ".bak"), GSON.toJson(snap.grades()));
+            Files.writeString(backupDir.resolve("aliases.json."    + timestamp + ".bak"), GSON.toJson(snap.aliases()));
+            Files.writeString(backupDir.resolve("commands.json."   + timestamp + ".bak"), GSON.toJson(snap.commands()));
+            Files.writeString(backupDir.resolve("settings.json."   + timestamp + ".bak"), GSON.toJson(snap.settings()));
+            Files.writeString(backupDir.resolve("ratelimits.json." + timestamp + ".bak"), GSON.toJson(snap.rateLimits()));
 
             // Rotation AR10 : conserver les 3 dernières backups par fichier
             rotateBackups(backupDir, "grades.json");
             rotateBackups(backupDir, "aliases.json");
             rotateBackups(backupDir, "commands.json");
             rotateBackups(backupDir, "settings.json");
+            rotateBackups(backupDir, "ratelimits.json");
 
         } catch (IOException e) {
             LOGGER.warn("[CustomPerm] Failed to write config backup: {}", e.getMessage());
@@ -298,8 +320,9 @@ public class ConfigManager {
     }
 
     // Getters de commodité — compatibles avec tous les appels existants sans modification des call-sites
-    public GradesConfig   getGrades()   { return configRef.get().grades(); }
-    public AliasesConfig  getAliases()  { return configRef.get().aliases(); }
-    public CommandsConfig getCommands() { return configRef.get().commands(); }
-    public SettingsConfig getSettings() { return configRef.get().settings(); }
+    public GradesConfig     getGrades()     { return configRef.get().grades(); }
+    public AliasesConfig    getAliases()    { return configRef.get().aliases(); }
+    public CommandsConfig   getCommands()   { return configRef.get().commands(); }
+    public SettingsConfig   getSettings()   { return configRef.get().settings(); }
+    public RateLimitsConfig getRateLimits() { return configRef.get().rateLimits(); }
 }

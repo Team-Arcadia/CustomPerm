@@ -2,6 +2,7 @@ package com.arcadia.customperm.command;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.GradesConfig;
+import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.perm.LuckPermsService;
 import com.arcadia.customperm.perm.PermissionService;
 import com.mojang.brigadier.CommandDispatcher;
@@ -37,6 +38,11 @@ import java.util.stream.Collectors;
  *                     steps <name>                      # show steps
  *                     remove <name>
  *                     list
+ * /customperm ratelimit set <name> <max> <windowSeconds>   # cap executions per player per window
+ *                     enable <name>                        # re-enable a previously configured limit
+ *                     disable <name>                       # keep the limit's numbers, stop enforcing it
+ *                     remove <name>                        # delete the limit entirely
+ *                     list                                 # show configured limits
  * /customperm test    <player> <node>                   # debug: report grant/deny + backend
  * /customperm reload
  *
@@ -119,6 +125,23 @@ public class CustomPermCommand {
                             .executes(CustomPermCommand::commandRemove)))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::commandList)))
+                .then(Commands.literal("ratelimit")
+                    .then(Commands.literal("set")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .then(Commands.argument("max", IntegerArgumentType.integer(1))
+                                .then(Commands.argument("windowSeconds", IntegerArgumentType.integer(1))
+                                    .executes(CustomPermCommand::rateLimitSet)))))
+                    .then(Commands.literal("enable")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .executes(CustomPermCommand::rateLimitEnable)))
+                    .then(Commands.literal("disable")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .executes(CustomPermCommand::rateLimitDisable)))
+                    .then(Commands.literal("remove")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .executes(CustomPermCommand::rateLimitRemove)))
+                    .then(Commands.literal("list")
+                        .executes(CustomPermCommand::rateLimitList)))
                 .then(Commands.literal("test")
                     .then(Commands.argument("player", EntityArgument.player())
                         .then(Commands.argument("node", StringArgumentType.greedyString())
@@ -202,6 +225,102 @@ public class CustomPermCommand {
                 "Exposed commands: " + String.join(", ", commands)), false);
         }
         return 1;
+    }
+
+    // ---------------- rate limits ----------------
+
+    private static int rateLimitSet(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        int max = IntegerArgumentType.getInteger(ctx, "max");
+        int windowSeconds = IntegerArgumentType.getInteger(ctx, "windowSeconds");
+
+        RateLimitsConfig.Rule rule = new RateLimitsConfig.Rule();
+        rule.enabled = true;
+        rule.maxExecutions = max;
+        rule.windowSeconds = windowSeconds;
+        rule.normalize();
+
+        CustomPerm.configManager.getRateLimits().rules.put(name, rule);
+        CustomPerm.configManager.save();
+        warnIfNeitherExposedNorAlias(ctx, name);
+        success(ctx, "Rate limit for /" + name + " set to " + rule.maxExecutions + " per " + rule.windowSeconds + "s (enabled).");
+        return 1;
+    }
+
+    private static int rateLimitEnable(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().rules.get(name);
+        if (rule == null) {
+            ctx.getSource().sendFailure(Component.literal(
+                "No rate limit configured for /" + name + ". Use /customperm ratelimit set first."));
+            return 0;
+        }
+        if (rule.enabled) {
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "Rate limit for /" + name + " is already enabled — no change."), false);
+            return 1;
+        }
+        rule.enabled = true;
+        CustomPerm.configManager.save();
+        success(ctx, "Rate limit for /" + name + " enabled (" + rule.maxExecutions + " per " + rule.windowSeconds + "s).");
+        return 1;
+    }
+
+    private static int rateLimitDisable(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().rules.get(name);
+        if (rule == null) {
+            ctx.getSource().sendFailure(Component.literal("No rate limit configured for /" + name + "."));
+            return 0;
+        }
+        if (!rule.enabled) {
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "Rate limit for /" + name + " is already disabled — no change."), false);
+            return 1;
+        }
+        rule.enabled = false;
+        CustomPerm.configManager.save();
+        success(ctx, "Rate limit for /" + name + " disabled. Settings kept — use /customperm ratelimit enable to restore.");
+        return 1;
+    }
+
+    private static int rateLimitRemove(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        boolean removed = CustomPerm.configManager.getRateLimits().rules.remove(name) != null;
+        if (!removed) {
+            ctx.getSource().sendFailure(Component.literal("No rate limit configured for /" + name + "."));
+            return 0;
+        }
+        CustomPerm.configManager.save();
+        success(ctx, "Rate limit for /" + name + " removed.");
+        return 1;
+    }
+
+    private static int rateLimitList(CommandContext<CommandSourceStack> ctx) {
+        var rules = CustomPerm.configManager.getRateLimits().rules;
+        if (rules.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "No rate limits configured. Use /customperm ratelimit set <name> <max> <windowSeconds>."), false);
+            return 1;
+        }
+        rules.forEach((name, rule) -> {
+            String status = rule.enabled ? "enabled" : "disabled";
+            ChatFormatting color = rule.enabled ? ChatFormatting.GREEN : ChatFormatting.GRAY;
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "/" + name + "  " + rule.maxExecutions + " per " + rule.windowSeconds + "s  [" + status + "]"
+            ).withStyle(color), false);
+        });
+        return 1;
+    }
+
+    private static void warnIfNeitherExposedNorAlias(CommandContext<CommandSourceStack> ctx, String name) {
+        boolean exposed = CustomPerm.configManager.getCommands().grantedCommands.contains(name);
+        boolean alias = CustomPerm.configManager.getAliases().aliases.containsKey(name);
+        if (!exposed && !alias) {
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "Note: /" + name + " is not currently exposed or an alias — the limit will take effect once it is."
+            ).withStyle(ChatFormatting.YELLOW), false);
+        }
     }
 
     // ---------------- grade ----------------
