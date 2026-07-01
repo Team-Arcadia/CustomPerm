@@ -17,6 +17,11 @@ Versioning: [Semantic Versioning](https://semver.org/)
 - New `ratelimits.json` config file (per-server, hot-reloadable, backed up alongside `grades.json`/`aliases.json`/`commands.json`/`settings.json`).
 - Rate-limit counters are in-memory only (reset on server restart) and tracked per player and per command; console/command-block invocations are not limited.
 
+### Fixed
+
+- The TesseraUI GUI's network channel is now registered as `optional()`. Without this, NeoForge's default handshake behavior would have refused the connection of any client missing the channel — meaning a vanilla client (or any client without CustomPerm) could no longer join a server running this build at all, breaking the mod's "server-side only" guarantee for every player, not just those wanting the GUI.
+- The GUI sync payload handler no longer creates an unconditional method reference into client-only code from the shared registration path. It's now dispatched through an `FMLEnvironment.dist.isClient()` guard, so a real dedicated server (whose jar has no `net.minecraft.client.*` classes, unlike the NeoForge dev/GameTest environment) never attempts to resolve them.
+
 ---
 
 ## [1.0.4] - 2026-06-11

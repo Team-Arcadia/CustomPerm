@@ -73,7 +73,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Concurrent-safe config access** — the active snapshot uses an `AtomicReference`; saves are serialized and each file is replaced through a unique temporary file.
 - **Diagnostics** — `/customperm status`, `/customperm scan`, `/customperm debug`, and `/customperm test` cover runtime inspection and troubleshooting.
 - **CI release checks** — GitHub Actions runs GameTests, builds the distributable jar, and verifies required jar metadata.
-- **Server-side only** — no client mod is required for core functionality.
+- **Server-side only** — no client mod is required for core functionality. Vanilla clients (and clients without CustomPerm installed) connect to a CustomPerm server without issue: the network channel backing the optional GUI is registered as `optional()`, so it never gates the connection handshake.
 - **Optional TesseraUI admin panel** — `/customperm gui grades|aliases|status` opens a graphical Grades/Aliases/Status screen when [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) is installed client-side. Every action in the GUI dispatches the same `/customperm` commands documented below — nothing is reimplemented client-side.
 
 ---
