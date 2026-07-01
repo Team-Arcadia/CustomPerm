@@ -136,8 +136,8 @@ class ConfigManagerTest {
                     .filter(p -> p.getFileName().toString().endsWith(".bak"))
                     .count();
         }
-        assertEquals(4L, backupCount,
-                "Exactement 4 fichiers .bak doivent être créés (grades, aliases, commands, settings)");
+        assertEquals(5L, backupCount,
+                "Exactement 5 fichiers .bak doivent être créés (grades, aliases, commands, settings, ratelimits)");
     }
 
     @Test

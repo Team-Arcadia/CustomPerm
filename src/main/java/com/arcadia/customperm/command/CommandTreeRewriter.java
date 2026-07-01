@@ -2,13 +2,17 @@ package com.arcadia.customperm.command;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.ConfigSnapshot;
+import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.perm.PermissionService;
+import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -115,6 +119,7 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
     public static void clearServerState() {
         ORIGINAL_ROOTS.clear();
         WRAPPED_NODES.clear();
+        RateLimiter.clearServerState();
     }
 
     public static int repair(MinecraftServer server) {
@@ -207,14 +212,14 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         if (original instanceof LiteralCommandNode<CommandSourceStack> literal) {
             wrapped = new LiteralCommandNode<>(
                 literal.getLiteral(),
-                literal.getCommand(),
+                wrapCommand(rootName, literal.getCommand()),
                 wrappedReq,
                 literal.getRedirect(),     // redirect: keep pointer to original (rare; not deep-cloned)
                 literal.getRedirectModifier(),
                 literal.isFork()
             );
         } else if (original instanceof ArgumentCommandNode<?, ?>) {
-            wrapped = cloneArgument(original, wrappedReq);
+            wrapped = cloneArgument(original, wrappedReq, rootName);
         } else {
             return original;  // unknown node type — leave alone
         }
@@ -240,18 +245,46 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static CommandNode<CommandSourceStack> cloneArgument(
             CommandNode<CommandSourceStack> original,
-            Predicate<CommandSourceStack> wrappedReq) {
+            Predicate<CommandSourceStack> wrappedReq,
+            String rootName) {
         ArgumentCommandNode argNode = (ArgumentCommandNode) original;
         return new ArgumentCommandNode<>(
             argNode.getName(),
             argNode.getType(),
-            argNode.getCommand(),
+            wrapCommand(rootName, argNode.getCommand()),
             wrappedReq,
             argNode.getRedirect(),
             argNode.getRedirectModifier(),
             argNode.isFork(),
             argNode.getCustomSuggestions()
         );
+    }
+
+    /**
+     * Wraps a leaf node's execution callback with the rate-limit check for {@code rootName}
+     * (see RateLimitsConfig). Applied uniformly to every executable node under the root, so
+     * `/observable foo` and `/observable bar` share a single per-player counter keyed by
+     * the root command name. Console/command-block sources have no stable UUID and are left
+     * unlimited.
+     */
+    private static Command<CommandSourceStack> wrapCommand(String rootName, Command<CommandSourceStack> original) {
+        if (original == null) return null;
+        return ctx -> {
+            CommandSourceStack source = ctx.getSource();
+            RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(rootName);
+            if (rule != null && rule.enabled && source.getEntity() instanceof ServerPlayer player) {
+                RateLimiter.Result result = RateLimiter.tryAcquire(
+                    rootName, player.getUUID(), rule.maxExecutions, rule.windowSeconds);
+                if (!result.allowed()) {
+                    source.sendFailure(Component.literal(
+                        "[CustomPerm] Rate limit reached for /" + rootName + " — try again in "
+                            + result.retryAfterSeconds() + "s (max " + rule.maxExecutions
+                            + " per " + rule.windowSeconds + "s)."));
+                    return 0;
+                }
+            }
+            return original.run(ctx);
+        };
     }
 
     @SuppressWarnings("unchecked")

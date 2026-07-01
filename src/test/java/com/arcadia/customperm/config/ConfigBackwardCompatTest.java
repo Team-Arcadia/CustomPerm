@@ -58,6 +58,10 @@ class ConfigBackwardCompatTest {
         SettingsConfig settings = mgr.getSettings();
         assertEquals("deny", settings.luckPermsFallbackMode,
                 "luckPermsFallbackMode doit être deny par défaut");
+
+        RateLimitsConfig rateLimits = mgr.getRateLimits();
+        assertNotNull(rateLimits.rules, "rateLimits.rules ne doit pas être null");
+        assertTrue(rateLimits.rules.isEmpty(), "rateLimits.rules doit être vide");
     }
 
     // -------------------------------------------------------------------------
@@ -165,6 +169,47 @@ class ConfigBackwardCompatTest {
 
         assertTrue(loaded, "load() doit normaliser un mode invalide sans rejeter la config");
         assertEquals("deny", mgr.getSettings().luckPermsFallbackMode);
+    }
+
+    @Test
+    void shouldLoadRateLimitsConfig_whenRateLimitsJsonIsEmptyObject() throws Exception {
+        Files.writeString(tempDir.resolve("ratelimits.json"), "{}");
+        ConfigManager mgr = new ConfigManager(tempDir);
+
+        boolean loaded = mgr.load();
+
+        assertTrue(loaded, "load() doit retourner true pour ratelimits.json = {}");
+        RateLimitsConfig rateLimits = mgr.getRateLimits();
+        assertNotNull(rateLimits.rules, "rateLimits.rules ne doit pas être null après {}");
+        assertTrue(rateLimits.rules.isEmpty());
+    }
+
+    @Test
+    void shouldLoadRateLimitsConfig_whenRulesFieldIsExplicitNull() throws Exception {
+        Files.writeString(tempDir.resolve("ratelimits.json"), "{\"rules\":null}");
+        ConfigManager mgr = new ConfigManager(tempDir);
+
+        boolean loaded = mgr.load();
+
+        assertTrue(loaded, "load() doit normaliser rules:null sans rejeter la config");
+        assertNotNull(mgr.getRateLimits().rules);
+        assertTrue(mgr.getRateLimits().rules.isEmpty());
+    }
+
+    @Test
+    void shouldLoadRateLimitsConfig_whenRuleIsPresent() throws Exception {
+        Files.writeString(tempDir.resolve("ratelimits.json"),
+                "{\"rules\":{\"observable\":{\"enabled\":true,\"maxExecutions\":10,\"windowSeconds\":3600}}}");
+        ConfigManager mgr = new ConfigManager(tempDir);
+
+        boolean loaded = mgr.load();
+
+        assertTrue(loaded, "load() doit lire ratelimits.json");
+        RateLimitsConfig.Rule rule = mgr.getRateLimits().rules.get("observable");
+        assertNotNull(rule);
+        assertTrue(rule.enabled);
+        assertEquals(10, rule.maxExecutions);
+        assertEquals(3600, rule.windowSeconds);
     }
 
     // -------------------------------------------------------------------------
