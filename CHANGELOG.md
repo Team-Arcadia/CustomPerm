@@ -11,6 +11,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- Optional TesseraUI admin panel: `/customperm gui grades|aliases|status` opens a graphical Grades/Aliases/Status screen when [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) is installed client-side. TesseraUI is a soft dependency (`compileOnly`, `optional` in `neoforge.mods.toml`) — without it, the command reports that the GUI is unavailable and the text commands keep working exactly as before. GUI actions reuse the existing `/customperm` commands (via a prefilled chat input) rather than duplicating any CRUD or permission logic.
 - Per-command execution rate limits for exposed commands and aliases: an admin can cap how many times a single player may run a given command within a sliding time window (e.g. `/customperm ratelimit set observable 10 3600` caps `/observable` at 10 uses per hour per player).
 - `/customperm ratelimit set|enable|disable|remove|list` — configure, toggle, and inspect rate limits. `disable` keeps the configured numbers so a limit can be re-enabled without re-entering them.
 - New `ratelimits.json` config file (per-server, hot-reloadable, backed up alongside `grades.json`/`aliases.json`/`commands.json`/`settings.json`).
