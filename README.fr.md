@@ -73,7 +73,8 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **Accès config concurrent sûr** : le snapshot actif utilise un `AtomicReference` ; les sauvegardes sont sérialisées et chaque fichier est remplacé via un temporaire unique.
 - **Diagnostics** : `/customperm status`, `/customperm scan`, `/customperm debug` et `/customperm test` couvrent l'inspection runtime et le dépannage.
 - **Checks CI release** : GitHub Actions lance les GameTests, construit le jar distribuable et vérifie les métadonnées requises du jar.
-- **Côté serveur uniquement** : aucun mod n'est requis côté client.
+- **Côté serveur uniquement** : aucun mod n'est requis côté client pour les fonctionnalités de base.
+- **Panneau d'administration TesseraUI (optionnel)** : `/customperm gui grades|aliases|status` ouvre un écran graphique Grades/Aliases/Status lorsque [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) est installé côté client. Chaque action du panneau exécute les mêmes commandes `/customperm` documentées ci-dessous — rien n'est réimplémenté côté client.
 
 ---
 
@@ -85,13 +86,15 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **NeoForge 21.1.221** ou supérieur
 - **Java 21**
 - (Optionnel mais recommandé) **LuckPerms 5.4.x ou 5.5.x** pour NeoForge
+- (Optionnel) **[TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) 1.0+** pour NeoForge, installé côté client, pour le panneau d'administration graphique
 
 ### Étapes
 
 1. Téléchargez le dernier artefact de release CustomPerm depuis la [page Releases](../../releases).
 2. Déposez le jar dans le dossier `mods/` de votre serveur.
 3. (Optionnel) Déposez aussi le jar de [LuckPerms](https://luckperms.net/download) (build NeoForge 1.21.1).
-4. Démarrez le serveur.
+4. (Optionnel) Les joueurs admin peuvent installer [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) côté client pour `/customperm gui`.
+5. Démarrez le serveur.
 
 Au démarrage, vous verrez dans les logs **une seule** des deux lignes suivantes selon votre configuration :
 
@@ -107,6 +110,15 @@ Suivie de la ligne de santé :
 ```
 
 Si aucune des deux lignes n'apparaît, le mod n'a pas chargé — vérifiez vos logs pour des stacktraces.
+
+### Optionnel : panneau graphique TesseraUI
+
+Si un joueur a [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) installé côté client, `/customperm gui grades|aliases|status` ouvre un panneau graphique au lieu de dépendre uniquement des commandes en chat. TesseraUI est une dépendance souple :
+
+- Sans lui : `/customperm gui ...` répond « TesseraUI is not installed — this GUI is unavailable. Use the text commands instead. » Rien d'autre ne change.
+- Avec lui : le panneau liste les grades/aliases avec des actions intégrées, et l'écran Status reflète `/customperm status`. Chaque bouton exécute la même commande `/customperm` sous-jacente décrite dans ce README (via un champ de chat pré-rempli) — le panneau n'a aucune logique de permission ou de CRUD qui lui soit propre.
+
+`/customperm gui` est une commande purement client (elle ne quitte jamais le client si TesseraUI n'est pas installé) ; les données de grades/aliases ne sont envoyées qu'aux joueurs qui passent déjà le même contrôle op level 2 que toute autre sous-commande `/customperm`.
 
 ---
 
@@ -190,6 +202,7 @@ Elles gèrent les nodes ALLOW. Les nodes DENY internes sont stockés dans `grade
 | `/customperm status` | Snapshot global : backend, nb de commandes wrappées, exposées, aliases, grades. |
 | `/customperm scan [pattern]` | Liste toutes les commandes du dispatcher avec leur état (exposée, alias, mod-interne). Filtre optionnel. |
 | `/customperm reload` | Recharge les fichiers de config depuis le disque. |
+| `/customperm gui grades\|aliases\|status` | Ouvre le panneau graphique TesseraUI (commande client uniquement ; nécessite TesseraUI installé côté client). |
 
 ---
 
@@ -511,6 +524,7 @@ Dans `gradle.properties` :
 minecraft_version=1.21.1
 neo_version=21.1.221
 luckperms_api_version=5.4
+tesseraui_version=1.1
 ```
 
 ---
@@ -654,7 +668,7 @@ LuckPerms stocke et résout les nodes `customperm.alias.*`. Il ne contourne pas 
 - **Pas de granularité par sous-commande** : `customperm.command.gamemode` couvre tous les sous-modes (creative, spectator, etc.). Pour scinder, utilisez les aliases.
 - **Pas de paramètres dans les aliases** : un alias est une commande sans argument. Pour faire `/heal <player>`, écrivez `/heal_target` avec `effect give @p` etc., ou créez plusieurs aliases.
 - **Contextes LP partiellement testés** : les contextes par-monde, par-serveur, etc. de LuckPerms passent par `getCachedData()` et sont en théorie supportés, mais non testés extensivement.
-- **Pas de GUI** : toute l'administration est en commandes. Pour une interface, utilisez le web editor de LuckPerms.
+- **GUI nécessite TesseraUI** : sans lui, l'administration reste entièrement en commandes. Le panneau optionnel ne remplace pas non plus le web editor de LuckPerms pour les permissions gérées par LP.
 
 ---
 

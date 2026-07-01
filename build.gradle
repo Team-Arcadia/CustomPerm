@@ -16,6 +16,7 @@ repositories {
     mavenLocal()
     maven { name = 'LuckPerms';  url = 'https://repo.lucko.me/' }
     maven { name = 'ParchmentMC'; url = 'https://maven.parchmentmc.org' }
+    maven { name = 'CurseMaven'; url = 'https://cursemaven.com' }
 }
 
 sourceSets {
@@ -58,6 +59,11 @@ neoForge {
 dependencies {
     // LuckPerms is a soft dependency — present at compile, not required at runtime.
     compileOnly "net.luckperms:api:${luckperms_api_version}"
+
+    // TesseraUI is a soft dependency (client-side GUI, optional) — CurseMaven coordinates are
+    // opaque file ids, not human-readable versions: tesseraui-1540971 = project id, 8116441 =
+    // file id for TesseraUI ${tesseraui_version}.
+    compileOnly "curse.maven:tesseraui-1540971:8116441"
 
     // GameTest source set depends on main output
     gameTestImplementation sourceSets.main.output

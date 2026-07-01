@@ -73,7 +73,8 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Concurrent-safe config access** — the active snapshot uses an `AtomicReference`; saves are serialized and each file is replaced through a unique temporary file.
 - **Diagnostics** — `/customperm status`, `/customperm scan`, `/customperm debug`, and `/customperm test` cover runtime inspection and troubleshooting.
 - **CI release checks** — GitHub Actions runs GameTests, builds the distributable jar, and verifies required jar metadata.
-- **Server-side only** — no client mod is required.
+- **Server-side only** — no client mod is required for core functionality.
+- **Optional TesseraUI admin panel** — `/customperm gui grades|aliases|status` opens a graphical Grades/Aliases/Status screen when [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) is installed client-side. Every action in the GUI dispatches the same `/customperm` commands documented below — nothing is reimplemented client-side.
 
 ---
 
@@ -85,13 +86,15 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **NeoForge 21.1.221** or newer
 - **Java 21**
 - (Optional but recommended) **LuckPerms 5.4.x or 5.5.x** for NeoForge
+- (Optional) **[TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) 1.0+** for NeoForge, installed client-side, for the graphical admin panel
 
 ### Steps
 
 1. Download the latest CustomPerm release artifact from the [Releases page](../../releases).
 2. Drop the jar into your server's `mods/` folder.
 3. (Optional) Drop the [LuckPerms](https://luckperms.net/download) jar (NeoForge 1.21.1 build) alongside.
-4. Start the server.
+4. (Optional) Have admin players install [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) client-side for `/customperm gui`.
+5. Start the server.
 
 At boot you will see **one of** these two lines depending on configuration:
 
@@ -107,6 +110,15 @@ Followed by the readiness summary:
 ```
 
 If you see neither line, the mod failed to load — check your logs for stack traces.
+
+### Optional: TesseraUI graphical panel
+
+If a player has [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) installed client-side, `/customperm gui grades|aliases|status` opens a graphical panel instead of relying purely on chat commands. TesseraUI is a soft dependency:
+
+- Without it: `/customperm gui ...` replies "TesseraUI is not installed — this GUI is unavailable. Use the text commands instead." Nothing else changes.
+- With it: the panel lists grades/aliases with inline actions, and the Status screen mirrors `/customperm status`. Every button dispatches the same underlying `/customperm` command shown in this README (via a prefilled chat input) — the GUI has no permission or CRUD logic of its own.
+
+`/customperm gui` itself is a client-only command (it never leaves the client if TesseraUI isn't installed); the actual grades/aliases data is only sent to players who already pass the same op-level-2 check as every other `/customperm` subcommand.
 
 ---
 
@@ -190,6 +202,7 @@ They manage ALLOW nodes. Internal DENY nodes are stored in `grades.json` under `
 | `/customperm status` | Global snapshot: backend, wrapped commands, exposed commands, aliases, grades. |
 | `/customperm scan [pattern]` | Lists every command in the dispatcher with its state (exposed, alias, mod-internal). Optional substring filter. |
 | `/customperm reload` | Reloads config files from disk. |
+| `/customperm gui grades\|aliases\|status` | Opens the graphical TesseraUI panel (client-only command; requires TesseraUI installed client-side). |
 
 ---
 
@@ -511,6 +524,7 @@ In `gradle.properties`:
 minecraft_version=1.21.1
 neo_version=21.1.221
 luckperms_api_version=5.4
+tesseraui_version=1.1
 ```
 
 ---
@@ -654,7 +668,7 @@ LuckPerms stores and resolves `customperm.alias.*` nodes. It does not by itself 
 - **No sub-command granularity**: `customperm.command.gamemode` covers every sub-mode (creative, spectator, etc.). To split, use aliases.
 - **No alias parameters**: an alias is a no-arg command. To build `/heal <player>`, write `/heal_target` using `effect give @p` etc., or create multiple aliases.
 - **LP contexts partially tested**: per-world, per-server contexts go through `getCachedData()` and are theoretically supported but not extensively tested.
-- **No GUI**: administration is command-driven. For an interface, use the LuckPerms web editor.
+- **GUI requires TesseraUI**: without it, administration stays fully command-driven. The optional panel also doesn't replace the LuckPerms web editor for LP-managed permissions.
 
 ---
 

@@ -4,6 +4,7 @@ import com.arcadia.customperm.command.AliasManager;
 import com.arcadia.customperm.command.CommandTreeRewriter;
 import com.arcadia.customperm.command.ICommandTreeReloader;
 import com.arcadia.customperm.config.ConfigManager;
+import com.arcadia.customperm.network.NetworkHandler;
 import com.arcadia.customperm.perm.DenyPermissionService;
 import com.arcadia.customperm.perm.InternalPermService;
 import com.arcadia.customperm.perm.LuckPermsService;
@@ -17,6 +18,7 @@ import net.neoforged.fml.common.Mod;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import org.slf4j.Logger;
 
 @Mod(CustomPerm.MODID)
@@ -80,6 +82,7 @@ public class CustomPerm {
         NeoForge.EVENT_BUS.register(CommandTreeRewriter.class);
         NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStarted);
         NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStopped);
+        modBus.addListener(NetworkHandler::register);
     }
 
     private static PermissionService unavailableLuckPermsBackend(InternalPermService internalBackend, String reason) {
@@ -147,6 +150,10 @@ public class CustomPerm {
 
     public static boolean isLuckPermsPresent() {
         return ModList.get().isLoaded("luckperms");
+    }
+
+    public static boolean isTesseraUiPresent() {
+        return ModList.get().isLoaded("tesseraui");
     }
 
     public static boolean isDirectCommandExposureEnabled() {
