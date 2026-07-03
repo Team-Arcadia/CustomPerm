@@ -45,15 +45,26 @@ import java.util.function.Predicate;
  * The wrapper is dynamic — at evaluation time it consults
  * {@link com.arcadia.customperm.config.CommandsConfig#grantedCommands}. The admin can
  * add/remove commands at runtime without re-wrapping.
+ *
+ * <p><strong>LuckPerms coexistence.</strong> LuckPerms' NeoForge {@code BrigadierInjector}
+ * overwrites every command node's {@code requirement} (reflectively) AFTER this event, which
+ * would drop CustomPerm's clone-time predicate. To let {@code customperm.command.<name>} work
+ * alongside LuckPerms, {@link #reassertExposedCommands} re-applies an {@link ExposureGate} on the
+ * live requirement on the next server tick (and on config changes) — running last, and additively
+ * (it only opens access for exposed+granted sources, deferring to LuckPerms/vanilla otherwise).</p>
  */
 public class CommandTreeRewriter implements ICommandTreeReloader {
 
     private static final Field CHILDREN_FIELD;
     private static final Field LITERALS_FIELD;
     private static final Field ARGUMENTS_FIELD;
+    private static final Field REQUIREMENT_FIELD;
     private static final Map<String, CommandNode<CommandSourceStack>> ORIGINAL_ROOTS = new HashMap<>();
     private static final Set<CommandNode<CommandSourceStack>> WRAPPED_NODES =
         Collections.newSetFromMap(new IdentityHashMap<>());
+
+    /** Set when the exposure gate needs re-applying on the next server tick (after LuckPerms injects). */
+    private static volatile boolean reassertPending = false;
 
     static {
         try {
@@ -63,6 +74,8 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             LITERALS_FIELD.setAccessible(true);
             ARGUMENTS_FIELD = CommandNode.class.getDeclaredField("arguments");
             ARGUMENTS_FIELD.setAccessible(true);
+            REQUIREMENT_FIELD = CommandNode.class.getDeclaredField("requirement");
+            REQUIREMENT_FIELD.setAccessible(true);
         } catch (NoSuchFieldException e) {
             throw new IllegalStateException("Brigadier API changed: CommandNode internal maps not found", e);
         }
@@ -92,6 +105,8 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         // repair APRÈS applyConfig : un nœud restauré par la suppression d'un alias
         // redevient éligible au wrapping s'il est exposé.
         int repaired = repair(server);
+        // Re-pose la vérification CustomPerm par-dessus une éventuelle injection LuckPerms.
+        reassertExposedCommands(server);
         CustomPerm.LOGGER.info("[CustomPerm] CommandTreeRewriter.onConfigReload — repaired {} command wrapper(s).", repaired);
     }
 
@@ -113,6 +128,27 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
 
         int wrapped = wrapUnwrappedRoots(dispatcher);
         CustomPerm.LOGGER.info("[CustomPerm] Wrapped {} top-level command(s) for permission gating.", wrapped);
+
+        // LuckPerms' BrigadierInjector overwrites every command's requirement AFTER this event.
+        // Defer the CustomPerm re-assertion to a server tick so it runs last and wins.
+        reassertPending = true;
+    }
+
+    /**
+     * Server-thread tick hook: re-applies CustomPerm's exposure gate once whenever it has been
+     * flagged pending (boot, /reload, command tree rebuild). This runs AFTER LuckPerms'
+     * BrigadierInjector has replaced command requirements, so CustomPerm's grant wins.
+     */
+    @SubscribeEvent
+    public static void onServerTick(net.neoforged.neoforge.event.tick.ServerTickEvent.Post event) {
+        if (!reassertPending) return;
+        reassertPending = false;
+        int n = reassertExposedCommands(event.getServer());
+        if (n > 0) {
+            CustomPerm.LOGGER.info("[CustomPerm] Re-asserted exposure over other permission handlers for {} command(s).", n);
+            event.getServer().getPlayerList().getPlayers()
+                .forEach(p -> event.getServer().getCommands().sendCommands(p));
+        }
     }
 
     /** Purge l'état statique lié au dispatcher courant — voir onRegisterCommands. */
@@ -125,6 +161,106 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
     public static int repair(MinecraftServer server) {
         if (server == null) return 0;
         return wrapUnwrappedRoots(server.getCommands().getDispatcher());
+    }
+
+    /**
+     * Re-applies CustomPerm's exposure gate directly on each exposed command's LIVE requirement,
+     * by reflectively composing {@link ExposureGate} on top of whatever predicate currently owns
+     * the node. This is what lets {@code customperm.command.<name>} work even when LuckPerms'
+     * BrigadierInjector has replaced the requirement with its own — CustomPerm re-wraps last.
+     *
+     * <p>The composition is <strong>additive</strong>: if CustomPerm doesn't grant the source, the
+     * gate defers to the delegate (LuckPerms' / vanilla's check), so no existing gating is broken.
+     * Commands no longer exposed have their delegate restored.</p>
+     *
+     * @return number of nodes whose requirement was changed.
+     */
+    public static int reassertExposedCommands(MinecraftServer server) {
+        if (server == null || !CustomPerm.isDirectCommandExposureEnabled()) return 0;
+        Set<String> exposed = CustomPerm.configManager.getCommands().grantedCommands;
+        CommandNode<CommandSourceStack> root = server.getCommands().getDispatcher().getRoot();
+
+        int changed = 0;
+        for (CommandNode<CommandSourceStack> node : root.getChildren()) {
+            String name = node.getName();
+            if ("customperm".equals(name)) continue;
+            // LuckPerms injects a requirement on EVERY node (root + arguments/children), so the
+            // gate must cover the whole subtree — otherwise the root command is reachable but its
+            // sub-arguments (e.g. /gamemode <mode>) stay gated by LuckPerms.
+            IdentityHashMap<CommandNode<CommandSourceStack>, Boolean> visited = new IdentityHashMap<>();
+            if (exposed.contains(name)) {
+                changed += applyGateRecursive(node, name, visited);
+            } else {
+                changed += restoreGateRecursive(node, visited);
+            }
+        }
+        return changed;
+    }
+
+    /** Reflectively composes an {@link ExposureGate} onto {@code node} and every descendant. */
+    private static int applyGateRecursive(CommandNode<CommandSourceStack> node, String rootName,
+            IdentityHashMap<CommandNode<CommandSourceStack>, Boolean> visited) {
+        if (visited.put(node, Boolean.TRUE) != null) return 0;  // cycle/redirect guard
+        int changed = 0;
+        try {
+            @SuppressWarnings("unchecked")
+            Predicate<CommandSourceStack> current = (Predicate<CommandSourceStack>) REQUIREMENT_FIELD.get(node);
+            if (!(current instanceof ExposureGate)) {
+                REQUIREMENT_FIELD.set(node, new ExposureGate(rootName, current));
+                changed++;
+            }
+        } catch (Throwable t) {
+            CustomPerm.LOGGER.warn("[CustomPerm] Could not re-assert exposure for /{} (node '{}')", rootName, node.getName(), t);
+        }
+        for (CommandNode<CommandSourceStack> child : node.getChildren()) {
+            changed += applyGateRecursive(child, rootName, visited);
+        }
+        return changed;
+    }
+
+    /** Restores the delegate on {@code node} and every descendant still carrying our gate. */
+    private static int restoreGateRecursive(CommandNode<CommandSourceStack> node,
+            IdentityHashMap<CommandNode<CommandSourceStack>, Boolean> visited) {
+        if (visited.put(node, Boolean.TRUE) != null) return 0;
+        int changed = 0;
+        try {
+            @SuppressWarnings("unchecked")
+            Predicate<CommandSourceStack> current = (Predicate<CommandSourceStack>) REQUIREMENT_FIELD.get(node);
+            if (current instanceof ExposureGate gate) {
+                REQUIREMENT_FIELD.set(node, gate.delegate());
+                changed++;
+            }
+        } catch (Throwable t) {
+            CustomPerm.LOGGER.warn("[CustomPerm] Could not restore requirement for node '{}'", node.getName(), t);
+        }
+        for (CommandNode<CommandSourceStack> child : node.getChildren()) {
+            changed += restoreGateRecursive(child, visited);
+        }
+        return changed;
+    }
+
+    /**
+     * Requirement predicate that grants an exposed command when CustomPerm authorises the source,
+     * and otherwise defers to the {@code delegate} (the predicate previously on the node — e.g.
+     * LuckPerms' injected requirement, or the vanilla op-level check). A concrete class (not a
+     * lambda) so {@link #reassertExposedCommands} can recognise its own gate and stay idempotent.
+     */
+    record ExposureGate(String rootName, Predicate<CommandSourceStack> delegate)
+            implements Predicate<CommandSourceStack> {
+        @Override
+        public boolean test(CommandSourceStack source) {
+            boolean op2 = source.hasPermission(2);
+            boolean customPermAllows = op2
+                || PermissionService.get().hasPermission(source, "customperm.command." + rootName);
+            if (!customPermAllows) {
+                // Not granted by CustomPerm — keep whatever gating was there before (additive).
+                return delegate != null && delegate.test(source);
+            }
+            if (CustomPerm.configManager.getCommands().shouldPreserveOriginalRequires(rootName)) {
+                return delegate == null || delegate.test(source);
+            }
+            return true;
+        }
     }
 
     private static int wrapUnwrappedRoots(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -148,7 +284,7 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
                 ORIGINAL_ROOTS.put(name, original);
                 IdentityHashMap<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> visited = new IdentityHashMap<>();
                 CommandNode<CommandSourceStack> wrappedRoot = wrapRecursive(original, name, visited);
-                if (wrappedRoot == original) continue;  // unknown type, skip
+                if (wrappedRoot == original) continue;  // unknown type — the tick-time re-assert still gates it
                 replaceInParent(root, original, wrappedRoot);
                 wrapped++;
             } catch (Throwable t) {

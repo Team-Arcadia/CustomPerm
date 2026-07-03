@@ -157,8 +157,11 @@ public class CustomPerm {
     }
 
     public static boolean isDirectCommandExposureEnabled() {
-        // LuckPerms owns normal command permissions whenever the mod is installed.
-        // CustomPerm keeps aliases active, including when the LP backend is degraded.
-        return !isLuckPermsPresent();
+        // Direct command exposure is always active. The permission node
+        // customperm.command.<name> is resolved by whatever PermissionService is in effect:
+        // LuckPermsService when LuckPerms is installed (so `customperm.command.*` granted via
+        // /lp works), InternalPermService otherwise (grades.json). Command wrapping and the
+        // node check are therefore backend-agnostic — LuckPerms no longer bypasses them.
+        return true;
     }
 }

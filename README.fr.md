@@ -22,7 +22,7 @@ CustomPerm permet de donner **précisément** les commandes que vous voulez à d
 - Donner `/give` à un grade VIP sans qu'ils puissent `/ban` ? Possible.
 - Créer des macros (alias) qui chaînent plusieurs commandes en une seule ? Possible.
 
-Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fournit son propre système de grades stocké en JSON. Avec LuckPerms installé, CustomPerm utilise LuckPerms pour les nodes de permission des aliases et laisse les commandes normales intactes. Sans LuckPerms, CustomPerm permet aussi l'exposition directe des commandes via ses grades internes.
+Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fournit son propre système de grades stocké en JSON. Avec LuckPerms installé, CustomPerm résout à la fois ses nodes d'aliases (`customperm.alias.*`) et ses nodes de commandes directes (`customperm.command.*`) via LuckPerms. Sans LuckPerms, les deux passent par les grades internes.
 
 ---
 
@@ -64,7 +64,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **Elévation des aliases** : les steps d'alias s'exécutent avec op level 4 pour permettre aux macros signées par l'admin d'appeler des commandes op-only.
 - **Garde-fous sur les aliases** : `/customperm` est réservé, les steps vides sont ignorés, les aliases sans step sont refusés, le shadow d'une commande existante émet un warning et les chaînes récursives sont arrêtées à la profondeur 8.
 - **Enregistrement runtime des aliases** : ajout, remplacement ou retrait d'alias sans redémarrage ; `/customperm reload` applique aussi les ajouts, suppressions et changements de steps provenant d'`aliases.json`.
-- **Politique adaptée au backend** : dès que LuckPerms est installé, l'exposition directe CustomPerm est désactivée et seuls les aliases CustomPerm utilisent les nodes LuckPerms.
+- **Politique indépendante du backend** : l'exposition directe des commandes fonctionne avec ou sans LuckPerms ; le node `customperm.command.<nom>` est résolu par LuckPerms lorsqu'il est installé (accordé via `/lp`), sinon par les grades internes.
 - **Préservation des ops** : les sources réellement op level 2+ gardent toujours l'accès ; le mod ne retire pas les droits opérateur.
 - **Re-sync du command tree client** : après changement interne ou event LuckPerms, les joueurs concernés reçoivent un arbre de commandes à jour.
 - **Hot-reload atomique** : `/customperm reload` charge `grades.json`, `aliases.json`, `commands.json` et `settings.json` en transaction ; un JSON invalide conserve le snapshot précédent.
@@ -155,7 +155,7 @@ Toutes les commandes admin sont sous `/customperm` et **requièrent op level 2**
 
 ### Exposition des commandes
 
-Cette fonctionnalité est disponible uniquement lorsque LuckPerms n'est pas installé. Avec LuckPerms installé, `/customperm command add/remove` est refusé : utilisez l'intégration LuckPerms propre au mod concerné lorsqu'elle existe, ou créez un alias CustomPerm contrôlé.
+Cette fonctionnalité fonctionne avec **l'un ou l'autre backend**. Le node `customperm.command.<nom>` est résolu par le backend actif : via **LuckPerms** lorsqu'il est installé (à accorder avec `/lp`), sinon via les grades internes. La commande d'exposition est la même dans les deux cas.
 
 Définit quelles commandes sont éligibles au système de permissions. Une commande non-exposée garde son comportement vanilla (op-only).
 
@@ -213,12 +213,12 @@ CustomPerm utilise un schéma de nodes hiérarchique compatible LuckPerms (et so
 | Node | Effet |
 |---|---|
 | `*` | Wildcard global du backend interne. À utiliser avec précaution. |
-| `customperm.command.<name>` | Autorise `<name>` via le backend interne (uniquement si elle est exposée et que LuckPerms n'est pas actif). |
-| `customperm.command.*` | Wildcard du backend interne couvrant les commandes exposées. |
+| `customperm.command.<name>` | Autorise `<name>` (effectif seulement une fois la commande exposée). Résolu par LuckPerms s'il est installé, sinon par les grades internes. |
+| `customperm.command.*` | Wildcard couvrant toutes les commandes exposées. Avec LuckPerms, c'est son propre moteur de wildcard qui le résout. |
 | `customperm.alias.<name>` | Autorise l'alias `<name>`. Ex: `customperm.alias.fly` |
 | `customperm.alias.*` | Wildcard alias. |
 
-> ⚠️ **Important** : les permissions de commandes directes CustomPerm sont désactivées lorsque LuckPerms est actif. Utilisez LuckPerms pour les commandes normales et `customperm.alias.<name>` pour les aliases CustomPerm.
+> ℹ️ Avec LuckPerms actif, accordez `customperm.command.<name>` (commandes exposées) et `customperm.alias.<name>` (aliases) via `/lp`. Les sous-commandes de grade (`/customperm grade ...`) restent désactivées sous LuckPerms — l'appartenance utilisateur/groupe se gère avec `/lp`.
 
 ---
 
@@ -230,7 +230,7 @@ Stockés dans `config/arcadia/customperm/`. Auto-créés au premier lancement, m
 
 Liste des commandes exposées au système.
 
-Ce fichier sert à l'exposition directe des commandes uniquement lorsque LuckPerms n'est pas installé. Lorsque LuckPerms est installé, ses entrées restent sur disque mais sont ignorées.
+Ce fichier liste les commandes exposées quel que soit le backend. Le node `customperm.command.<nom>` qui autorise chacune est résolu par LuckPerms lorsqu'il est installé (à accorder via `/lp`), sinon par les grades internes.
 
 ```json
 {
@@ -312,13 +312,21 @@ Avec LuckPerms actif, ce fichier est ignoré (les perms passent par LP).
 
 ### Donner `/gamemode` à un grade VIP
 
-**Avec LuckPerms** :
+**Avec LuckPerms** — deux options :
+
+*Exposition directe* (toute la commande `/gamemode`) :
+```
+customperm command add gamemode
+lp group vip permission set customperm.command.gamemode true
+```
+
+*Alias contrôlé* (spectator uniquement, plus sûr) :
 ```
 customperm alias add spec gamemode spectator
 lp group vip permission set customperm.alias.spec true
 ```
 
-LuckPerms fournit l'assignation de permission et l'alias contrôlé délègue précisément l'action vanilla voulue. LuckPerms seul ne contourne pas les `requires` Brigadier vanilla sur NeoForge.
+Dans les deux cas LuckPerms fournit l'assignation de permission ; c'est le wrapper de commande de CustomPerm qui laisse effectivement passer le node à travers le `requires` de Brigadier (LuckPerms seul ne le contourne pas sur NeoForge). Préférez l'alias quand vous voulez une granularité par sous-commande (spectator mais pas creative).
 
 **Sans LuckPerms** :
 ```
@@ -644,7 +652,7 @@ Enregistrés comme des `Commands.literal(name).requires(...).executes(...)`. Le 
 
 **Compatible automatiquement en mode interne.** Les commandes enregistrées au `RegisterCommandsEvent` standard sont traitées en priorité `LOWEST`, puis une passe de réparation est exécutée au démarrage du serveur. Aucune intégration dédiée n'est normalement nécessaire.
 
-Sans LuckPerms, exposez une commande de mod tiers avec `customperm command add <addon_command>`. Avec LuckPerms installé, l'exposition directe est désactivée : utilisez l'intégration de permission du mod si elle existe ou créez un alias CustomPerm limité. Pour vérifier la détection : `customperm scan <pattern>`.
+Exposez une commande de mod tiers avec `customperm command add <addon_command>`, puis accordez `customperm.command.<addon_command>` — via `/lp` si LuckPerms est installé, sinon via un grade interne. Un alias CustomPerm limité reste une option quand vous voulez une portée plus fine (par sous-commande). Pour vérifier la détection : `customperm scan <pattern>`.
 
 ### Mods qui modifient le dispatcher dynamiquement
 
@@ -659,7 +667,7 @@ Cible privilégiée. Toute la machinerie LP standard fonctionne :
 - Web editor
 - Stockage SQL/MySQL/MongoDB
 
-LuckPerms stocke et résout les nodes `customperm.alias.*`. Il ne contourne pas à lui seul les requirements Brigadier vanilla sur NeoForge : pour une action comme le mode spectator, utilisez un alias contrôlé plutôt que d'attendre de `customperm.command.gamemode` qu'il déverrouille `/gamemode`.
+LuckPerms stocke et résout à la fois les nodes `customperm.command.*` et `customperm.alias.*`. LuckPerms ne contourne pas à lui seul les requirements Brigadier vanilla sur NeoForge — c'est le wrapper de commande de CustomPerm qui consulte le node et laisse passer la source. Donc `customperm.command.gamemode` accordé dans `/lp` **déverrouille bien** `/gamemode` une fois la commande exposée via `customperm command add gamemode` ; un alias contrôlé n'est nécessaire que pour une granularité par sous-commande (spectator mais pas creative).
 
 ---
 
