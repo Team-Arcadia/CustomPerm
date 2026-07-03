@@ -26,20 +26,21 @@ public final class AliasesScreen extends AbstractSyncedScreen {
 
     @Override
     protected TesseraPanel buildPanel(GuiSyncPayload payload) {
-        TesseraPanel root = TesseraPanel.column(originX(), originY(), PANEL_W, PANEL_H).padding(10).gap(6);
+        TesseraPanel root = newRoot();
 
-        root.add(TesseraPanel.row(0, 0, PANEL_W, 20).gap(6)
+        root.add(TesseraPanel.row(0, 0, panelW(), 20).gap(6)
+                .add(new TesseraButton(0, 0, 70, 20).label("< Menu").onClick(this::openHub))
                 .add(new TesseraButton(0, 0, 110, 20).label("Create alias")
                         .onClick(() -> openChat("/customperm alias add ")))
                 .add(new TesseraButton(0, 0, 80, 20).label("Refresh")
                         .onClick(this::requestRefresh)));
 
-        TesseraScrollList list = new TesseraScrollList(0, 0, PANEL_W, PANEL_H - 40, 24);
+        TesseraScrollList list = new TesseraScrollList(0, 0, panelW(), panelH() - 40, 24);
         List<TesseraPanel> rows = new ArrayList<>();
         for (Map.Entry<String, Integer> entry : payload.aliases().entrySet()) {
             String name = entry.getKey();
             int stepCount = entry.getValue();
-            rows.add(TesseraPanel.row(0, 0, PANEL_W, 22).gap(4)
+            rows.add(TesseraPanel.row(0, 0, panelW(), 22).gap(4)
                     .add(new TesseraLabel(0, 0, 140, 20, name + " (" + stepCount + " step" + (stepCount > 1 ? "s" : "") + ")"))
                     .add(new TesseraButton(0, 0, 60, 20).label("+Step")
                             .onClick(() -> openChat("/customperm alias addstep " + name + " ")))
