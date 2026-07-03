@@ -26,26 +26,28 @@ public final class GradesScreen extends AbstractSyncedScreen {
 
     @Override
     protected TesseraPanel buildPanel(GuiSyncPayload payload) {
-        TesseraPanel root = TesseraPanel.column(originX(), originY(), PANEL_W, PANEL_H).padding(10).gap(6);
+        TesseraPanel root = newRoot();
 
         if (payload.luckPermsActive()) {
-            root.add(new TesseraLabel(0, 0, PANEL_W, 40,
+            root.add(new TesseraLabel(0, 0, panelW(), 40,
                     "Grades are managed by LuckPerms (/lp) while it is active."));
+            root.add(new TesseraButton(0, 0, 80, 20).label("< Menu").onClick(this::openHub));
             return root;
         }
 
-        root.add(TesseraPanel.row(0, 0, PANEL_W, 20).gap(6)
+        root.add(TesseraPanel.row(0, 0, panelW(), 20).gap(6)
+                .add(new TesseraButton(0, 0, 70, 20).label("< Menu").onClick(this::openHub))
                 .add(new TesseraButton(0, 0, 110, 20).label("Create grade")
                         .onClick(() -> openChat("/customperm grade create ")))
                 .add(new TesseraButton(0, 0, 80, 20).label("Refresh")
                         .onClick(this::requestRefresh)));
 
-        TesseraScrollList list = new TesseraScrollList(0, 0, PANEL_W, PANEL_H - 40, 24);
+        TesseraScrollList list = new TesseraScrollList(0, 0, panelW(), panelH() - 40, 24);
         List<TesseraPanel> rows = new ArrayList<>();
         for (Map.Entry<String, GuiSyncPayload.GradeDto> entry : payload.grades().entrySet()) {
             String name = entry.getKey();
             GuiSyncPayload.GradeDto grade = entry.getValue();
-            rows.add(TesseraPanel.row(0, 0, PANEL_W, 22).gap(4)
+            rows.add(TesseraPanel.row(0, 0, panelW(), 22).gap(4)
                     .add(new TesseraLabel(0, 0, 140, 20, name + " (" + grade.permissions().size()
                             + " perm, " + grade.deniedPermissions().size() + " deny)"))
                     .add(new TesseraButton(0, 0, 60, 20).label("+Perm")

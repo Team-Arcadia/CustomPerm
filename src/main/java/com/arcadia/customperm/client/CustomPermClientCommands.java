@@ -1,12 +1,9 @@
 package com.arcadia.customperm.client;
 
 import com.arcadia.customperm.CustomPerm;
-import com.arcadia.customperm.client.gui.AliasesScreen;
-import com.arcadia.customperm.client.gui.GradesScreen;
-import com.arcadia.customperm.client.gui.StatusScreen;
+import com.arcadia.customperm.client.gui.TesseraGuiBridge;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.context.CommandContext;
-import net.minecraft.client.Minecraft;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
@@ -16,8 +13,10 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.client.event.RegisterClientCommandsEvent;
 
 /**
- * Client-only trigger for the optional TesseraUI admin panel (H2.1): {@code /customperm gui
- * grades|aliases|status}. This is a genuinely separate, client-side-only command tree (see
+ * Client-only trigger for the optional TesseraUI admin panel (H2.1): {@code /customperm gui}
+ * opens a landing menu ({@code HubScreen}) with buttons to the Grades/Aliases/Status screens;
+ * {@code /customperm gui grades|aliases|status} still opens a screen directly. This is a
+ * genuinely separate, client-side-only command tree (see
  * {@link RegisterClientCommandsEvent}) — it never touches the server-authoritative
  * {@code /customperm} dispatcher registered in {@code CustomPermCommand}, and merging the same
  * root literal name into the client's local dispatcher is safe: Brigadier's node merge only
@@ -44,6 +43,7 @@ public final class CustomPermClientCommands {
             Commands.literal("customperm")
                 .requires(src -> src.hasPermission(2))
                 .then(Commands.literal("gui")
+                    .executes(ctx -> openScreen(ctx, "hub"))
                     .then(Commands.literal("grades").executes(ctx -> openScreen(ctx, "grades")))
                     .then(Commands.literal("aliases").executes(ctx -> openScreen(ctx, "aliases")))
                     .then(Commands.literal("status").executes(ctx -> openScreen(ctx, "status"))))
@@ -56,12 +56,9 @@ public final class CustomPermClientCommands {
                 "[CustomPerm] TesseraUI is not installed - this GUI is unavailable. Use the text commands instead."));
             return 0;
         }
-        Minecraft mc = Minecraft.getInstance();
-        switch (screen) {
-            case "grades" -> mc.setScreen(new GradesScreen());
-            case "aliases" -> mc.setScreen(new AliasesScreen());
-            default -> mc.setScreen(new StatusScreen());
-        }
+        // Plain static call — this class must not reference screen types directly, or verifying it
+        // on a TesseraUI-less client would try (and fail) to load com.tesseraui.TesseraScreen.
+        TesseraGuiBridge.open(screen);
         return 1;
     }
 }

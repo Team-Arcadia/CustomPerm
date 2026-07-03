@@ -11,7 +11,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 
-- Optional TesseraUI admin panel: `/customperm gui grades|aliases|status` opens a graphical Grades/Aliases/Status screen when [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) is installed client-side. TesseraUI is a soft dependency (`compileOnly`, `optional` in `neoforge.mods.toml`) — without it, the command reports that the GUI is unavailable and the text commands keep working exactly as before. GUI actions reuse the existing `/customperm` commands (via a prefilled chat input) rather than duplicating any CRUD or permission logic.
+- Optional TesseraUI admin panel: `/customperm gui` opens a graphical landing menu with buttons to the Grades, Aliases and Status screens (each screen has a "< Menu" button back to it), and `/customperm gui grades|aliases|status` jumps straight to one, when [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) is installed client-side. TesseraUI is a soft dependency (`compileOnly`, `optional` in `neoforge.mods.toml`) — without it, the command reports that the GUI is unavailable and the text commands keep working exactly as before. GUI actions reuse the existing `/customperm` commands (via a prefilled chat input) rather than duplicating any CRUD or permission logic.
 
 ### Changed
 
@@ -25,6 +25,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 - The TesseraUI GUI's network channel is now registered as `optional()`. Without this, NeoForge's default handshake behavior would have refused the connection of any client missing the channel — meaning a vanilla client (or any client without CustomPerm) could no longer join a server running this build at all, breaking the mod's "server-side only" guarantee for every player, not just those wanting the GUI.
 - The GUI sync payload handler no longer creates an unconditional method reference into client-only code from the shared registration path. It's now dispatched through an `FMLEnvironment.dist.isClient()` guard, so a real dedicated server (whose jar has no `net.minecraft.client.*` classes, unlike the NeoForge dev/GameTest environment) never attempts to resolve them.
+- A **client** running CustomPerm but not TesseraUI no longer fails to load with `NoClassDefFoundError: com/tesseraui/TesseraScreen`. The always-loaded client classes (`CustomPermClientCommands`, registered via `@EventBusSubscriber(Dist.CLIENT)`, and `ClientNetworkHandler`) previously referenced the GUI screen classes directly; JVM verification of those classes at mod-load time eagerly resolved the screens' TesseraUI supertype, which is absent on a TesseraUI-less client. All screen interaction is now routed through a lazily-loaded `TesseraGuiBridge` behind the `isTesseraUiPresent()` guard, so the TesseraUI types are only linked on a client that actually has TesseraUI. This restores the intended "TesseraUI is optional" behaviour on the client side, not just the server side.
 
 ---
 

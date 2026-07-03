@@ -17,23 +17,25 @@ public final class StatusScreen extends AbstractSyncedScreen {
 
     @Override
     protected TesseraPanel buildPanel(GuiSyncPayload payload) {
-        TesseraPanel root = TesseraPanel.column(originX(), originY(), PANEL_W, PANEL_H).padding(10).gap(6);
+        TesseraPanel root = newRoot();
 
-        root.add(new TesseraLabel(0, 0, PANEL_W, 20, "Backend: " + payload.backendLabel()));
-        root.add(new TesseraLabel(0, 0, PANEL_W, 20, "LP fallback mode: " + payload.lpFallbackMode()));
-        root.add(new TesseraLabel(0, 0, PANEL_W, 20,
+        root.add(new TesseraLabel(0, 0, panelW(), 20, "Backend: " + payload.backendLabel()));
+        root.add(new TesseraLabel(0, 0, panelW(), 20, "LP fallback mode: " + payload.lpFallbackMode()));
+        root.add(new TesseraLabel(0, 0, panelW(), 20,
                 "Dispatcher commands: " + payload.dispatcherCommandCount() + " (vanilla + mods + aliases)"));
-        root.add(new TesseraLabel(0, 0, PANEL_W, 20, "Exposed commands: " + payload.exposedCommandCount()));
-        root.add(new TesseraLabel(0, 0, PANEL_W, 20, "Custom aliases: " + payload.aliases().size()));
+        root.add(new TesseraLabel(0, 0, panelW(), 20, "Exposed commands: " + payload.exposedCommandCount()));
+        root.add(new TesseraLabel(0, 0, panelW(), 20, "Custom aliases: " + payload.aliases().size()));
 
         if (payload.luckPermsActive()) {
-            root.add(new TesseraLabel(0, 0, PANEL_W, 20, "(Grades & user perms managed by /lp)"));
+            root.add(new TesseraLabel(0, 0, panelW(), 20, "(Grades & user perms managed by /lp)"));
         } else {
-            root.add(new TesseraLabel(0, 0, PANEL_W, 20, "Internal grades: " + payload.grades().size()));
-            root.add(new TesseraLabel(0, 0, PANEL_W, 20, "Users with grade: " + payload.userGradeCount()));
+            root.add(new TesseraLabel(0, 0, panelW(), 20, "Internal grades: " + payload.grades().size()));
+            root.add(new TesseraLabel(0, 0, panelW(), 20, "Users with grade: " + payload.userGradeCount()));
         }
 
-        root.add(new TesseraButton(0, 0, 80, 20).label("Refresh").onClick(this::requestRefresh));
+        root.add(TesseraPanel.row(0, 0, panelW(), 20).gap(6)
+                .add(new TesseraButton(0, 0, 80, 20).label("< Menu").onClick(this::openHub))
+                .add(new TesseraButton(0, 0, 80, 20).label("Refresh").onClick(this::requestRefresh)));
         return root;
     }
 }

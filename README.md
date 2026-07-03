@@ -74,7 +74,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Diagnostics** — `/customperm status`, `/customperm scan`, `/customperm debug`, and `/customperm test` cover runtime inspection and troubleshooting.
 - **CI release checks** — GitHub Actions runs GameTests, builds the distributable jar, and verifies required jar metadata.
 - **Server-side only** — no client mod is required for core functionality. Vanilla clients (and clients without CustomPerm installed) connect to a CustomPerm server without issue: the network channel backing the optional GUI is registered as `optional()`, so it never gates the connection handshake.
-- **Optional TesseraUI admin panel** — `/customperm gui grades|aliases|status` opens a graphical Grades/Aliases/Status screen when [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) is installed client-side. Every action in the GUI dispatches the same `/customperm` commands documented below — nothing is reimplemented client-side.
+- **Optional TesseraUI admin panel** — `/customperm gui` opens a graphical landing menu with buttons to the Grades, Aliases and Status screens (or jump straight to one with `/customperm gui grades|aliases|status`) when [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) is installed client-side. Every action in the GUI dispatches the same `/customperm` commands documented below — nothing is reimplemented client-side.
 
 ---
 
@@ -113,7 +113,7 @@ If you see neither line, the mod failed to load — check your logs for stack tr
 
 ### Optional: TesseraUI graphical panel
 
-If a player has [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) installed client-side, `/customperm gui grades|aliases|status` opens a graphical panel instead of relying purely on chat commands. TesseraUI is a soft dependency:
+If a player has [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) installed client-side, `/customperm gui` opens a graphical landing menu (buttons to Grades, Aliases, Status; each screen has a "< Menu" button to come back), and `/customperm gui grades|aliases|status` jumps straight to one — instead of relying purely on chat commands. TesseraUI is a soft dependency:
 
 - Without it: `/customperm gui ...` replies "TesseraUI is not installed — this GUI is unavailable. Use the text commands instead." Nothing else changes.
 - With it: the panel lists grades/aliases with inline actions, and the Status screen mirrors `/customperm status`. Every button dispatches the same underlying `/customperm` command shown in this README (via a prefilled chat input) — the GUI has no permission or CRUD logic of its own.
@@ -202,7 +202,7 @@ They manage ALLOW nodes. Internal DENY nodes are stored in `grades.json` under `
 | `/customperm status` | Global snapshot: backend, wrapped commands, exposed commands, aliases, grades. |
 | `/customperm scan [pattern]` | Lists every command in the dispatcher with its state (exposed, alias, mod-internal). Optional substring filter. |
 | `/customperm reload` | Reloads config files from disk. |
-| `/customperm gui grades\|aliases\|status` | Opens the graphical TesseraUI panel (client-only command; requires TesseraUI installed client-side). |
+| `/customperm gui [grades\|aliases\|status]` | Opens the graphical TesseraUI panel — no argument opens the landing menu, an argument jumps to that screen (client-only command; requires TesseraUI installed client-side). |
 
 ---
 
