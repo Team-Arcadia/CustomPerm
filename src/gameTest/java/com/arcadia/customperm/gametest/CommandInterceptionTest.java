@@ -99,10 +99,11 @@ public class CommandInterceptionTest {
     }
 
     /**
-     * Runtime repair follows the active direct-command policy.
+     * Runtime repair wraps newly registered roots regardless of backend.
      *
-     * With LuckPerms installed, CustomPerm must leave the command untouched.
-     * Without LuckPerms, the internal backend must wrap newly registered roots.
+     * Direct command exposure is always active (the customperm.command.&lt;name&gt; node is
+     * resolved by LuckPerms when present, by the internal grades otherwise), so a freshly
+     * registered root must be wrapped, and an unexposed command must stay denied to non-op.
      */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void runtimeCommandRepairMatchesBackendPolicy(GameTestHelper helper) {
@@ -119,35 +120,26 @@ public class CommandInterceptionTest {
         if (original == null)
             fail("Setup failed — synthetic runtime command was not registered.");
 
-        boolean directCommandsEnabled = CustomPerm.isDirectCommandExposureEnabled();
         int repaired = CommandTreeRewriter.repair(server);
         CommandNode<CommandSourceStack> afterRepair = Customperm.findRoot(server, testName);
 
-        if (directCommandsEnabled) {
-            if (repaired < 1)
-                fail("Internal mode did not repair the synthetic runtime command.");
-            if (afterRepair == original)
-                fail("Internal mode did not replace the synthetic runtime command node.");
-            if (afterRepair.canUse(source))
-                fail("Internal mode changed the unexposed command requirement unexpectedly.");
-        } else {
-            if (repaired != 0)
-                fail("CustomPerm must not repair direct commands while LuckPerms is installed.");
-            if (afterRepair != original)
-                fail("LuckPerms mode replaced a runtime command node unexpectedly.");
-            if (afterRepair.canUse(source))
-                fail("LuckPerms mode changed the original command requirement unexpectedly.");
-        }
+        if (repaired < 1)
+            fail("Repair did not wrap the synthetic runtime command.");
+        if (afterRepair == original)
+            fail("Repair did not replace the synthetic runtime command node.");
+        if (afterRepair.canUse(source))
+            fail("Repair changed the unexposed command requirement unexpectedly.");
 
         helper.succeed();
     }
 
     /**
-     * With an active LuckPerms backend, CustomPerm must leave direct command
-     * permissions to LuckPerms and keep only aliases active.
+     * With an active LuckPerms backend, CustomPerm still exposes direct commands — the
+     * permission node customperm.command.&lt;name&gt; is simply resolved through LuckPerms
+     * instead of the internal grades. /customperm command add must therefore be accepted.
      */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void luckPermsDisablesDirectCommandExposure(GameTestHelper helper) {
+    public static void luckPermsDelegatesDirectCommandExposure(GameTestHelper helper) {
         if (!CustomPerm.isLuckPermsActive()) {
             // CI intentionally runs without the optional LuckPerms mod. The internal
             // policy is covered by runtimeCommandRepairMatchesBackendPolicy.
@@ -163,10 +155,10 @@ public class CommandInterceptionTest {
             int result = helper.getLevel().getServer().getCommands().getDispatcher().execute(
                 "customperm command add gamemode",
                 helper.getLevel().getServer().createCommandSourceStack());
-            if (result != 0)
-                fail("/customperm command add must be rejected while LuckPerms is active.");
-            if (exposed.contains("gamemode"))
-                fail("LuckPerms mode must not add gamemode to grantedCommands.");
+            if (result != 1)
+                fail("/customperm command add must be accepted while LuckPerms is active.");
+            if (!exposed.contains("gamemode"))
+                fail("LuckPerms mode must add gamemode to grantedCommands (node resolved by LuckPerms).");
         } catch (CommandSyntaxException e) {
             fail("Command syntax error while checking LuckPerms direct-command policy: " + e.getMessage());
         } finally {

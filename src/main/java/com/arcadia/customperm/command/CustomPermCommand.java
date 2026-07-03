@@ -164,8 +164,6 @@ public class CustomPermCommand {
     // ---------------- command exposure ----------------
 
     private static int commandAdd(CommandContext<CommandSourceStack> ctx) {
-        if (rejectDirectCommandsWithLuckPerms(ctx)) return 0;
-
         String name = StringArgumentType.getString(ctx, "name");
         if (name.equals("customperm")) {
             ctx.getSource().sendFailure(Component.literal("Cannot expose /customperm itself."));
@@ -186,14 +184,16 @@ public class CustomPermCommand {
         }
         CustomPerm.configManager.save();
         CommandTreeRewriter.repair(server);
+        // Re-pose la vérification CustomPerm (racine + sous-arbre) par-dessus une éventuelle
+        // injection LuckPerms (LuckPerms a déjà injecté au boot ; sans ceci le node serait ignoré).
+        int reasserted = CommandTreeRewriter.reassertExposedCommands(server);
+        CustomPerm.LOGGER.info("[CustomPerm] Re-asserted exposure over other permission handlers on {} node(s) for /{}.", reasserted, name);
         resyncCommands(ctx);
         success(ctx, "Exposed /" + name + " to the permission system. Grant `customperm.command." + name + "` to authorize.");
         return 1;
     }
 
     private static int commandRemove(CommandContext<CommandSourceStack> ctx) {
-        if (rejectDirectCommandsWithLuckPerms(ctx)) return 0;
-
         String name = StringArgumentType.getString(ctx, "name");
         boolean removed = CustomPerm.configManager.getCommands().removeCommand(name);
         if (!removed) {
@@ -201,21 +201,16 @@ public class CustomPermCommand {
             return 0;
         }
         CustomPerm.configManager.save();
-        CommandTreeRewriter.repair(ctx.getSource().getServer());
+        var server = ctx.getSource().getServer();
+        CommandTreeRewriter.repair(server);
+        // Restaure le requires d'origine (LuckPerms/vanilla) sur la commande dé-exposée.
+        CommandTreeRewriter.reassertExposedCommands(server);
         resyncCommands(ctx);
         success(ctx, "/" + name + " is no longer exposed. Reverts to its original (vanilla) authorisation.");
         return 1;
     }
 
     private static int commandList(CommandContext<CommandSourceStack> ctx) {
-        if (!CustomPerm.isDirectCommandExposureEnabled()) {
-            ctx.getSource().sendSuccess(() -> Component.literal(
-                "Direct command exposure is disabled while LuckPerms is installed. "
-                    + "Use LuckPerms for normal commands and CustomPerm aliases for controlled macros."
-            ).withStyle(ChatFormatting.YELLOW), false);
-            return 1;
-        }
-
         var commands = CustomPerm.configManager.getCommands().grantedCommands;
         if (commands.isEmpty()) {
             ctx.getSource().sendSuccess(() -> Component.literal(
@@ -710,9 +705,7 @@ public class CustomPermCommand {
         String backend = CustomPerm.backendLabel();
 
         int totalCmds = server == null ? 0 : server.getCommands().getDispatcher().getRoot().getChildren().size();
-        boolean directCommandsEnabled = CustomPerm.isDirectCommandExposureEnabled();
-        int configuredExposed = CustomPerm.configManager.getCommands().grantedCommands.size();
-        int exposed = directCommandsEnabled ? configuredExposed : 0;
+        int exposed = CustomPerm.configManager.getCommands().grantedCommands.size();
         int aliases = CustomPerm.configManager.getAliases().aliases.size();
         int grades = CustomPerm.configManager.getGrades().grades.size();
         int users = CustomPerm.configManager.getGrades().userGrades.size();
@@ -722,12 +715,8 @@ public class CustomPermCommand {
         ctx.getSource().sendSuccess(() -> Component.literal("  Backend            : " + backend), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  LP fallback mode   : " + lpFallbackMode), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Dispatcher commands: " + totalCmds + " (vanilla + mods + aliases)"), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("  Exposed commands   : " + exposed), false);
-        if (!directCommandsEnabled && configuredExposed > 0) {
-            ctx.getSource().sendSuccess(() -> Component.literal(
-                "  Configured command entries ignored while LuckPerms is installed: " + configuredExposed
-            ).withStyle(ChatFormatting.GRAY), false);
-        }
+        ctx.getSource().sendSuccess(() -> Component.literal("  Exposed commands   : " + exposed
+            + (CustomPerm.isLuckPermsActive() ? " (nodes resolved by LuckPerms)" : "")), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Custom aliases     : " + aliases), false);
 
         // AC1 grades-fallback : afficher grades si Internal pur OU si fallback (InternalPermService actif dans les deux cas)
@@ -755,9 +744,7 @@ public class CustomPermCommand {
             ctx.getSource().sendFailure(Component.literal("No server context."));
             return 0;
         }
-        Set<String> exposed = CustomPerm.isDirectCommandExposureEnabled()
-            ? CustomPerm.configManager.getCommands().grantedCommands
-            : Set.of();
+        Set<String> exposed = CustomPerm.configManager.getCommands().grantedCommands;
         Set<String> aliasNames = CustomPerm.configManager.getAliases().aliases.keySet();
 
         List<String> rootNames = new ArrayList<>();
@@ -836,16 +823,6 @@ public class CustomPermCommand {
     }
 
     // ---------------- helpers ----------------
-
-    private static boolean rejectDirectCommandsWithLuckPerms(CommandContext<CommandSourceStack> ctx) {
-        if (CustomPerm.isDirectCommandExposureEnabled()) return false;
-
-        ctx.getSource().sendFailure(Component.literal(
-            "[CustomPerm] Direct command exposure is disabled while LuckPerms is installed. "
-                + "Manage normal command permissions with LuckPerms; CustomPerm aliases remain available."
-        ));
-        return true;
-    }
 
     private static boolean warnIfLuckPerms(CommandContext<CommandSourceStack> ctx) {
         if (CustomPerm.isLuckPermsActive()) {
