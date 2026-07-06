@@ -18,7 +18,7 @@ Complete setup guide for installing CustomPerm, exposing commands, creating alia
 4. Start the server once.
 
 ```text
-mods/customperm-1.0.4.jar
+mods/customperm-1.0.5.jar
 mods/LuckPerms-NeoForge-5.4.x.jar
 ```
 

@@ -8,7 +8,7 @@
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg)]()
 [![Java](https://img.shields.io/badge/Java-21-red.svg)]()
 [![License](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.4-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/version-1.0.5-brightgreen.svg)]()
 
 ---
 
