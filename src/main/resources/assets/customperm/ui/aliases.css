@@ -1,0 +1,88 @@
+/* CustomPerm TesseraUI theme — aliases. Sibling of aliases.html. */
+:root {
+    --win-bg: #141824;
+    --win-border: #3a3a4c;
+    --copper: #b87333;
+    --copper-hi: #e8a24a;
+    --cream: #d8d0bc;
+    --cream-dim: #a09880;
+    --danger: #c0392b;
+    --danger-hi: #e05a4a;
+    --btn-bg: #1e2433;
+    --btn-hover: #2a3450;
+    --row-bg: #191f2e;
+}
+
+.window {
+    background: var(--win-bg);
+    border: 1px solid var(--win-border);
+    padding: 10px;
+    gap: 6px;
+    min-width: 300px;
+}
+
+.toolbar {
+    gap: 6px;
+    min-height: 20px;
+}
+
+.list {
+    gap: 4px;
+    padding: 2px;
+}
+
+.empty {
+    color: var(--cream-dim);
+    font-size: 7px;
+    padding: 6px;
+}
+
+.alias-row {
+    background: var(--row-bg);
+    border: 1px solid var(--win-border);
+    padding: 3px;
+    gap: 4px;
+    min-height: 22px;
+}
+
+.alias-name {
+    color: var(--cream);
+    font-size: 7px;
+    flex: 2;
+}
+
+.alias-meta {
+    color: var(--cream-dim);
+    font-size: 6px;
+    flex: 2;
+}
+
+.btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--copper);
+    color: var(--cream);
+    padding: 4px;
+    min-height: 20px;
+    font-size: 7px;
+    transition: background 150ms ease-out, border-color 150ms ease-out;
+}
+
+.btn:hover {
+    background: var(--btn-hover);
+    border-color: var(--copper-hi);
+}
+
+.btn.sm {
+    font-size: 6px;
+    padding: 3px;
+    flex: 1;
+}
+
+.btn.danger {
+    border-color: var(--danger);
+}
+
+.btn.danger:hover {
+    background: #3a1a1a;
+    border-color: var(--danger-hi);
+}

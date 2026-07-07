@@ -1,0 +1,15 @@
+<!-- CustomPerm — TesseraUI landing hub. Loaded via TesseraTemplate.load("customperm:ui/hub").
+     Carries no server data: three navigation buttons wired to handlers "openGrades",
+     "openAliases", "openStatus". -->
+<col class="window">
+    <label class="title">CustomPerm — Administration</label>
+    <label class="subtitle">Server command permissions</label>
+
+    <col class="nav">
+        <button class="nav-btn" onclick="openGrades">Grades</button>
+        <button class="nav-btn" onclick="openAliases">Aliases</button>
+        <button class="nav-btn" onclick="openStatus">Status</button>
+    </col>
+
+    <label class="footer">v{{version}} · backend: {{backendLabel}}</label>
+</col>

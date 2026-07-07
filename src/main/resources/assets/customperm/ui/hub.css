@@ -1,0 +1,54 @@
+/* CustomPerm TesseraUI theme — hub. Sibling of hub.html (auto-paired by TesseraTemplate.load). */
+:root {
+    --win-bg: #141824;
+    --win-border: #3a3a4c;
+    --copper: #b87333;
+    --copper-hi: #e8a24a;
+    --cream: #d8d0bc;
+    --cream-dim: #a09880;
+    --btn-bg: #1e2433;
+    --btn-hover: #2a3450;
+}
+
+.window {
+    background: var(--win-bg);
+    border: 1px solid var(--win-border);
+    padding: 12px;
+    gap: 8px;
+    min-width: 200px;
+}
+
+.title {
+    color: var(--copper-hi);
+    font-size: 8px;
+}
+
+.subtitle {
+    color: var(--cream-dim);
+    font-size: 6px;
+}
+
+.nav {
+    gap: 6px;
+    padding: 4px;
+}
+
+.nav-btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--copper);
+    color: var(--cream);
+    padding: 6px;
+    min-height: 22px;
+    font-size: 7px;
+    transition: background 150ms ease-out, border-color 150ms ease-out;
+}
+
+.nav-btn:hover {
+    background: var(--btn-hover);
+    border-color: var(--copper-hi);
+}
+
+.footer {
+    color: var(--cream-dim);
+    font-size: 6px;
+}
