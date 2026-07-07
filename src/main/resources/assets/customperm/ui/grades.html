@@ -1,0 +1,25 @@
+<!-- CustomPerm — TesseraUI grades screen. Loaded via TesseraTemplate.load("customperm:ui/grades").
+     Model keys (see GuiSyncPayload): luckPermsActive, internalMode, noGrades,
+     grades[] = { name, permCount, denyCount, addPermAction, removePermAction, deleteAction }.
+     Static handlers: back, refresh, createGrade. Per-row handlers are bound per grade via the
+     item's *Action keys (see the integration guide). -->
+<col class="window">
+    <row class="toolbar">
+        <button class="btn" onclick="back">&lt; Menu</button>
+        <button class="btn" onclick="createGrade" v-if="internalMode">Create grade</button>
+        <button class="btn" onclick="refresh">Refresh</button>
+    </row>
+
+    <label class="lp-note" v-if="luckPermsActive">Grades are managed by LuckPerms (/lp) while it is active.</label>
+
+    <col class="list" v-if="internalMode">
+        <label class="empty" v-if="noGrades">No grades yet — use "Create grade".</label>
+        <row class="grade-row" v-for="grade in grades">
+            <label class="grade-name">{{grade.name}}</label>
+            <label class="grade-meta">{{grade.permCount}} perm · {{grade.denyCount}} deny</label>
+            <button class="btn sm" onclick="{{grade.addPermAction}}">+Perm</button>
+            <button class="btn sm" onclick="{{grade.removePermAction}}">-Perm</button>
+            <button class="btn sm danger" onclick="{{grade.deleteAction}}">Delete</button>
+        </row>
+    </col>
+</col>

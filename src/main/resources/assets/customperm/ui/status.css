@@ -1,0 +1,72 @@
+/* CustomPerm TesseraUI theme — status. Sibling of status.html. */
+:root {
+    --win-bg: #141824;
+    --win-border: #3a3a4c;
+    --copper: #b87333;
+    --copper-hi: #e8a24a;
+    --cream: #d8d0bc;
+    --cream-dim: #a09880;
+    --btn-bg: #1e2433;
+    --btn-hover: #2a3450;
+    --row-bg: #191f2e;
+}
+
+.window {
+    background: var(--win-bg);
+    border: 1px solid var(--win-border);
+    padding: 10px;
+    gap: 5px;
+    min-width: 240px;
+}
+
+.toolbar {
+    gap: 6px;
+    min-height: 20px;
+}
+
+.title {
+    color: var(--copper-hi);
+    font-size: 8px;
+    padding: 2px;
+}
+
+.stat {
+    background: var(--row-bg);
+    border: 1px solid var(--win-border);
+    padding: 3px;
+    gap: 4px;
+    min-height: 16px;
+}
+
+.k {
+    color: var(--cream-dim);
+    font-size: 7px;
+    flex: 2;
+}
+
+.v {
+    color: var(--cream);
+    font-size: 7px;
+    flex: 3;
+}
+
+.lp-note {
+    color: var(--copper-hi);
+    font-size: 6px;
+    padding: 4px;
+}
+
+.btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--copper);
+    color: var(--cream);
+    padding: 4px;
+    min-height: 20px;
+    font-size: 7px;
+    transition: background 150ms ease-out, border-color 150ms ease-out;
+}
+
+.btn:hover {
+    background: var(--btn-hover);
+    border-color: var(--copper-hi);
+}
