@@ -1,22 +1,22 @@
 package com.arcadia.customperm.client.gui;
 
 import com.arcadia.customperm.network.GuiSyncPayload;
-import com.tesseraui.TesseraButton;
-import com.tesseraui.TesseraLabel;
+import com.tesseraui.TesseraModel;
 import com.tesseraui.TesseraPanel;
-import com.tesseraui.TesseraScrollList;
+import com.tesseraui.TesseraTemplate;
+import com.tesseraui.TesseraTemplateRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * TesseraUI counterpart of {@code /customperm alias ...}. Actions reuse the exact same
- * server-side command (via a prefilled {@link ChatScreen}) instead of duplicating alias
- * CRUD logic client-side.
+ * TesseraUI counterpart of {@code /customperm alias ...}, rendered from the
+ * {@code customperm:ui/aliases} HTML template. Actions reuse the exact same server-side command
+ * (via a prefilled {@link ChatScreen}) instead of duplicating alias CRUD logic client-side.
  */
 public final class AliasesScreen extends AbstractSyncedScreen {
 
@@ -26,32 +26,38 @@ public final class AliasesScreen extends AbstractSyncedScreen {
 
     @Override
     protected TesseraPanel buildPanel(GuiSyncPayload payload) {
-        TesseraPanel root = newRoot();
+        Map<String, String> data = new LinkedHashMap<>();
+        Map<String, Runnable> handlers = new HashMap<>();
 
-        root.add(TesseraPanel.row(0, 0, panelW(), 20).gap(6)
-                .add(new TesseraButton(0, 0, 70, 20).label("< Menu").onClick(this::openHub))
-                .add(new TesseraButton(0, 0, 110, 20).label("Create alias")
-                        .onClick(() -> openChat("/customperm alias add ")))
-                .add(new TesseraButton(0, 0, 80, 20).label("Refresh")
-                        .onClick(this::requestRefresh)));
+        data.put("noAliases", String.valueOf(payload.aliases().isEmpty()));
+        handlers.put("back", this::openHub);
+        handlers.put("refresh", this::requestRefresh);
+        handlers.put("createAlias", () -> openChat("/customperm alias add "));
 
-        TesseraScrollList list = new TesseraScrollList(0, 0, panelW(), panelH() - 40, 24);
-        List<TesseraPanel> rows = new ArrayList<>();
+        // v-for count key, then one indexed entry per field (alias.<field>.<i>).
+        data.put("aliases", String.valueOf(payload.aliases().size()));
+        int i = 0;
         for (Map.Entry<String, Integer> entry : payload.aliases().entrySet()) {
             String name = entry.getKey();
             int stepCount = entry.getValue();
-            rows.add(TesseraPanel.row(0, 0, panelW(), 22).gap(4)
-                    .add(new TesseraLabel(0, 0, 140, 20, name + " (" + stepCount + " step" + (stepCount > 1 ? "s" : "") + ")"))
-                    .add(new TesseraButton(0, 0, 60, 20).label("+Step")
-                            .onClick(() -> openChat("/customperm alias addstep " + name + " ")))
-                    .add(new TesseraButton(0, 0, 60, 20).label("Steps")
-                            .onClick(() -> openChat("/customperm alias steps " + name)))
-                    .add(new TesseraButton(0, 0, 60, 20).label("Remove")
-                            .onClick(() -> openChat("/customperm alias remove " + name))));
+            data.put("alias.name." + i, name);
+            data.put("alias.stepCount." + i, String.valueOf(stepCount));
+
+            String addKey = "alias.addstep." + i;
+            String stepsKey = "alias.steps." + i;
+            String remKey = "alias.remove." + i;
+            data.put("alias.addStepAction." + i, addKey);
+            data.put("alias.stepsAction." + i, stepsKey);
+            data.put("alias.removeAction." + i, remKey);
+            handlers.put(addKey, () -> openChat("/customperm alias addstep " + name + " "));
+            handlers.put(stepsKey, () -> openChat("/customperm alias steps " + name));
+            handlers.put(remKey, () -> openChat("/customperm alias remove " + name));
+            i++;
         }
-        list.setItems(rows);
-        root.add(list);
-        return root;
+
+        TesseraTemplate tpl = TesseraTemplate.load("customperm:ui/aliases");
+        return TesseraTemplateRenderer.build(tpl, TesseraModel.of(data), handlers,
+                originX(), originY(), panelW(), panelH());
     }
 
     private static void openChat(String prefilled) {

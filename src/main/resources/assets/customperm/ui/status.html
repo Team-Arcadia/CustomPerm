@@ -1,43 +1,44 @@
 <!-- CustomPerm — TesseraUI status screen. Loaded via TesseraTemplate.load("customperm:ui/status").
-     Model keys (see GuiSyncPayload): backendLabel, lpFallbackMode, luckPermsActive,
-     directCommandExposureEnabled, dispatcherCommandCount, exposedCommandCount, userGradeCount,
-     aliasCount. Static handlers: back, refresh. -->
+     Model keys (see GuiSyncPayload): backendLabel, lpFallbackMode, dispatcherCommandCount,
+     exposedCommandCount, aliasCount, luckPermsActive, internalMode, gradeCount, userGradeCount.
+     Static handlers: back, refresh. -->
 <col class="window">
-    <row class="toolbar">
-        <button class="btn" onclick="back">&lt; Menu</button>
-        <button class="btn" onclick="refresh">Refresh</button>
-    </row>
-
     <label class="title">Server status</label>
 
     <row class="stat">
         <label class="k">Backend</label>
         <label class="v">{{backendLabel}}</label>
     </row>
-    <row class="stat" v-show="luckPermsActive">
-        <label class="k">LP fallback</label>
+    <row class="stat">
+        <label class="k">LP fallback mode</label>
         <label class="v">{{lpFallbackMode}}</label>
     </row>
     <row class="stat">
-        <label class="k">Direct exposure</label>
-        <label class="v">{{directCommandExposureEnabled}}</label>
+        <label class="k">Dispatcher commands</label>
+        <label class="v">{{dispatcherCommandCount}} (vanilla + mods + aliases)</label>
     </row>
     <row class="stat">
-        <label class="k">Dispatcher cmds</label>
-        <label class="v">{{dispatcherCommandCount}}</label>
-    </row>
-    <row class="stat">
-        <label class="k">Exposed cmds</label>
+        <label class="k">Exposed commands</label>
         <label class="v">{{exposedCommandCount}}</label>
     </row>
     <row class="stat">
-        <label class="k">User grades</label>
-        <label class="v">{{userGradeCount}}</label>
-    </row>
-    <row class="stat">
-        <label class="k">Aliases</label>
+        <label class="k">Custom aliases</label>
         <label class="v">{{aliasCount}}</label>
     </row>
 
-    <label class="lp-note" v-if="luckPermsActive">LuckPerms owns command permissions; CustomPerm keeps aliases active.</label>
+    <label class="lp-note" v-if="luckPermsActive">Grades &amp; user perms managed by /lp</label>
+
+    <row class="stat" v-if="internalMode">
+        <label class="k">Internal grades</label>
+        <label class="v">{{gradeCount}}</label>
+    </row>
+    <row class="stat" v-if="internalMode">
+        <label class="k">Users with grade</label>
+        <label class="v">{{userGradeCount}}</label>
+    </row>
+
+    <row class="toolbar">
+        <button class="btn" onclick="back">&lt; Menu</button>
+        <button class="btn" onclick="refresh">Refresh</button>
+    </row>
 </col>

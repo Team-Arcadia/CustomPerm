@@ -1,13 +1,19 @@
 package com.arcadia.customperm.client.gui;
 
 import com.arcadia.customperm.network.GuiSyncPayload;
-import com.tesseraui.TesseraButton;
-import com.tesseraui.TesseraLabel;
+import com.tesseraui.TesseraModel;
 import com.tesseraui.TesseraPanel;
+import com.tesseraui.TesseraTemplate;
+import com.tesseraui.TesseraTemplateRenderer;
 import net.minecraft.network.chat.Component;
 
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 /**
- * Read-only TesseraUI counterpart of {@code /customperm status}.
+ * Read-only TesseraUI counterpart of {@code /customperm status}, rendered from the
+ * {@code customperm:ui/status} HTML template.
  */
 public final class StatusScreen extends AbstractSyncedScreen {
 
@@ -17,25 +23,25 @@ public final class StatusScreen extends AbstractSyncedScreen {
 
     @Override
     protected TesseraPanel buildPanel(GuiSyncPayload payload) {
-        TesseraPanel root = newRoot();
+        Map<String, String> data = new LinkedHashMap<>();
+        Map<String, Runnable> handlers = new HashMap<>();
 
-        root.add(new TesseraLabel(0, 0, panelW(), 20, "Backend: " + payload.backendLabel()));
-        root.add(new TesseraLabel(0, 0, panelW(), 20, "LP fallback mode: " + payload.lpFallbackMode()));
-        root.add(new TesseraLabel(0, 0, panelW(), 20,
-                "Dispatcher commands: " + payload.dispatcherCommandCount() + " (vanilla + mods + aliases)"));
-        root.add(new TesseraLabel(0, 0, panelW(), 20, "Exposed commands: " + payload.exposedCommandCount()));
-        root.add(new TesseraLabel(0, 0, panelW(), 20, "Custom aliases: " + payload.aliases().size()));
+        boolean lp = payload.luckPermsActive();
+        data.put("backendLabel", payload.backendLabel());
+        data.put("lpFallbackMode", payload.lpFallbackMode());
+        data.put("dispatcherCommandCount", String.valueOf(payload.dispatcherCommandCount()));
+        data.put("exposedCommandCount", String.valueOf(payload.exposedCommandCount()));
+        data.put("aliasCount", String.valueOf(payload.aliases().size()));
+        data.put("gradeCount", String.valueOf(payload.grades().size()));
+        data.put("userGradeCount", String.valueOf(payload.userGradeCount()));
+        data.put("luckPermsActive", String.valueOf(lp));
+        data.put("internalMode", String.valueOf(!lp));
 
-        if (payload.luckPermsActive()) {
-            root.add(new TesseraLabel(0, 0, panelW(), 20, "(Grades & user perms managed by /lp)"));
-        } else {
-            root.add(new TesseraLabel(0, 0, panelW(), 20, "Internal grades: " + payload.grades().size()));
-            root.add(new TesseraLabel(0, 0, panelW(), 20, "Users with grade: " + payload.userGradeCount()));
-        }
+        handlers.put("back", this::openHub);
+        handlers.put("refresh", this::requestRefresh);
 
-        root.add(TesseraPanel.row(0, 0, panelW(), 20).gap(6)
-                .add(new TesseraButton(0, 0, 80, 20).label("< Menu").onClick(this::openHub))
-                .add(new TesseraButton(0, 0, 80, 20).label("Refresh").onClick(this::requestRefresh)));
-        return root;
+        TesseraTemplate tpl = TesseraTemplate.load("customperm:ui/status");
+        return TesseraTemplateRenderer.build(tpl, TesseraModel.of(data), handlers,
+                originX(), originY(), panelW(), panelH());
     }
 }
