@@ -1,22 +1,23 @@
 package com.arcadia.customperm.client.gui;
 
 import com.arcadia.customperm.network.GuiSyncPayload;
-import com.tesseraui.TesseraButton;
-import com.tesseraui.TesseraLabel;
+import com.tesseraui.TesseraModel;
 import com.tesseraui.TesseraPanel;
-import com.tesseraui.TesseraScrollList;
+import com.tesseraui.TesseraTemplate;
+import com.tesseraui.TesseraTemplateRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.network.chat.Component;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * TesseraUI counterpart of {@code /customperm grade ...}. Every action reuses the exact same
- * server-side command (via a prefilled {@link ChatScreen}) instead of duplicating CRUD/
- * permission logic client-side.
+ * TesseraUI counterpart of {@code /customperm grade ...}, rendered from the
+ * {@code customperm:ui/grades} HTML template. Every action reuses the exact same server-side
+ * command (via a prefilled {@link ChatScreen}) instead of duplicating CRUD/permission logic
+ * client-side. Per-row actions are wired by giving each grade item a unique handler key.
  */
 public final class GradesScreen extends AbstractSyncedScreen {
 
@@ -26,40 +27,43 @@ public final class GradesScreen extends AbstractSyncedScreen {
 
     @Override
     protected TesseraPanel buildPanel(GuiSyncPayload payload) {
-        TesseraPanel root = newRoot();
+        Map<String, String> data = new LinkedHashMap<>();
+        Map<String, Runnable> handlers = new HashMap<>();
 
-        if (payload.luckPermsActive()) {
-            root.add(new TesseraLabel(0, 0, panelW(), 40,
-                    "Grades are managed by LuckPerms (/lp) while it is active."));
-            root.add(new TesseraButton(0, 0, 80, 20).label("< Menu").onClick(this::openHub));
-            return root;
-        }
+        boolean lp = payload.luckPermsActive();
+        data.put("luckPermsActive", String.valueOf(lp));
+        data.put("internalMode", String.valueOf(!lp));
+        data.put("noGrades", String.valueOf(payload.grades().isEmpty()));
 
-        root.add(TesseraPanel.row(0, 0, panelW(), 20).gap(6)
-                .add(new TesseraButton(0, 0, 70, 20).label("< Menu").onClick(this::openHub))
-                .add(new TesseraButton(0, 0, 110, 20).label("Create grade")
-                        .onClick(() -> openChat("/customperm grade create ")))
-                .add(new TesseraButton(0, 0, 80, 20).label("Refresh")
-                        .onClick(this::requestRefresh)));
+        handlers.put("back", this::openHub);
+        handlers.put("refresh", this::requestRefresh);
+        handlers.put("createGrade", () -> openChat("/customperm grade create "));
 
-        TesseraScrollList list = new TesseraScrollList(0, 0, panelW(), panelH() - 40, 24);
-        List<TesseraPanel> rows = new ArrayList<>();
+        // v-for count key, then one indexed entry per field (grade.<field>.<i>).
+        data.put("grades", String.valueOf(payload.grades().size()));
+        int i = 0;
         for (Map.Entry<String, GuiSyncPayload.GradeDto> entry : payload.grades().entrySet()) {
             String name = entry.getKey();
             GuiSyncPayload.GradeDto grade = entry.getValue();
-            rows.add(TesseraPanel.row(0, 0, panelW(), 22).gap(4)
-                    .add(new TesseraLabel(0, 0, 140, 20, name + " (" + grade.permissions().size()
-                            + " perm, " + grade.deniedPermissions().size() + " deny)"))
-                    .add(new TesseraButton(0, 0, 60, 20).label("+Perm")
-                            .onClick(() -> openChat("/customperm grade addperm " + name + " ")))
-                    .add(new TesseraButton(0, 0, 60, 20).label("-Perm")
-                            .onClick(() -> openChat("/customperm grade removeperm " + name + " ")))
-                    .add(new TesseraButton(0, 0, 60, 20).label("Delete")
-                            .onClick(() -> openChat("/customperm grade delete " + name))));
+            data.put("grade.name." + i, name);
+            data.put("grade.permCount." + i, String.valueOf(grade.permissions().size()));
+            data.put("grade.denyCount." + i, String.valueOf(grade.deniedPermissions().size()));
+
+            String addKey = "grade.addperm." + i;
+            String remKey = "grade.removeperm." + i;
+            String delKey = "grade.delete." + i;
+            data.put("grade.addPermAction." + i, addKey);
+            data.put("grade.removePermAction." + i, remKey);
+            data.put("grade.deleteAction." + i, delKey);
+            handlers.put(addKey, () -> openChat("/customperm grade addperm " + name + " "));
+            handlers.put(remKey, () -> openChat("/customperm grade removeperm " + name + " "));
+            handlers.put(delKey, () -> openChat("/customperm grade delete " + name));
+            i++;
         }
-        list.setItems(rows);
-        root.add(list);
-        return root;
+
+        TesseraTemplate tpl = TesseraTemplate.load("customperm:ui/grades");
+        return TesseraTemplateRenderer.build(tpl, TesseraModel.of(data), handlers,
+                originX(), originY(), panelW(), panelH());
     }
 
     private static void openChat(String prefilled) {

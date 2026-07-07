@@ -1,18 +1,22 @@
 package com.arcadia.customperm.client.gui;
 
-import com.tesseraui.TesseraButton;
-import com.tesseraui.TesseraLabel;
+import com.tesseraui.TesseraModel;
 import com.tesseraui.TesseraPanel;
 import com.tesseraui.TesseraScreen;
+import com.tesseraui.TesseraTemplate;
+import com.tesseraui.TesseraTemplateRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * Landing menu for the CustomPerm TesseraUI panel, opened by {@code /customperm gui} (no
  * argument). Purely client-side navigation — three buttons that open the Grades, Aliases and
- * Status screens. It carries no server data, so unlike {@link AbstractSyncedScreen} it does not
- * request a sync.
+ * Status screens. Rendered from the {@code customperm:ui/hub} HTML template; it carries no
+ * server data, so unlike {@link AbstractSyncedScreen} it does not request a sync.
  */
 public final class HubScreen extends TesseraScreen {
 
@@ -31,19 +35,14 @@ public final class HubScreen extends TesseraScreen {
         int h = Math.min(this.height - 16, MAX_H);
         int x = (this.width - w) / 2;
         int y = (this.height - h) / 2;
-        int btnW = w - 24;
-        root = TesseraPanel.column(x, y, w, h)
-                .background(AbstractSyncedScreen.WINDOW_BG)
-                .border(1, AbstractSyncedScreen.WINDOW_BORDER)
-                .padding(12)
-                .gap(8)
-                .add(new TesseraLabel(0, 0, w, 22, "CustomPerm — Administration"))
-                .add(new TesseraButton(0, 0, btnW, 26).label("Grades")
-                        .onClick(() -> Minecraft.getInstance().setScreen(new GradesScreen())))
-                .add(new TesseraButton(0, 0, btnW, 26).label("Aliases")
-                        .onClick(() -> Minecraft.getInstance().setScreen(new AliasesScreen())))
-                .add(new TesseraButton(0, 0, btnW, 26).label("Status")
-                        .onClick(() -> Minecraft.getInstance().setScreen(new StatusScreen())));
+
+        Map<String, Runnable> handlers = new HashMap<>();
+        handlers.put("openGrades", () -> Minecraft.getInstance().setScreen(new GradesScreen()));
+        handlers.put("openAliases", () -> Minecraft.getInstance().setScreen(new AliasesScreen()));
+        handlers.put("openStatus", () -> Minecraft.getInstance().setScreen(new StatusScreen()));
+
+        TesseraTemplate tpl = TesseraTemplate.load("customperm:ui/hub");
+        root = TesseraTemplateRenderer.build(tpl, TesseraModel.EMPTY, handlers, x, y, w, h);
         root.layout();
     }
 

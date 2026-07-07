@@ -1,6 +1,7 @@
 <!-- CustomPerm — TesseraUI aliases screen. Loaded via TesseraTemplate.load("customperm:ui/aliases").
-     Model keys (see GuiSyncPayload.aliases): noAliases, aliases[] = { name, stepCount,
-     addStepAction, removeAction }. Static handlers: back, refresh, createAlias. -->
+     Model keys (see GuiSyncPayload.aliases): noAliases, aliases (count); per row:
+     alias.name.<i>, alias.stepCount.<i>, alias.addStepAction.<i>, alias.stepsAction.<i>,
+     alias.removeAction.<i>. Static handlers: back, refresh, createAlias. -->
 <col class="window">
     <row class="toolbar">
         <button class="btn" onclick="back">&lt; Menu</button>
@@ -14,6 +15,7 @@
             <label class="alias-name">/{{alias.name}}</label>
             <label class="alias-meta">{{alias.stepCount}} step(s)</label>
             <button class="btn sm" onclick="{{alias.addStepAction}}">+Step</button>
+            <button class="btn sm" onclick="{{alias.stepsAction}}">Steps</button>
             <button class="btn sm danger" onclick="{{alias.removeAction}}">Remove</button>
         </row>
     </col>
