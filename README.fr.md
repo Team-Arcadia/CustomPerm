@@ -7,7 +7,7 @@
 [![Minecraft](https://img.shields.io/badge/Minecraft-1.21.1-green.svg)]()
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg)]()
 [![Java](https://img.shields.io/badge/Java-21-red.svg)]()
-[![License](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)](LICENSE)
+[![License](https://img.shields.io/badge/license-All%20Rights%20Reserved-blue.svg)](LICENSE)
 [![Version](https://img.shields.io/badge/version-1.0.5-brightgreen.svg)]()
 
 ---
@@ -682,11 +682,15 @@ LuckPerms stocke et résout à la fois les nodes `customperm.command.*` et `cust
 
 ## Licence
 
-Copyright (C) 2026 THEFricadelle.
+Copyright (C) 2026 THEFricadelle. Tous droits réservés.
 
-CustomPerm est distribué sous la **GNU General Public License version 3
-uniquement** (`GPL-3.0-only`). Voir [LICENSE](LICENSE) pour le texte complet
-de la licence.
+CustomPerm est un **logiciel propriétaire à source visible** — le code source
+est public à titre de référence et d'interopérabilité, mais il n'est **pas**
+open-source. Vous pouvez télécharger les builds officiels et exécuter le mod sur
+votre/vos serveur(s) ; vous ne pouvez **pas** le redistribuer, le ré-uploader,
+le repackager, le vendre ni en créer des œuvres dérivées sans autorisation
+écrite préalable. Voir [LICENSE](LICENSE) pour les conditions complètes et pour
+demander une autorisation de redistribution ou d'inclusion en modpack.
 
 ---
 

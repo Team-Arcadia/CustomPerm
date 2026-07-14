@@ -20,6 +20,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 - `/customperm ratelimit set|enable|disable|remove|list` — configure, toggle, and inspect rate limits. `disable` keeps the configured numbers so a limit can be re-enabled without re-entering them.
 - New `ratelimits.json` config file (per-server, hot-reloadable, backed up alongside `grades.json`/`aliases.json`/`commands.json`/`settings.json`).
 - Rate-limit counters are in-memory only (reset on server restart) and tracked per player and per command; console/command-block invocations are not limited.
+- Project licensing changed from the GNU General Public License v3.0 only (`GPL-3.0-only`) to a **proprietary, source-available license (All Rights Reserved)**. The source stays publicly viewable for reference and interoperability, but redistribution, re-upload, repackaging, sale, and derivative works now require prior written permission. Versions released before 1.0.5 remain available under their original GPL-3.0-only terms.
 
 ### Fixed
 
