@@ -4,7 +4,7 @@
 
 > 🧪 **Current build 1.0.5 is published on the Beta channel** while final testing wraps up. It is feature-complete and safe to try on a test server; feedback is welcome.
 
-![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-green.svg) ![NeoForge 21.1.221+](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg) ![Java 21](https://img.shields.io/badge/Java-21-red.svg) ![License GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)
+![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-green.svg) ![NeoForge 21.1.221+](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg) ![Java 21](https://img.shields.io/badge/Java-21-red.svg) ![License All Rights Reserved](https://img.shields.io/badge/license-All%20Rights%20Reserved-blue.svg)
 
 ---
 
@@ -78,7 +78,7 @@ customperm grade assign Steve vip
 | LuckPerms | 5.4.150+ (optional) |
 | TesseraUI | 1.0+ (optional, client-side) |
 
-**License:** GNU General Public License v3.0 only (`GPL-3.0-only`) · **Author:** THEFricadelle
+**License:** Proprietary — All Rights Reserved (source-available; no redistribution without permission) · **Author:** THEFricadelle
 
 ---
 ---
@@ -89,7 +89,7 @@ customperm grade assign Steve vip
 
 > 🧪 **La version 1.0.5 est publiée sur le canal Bêta** le temps de finaliser les tests. Elle est complète et sûre à essayer sur un serveur de test ; vos retours sont les bienvenus.
 
-![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-green.svg) ![NeoForge 21.1.221+](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg) ![Java 21](https://img.shields.io/badge/Java-21-red.svg) ![License GPL-3.0-only](https://img.shields.io/badge/license-GPL--3.0--only-blue.svg)
+![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-green.svg) ![NeoForge 21.1.221+](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg) ![Java 21](https://img.shields.io/badge/Java-21-red.svg) ![License All Rights Reserved](https://img.shields.io/badge/license-All%20Rights%20Reserved-blue.svg)
 
 ---
 
@@ -163,4 +163,4 @@ customperm grade assign Steve vip
 | LuckPerms | 5.4.150+ (optionnel) |
 | TesseraUI | 1.0+ (optionnel, côté client) |
 
-**Licence :** GNU General Public License v3.0 only (`GPL-3.0-only`) · **Auteur :** THEFricadelle
+**Licence :** Propriétaire — Tous droits réservés (source visible ; redistribution interdite sans autorisation) · **Auteur :** THEFricadelle
