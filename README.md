@@ -688,8 +688,12 @@ CustomPerm is **proprietary, source-available software** — the source is publi
 for reference and interoperability, but it is **not** open-source. You may
 download the official builds and run the mod on your own server(s); you may
 **not** redistribute, re-upload, repackage, sell, or create derivative works
-without prior written permission. See [LICENSE](LICENSE) for the full terms and
-for how to request redistribution or modpack permission.
+without prior written permission.
+
+**Modpacks are allowed** in CurseForge / Modrinth modpacks that reference the
+**unmodified official file** from the platform. Bundling the jar into an
+exported/offline pack, re-hosting it elsewhere, or shipping a modified build
+still requires written permission. See [LICENSE](LICENSE) for the full terms.
 
 ---
 

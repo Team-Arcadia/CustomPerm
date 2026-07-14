@@ -47,8 +47,18 @@ Except with the Author's prior written permission, You may NOT:
       sites, modpack platforms, forums, file lockers, Discord servers,
       and torrents;
 
-  (b) include the Mod in a modpack or distribution without the Author's
-      prior written permission (permission requests are welcome);
+  (b) include the Mod in a modpack EXCEPT under all of the following
+      conditions, which are hereby permitted without further request:
+        (i)   the modpack distributes the Mod by referencing an official,
+              Author-authorized distribution channel (for example the
+              CurseForge app or Modrinth), so that the Mod file is fetched
+              from that channel at install time;
+        (ii)  the exact, unmodified official Mod file is used — the Mod is
+              not altered, patched, recompiled, or repackaged in any way; and
+        (iii) all copyright, authorship, and license notices are preserved.
+      Bundling the Mod file into an exported or offline pack, re-hosting it on
+      any other channel, or including a modified build is NOT covered by this
+      permission and still requires the Author's prior written consent;
 
   (c) sell, rent, sublicense, or otherwise commercialize the Mod itself,
       or bundle it with a paid product;
