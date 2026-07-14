@@ -80,6 +80,8 @@ customperm grade assign Steve vip
 
 **License:** Proprietary — All Rights Reserved (source-available; no redistribution without permission) · **Author:** THEFricadelle
 
+**Modpacks:** ✅ Allowed in CurseForge / Modrinth modpacks that fetch the **unmodified official file** from the platform. ❌ Bundling the jar into an exported/offline pack, re-hosting it elsewhere, or including a modified build requires written permission.
+
 ---
 ---
 
@@ -164,3 +166,5 @@ customperm grade assign Steve vip
 | TesseraUI | 1.0+ (optionnel, côté client) |
 
 **Licence :** Propriétaire — Tous droits réservés (source visible ; redistribution interdite sans autorisation) · **Auteur :** THEFricadelle
+
+**Modpacks :** ✅ Autorisé dans les modpacks CurseForge / Modrinth qui récupèrent le **fichier officiel non modifié** depuis la plateforme. ❌ Empaqueter le jar dans un pack exporté/hors-ligne, le ré-héberger ailleurs, ou inclure une version modifiée nécessite une autorisation écrite.

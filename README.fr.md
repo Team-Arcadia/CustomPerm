@@ -689,8 +689,13 @@ est public à titre de référence et d'interopérabilité, mais il n'est **pas*
 open-source. Vous pouvez télécharger les builds officiels et exécuter le mod sur
 votre/vos serveur(s) ; vous ne pouvez **pas** le redistribuer, le ré-uploader,
 le repackager, le vendre ni en créer des œuvres dérivées sans autorisation
-écrite préalable. Voir [LICENSE](LICENSE) pour les conditions complètes et pour
-demander une autorisation de redistribution ou d'inclusion en modpack.
+écrite préalable.
+
+**Les modpacks sont autorisés** dans les modpacks CurseForge / Modrinth qui
+référencent le **fichier officiel non modifié** depuis la plateforme. Empaqueter
+le jar dans un pack exporté/hors-ligne, le ré-héberger ailleurs ou livrer une
+version modifiée nécessite une autorisation écrite. Voir [LICENSE](LICENSE) pour
+les conditions complètes.
 
 ---
 
