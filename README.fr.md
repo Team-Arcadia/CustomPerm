@@ -30,6 +30,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 
 - [Fonctionnalités](#fonctionnalités)
 - [Installation](#installation)
+- [Mondes solo et LAN](#mondes-solo-et-lan)
 - [Démarrage rapide](#démarrage-rapide)
 - [Commandes](#commandes)
 - [Nodes de permission](#nodes-de-permission)
@@ -119,6 +120,37 @@ Si un joueur a [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesserau
 - Avec lui : le panneau liste les grades/aliases avec des actions intégrées, et l'écran Status reflète `/customperm status`. Chaque bouton exécute la même commande `/customperm` sous-jacente décrite dans ce README (via un champ de chat pré-rempli) — le panneau n'a aucune logique de permission ou de CRUD qui lui soit propre.
 
 `/customperm gui` est une commande purement client (elle ne quitte jamais le client si TesseraUI n'est pas installé) ; les données de grades/aliases ne sont envoyées qu'aux joueurs qui passent déjà le même contrôle op level 2 que toute autre sous-commande `/customperm`.
+
+---
+
+## Mondes solo et LAN
+
+CustomPerm est conçu pour les serveurs, mais fonctionne également en monde solo — le serveur intégré exécute exactement le même code. Deux comportements diffèrent suffisamment pour être connus avant d'essayer.
+
+### Les commandes de triche doivent être activées
+
+`/customperm` est protégée par un contrôle op niveau 2 réel. En monde solo, vous ne disposez d'un niveau de permission que si **Autoriser les commandes de triche** est actif (`Créer un nouveau monde → Plus → Autoriser les commandes de triche`, ou ouverture en LAN avec la triche activée). Sans cela, la commande est masquée de la tab-complétion et inexécutable — ce n'est pas un bug, c'est la même protection que sur un serveur.
+
+Ce contrôle inspecte volontairement votre niveau OP *réel* et non celui de la source de commande courante, afin qu'un alias ne puisse jamais servir à faire passer une sous-commande `/customperm` en fraude.
+
+### La configuration est par installation, pas par monde
+
+C'est le point qui surprend. La configuration se trouve dans le répertoire d'installation de Minecraft :
+
+```
+.minecraft/config/arcadia/customperm/
+```
+
+Elle n'est **pas** stockée dans la sauvegarde du monde. Chaque grade, alias, commande exposée et limite d'exécution que vous créez est donc partagé par **tous** vos mondes solo. Créez un alias `/heal` en bricolant dans un monde créatif, et il existera aussi dans votre monde survie.
+
+Sur un serveur dédié, cela reste invisible — une installation, un monde. En solo, si vous voulez des configurations différentes par monde, il faut pour l'instant permuter vous-même le dossier de configuration.
+
+### Ce qui est réellement utile hors ligne
+
+- **Les alias et macros** — la principale raison d'utiliser CustomPerm en solo. Enchaînez plusieurs commandes derrière une seule, exécutées en op niveau 4.
+- **Le panneau TesseraUI** — `/customperm gui` fonctionne en solo comme ailleurs, si TesseraUI est installé.
+- **Les grades et nodes de permission** — de peu d'intérêt tant que vous êtes seul et déjà opérateur. Ils prennent tout leur sens dès que vous **ouvrez le monde en LAN** : les invités rejoignent en non-op, et les grades permettent de leur accorder exactement les commandes voulues.
+- **Les limites d'exécution** — attention, elles s'appliquent aussi à vous. Une limite définie dans un monde s'applique dans tous, conformément au point ci-dessus.
 
 ---
 

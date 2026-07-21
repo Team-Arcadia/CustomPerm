@@ -30,6 +30,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 
 - [Features](#features)
 - [Installation](#installation)
+- [Singleplayer and LAN worlds](#singleplayer-and-lan-worlds)
 - [Quick start](#quick-start)
 - [Commands](#commands)
 - [Permission nodes](#permission-nodes)
@@ -119,6 +120,37 @@ If a player has [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tessera
 - With it: the panel lists grades/aliases with inline actions, and the Status screen mirrors `/customperm status`. Every button dispatches the same underlying `/customperm` command shown in this README (via a prefilled chat input) — the GUI has no permission or CRUD logic of its own.
 
 `/customperm gui` itself is a client-only command (it never leaves the client if TesseraUI isn't installed); the actual grades/aliases data is only sent to players who already pass the same op-level-2 check as every other `/customperm` subcommand.
+
+---
+
+## Singleplayer and LAN worlds
+
+CustomPerm is designed for servers, but it works in a singleplayer world too — the integrated server runs the exact same code. Two things behave differently enough to be worth knowing before you try it.
+
+### You must enable cheats
+
+`/customperm` is gated behind a real op-level-2 check. In a singleplayer world you only hold a permission level if **Allow Cheats** is on (`Create New World → More → Allow Cheats`, or open the world to LAN with cheats enabled). Without it the command is hidden from tab-completion and cannot be run — this is not a bug, it is the same gate that protects the command on a server.
+
+The check deliberately inspects your *real* op level rather than the level of the current command source, so an alias can never be used to smuggle a `/customperm` subcommand past it.
+
+### Configuration is per-installation, not per-world
+
+This is the one that surprises people. Configuration lives in your Minecraft installation directory:
+
+```
+.minecraft/config/arcadia/customperm/
+```
+
+It is **not** stored in the world save. Every grade, alias, exposed command and rate limit you create is therefore shared by **all** of your singleplayer worlds. Create an alias `/heal` while messing about in a creative world and it will exist in your survival world too.
+
+On a dedicated server this is invisible — one installation, one world. In singleplayer, if you want different setups per world, you currently have to swap the config directory yourself.
+
+### What is actually useful offline
+
+- **Aliases and macros** — the main reason to run CustomPerm solo. Chain several commands behind one, executed at op level 4.
+- **The TesseraUI panel** — `/customperm gui` works in singleplayer like anywhere else, if TesseraUI is installed.
+- **Grades and permission nodes** — of little use while you are alone and already an operator. They become meaningful the moment you **open the world to LAN**: guests join as non-ops, and grades let you hand out exactly the commands you want them to have.
+- **Rate limits** — note these apply to you as well. A limit set in one world applies in all of them, per the point above.
 
 ---
 
