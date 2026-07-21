@@ -68,6 +68,17 @@ customperm grade assign Steve vip
 
 ---
 
+## Singleplayer and LAN
+
+CustomPerm also works in a singleplayer world — the integrated server runs the same code. Two caveats:
+
+- **Cheats must be enabled.** `/customperm` is gated behind a real op-level-2 check. Without **Allow Cheats**, the command is hidden and cannot be run.
+- **Configuration is per-installation, not per-world.** It lives in `.minecraft/config/arcadia/customperm/`, not in the world save, so grades, aliases, exposed commands and rate limits are shared by **all** your singleplayer worlds.
+
+Offline, aliases and macros are the main draw. Grades and permission nodes come into their own when you **open the world to LAN** — guests join as non-ops, and grades let you grant exactly the commands you want them to have.
+
+---
+
 ## Requirements
 
 | Component | Version |
@@ -152,6 +163,17 @@ customperm grade create vip
 customperm grade addperm vip customperm.command.gamemode
 customperm grade assign Steve vip
 ```
+
+---
+
+## Solo et LAN
+
+CustomPerm fonctionne aussi en monde solo — le serveur intégré exécute le même code. Deux réserves :
+
+- **Les commandes de triche doivent être activées.** `/customperm` est protégée par un contrôle op niveau 2 réel. Sans **Autoriser les commandes de triche**, la commande est masquée et inexécutable.
+- **La configuration est par installation, pas par monde.** Elle réside dans `.minecraft/config/arcadia/customperm/` et non dans la sauvegarde du monde : grades, alias, commandes exposées et limites d'exécution sont donc partagés par **tous** vos mondes solo.
+
+Hors ligne, les alias et macros sont l'intérêt principal. Les grades et nodes de permission prennent tout leur sens dès que vous **ouvrez le monde en LAN** — les invités rejoignent en non-op, et les grades permettent de leur accorder exactement les commandes voulues.
 
 ---
 
