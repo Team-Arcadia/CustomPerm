@@ -7,6 +7,14 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ---
 
+## [Unreleased]
+
+### Added
+
+- Documented singleplayer and LAN usage, which had never been covered. `README.md`, `README.fr.md` and `distribution/DESCRIPTION.md` now explain the two behaviours that differ from a dedicated server: `/customperm` is gated behind a real op-level-2 check, so **Allow Cheats** must be enabled for the command to be visible and runnable in a local world; and configuration lives in `.minecraft/config/arcadia/customperm/` rather than in the world save, so grades, aliases, exposed commands and rate limits are shared by every singleplayer world on that installation. Also states what is actually worth using offline (aliases and macros, the TesseraUI panel) and notes that grades and permission nodes only become meaningful once the world is opened to LAN. Documentation only — no behaviour change.
+
+---
+
 ## [1.0.5] - 2026-07-06
 
 ### Added
