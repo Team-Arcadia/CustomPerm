@@ -21,13 +21,27 @@ This file is a plain-language summary for convenience. The binding terms are in
 | Report bugs, open issues | ✅ Yes |
 | Fork the repo to submit a pull request | ✅ Yes — see [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Include it in a CurseForge / Modrinth modpack that **references** the official unmodified file | ✅ Yes, no need to ask |
+| Send the official file to players joining **your own** server (launcher / host auto-sync) | ✅ Yes — see §2.2 |
+| Mention it factually: "my pack includes CustomPerm", tutorials, reviews | ✅ Yes |
 | Bundle the jar in an exported / offline modpack | ❌ Written permission required |
+| Offer it as a "one-click install" product in a hosting panel catalogue | ❌ Written permission required |
 | Re-upload or mirror it anywhere (sites, forums, Discord, file lockers) | ❌ No |
 | Modify it and distribute the result | ❌ No |
 | Publish a build made from your fork | ❌ No |
 | Reuse its code in another mod, plugin, or project | ❌ No |
 | Sell it, rent it, or bundle it with a paid product | ❌ No |
 | Claim you wrote it, or remove the copyright notices | ❌ No |
+| Use the name, mod id, or logo for another project, or to imply endorsement | ❌ No |
+| Use the code to train or fine-tune an AI / machine-learning model | ❌ No |
+
+## About revocation
+
+The right to use the Mod is revocable — but **not arbitrarily**. Revocation is
+**individual** (it takes effect only against a specific person or entity, upon
+written notice), **prospective** (it never makes past compliant use unlawful),
+and it does **not** silently kill a compliant modpack or stop other users from
+running an Official Build they lawfully obtained. It is a tool against abuse,
+not a kill switch over the ecosystem. See §2.3 of the LICENSE.
 
 ## Why source-available and not open-source
 
@@ -55,7 +69,13 @@ third-party code is bundled into the CustomPerm jar.
 ## Requesting permission
 
 Anything marked ❌ above can still be granted case by case. Ask — the answer is
-often yes for reasonable requests. Permission must be **written** to be valid.
+often yes for reasonable requests. Open an issue on the official repository:
+
+  https://github.com/Team-Arcadia/CustomPerm/issues
+
+Permission must be **written** to be valid. Silence is not consent: no reply, or
+no objection to a use, never counts as permission. A permission granted in one
+case applies to that case only.
 
 **Author: THEFricadelle**
 
@@ -85,13 +105,28 @@ LICENSE prévaut.
 | Signaler des bugs, ouvrir des issues | ✅ Oui |
 | Forker le dépôt pour soumettre une pull request | ✅ Oui — voir [CONTRIBUTING.md](CONTRIBUTING.md) |
 | L'inclure dans un modpack CurseForge / Modrinth qui **référence** le fichier officiel non modifié | ✅ Oui, sans demander |
+| Transmettre le fichier officiel aux joueurs rejoignant **votre propre** serveur (auto-sync launcher / hébergeur) | ✅ Oui — voir §2.2 |
+| Le mentionner factuellement : « mon pack inclut CustomPerm », tutoriels, tests | ✅ Oui |
 | Empaqueter le jar dans un modpack exporté / hors-ligne | ❌ Autorisation écrite requise |
+| Le proposer en « installation en un clic » dans le catalogue d'un hébergeur | ❌ Autorisation écrite requise |
 | Le ré-uploader ou le mirrorer ailleurs (sites, forums, Discord, hébergeurs de fichiers) | ❌ Non |
 | Le modifier et en distribuer le résultat | ❌ Non |
 | Publier un build issu de votre fork | ❌ Non |
 | Réutiliser son code dans un autre mod, plugin ou projet | ❌ Non |
 | Le vendre, le louer, ou le lier à un produit payant | ❌ Non |
 | Prétendre l'avoir écrit, ou retirer les mentions de copyright | ❌ Non |
+| Utiliser le nom, le mod id ou le logo pour un autre projet, ou pour suggérer une caution | ❌ Non |
+| Utiliser le code pour entraîner ou affiner un modèle d'IA / d'apprentissage automatique | ❌ Non |
+
+## À propos de la révocation
+
+Le droit d'utiliser le mod est révocable — mais **pas arbitrairement**. La
+révocation est **individuelle** (elle ne prend effet qu'à l'encontre d'une
+personne ou entité déterminée, sur notification écrite), **non rétroactive**
+(elle ne rend jamais illicite un usage passé conforme), et elle ne tue **pas**
+silencieusement un modpack conforme ni n'empêche les autres utilisateurs
+d'exécuter un build officiel obtenu licitement. C'est un outil contre l'abus,
+pas un interrupteur sur l'écosystème. Voir §2.3 de la LICENSE.
 
 ## Pourquoi source visible et pas open-source
 
@@ -121,7 +156,14 @@ Aucun code tiers n'est empaqueté dans le jar CustomPerm.
 ## Demander une autorisation
 
 Tout ce qui est marqué ❌ ci-dessus peut malgré tout être accordé au cas par cas.
-Demandez — la réponse est souvent oui pour les demandes raisonnables.
-L'autorisation doit être **écrite** pour être valable.
+Demandez — la réponse est souvent oui pour les demandes raisonnables. Ouvrez une
+issue sur le dépôt officiel :
+
+  https://github.com/Team-Arcadia/CustomPerm/issues
+
+L'autorisation doit être **écrite** pour être valable. Le silence ne vaut pas
+accord : l'absence de réponse, ou l'absence d'objection à un usage, ne constitue
+jamais une autorisation. Une autorisation accordée dans un cas ne vaut que pour
+ce cas.
 
 **Author: THEFricadelle**

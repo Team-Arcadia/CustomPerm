@@ -728,10 +728,21 @@ référencent le **fichier officiel non modifié** depuis la plateforme. Empaque
 le jar dans un pack exporté/hors-ligne, le ré-héberger ailleurs ou livrer une
 version modifiée nécessite une autorisation écrite.
 
+**Les opérateurs de serveur peuvent transmettre le mod à leurs propres
+joueurs.** CustomPerm comportant des composants côté client, la synchronisation
+automatique des mods vers les joueurs rejoignant *votre* serveur est
+explicitement autorisée, tant que le fichier officiel est transmis non modifié.
+Le proposer en téléchargement général ou en « installation en un clic » dans le
+catalogue d'un hébergeur ne l'est pas.
+
 **Les contributions sont les bienvenues.** Vous pouvez forker le dépôt pour
 soumettre une pull request — cet usage précis est explicitement autorisé.
 Publier un build issu de votre fork, le rebrander ou réutiliser le code
 ailleurs ne l'est pas.
+
+Le nom, le mod id et le logo ne peuvent pas être utilisés pour un autre projet
+ni pour suggérer une caution, et le code ne peut pas servir à entraîner des
+modèles d'IA.
 
 Voir [LICENSE](LICENSE) pour les conditions complètes, [NOTICE.md](NOTICE.md)
 pour un résumé en langage clair de ce qui est autorisé ou non, et
