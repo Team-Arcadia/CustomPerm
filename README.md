@@ -727,9 +727,18 @@ without prior written permission.
 exported/offline pack, re-hosting it elsewhere, or shipping a modified build
 still requires written permission.
 
+**Server operators may send the mod to their own players.** Because CustomPerm
+has client-side components, automatic mod-synchronization to the players joining
+*your* server is explicitly permitted, as long as the official file is
+transmitted unmodified. Offering it as a general download or a hosting-panel
+"one-click install" product is not.
+
 **Contributions are welcome.** You may fork the repository to submit a pull
 request — that specific use is explicitly permitted. Publishing any build made
 from your fork, rebranding it, or reusing the code elsewhere is not.
+
+The name, mod id, and logo may not be used for another project or to imply
+endorsement, and the code may not be used to train AI models.
 
 See [LICENSE](LICENSE) for the full terms, [NOTICE.md](NOTICE.md) for a
 plain-language summary of what is and isn't allowed, and

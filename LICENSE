@@ -1,5 +1,6 @@
 CustomPerm — Proprietary License (All Rights Reserved)
 SPDX-License-Identifier: LicenseRef-CustomPerm-ARR
+License version: 1.1 — 2026-07-28
 
 Copyright (C) 2026 THEFricadelle. All rights reserved.
 
@@ -11,6 +12,15 @@ does NOT grant any of the rights below unless explicitly stated.
 Contributions are welcome: see Section 5 and the CONTRIBUTING.md file for the
 limited fork permission granted for submitting pull requests.
 
+ALL RIGHTS NOT EXPRESSLY GRANTED IN THIS LICENSE ARE RESERVED BY THE AUTHOR.
+No right is granted by implication, estoppel, acquiescence, or otherwise.
+
+VERSIONING OF THIS LICENSE
+Each release of the Mod is governed by the version of this license distributed
+with that release. A later version of this license does not retroactively
+change the terms applicable to a release you already obtained, and an earlier
+version does not apply to a later release.
+
 ====================================================================
 1. DEFINITIONS
 ====================================================================
@@ -19,24 +29,82 @@ limited fork permission granted for submitting pull requests.
 artifacts (.jar), source code, configuration templates, assets, and
 documentation.
 
-"You" means the individual or entity exercising the permissions granted here.
+"You" means any individual or entity that accesses, downloads, installs, runs,
+copies, or otherwise deals with the Mod or its source code, whether or not
+acting within the permissions granted here.
 
 "Author" means THEFricadelle, the sole copyright holder.
+
+"Official Channel" means a distribution channel operated or authorized by the
+Author — currently CurseForge, Modrinth, and the official GitHub repository and
+its Releases page.
+
+"Official Build" means an exact, unmodified artifact of the Mod as published by
+the Author on an Official Channel.
+
+"Server Operator" means a person or entity that runs a Minecraft server on
+which the Mod is installed, including hosting providers acting on behalf of
+their customers.
 
 ====================================================================
 2. GRANT OF USE
 ====================================================================
 
+2.1 GRANT
+
 Subject to the restrictions in Section 3, the Author grants You a
 non-exclusive, non-transferable, revocable, royalty-free right to:
 
-  (a) download the official compiled Mod from an Author-authorized
-      distribution channel (e.g. CurseForge, Modrinth, the official
-      GitHub Releases page); and
+  (a) download the Official Build from an Official Channel; and
 
-  (b) install and run the Mod on Minecraft server(s) that You own or
-      operate, for any number of players, including monetized servers,
+  (b) install and run the Mod on Minecraft server(s) or client(s) that You own
+      or operate, for any number of players, including monetized servers,
       provided the Mod itself is not sold or paywalled.
+
+2.2 DISTRIBUTION TO PLAYERS BY SERVER OPERATORS
+
+The Mod includes client-side components and may be required on the client to
+join a server running it. Notwithstanding Section 3(a), a Server Operator is
+permitted, without further request, to transmit the Official Build to the
+players connecting to that Operator's own server — including through automatic
+mod-synchronization mechanisms provided by launchers, hosting panels, or
+server-side sync mods — provided that:
+
+  (a) the Official Build is transmitted unmodified;
+
+  (b) the transmission is incidental to joining that specific server and the
+      Mod is not offered as a general-purpose download; and
+
+  (c) all copyright, authorship, and license notices are preserved.
+
+This permission covers delivery to that server's own players only. It does not
+authorize a hosting provider to publish, catalogue, mirror, or offer the Mod as
+a downloadable or "one-click install" product independently of a customer's own
+server instance; that requires the Author's prior written permission.
+
+2.3 REVOCATION
+
+The rights granted in Section 2.1 are revocable, but revocation operates as
+follows:
+
+  (a) Revocation is individual. It takes effect only against a specific You,
+      and only upon written notice from the Author to that You. There is no
+      blanket or silent withdrawal of the rights granted to the public at
+      large.
+
+  (b) Revocation is prospective. It does not retroactively make unlawful any
+      use that was compliant at the time it occurred.
+
+  (c) Revocation does not, by itself, affect (i) the modpack permission of
+      Section 3(b) as it applies to any compliant modpack maintained by a
+      third party, nor (ii) the ability of other users to continue running an
+      Official Build they lawfully obtained. Withdrawing the modpack
+      permission from a given modpack maintainer requires separate written
+      notice to that maintainer, and does not apply retroactively to modpack
+      versions already published.
+
+  (d) This Section is without prejudice to Section 6 (Termination), which
+      operates automatically upon breach.
 
 ====================================================================
 3. RESTRICTIONS
@@ -48,15 +116,16 @@ Except with the Author's prior written permission, You may NOT:
       Mod (compiled or source) available to third parties through any
       channel not authorized by the Author — this includes mod-hosting
       sites, modpack platforms, forums, file lockers, Discord servers,
-      and torrents;
+      and torrents — SUBJECT TO the modpack permission of Section 3(b), the
+      server-to-player distribution permitted by Section 2.2, and the
+      contribution fork permitted by Section 5.1;
 
   (b) include the Mod in a modpack EXCEPT under all of the following
       conditions, which are hereby permitted without further request:
-        (i)   the modpack distributes the Mod by referencing an official,
-              Author-authorized distribution channel (for example the
-              CurseForge app or Modrinth), so that the Mod file is fetched
-              from that channel at install time;
-        (ii)  the exact, unmodified official Mod file is used — the Mod is
+        (i)   the modpack distributes the Mod by referencing an Official
+              Channel (for example the CurseForge app or Modrinth), so that
+              the Mod file is fetched from that channel at install time;
+        (ii)  the exact, unmodified Official Build is used — the Mod is
               not altered, patched, recompiled, or repackaged in any way; and
         (iii) all copyright, authorship, and license notices are preserved.
       Bundling the Mod file into an exported or offline pack, re-hosting it on
@@ -68,15 +137,32 @@ Except with the Author's prior written permission, You may NOT:
 
   (d) create, distribute, or publish derivative works, forks, or modified
       versions of the Mod or its source code, EXCEPT for the contribution
-      fork permitted by Section 5;
+      fork permitted by Section 5.1;
 
   (e) remove, alter, or obscure any copyright, authorship, or license
-      notice contained in the Mod or its source;
+      notice contained in the Mod or its source, including the SPDX headers
+      at the top of source files;
 
   (f) claim authorship of the Mod or any part of it, present it as Your own
       work, or reuse its source code — in whole or in part, verbatim or
       substantially adapted — inside any other project, mod, plugin, or
-      product.
+      product;
+
+  (g) use the name "CustomPerm", the Mod's mod id, logo, visual identity, or
+      any confusingly similar designation (i) to identify or promote any other
+      project, product, or service, (ii) in a way that suggests affiliation
+      with, sponsorship by, or endorsement from the Author where none exists,
+      or (iii) as or within a trademark, domain name, or account name. Factual,
+      nominative references to the Mod — such as stating that a modpack
+      includes it, writing a tutorial, or publishing a review — are permitted
+      and are not restricted by this paragraph;
+
+  (h) use the Mod or its source code, in whole or in part, as training,
+      fine-tuning, validation, or retrieval corpus for any machine-learning or
+      generative artificial-intelligence system, nor include it in any dataset
+      compiled or distributed for that purpose. Ordinary use of AI-assisted
+      developer tooling by a contributor working on a contribution under
+      Section 5.1 is not restricted by this paragraph.
 
 ====================================================================
 4. SOURCE CODE AND DECOMPILATION
@@ -86,9 +172,9 @@ The publication of the source code (e.g. on a public repository) is provided
 for reference, review, contribution, and interoperability only. It grants no
 license to copy, reuse, redistribute, or create derivative works from that
 source, except as expressly permitted by Section 5.1 (contribution fork) or as
-strictly permitted by mandatory applicable law (for example,
-decompilation strictly necessary to achieve interoperability where such a
-right cannot be lawfully excluded).
+strictly permitted by mandatory applicable law (for example, decompilation
+strictly necessary to achieve interoperability where such a right cannot be
+lawfully excluded).
 
 ====================================================================
 5. CONTRIBUTIONS
@@ -114,7 +200,10 @@ permission is subject to all of the following conditions:
 
   (d) once Your pull request is merged, closed, or abandoned, this permission
       covers no further use of the fork beyond keeping it as a historical
-      record.
+      record. For the purpose of this paragraph, a pull request is deemed
+      "abandoned" if it has received no commit, comment, or other activity
+      from You for ninety (90) consecutive days, or if You publicly state that
+      You no longer intend to pursue it.
 
 Any use of a fork outside these conditions is not licensed and falls back
 under the restrictions of Section 3.
@@ -125,11 +214,18 @@ If You submit a contribution (e.g. a pull request, patch, or code suggestion),
 You grant the Author a perpetual, worldwide, irrevocable, non-exclusive,
 royalty-free, sublicensable and transferable license to use, reproduce,
 modify, relicense, and distribute that contribution as part of the Mod under
-this or any other license, without obligation of compensation or attribution.
+this or any other license, without obligation of compensation.
 
 You confirm that You are the author of the contribution, that You have the
 right to grant that license, and that the contribution does not include
 third-party code You are not entitled to submit.
+
+To the fullest extent permitted by applicable law, You waive any moral rights
+You may hold in Your contribution as against the Author and its licensees.
+Where such rights cannot lawfully be waived, You agree not to assert them in a
+manner that would prevent the Author from exercising the license granted above,
+it being understood that the Author will not misattribute Your contribution to
+a third party.
 
 You retain the copyright on Your own contribution. Submitting a contribution
 grants You no ownership, co-authorship, or any other right over the Mod
@@ -140,33 +236,127 @@ itself.
 ====================================================================
 
 Any breach of this license automatically and immediately terminates the
-rights granted in Section 2. Upon termination You must stop using and delete
-all copies of the Mod in Your possession. Sections 3 through 8 survive
-termination.
+rights granted in Sections 2.1, 2.2, 3(b), and 5.1. Upon termination You must
+stop using and delete all copies of the Mod in Your possession, and cease any
+distribution then in progress.
+
+Sections 1, 3, 4, 5.2, and 7 through 15, together with the reservation of
+rights stated above, survive termination.
+
+Termination under this Section is without prejudice to any other remedy
+available to the Author.
 
 ====================================================================
 7. NO WARRANTY
 ====================================================================
 
-THE MOD IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-FITNESS FOR A PARTICULAR PURPOSE, AND NONINFRINGEMENT.
+TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, THE MOD IS PROVIDED "AS
+IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT
+LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
+PURPOSE, AND NONINFRINGEMENT.
+
+The Mod is supplied free of charge. Nothing in this Section excludes any
+warranty that cannot lawfully be excluded.
 
 ====================================================================
 8. LIMITATION OF LIABILITY
 ====================================================================
 
-IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT, OR OTHERWISE, ARISING
-FROM, OUT OF, OR IN CONNECTION WITH THE MOD OR THE USE OR OTHER DEALINGS IN
-THE MOD.
+TO THE FULLEST EXTENT PERMITTED BY APPLICABLE LAW, AND IN CONSIDERATION OF THE
+FACT THAT THE MOD IS PROVIDED FREE OF CHARGE, IN NO EVENT SHALL THE AUTHOR BE
+LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY, WHETHER IN AN ACTION OF
+CONTRACT, TORT, OR OTHERWISE, ARISING FROM, OUT OF, OR IN CONNECTION WITH THE
+MOD OR THE USE OR OTHER DEALINGS IN THE MOD — INCLUDING WITHOUT LIMITATION
+DATA LOSS, WORLD CORRUPTION, SERVICE INTERRUPTION, OR LOSS OF REVENUE.
+
+Nothing in this Section excludes or limits the Author's liability for death or
+personal injury, for fraud or wilful misconduct (dol), for gross negligence
+(faute lourde), or for any other liability that cannot lawfully be excluded or
+limited under applicable law.
 
 ====================================================================
-9. PERMISSIONS AND CONTACT
+9. AUTHORSHIP AND MORAL RIGHTS
 ====================================================================
 
-For redistribution, modpack inclusion, or any other permission not granted
-above, contact the Author. Written permission is required and may be granted
-at the Author's sole discretion.
+The Author asserts the moral rights of authorship in the Mod, including the
+right to be identified as its author (droit à la paternité) and the right to
+the integrity of the work (droit au respect de l'œuvre), as recognized under
+French law and applicable international conventions. These rights are
+perpetual, inalienable, and imprescriptible, and are not affected, waived, or
+diminished by any permission granted in this license, by the public
+availability of the source code, or by any termination or revocation.
+
+====================================================================
+10. NO WAIVER
+====================================================================
+
+No failure or delay by the Author in exercising any right or remedy under this
+license, and no tolerance of any breach, constitutes a waiver of that right or
+remedy, or of any subsequent breach — whether similar or not.
+
+Any permission granted by the Author in a specific case is granted for that
+case only. It creates no precedent, no entitlement, and no expectation for any
+other person, project, or occasion. A waiver is effective only if given in
+writing by the Author and identifying what is waived.
+
+====================================================================
+11. SEVERABILITY
+====================================================================
+
+If any provision of this license is held invalid, unenforceable, or contrary
+to mandatory law by a competent court, that provision shall be reduced to the
+minimum extent necessary to make it valid and enforceable, or, if that is not
+possible, severed. The remaining provisions remain in full force and effect,
+and shall be interpreted so as to give the greatest possible effect to the
+Author's reservation of rights.
+
+====================================================================
+12. ENTIRE AGREEMENT
+====================================================================
+
+This license constitutes the entire agreement between You and the Author
+concerning the Mod, and supersedes any prior or contemporaneous statement,
+description, understanding, or communication, including any wording appearing
+on a distribution platform's project page. Nothing on such a page modifies this
+license.
+
+Any modification of these terms in a specific case is valid only if made in
+writing by the Author.
+
+====================================================================
+13. GOVERNING LAW AND JURISDICTION
+====================================================================
+
+This license is governed by and construed in accordance with French law,
+without regard to its conflict-of-law rules.
+
+Any dispute arising out of or in connection with this license shall be
+submitted to the exclusive jurisdiction of the competent French courts, to the
+extent permitted by applicable law. Where mandatory consumer-protection rules
+grant You the right to bring proceedings before, or to benefit from the law of,
+the courts of Your place of residence, those rules are unaffected by this
+Section.
+
+====================================================================
+14. LANGUAGE
+====================================================================
+
+The authoritative version of this license is the English text. Any translation
+is provided for convenience only, and in case of divergence the English text
+prevails, except where mandatory local law requires otherwise.
+
+====================================================================
+15. PERMISSIONS AND CONTACT
+====================================================================
+
+For redistribution, modpack inclusion beyond Section 3(b), commercial hosting
+offers, or any other permission not granted above, contact the Author by
+opening an issue on the official repository:
+
+  https://github.com/Team-Arcadia/CustomPerm/issues
+
+Written permission is required and may be granted at the Author's sole
+discretion. Silence is not consent: absence of a reply, or the Author's failure
+to object to a use, never constitutes permission.
 
 Author: THEFricadelle

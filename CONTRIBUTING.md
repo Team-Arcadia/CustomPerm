@@ -30,20 +30,31 @@ guide, not a substitute for it.
 
 The fork permission exists for one reason: letting you submit a pull request.
 Once your PR is merged, closed, or abandoned, that permission covers nothing
-further beyond keeping the fork as a historical record.
+further beyond keeping the fork as a historical record. A PR counts as
+abandoned after **90 consecutive days** without a commit, comment, or other
+activity from you, or if you say you are no longer pursuing it.
+
+Using AI-assisted developer tooling while writing your contribution is fine —
+the §3(h) restriction targets using the codebase as training data, not your
+editor.
 
 ## Contributor terms (important)
 
 By submitting a pull request, patch, or code suggestion, you agree that:
 
 1. You grant THEFricadelle a perpetual, worldwide, irrevocable, royalty-free,
-   sublicensable license to use, modify, relicense, and distribute your
-   contribution as part of CustomPerm, under this or any other license.
+   sublicensable and transferable license to use, modify, relicense, and
+   distribute your contribution as part of CustomPerm, under this or any other
+   license.
 2. You are the author of the contribution and have the right to submit it.
 3. Your contribution contains no third-party code you are not entitled to
    submit.
 4. You keep the copyright on your own contribution, but submitting it gives you
    **no ownership, co-authorship, or any other right over CustomPerm itself**.
+5. Where the law allows it, you waive your moral rights in the contribution as
+   against the author; where it does not, you agree not to assert them in a way
+   that would block the license above. In return, your contribution will never
+   be misattributed to someone else.
 
 If you do not agree with these terms, do not submit a pull request — open an
 issue describing the problem instead. That is just as useful.
@@ -104,7 +115,10 @@ Include, at minimum:
 ## Contact
 
 For redistribution requests, modpack permission beyond what the LICENSE already
-allows, or anything else not covered here, contact the author.
+allows, or anything else not covered here, open an issue on the official
+repository:
+
+  https://github.com/Team-Arcadia/CustomPerm/issues
 
 **Author: THEFricadelle**
 
@@ -144,7 +158,13 @@ guide en langage clair, pas un substitut.
 L'autorisation de fork existe pour une seule raison : vous permettre de soumettre
 une pull request. Une fois votre PR fusionnée, fermée ou abandonnée, cette
 autorisation ne couvre plus rien d'autre que la conservation du fork comme
-archive.
+archive. Une PR est réputée abandonnée après **90 jours consécutifs** sans
+commit, commentaire ou autre activité de votre part, ou si vous déclarez ne plus
+la poursuivre.
+
+Utiliser des outils de développement assistés par IA pour rédiger votre
+contribution ne pose aucun problème — la restriction du §3(h) vise l'usage du
+code comme données d'entraînement, pas votre éditeur.
 
 ## Conditions applicables aux contributeurs (important)
 
@@ -152,15 +172,19 @@ En soumettant une pull request, un patch ou une suggestion de code, vous
 acceptez que :
 
 1. Vous accordez à THEFricadelle une licence perpétuelle, mondiale, irrévocable,
-   gratuite et sous-licenciable pour utiliser, modifier, relicencier et
-   distribuer votre contribution au sein de CustomPerm, sous cette licence ou
-   toute autre.
+   gratuite, sous-licenciable et transférable pour utiliser, modifier,
+   relicencier et distribuer votre contribution au sein de CustomPerm, sous
+   cette licence ou toute autre.
 2. Vous êtes l'auteur de la contribution et avez le droit de la soumettre.
 3. Votre contribution ne contient aucun code tiers que vous n'auriez pas le
    droit de soumettre.
 4. Vous conservez le copyright sur votre propre contribution, mais la soumettre
    ne vous donne **aucun droit de propriété, de co-paternité ou autre sur
    CustomPerm lui-même**.
+5. Dans la limite permise par la loi, vous renoncez à vos droits moraux sur la
+   contribution à l'égard de l'auteur ; à défaut, vous vous engagez à ne pas les
+   invoquer d'une manière qui ferait obstacle à la licence ci-dessus. En
+   contrepartie, votre contribution ne sera jamais attribuée à un tiers.
 
 Si vous n'acceptez pas ces conditions, ne soumettez pas de pull request —
 ouvrez plutôt une issue décrivant le problème. C'est tout aussi utile.
@@ -224,6 +248,9 @@ Incluez au minimum :
 ## Contact
 
 Pour toute demande de redistribution, d'autorisation modpack au-delà de ce que
-la LICENSE permet déjà, ou tout autre point non couvert ici, contactez l'auteur.
+la LICENSE permet déjà, ou tout autre point non couvert ici, ouvrez une issue
+sur le dépôt officiel :
+
+  https://github.com/Team-Arcadia/CustomPerm/issues
 
 **Author: THEFricadelle**
