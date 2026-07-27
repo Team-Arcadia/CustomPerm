@@ -77,4 +77,61 @@ class RateLimiterTest {
         assertTrue(RateLimiter.tryAcquire("observable", player, 1, 3600).allowed(),
                 "clearServerState() doit purger tout l'historique");
     }
+
+    // ---------------- purge amortie (anti-fuite mémoire) ----------------
+
+    @Test
+    void sweep_evictsIdlePlayer_afterWindowElapses() {
+        UUID player = UUID.randomUUID();
+        assertTrue(RateLimiter.tryAcquire("observable", player, 5, 10).allowed());
+        assertTrue(RateLimiter.isTracked("observable", player));
+
+        // Fenêtre de 10s écoulée : la sweep purge l'entrée du joueur inactif.
+        long future = System.currentTimeMillis() + 11_000L;
+        RateLimiter.sweep(future, name -> 10_000L);
+
+        assertFalse(RateLimiter.isTracked("observable", player),
+                "Un joueur inactif dont la fenêtre a expiré doit être évincé");
+    }
+
+    @Test
+    void sweep_keepsPlayerStillWithinWindow() {
+        UUID player = UUID.randomUUID();
+        assertTrue(RateLimiter.tryAcquire("observable", player, 5, 3600).allowed());
+
+        RateLimiter.sweep(System.currentTimeMillis(), name -> 3_600_000L);
+
+        assertTrue(RateLimiter.isTracked("observable", player),
+                "Un joueur encore dans sa fenêtre ne doit pas être évincé");
+    }
+
+    @Test
+    void sweep_dropsWholeBucket_whenRuleRemovedOrDisabled() {
+        UUID player = UUID.randomUUID();
+        assertTrue(RateLimiter.tryAcquire("gone", player, 5, 3600).allowed());
+
+        // resolver renvoie <= 0 : la règle n'existe plus → le bucket entier est supprimé,
+        // même si les timestamps du joueur ne sont pas encore expirés.
+        RateLimiter.sweep(System.currentTimeMillis(), name -> -1L);
+
+        assertFalse(RateLimiter.isTracked("gone", player),
+                "Le bucket d'une commande sans règle active doit être supprimé");
+    }
+
+    @Test
+    void maybeSweep_runsAtMostOncePerInterval() {
+        UUID player = UUID.randomUUID();
+        assertTrue(RateLimiter.tryAcquire("observable", player, 5, 10).allowed());
+
+        // Premier maybeSweep (dernier sweep = 0 après clear) : s'exécute et purge l'entrée expirée.
+        long base = System.currentTimeMillis() + 11_000L;
+        RateLimiter.maybeSweep(base, name -> 10_000L);
+        assertFalse(RateLimiter.isTracked("observable", player));
+
+        // Ré-insertion, puis un second maybeSweep juste après : sous l'intervalle → aucune sweep.
+        assertTrue(RateLimiter.tryAcquire("observable", player, 5, 10).allowed());
+        RateLimiter.maybeSweep(base + 1_000L, name -> 10_000L);
+        assertTrue(RateLimiter.isTracked("observable", player),
+                "Deux sweeps rapprochés : le second ne doit pas s'exécuter (amortissement)");
+    }
 }

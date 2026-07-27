@@ -407,6 +407,10 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         if (original == null) return null;
         return ctx -> {
             CommandSourceStack source = ctx.getSource();
+            // Amortised memory reclaim for the rate-limiter — self-throttled to once per interval.
+            // Piggybacked on command execution (single-threaded server tick) so idle players' history
+            // is evicted without a dedicated scheduled task. See RateLimiter#maybeSweep.
+            RateLimiter.maybeSweep(System.currentTimeMillis(), CommandTreeRewriter::rateLimitWindowMillis);
             RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(rootName);
             if (rule != null && rule.enabled && source.getEntity() instanceof ServerPlayer player) {
                 RateLimiter.Result result = RateLimiter.tryAcquire(
@@ -421,6 +425,13 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             }
             return original.run(ctx);
         };
+    }
+
+    /** Active window (ms) for {@code commandName}, or {@code <= 0} when no enabled rule exists. */
+    private static long rateLimitWindowMillis(String commandName) {
+        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(commandName);
+        if (rule == null || !rule.enabled) return -1L;
+        return rule.windowSeconds * 1000L;
     }
 
     @SuppressWarnings("unchecked")
