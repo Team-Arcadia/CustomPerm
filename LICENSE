@@ -4,9 +4,12 @@ SPDX-License-Identifier: LicenseRef-CustomPerm-ARR
 Copyright (C) 2026 THEFricadelle. All rights reserved.
 
 This software ("CustomPerm", the "Mod") and its source code are made publicly
-viewable for transparency and interoperability purposes only. Public visibility
-of the source does NOT make it open-source and does NOT grant any of the rights
-below unless explicitly stated.
+viewable for transparency, interoperability, and community contribution
+purposes only. Public visibility of the source does NOT make it open-source and
+does NOT grant any of the rights below unless explicitly stated.
+
+Contributions are welcome: see Section 5 and the CONTRIBUTING.md file for the
+limited fork permission granted for submitting pull requests.
 
 ====================================================================
 1. DEFINITIONS
@@ -64,19 +67,26 @@ Except with the Author's prior written permission, You may NOT:
       or bundle it with a paid product;
 
   (d) create, distribute, or publish derivative works, forks, or modified
-      versions of the Mod or its source code;
+      versions of the Mod or its source code, EXCEPT for the contribution
+      fork permitted by Section 5;
 
   (e) remove, alter, or obscure any copyright, authorship, or license
-      notice contained in the Mod or its source.
+      notice contained in the Mod or its source;
+
+  (f) claim authorship of the Mod or any part of it, present it as Your own
+      work, or reuse its source code — in whole or in part, verbatim or
+      substantially adapted — inside any other project, mod, plugin, or
+      product.
 
 ====================================================================
 4. SOURCE CODE AND DECOMPILATION
 ====================================================================
 
 The publication of the source code (e.g. on a public repository) is provided
-for reference, review, and interoperability only. It grants no license to
-copy, reuse, redistribute, or create derivative works from that source,
-except as strictly permitted by mandatory applicable law (for example,
+for reference, review, contribution, and interoperability only. It grants no
+license to copy, reuse, redistribute, or create derivative works from that
+source, except as expressly permitted by Section 5.1 (contribution fork) or as
+strictly permitted by mandatory applicable law (for example,
 decompilation strictly necessary to achieve interoperability where such a
 right cannot be lawfully excluded).
 
@@ -84,10 +94,46 @@ right cannot be lawfully excluded).
 5. CONTRIBUTIONS
 ====================================================================
 
-If You submit a contribution (e.g. a pull request), You grant the Author a
-perpetual, worldwide, irrevocable, royalty-free license to use, relicense,
-and distribute that contribution as part of the Mod under this or any other
-license, and You confirm You have the right to grant that license.
+5.1 CONTRIBUTION FORK (LIMITED PERMISSION)
+
+Notwithstanding Section 3(d), the Author grants You permission to fork the
+official source repository and modify Your fork FOR THE SOLE PURPOSE of
+preparing and submitting a pull request to the official repository. This
+permission is subject to all of the following conditions:
+
+  (a) the fork remains a recognizable fork of the official repository and
+      keeps this LICENSE file, the copyright notices, and the Mod's identity
+      (name, mod id, branding) unchanged;
+
+  (b) You do not distribute, publish, advertise, or release any build
+      (compiled or source) produced from Your fork to third parties — the
+      fork is for development and review only;
+
+  (c) You do not use the fork as the basis of a separate, competing, or
+      rebranded project; and
+
+  (d) once Your pull request is merged, closed, or abandoned, this permission
+      covers no further use of the fork beyond keeping it as a historical
+      record.
+
+Any use of a fork outside these conditions is not licensed and falls back
+under the restrictions of Section 3.
+
+5.2 GRANT OVER YOUR CONTRIBUTION
+
+If You submit a contribution (e.g. a pull request, patch, or code suggestion),
+You grant the Author a perpetual, worldwide, irrevocable, non-exclusive,
+royalty-free, sublicensable and transferable license to use, reproduce,
+modify, relicense, and distribute that contribution as part of the Mod under
+this or any other license, without obligation of compensation or attribution.
+
+You confirm that You are the author of the contribution, that You have the
+right to grant that license, and that the contribution does not include
+third-party code You are not entitled to submit.
+
+You retain the copyright on Your own contribution. Submitting a contribution
+grants You no ownership, co-authorship, or any other right over the Mod
+itself.
 
 ====================================================================
 6. TERMINATION

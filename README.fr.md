@@ -726,8 +726,16 @@ le repackager, le vendre ni en créer des œuvres dérivées sans autorisation
 **Les modpacks sont autorisés** dans les modpacks CurseForge / Modrinth qui
 référencent le **fichier officiel non modifié** depuis la plateforme. Empaqueter
 le jar dans un pack exporté/hors-ligne, le ré-héberger ailleurs ou livrer une
-version modifiée nécessite une autorisation écrite. Voir [LICENSE](LICENSE) pour
-les conditions complètes.
+version modifiée nécessite une autorisation écrite.
+
+**Les contributions sont les bienvenues.** Vous pouvez forker le dépôt pour
+soumettre une pull request — cet usage précis est explicitement autorisé.
+Publier un build issu de votre fork, le rebrander ou réutiliser le code
+ailleurs ne l'est pas.
+
+Voir [LICENSE](LICENSE) pour les conditions complètes, [NOTICE.md](NOTICE.md)
+pour un résumé en langage clair de ce qui est autorisé ou non, et
+[CONTRIBUTING.md](CONTRIBUTING.md) avant d'ouvrir une pull request.
 
 ---
 
