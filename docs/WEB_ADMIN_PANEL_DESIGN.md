@@ -263,10 +263,16 @@ No blocking network call ever executes inside a Brigadier command callback on th
   with a banner: *"Managed by LuckPerms — use `/lp editor`."* Only CustomPerm-owned tabs are editable.
 - **Output**: on save, `POST` to the same bytebin and display the exact `/customperm applyedits <code>`
   string to copy.
-- **Hosting**: ship the static files in the repo under `webeditor/` and document self-hosting (any static
-  host, or bundled with a self-hosted bytebin). We may adapt LP's MIT-licensed `webeditor` as a starting
-  point (attribution required; our fork/hosting is compatible with our proprietary mod license since the
-  SPA is a separate deliverable).
+- **Origin (decision #2 — hybrid)**: fork LP's MIT `webeditor` as the base for the **Grades / Users /
+  Permissions** experience (it already models allow/deny nodes, group membership, wildcards, and a good
+  node-picker UX), then add **bespoke tabs** for the concepts LP's editor has no notion of:
+  **Exposed Commands**, **Aliases** (ordered multi-step editor), **Rate Limits**, and **Settings**. The
+  fork's LP-specific serialization is replaced by CustomPerm's schema (§5); attribution to the MIT
+  `webeditor` is preserved in the SPA. The bespoke tabs are original CustomPerm work.
+- **Hosting**: ship the static files in the repo under `webeditor/`. Two supported deployments (see §17):
+  (a) **served directly by the mod's embedded server** (self-hosted default, zero extra infra); (b) any
+  static host paired with a self-hosted bytebin. The SPA is a separate deliverable from the mod jar, so
+  its MIT lineage does not affect the mod's proprietary license.
 
 ---
 
@@ -321,18 +327,33 @@ block in `settings.json`. Proposed `WebEditorConfig`:
 ```json
 {
   "enabled": false,
+  "mode": "embedded",
+
+  "// embedded mode (§17)": "",
+  "bindAddress": "127.0.0.1",
+  "port": 8765,
+
+  "// bytebin mode (§2, §3 Option A)": "",
   "bytebinUrl": "https://bytebin.example.com",
   "editorUrl":  "https://customperm-editor.example.com",
+
+  "// shared": "",
   "sessionTtlMinutes": 60,
   "maxDownloadBytes": 2097152,
   "httpTimeoutSeconds": 10,
+  "exportPlayerNames": true,
   "abortOnConcurrentChange": true
 }
 ```
 
+- `mode`: `"embedded"` (default, §17 — loopback HTTP server) or `"bytebin"` (§3 Option A — external
+  self-hosted store). `bindAddress`/`port` apply to embedded; `bytebinUrl`/`editorUrl` apply to bytebin.
+- `exportPlayerNames` (§18): `true` includes names (safe under embedded/loopback), `false` = UUID-only.
 - Add to `ConfigSnapshot`, `ConfigManager` (parse/save/backup like the existing five files), and the
-  all-or-nothing reload transaction (INVARIANT-401). Provide `normalize()` with safe defaults.
-- **Do not** ship real public URLs enabled by default (privacy + opt-in).
+  all-or-nothing reload transaction (INVARIANT-401), per the touch points in §19.3. Provide `normalize()`
+  with safe defaults (validate `mode`, clamp `port`/timeouts, force `bindAddress` to a sane value).
+- **Do not** ship real public URLs enabled by default (privacy + opt-in); embedded defaults to loopback.
+- (JSON comments above are illustrative; the real file is plain JSON — Gson tolerates no comments.)
 
 ---
 
@@ -379,18 +400,19 @@ Each phase ships with tests (§13) and a CHANGELOG entry; **no version bump** un
 
 ---
 
-## 14. Risks & Open Decisions (need owner input before implementation)
+## 14. Decisions Log
 
-1. **Bytebin hosting** — self-host (recommended, private) vs use lucko's public `bytebin.lucko.me`
-   (uploads player data to a third party; check ToS). *Default in this design: self-host, opt-in.*
-2. **SPA origin** — fork LP's MIT `webeditor` (faster, needs attribution) vs build a minimal bespoke SPA
-   (full control, more work).
-3. **Outbound HTTP** — some servers are firewalled/offline; do we also need Option B (embedded server)
-   for those, and when?
-4. **PII policy** — is uploading UUIDs/names acceptable at all for this project, or must exports be
-   pseudonymized (UUID-only, names resolved locally by the SPA operator)?
-5. **Config placement** — separate `webeditor.json` vs nested in `settings.json`.
-6. **Conflict policy default** — abort vs 3-way merge on `baseConfigHash` mismatch.
+| # | Topic | Decision | Detail |
+|---|---|---|---|
+| 1 | **Storage hosting** | **Self-hosted** (exact form TBD). No third-party upload of player data. | §9, §10, and §17 (an embedded local store removes the need for separate infra). |
+| 2 | **SPA origin** | **Hybrid**: fork LP's MIT `webeditor` as the base for grades/users/permissions, and add **bespoke tabs** for CustomPerm-only concepts (exposed commands, aliases, rate limits, settings) that LP's editor has no notion of. | §7. |
+| 3 | **Connectivity / offline** | Developed → see **§17**. Recommendation: ship an **embedded local server (Option B)** as the self-hosted default, keep the bytebin round-trip (Option A) as an alternative for remote-without-proxy. | §17 |
+| 4 | **PII policy** | Developed → see **§18**. Recommendation: **data minimization + configurable pseudonymization**, names default-on only because storage is self-hosted/local. | §18 |
+| 5 | **Config placement** | Developed → see **§19**. Recommendation: **separate `webeditor.json`**, matching the existing per-concern file split. | §19 |
+| 6 | **Conflict policy** | Developed → see **§20**. Recommendation: **abort-on-mismatch by default** (safe), opt-in 3-way merge later. | §20 |
+
+Remaining to finalize for #1: the *exact* self-hosted form — embedded server (§17, recommended) and/or a
+self-hosted bytebin container. §17 makes the case for embedded-first.
 
 ---
 
@@ -406,14 +428,217 @@ Each phase ships with tests (§13) and a CHANGELOG entry; **no version bump** un
 
 ---
 
-## 16. Summary
+## 17. Connectivity, Offline & Firewalled Servers (decision #3)
 
-Adopt the **LuckPerms round-trip model (Option A)**: `/customperm editor` exports a versioned,
-backend-aware JSON, uploads it to a (self-hosted) bytebin, and hands the admin a URL to a static SPA;
-edits round-trip back and are applied by `/customperm applyedits <code>` as a **validated diff on the main
-thread**, reusing every existing mutation path and invariant. This delivers LP-editor-grade
-administration for **autonomous mode**, coexists cleanly with LuckPerms mode (read-only there), adds **no
-inbound port and no new server dependency**, and is fully self-hostable to satisfy privacy and the
-proprietary license. Implementation proceeds in six phases, each tested and changelogged, with the open
-decisions in §14 resolved first.
+### 17.1 The problem
+Option A (§3) needs **two** network reachabilities:
+1. **Server → storage** — the game server must make an outbound HTTPS call to upload/download sessions.
+2. **Admin browser → storage + SPA** — the admin's browser must reach the storage and the SPA.
+
+Real deployments break these assumptions:
+- **Egress-firewalled** hosts (many managed/hosting providers block outbound HTTP from game servers).
+- **Air-gapped / LAN-only** servers with no internet at all.
+- **Singleplayer / Open-to-LAN** worlds (§ the mod already supports these) — there is no public endpoint,
+  and running external infra is absurd for one player.
+- **Privacy** — decision #1 is self-hosted; the fewer moving parts, the smaller the trust surface.
+
+### 17.2 Recommended answer: embedded server first (Option B as the self-hosted default)
+Because storage is self-hosted anyway (decision #1), the simplest self-hosting is **no separate infra at
+all**: the mod runs a **tiny embedded HTTP server** that both **serves the SPA** and **stores/serves
+sessions** (acts as a local one-endpoint bytebin). This collapses the two reachabilities into one and
+works offline, on LAN, and in singleplayer.
+
+```mermaid
+sequenceDiagram
+    participant Admin as Admin (browser)
+    participant Server as MC Server (embedded HTTP)
+    Admin->>Server: GET /editor?token=…       (SPA + session bootstrap)
+    Server-->>Admin: SPA (static) + session JSON
+    Admin->>Server: PUT /session/<id> (edited JSON, token)
+    Server-->>Admin: 200 { applyCode }
+    Note over Admin,Server: Admin runs /customperm applyedits <code> in-game
+    Server->>Server: validate + diff + apply (main thread)
+```
+
+The bytebin round-trip (Option A) stays available as an alternative for admins who prefer editing from a
+remote machine without exposing the server (they self-host a bytebin + SPA elsewhere).
+
+### 17.3 Embedded-server design (`com.arcadia.customperm.webeditor.http`)
+- **Implementation**: JDK built-in `com.sun.net.httpserver.HttpServer` (no new dependency; already used in
+  unit tests as a stub — §13). Runs on its own small thread pool, **never** on the game tick thread.
+- **Lifecycle**: start on `ServerStartedEvent` **only if** `webeditor.enabled` and
+  `webeditor.mode == "embedded"`; stop on `ServerStoppedEvent`. Mirrors the existing hook style in
+  `CustomPerm` (which already listens to `ServerStartedEvent`/`ServerStoppedEvent`).
+- **Bind address (default safe)**: `127.0.0.1` (loopback only). To reach it remotely, the admin uses an
+  **SSH tunnel** (`ssh -L 8765:127.0.0.1:8765 …`) or a reverse proxy they control — the mod does **not**
+  expose a public port by default. A `bindAddress` config allows LAN binding for trusted networks.
+- **Port**: configurable (`webeditor.port`, default e.g. `8765`); if taken, log and disable gracefully.
+- **Endpoints** (minimal REST):
+  - `GET  /` and `/assets/*` → the static SPA (served from the mod jar resources / `webeditor/`).
+  - `GET  /api/session/<id>` → the exported JSON for that session (token-guarded).
+  - `PUT  /api/session/<id>` → store an edited JSON, return an `applyCode` (token-guarded).
+  - No endpoint mutates game state directly — **writes still require in-game `/customperm applyedits`**
+    (keeps op-2 as the single authorization authority; the HTTP layer is a courier, not an admin API).
+- **Threading**: HTTP handlers only read the current `ConfigSnapshot` (atomic) and buffer session blobs in
+  memory; the actual apply happens later, on the main thread, triggered by the in-game command.
+
+### 17.4 Authentication & hardening (embedded)
+- **One-time capability token**: `/customperm editor` generates a random token, embeds it in the printed
+  URL (`http://127.0.0.1:8765/?t=<token>`), and binds it to a session id with a short TTL. The HTTP server
+  accepts only requests carrying a valid, unexpired token.
+- **Loopback-by-default** dramatically shrinks the attack surface (no remote reachability without an
+  explicit tunnel/proxy the operator sets up).
+- **CSRF/same-origin**: the SPA and API share the mod's own origin; enforce `Origin`/`Sec-Fetch-Site`
+  checks on `PUT`, and require the token in a header (not just a cookie).
+- **No TLS termination in-mod**: loopback needs none; for remote access the operator's tunnel/reverse
+  proxy provides TLS. Document this explicitly (don't roll our own TLS).
+- **Body/size/timeout limits** identical to the `BytebinClient` guards (§6.4).
+- Still **opt-in** (`enabled=false` default) and **op-2** for the in-game commands.
+
+### 17.5 Decision matrix
+
+| Scenario | Recommended mode |
+|---|---|
+| Singleplayer / Open-to-LAN | **Embedded**, loopback (or LAN bind for the host). |
+| Dedicated server, admin on same box / via SSH | **Embedded**, loopback + SSH tunnel. |
+| Dedicated server, egress-firewalled | **Embedded** (no outbound needed). |
+| Admin wants to edit from anywhere, has own infra | **Bytebin (Option A)** with self-hosted bytebin + SPA. |
+| Managed host, no shell access, outbound allowed | **Bytebin (Option A)**. |
+
+**Config**: `webeditor.mode = "embedded" | "bytebin"` selects the path (§19 shows the full config).
+
+---
+
+## 18. Player Data & Pseudonymization (decision #4)
+
+### 18.1 What the export contains
+Only two sensitive fields: **player UUIDs** and **player names**, and only for users who actually have a
+grade assignment (`GradesConfig.userGrades` is already sparse — unassigned players are never listed). The
+permission *topology* (grade names, nodes) is not personal data.
+
+### 18.2 Principles (defense in depth, even when self-hosted)
+Self-hosting (decision #1) already keeps data on the operator's own infra, so the third-party-upload risk
+is gone. Pseudonymization still matters for: browser history, screen-sharing/screenshots, shared admin
+machines, and session blobs at rest. Apply **data minimization**:
+
+1. **Minimize scope** — export only assigned users (already the case). Never export the full player list.
+2. **UUID is the key; name is a convenience** — the applier keys everything on UUID; names are display-only
+   and never used to resolve identity on apply.
+3. **Configurable name handling** (`webeditor.exportPlayerNames`):
+   - `true` (default when embedded/loopback) — include names, resolved from the server's
+     `GameProfileCache` / usercache for good UX.
+   - `false` — export UUID-only; the SPA shows a short UUID prefix, and the operator can paste a local
+     name map if desired. No names ever leave the game process.
+4. **Short retention** — embedded sessions live in memory with a TTL and are dropped on server stop;
+   bytebin blobs use a short TTL. No long-term store of exports.
+5. **No logging of PII** — the mod logs session ids and counts, never names/UUIDs at INFO.
+
+### 18.3 Recommendation
+Ship with `exportPlayerNames=true` **because** the default storage is embedded/loopback (decision #1 + #3),
+where names never leave the host. Document that operators who enable a networked mode or a remote bytebin
+should set `exportPlayerNames=false` and treat exports as personal data (retention, access control). This
+is a pragmatic middle ground: best UX where it's safe, easy hardening where it isn't.
+
+---
+
+## 19. Config Placement (decision #5)
+
+### 19.1 Options
+- **A — separate `webeditor.json`** alongside the existing five files
+  (`grades/aliases/commands/settings/ratelimits.json`).
+- **B — nested block inside `settings.json`** (which today holds only `luckPermsFallbackMode`).
+
+### 19.2 Analysis against the existing `ConfigManager` design
+`ConfigManager` already treats config as **one file per concern**, with an **all-or-nothing reload
+transaction** (INVARIANT-401), **atomic writes**, and **per-file backup rotation** (keep last 3). A new
+concern fits that model naturally as its own file:
+
+| Criterion | Separate `webeditor.json` (A) | Nested in `settings.json` (B) |
+|---|---|---|
+| Consistency with existing split | ✅ matches the 5-file pattern | ⚠️ overloads a single-purpose file |
+| Independent backup/rotation | ✅ own `.bak` lineage | ❌ shares settings' backups |
+| Blast radius of invalid JSON | ✅ isolated (only web-editor disabled) | ❌ a typo disables the LP-fallback setting too |
+| Security isolation (opt-in, tokens) | ✅ self-contained | ⚠️ mixes a network feature into core settings |
+| Code touch points | 6th file in the transaction | none new, but reshapes `SettingsConfig` |
+
+### 19.3 Recommendation: **separate `webeditor.json` (A)**
+It is the consistent, lower-blast-radius choice and keeps a **security-sensitive, opt-in, network-capable**
+feature cleanly isolated from core permission settings.
+
+**Exact code touch points** (so implementation is mechanical):
+- New `WebEditorConfig` class with `normalize()` and safe defaults (§10 + §17/§18 fields).
+- `ConfigSnapshot` record → add a 6th component `WebEditorConfig webEditor`.
+- `ConfigManager`:
+  - add `webEditorFile = dir.resolve("webeditor.json")`;
+  - parse it inside the same try/catch-per-file block in `load()` (respect INVARIANT-401 — an invalid
+    `webeditor.json` returns `false`, previous snapshot kept);
+  - write it in `save()` via `writeAtomically`;
+  - back it up + `rotateBackups(..., "webeditor.json")` in `writeBackup()`;
+  - add getter `getWebEditor()`.
+  - include it in the legacy migration copy list.
+- Everything else (atomic write, retry, backup rotation) is inherited unchanged.
+
+---
+
+## 20. Concurrent-Change / Conflict Resolution (decision #6)
+
+### 20.1 The scenario
+Admin A runs `/customperm editor` at config hash `H0` and edits in the browser. Meanwhile the live config
+changes to `H1` (admin B via in-game commands, an alias/command add, or a `/customperm reload`). A then
+runs `/customperm applyedits`; the session's `meta.baseConfigHash = H0` no longer matches the live `H1`.
+
+### 20.2 Why "diff-based apply" alone is not enough
+The apply is already a **diff of the document against live state** (§5.4), which avoids blindly
+overwriting untouched entries. But without knowing the **base** the admin started from, the server cannot
+tell *"admin deleted grade X"* apart from *"admin never touched X, but B added X after export"* — the
+document simply lacks X in both cases. So a document-vs-live diff can silently undo B's additions. This is
+exactly why a base reference is needed for correct merging.
+
+### 20.3 Option — Abort on mismatch (recommended default)
+If `baseConfigHash != liveHash`, **refuse** and tell the admin to re-run `/customperm editor` and redo the
+edits on fresh state. 
+- ✅ Safe, predictable, trivial to implement and reason about; zero risk of clobbering B's work.
+- ❌ The admin loses their in-browser edits on a conflict (mitigated: the SPA can keep a local draft and
+  the window between export and apply is usually short).
+
+### 20.4 Option — 3-way merge (opt-in, later)
+Embed the **base values** in the session (`meta.base` = the exported per-entry state, or reuse the full
+exported document as the base). On apply, compute two diffs:
+- `theirs = edited − base` (what the admin changed),
+- then apply `theirs` onto **live** (not onto base), flagging a **conflict** only when the *same entry* was
+  changed on both sides (admin changed grade X's nodes AND B also changed grade X since export).
+- Non-conflicting changes from both sides survive; conflicts are reported per-entry and left for the admin
+  to resolve (default: keep live, list skipped items).
+- ✅ No lost work in the common case (disjoint edits); ❌ more code, more test surface, subtle per-section
+  merge rules (sets vs ordered lists — alias steps are ordered and need care).
+
+### 20.5 Recommendation
+Default to **abort-on-mismatch** for v1 (`webeditor.abortOnConcurrentChange = true`). Ship 3-way merge as
+an opt-in enhancement once the base-embedding and per-section merge rules are implemented and tested. Both
+rely on the same `baseConfigHash` already in the schema (§5.1), so v1 is forward-compatible.
+
+---
+
+## 21. Summary
+
+Adopt the **LuckPerms round-trip model** for the data flow (`/customperm editor` exports a versioned,
+backend-aware JSON; `/customperm applyedits <code>` applies it back as a **validated diff on the main
+thread**, reusing every existing mutation path and invariant). Resolved decisions steer the shape:
+
+- **Self-hosted (#1)** with an **embedded loopback HTTP server as the default (#3, §17)** — the mod serves
+  the SPA and stores sessions itself, so it works **offline, on LAN, in singleplayer, and behind egress
+  firewalls**, with **no inbound public port** (loopback + optional SSH tunnel) and **no new dependency**
+  (JDK `HttpServer`/`HttpClient`). The bytebin round-trip stays available for remote self-hosted setups.
+- **Hybrid SPA (#2, §7)** — fork LP's MIT `webeditor` for grades/users/permissions, add bespoke tabs for
+  CustomPerm-only concepts (exposed commands, aliases, rate limits, settings).
+- **Data minimization + configurable pseudonymization (#4, §18)** — names default-on only because storage
+  is local; UUID-only mode for networked setups.
+- **Separate `webeditor.json` (#5, §19)** — consistent with the existing per-concern file split and
+  INVARIANT-401 reload transaction.
+- **Abort-on-concurrent-change by default (#6, §20)** — safe and simple; opt-in 3-way merge later.
+
+This delivers LP-editor-grade administration for **autonomous mode**, coexists cleanly with LuckPerms mode
+(read-only there), and is fully self-hostable. Implementation proceeds in the six phases of §12, each
+tested and changelogged; only the exact self-hosted form of #1 (embedded vs also shipping a bytebin
+container) remains to finalize — §17 recommends embedded-first.
 ```
