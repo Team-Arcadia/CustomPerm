@@ -43,8 +43,9 @@ respecting the mod's "server-side only, never break vanilla clients" guarantee.
 ### Non-Goals (v1)
 - Replacing `/lp editor` for LuckPerms user/group management.
 - Real-time multi-admin collaborative editing (optional future — §6.6, websocket).
-- A permanently-listening authenticated web server with accounts (documented as **Option B**, §3, but
-  not the recommended v1).
+- A **public, account-based, always-on** admin portal. v1 does run a lightweight embedded HTTP server
+  (§17), but it is **loopback-by-default, one-time-token, opt-in, and only listens while enabled** — not a
+  multi-user authenticated web app.
 
 ---
 
@@ -99,13 +100,15 @@ sequenceDiagram
 
 | Option | Summary | Pros | Cons | Verdict |
 |---|---|---|---|---|
-| **A. bytebin round-trip + static SPA** (mirror LP) | Server exports JSON, uploads to a bytebin, admin edits in a hosted static SPA, `applyedits` downloads + diffs. | No open inbound port; matches a proven model; SPA is trivially self-hostable; minimal server surface; HTTP is short-lived & outbound only. | Requires outbound HTTPS from the server; needs a hosted bytebin + SPA (self or public); not real-time. | **RECOMMENDED for v1.** |
-| **B. Embedded local HTTP server + REST API** | The mod runs an authenticated HTTP server exposing a panel + REST endpoints, edited live. | Fully offline/self-contained; live; no third party. | Opens an inbound port (firewall/security surface); needs auth (tokens/sessions), TLS, CSRF handling; larger attack surface; more code. | Documented as an **optional advanced mode** (Phase 6), not v1. |
+| **A. bytebin round-trip + static SPA** (mirror LP) | Server exports JSON, uploads to a bytebin, admin edits in a hosted static SPA, `applyedits` downloads + diffs. | No open inbound port; matches a proven model; SPA is trivially self-hostable; HTTP is short-lived & outbound only. | Requires outbound HTTPS from the server; needs a hosted bytebin + SPA (self or public); breaks on egress-firewalled/offline/LAN/singleplayer; not real-time. | **DEFERRED** — future `mode="bytebin"` (§17.2, P6). |
+| **B. Embedded local HTTP server** | The mod runs a small loopback HTTP server that serves the SPA and stores/serves sessions; writes still go through in-game `applyedits`. | Fully offline/self-contained (no third party, no egress); works on LAN/singleplayer/firewalled; no separate infra; JDK-only. | Runs a local listener (mitigated: loopback-by-default, one-time token, opt-in); remote access needs an SSH tunnel/proxy. | **CHOSEN for v1** (loopback, token-gated — see §17). |
 | **C. In-game GUI only** (extend TesseraUI) | Keep everything in Minecraft screens. | No web at all; already partially built. | Not a "web panel"; limited layout; requires TesseraUI client-side. | Complementary, **not a substitute**. |
 
-**Decision:** implement **Option A**. It reuses a battle-tested, minimal-surface design, keeps the
-mod's server-side-only and no-inbound-port properties, and is fully self-hostable to satisfy the
-proprietary/privacy constraints. Option B may be added later for air-gapped servers.
+**Decision (confirmed):** implement **Option B** — a lightweight, loopback-by-default, token-gated
+embedded server (§17). It keeps the mod fully self-hosted with **zero external infra**, works
+**offline/LAN/singleplayer and behind egress firewalls**, and never opens a public port by default. Writes
+remain authorized solely by in-game op-2 `applyedits`, so the HTTP layer is a courier, not an admin API.
+**Option A (bytebin) is deferred** as a forward-compatible future mode for remote editing without a tunnel.
 
 ---
 
@@ -118,8 +121,9 @@ New commands (see §11):
 /customperm applyedits <code>     # download edited doc, diff, apply, resync
 ```
 
-Flow is identical to §2 with CustomPerm data and CustomPerm's own bytebin/SPA (self-hosted by default).
-Two implementation-critical rules:
+The **v1 flow is the embedded-server variant in §17.2** (the mod itself serves the SPA and stores the
+session over loopback); the §2 bytebin round-trip is the conceptual reference model and the deferred
+`mode="bytebin"` future. Either way the same two implementation-critical rules hold:
 
 - **All HTTP runs off the server main thread** (async `HttpClient`), and the **apply step returns to the
   main thread** via `server.execute(...)` before mutating config or the command dispatcher — exactly the
@@ -225,7 +229,9 @@ All new classes live under `com.arcadia.customperm.webeditor`.
 - **Validation gate first** (§9): reject the whole document on any invalid field; never partial-apply
   silently (report which entries were rejected).
 
-### 6.4 `BytebinClient`
+### 6.4 `BytebinClient` (DEFERRED — Option A / P6 only)
+> Not part of v1. The v1 courier is the embedded `HttpServer` (§17.3). This client is only built if/when
+> `webeditor.mode = "bytebin"` is implemented for remote self-hosted setups.
 - `java.net.http.HttpClient` (JDK built-in — **no new Gradle dependency**).
 - `POST` gzip body, `Content-Type: application/json`, `Content-Encoding: gzip`, parse `{ "key": … }`
   (bytebin returns the key in the `Location`/body depending on instance — implement per chosen instance).
@@ -372,14 +378,17 @@ to enable and the privacy implications.
 
 ## 12. Implementation Plan (phased)
 
+v1 uses the **embedded server (§17)** as the courier — there is **no `BytebinClient` in v1**.
+
 | Phase | Deliverable | Key files | Invariants to preserve |
 |---|---|---|---|
-| **P1** | Exporter + `BytebinClient` + `/customperm editor` (export & upload only) | `EditorSessionExporter`, `BytebinClient`, `WebEditorService`, command wiring, `WebEditorConfig` | Off-thread HTTP; op-2 gate; opt-in enable. |
-| **P2** | `/customperm applyedits` for CustomPerm-owned sections (commands/aliases/ratelimits/settings) | `EditorSessionApplier` (diff), validation | Reuse `commandAdd/Remove`, `AliasManager`, `reassertExposedCommands`, resync. |
-| **P3** | Grades + users editing (standalone) | applier grade/user diff | `PermissionResolver` shapes; save/backup. |
+| **P0** | `WebEditorConfig` + `webeditor.json` wired into `ConfigManager`/`ConfigSnapshot` | `WebEditorConfig`, `ConfigManager`/`ConfigSnapshot` edits (§19.3) | INVARIANT-401 (all-or-nothing reload); atomic write; backup rotation. |
+| **P1** | Embedded `HttpServer` (loopback) + exporter + `/customperm editor` (serve SPA + session, print tokened URL) | `webeditor.http.EmbeddedServer`, `EditorSessionExporter`, `WebEditorService`, command wiring | Off-tick HTTP thread pool; op-2 gate; opt-in enable; loopback bind; one-time token. |
+| **P2** | `/customperm applyedits` for CustomPerm-owned sections (commands/aliases/ratelimits/settings) | `EditorSessionApplier` (diff), validation, `baseConfigHash` abort (§20) | Reuse `commandAdd/Remove`, `AliasManager`, `reassertExposedCommands`, resync; main-thread apply. |
+| **P3** | Grades + users editing (standalone) + `exportPlayerNames` handling (§18) | applier grade/user diff | `PermissionResolver` shapes; save/backup. |
 | **P4** | LuckPerms-mode read-only + delegation + defense-in-depth refusal | backend gating in exporter/applier | Mirror `warnIfLuckPerms`. |
-| **P5** | Static SPA front-end | `webeditor/` | CSP, no external calls except configured bytebin. |
-| **P6 (opt.)** | Live websocket sync and/or Option B embedded server | — | Additive; auth/TLS if inbound. |
+| **P5** | Hybrid SPA front-end (LP `webeditor` fork + bespoke tabs, §7) | `webeditor/` | CSP; same-origin only; no external calls. |
+| **P6 (deferred)** | Optional Option A (`BytebinClient`, `mode="bytebin"`), live websocket sync, 3-way merge (§20.4) | — | Additive; off-thread HTTP; auth/TLS if ever inbound. |
 
 Each phase ships with tests (§13) and a CHANGELOG entry; **no version bump** until the owner requests one.
 
@@ -393,26 +402,32 @@ Each phase ships with tests (§13) and a CHANGELOG entry; **no version bump** un
   - Applier diff: add/remove/change per section; all-or-nothing on invalid entry.
   - Validation rejects: bad names, bad nodes, out-of-range limits, unknown settings keys,
     `customperm` shadowing, grade edits under `backend=luckperms`.
-  - `BytebinClient` against a **local `com.sun.net.httpserver.HttpServer` stub** (no network).
+  - Embedded server: hit its endpoints via an in-process HTTP client against a loopback bind on an
+    ephemeral port — `GET /api/session/<id>` returns the export; `PUT` stores and returns an `applyCode`;
+    requests without a valid token are rejected.
 - **GameTest (`src/gameTest`):** `editor` requires op-2 (non-op denied); `applyedits` mutates the live
   dispatcher and triggers `sendCommands`; conflict-hash mismatch aborts.
-- **Security tests:** malformed/oversized payload rejected; replay of a used `sessionNonce` refused.
+- **Security tests:** malformed/oversized payload rejected; replay of a used `sessionNonce`/token refused;
+  non-loopback request refused when `bindAddress` is loopback; `Origin`/`Sec-Fetch-Site` guard on `PUT`.
 
 ---
 
 ## 14. Decisions Log
 
-| # | Topic | Decision | Detail |
-|---|---|---|---|
-| 1 | **Storage hosting** | **Self-hosted** (exact form TBD). No third-party upload of player data. | §9, §10, and §17 (an embedded local store removes the need for separate infra). |
-| 2 | **SPA origin** | **Hybrid**: fork LP's MIT `webeditor` as the base for grades/users/permissions, and add **bespoke tabs** for CustomPerm-only concepts (exposed commands, aliases, rate limits, settings) that LP's editor has no notion of. | §7. |
-| 3 | **Connectivity / offline** | Developed → see **§17**. Recommendation: ship an **embedded local server (Option B)** as the self-hosted default, keep the bytebin round-trip (Option A) as an alternative for remote-without-proxy. | §17 |
-| 4 | **PII policy** | Developed → see **§18**. Recommendation: **data minimization + configurable pseudonymization**, names default-on only because storage is self-hosted/local. | §18 |
-| 5 | **Config placement** | Developed → see **§19**. Recommendation: **separate `webeditor.json`**, matching the existing per-concern file split. | §19 |
-| 6 | **Conflict policy** | Developed → see **§20**. Recommendation: **abort-on-mismatch by default** (safe), opt-in 3-way merge later. | §20 |
+**All six decisions are CONFIRMED.** The spec below is final for v1; implementation follows §12.
 
-Remaining to finalize for #1: the *exact* self-hosted form — embedded server (§17, recommended) and/or a
-self-hosted bytebin container. §17 makes the case for embedded-first.
+| # | Topic | Decision (final) | Detail |
+|---|---|---|---|
+| 1 | **Storage hosting** | **Self-hosted, via the mod's own embedded server** (resolved together with #3 — no separate bytebin infra to run). A self-hosted bytebin container is an *optional, deferred* alternative, not part of v1. | §9, §10, §17 |
+| 2 | **SPA origin** | **Hybrid**: fork LP's MIT `webeditor` for grades/users/permissions, add **bespoke tabs** for CustomPerm-only concepts (exposed commands, aliases, rate limits, settings). | §7 |
+| 3 | **Connectivity / offline** | **Option B — embedded loopback HTTP server** is the chosen, default (and v1-only) path. Works offline, LAN, singleplayer, and behind egress firewalls; no inbound public port. The bytebin round-trip (Option A) is **deferred** (optional future for remote-without-tunnel setups). | §17 |
+| 4 | **PII policy** | **Data minimization + configurable pseudonymization.** `exportPlayerNames=true` default (safe because storage is loopback/local); UUID-only mode available. | §18 |
+| 5 | **Config placement** | **Separate `webeditor.json`**, matching the existing per-concern file split and the INVARIANT-401 reload transaction. | §19 |
+| 6 | **Conflict policy** | **Abort-on-mismatch by default** (`abortOnConcurrentChange=true`). Opt-in 3-way merge is a deferred enhancement. | §20 |
+
+Consequence for v1 scope: the **`BytebinClient` / Option A path is out of v1** — the courier is the
+embedded `HttpServer`. Option A remains documented (§2–§3, §17.2) as a forward-compatible future mode
+selected by `webeditor.mode = "bytebin"`, but is not built in the initial phases.
 
 ---
 
@@ -442,11 +457,11 @@ Real deployments break these assumptions:
   and running external infra is absurd for one player.
 - **Privacy** — decision #1 is self-hosted; the fewer moving parts, the smaller the trust surface.
 
-### 17.2 Recommended answer: embedded server first (Option B as the self-hosted default)
+### 17.2 Chosen approach: embedded server (Option B) — CONFIRMED, v1
 Because storage is self-hosted anyway (decision #1), the simplest self-hosting is **no separate infra at
 all**: the mod runs a **tiny embedded HTTP server** that both **serves the SPA** and **stores/serves
 sessions** (acts as a local one-endpoint bytebin). This collapses the two reachabilities into one and
-works offline, on LAN, and in singleplayer.
+works offline, on LAN, and in singleplayer. **This is the v1 path.**
 
 ```mermaid
 sequenceDiagram
@@ -460,8 +475,9 @@ sequenceDiagram
     Server->>Server: validate + diff + apply (main thread)
 ```
 
-The bytebin round-trip (Option A) stays available as an alternative for admins who prefer editing from a
-remote machine without exposing the server (they self-host a bytebin + SPA elsewhere).
+The bytebin round-trip (Option A) is **deferred** — kept as a forward-compatible future mode
+(`webeditor.mode = "bytebin"`) for admins who later want to edit from a remote machine without a tunnel by
+self-hosting a bytebin + SPA elsewhere. It is not built in v1.
 
 ### 17.3 Embedded-server design (`com.arcadia.customperm.webeditor.http`)
 - **Implementation**: JDK built-in `com.sun.net.httpserver.HttpServer` (no new dependency; already used in
