@@ -33,7 +33,16 @@ documentation.
 copies, or otherwise deals with the Mod or its source code, whether or not
 acting within the permissions granted here.
 
-"Author" means THEFricadelle, the sole copyright holder.
+"Author" means THEFricadelle, who holds the copyright in the Mod as a whole and
+is the sole party entitled to grant, withhold, or withdraw the permissions set
+out in this license.
+
+"Contributor" means a person whose contribution has been merged into the Mod.
+Contributors retain the copyright in their own contribution and have licensed it
+to the Author under Section 5.2. Contributors are credited in the CONTRIBUTORS.md
+file. That credit is an acknowledgment of authorship of a specific contribution;
+it confers no ownership or co-ownership of the Mod, no co-maintainership, and no
+right to grant any permission under this license.
 
 "Official Channel" means a distribution channel operated or authorized by the
 Author — currently CurseForge, Modrinth, and the official GitHub repository and
@@ -285,6 +294,10 @@ French law and applicable international conventions. These rights are
 perpetual, inalienable, and imprescriptible, and are not affected, waived, or
 diminished by any permission granted in this license, by the public
 availability of the source code, or by any termination or revocation.
+
+The moral rights of Contributors in their own contributions are addressed in
+Section 5.2. The Author will not misattribute any contribution to a third party,
+and credits Contributors in the CONTRIBUTORS.md file.
 
 ====================================================================
 10. NO WAIVER

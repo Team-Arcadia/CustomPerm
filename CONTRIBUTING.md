@@ -56,6 +56,10 @@ By submitting a pull request, patch, or code suggestion, you agree that:
    that would block the license above. In return, your contribution will never
    be misattributed to someone else.
 
+Merged contributions are credited in [CONTRIBUTORS.md](CONTRIBUTORS.md). That
+credit is recognition of your work — it does not make you a co-owner or
+co-maintainer of the project.
+
 If you do not agree with these terms, do not submit a pull request — open an
 issue describing the problem instead. That is just as useful.
 
@@ -185,6 +189,10 @@ acceptez que :
    contribution à l'égard de l'auteur ; à défaut, vous vous engagez à ne pas les
    invoquer d'une manière qui ferait obstacle à la licence ci-dessus. En
    contrepartie, votre contribution ne sera jamais attribuée à un tiers.
+
+Les contributions fusionnées sont créditées dans
+[CONTRIBUTORS.md](CONTRIBUTORS.md). Ce crédit est une reconnaissance de votre
+travail — il ne fait pas de vous un copropriétaire ni un co-mainteneur du projet.
 
 Si vous n'acceptez pas ces conditions, ne soumettez pas de pull request —
 ouvrez plutôt une issue décrivant le problème. C'est tout aussi utile.

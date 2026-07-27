@@ -752,6 +752,13 @@ pour un résumé en langage clair de ce qui est autorisé ou non, et
 
 ## Crédits
 
+Auteur et mainteneur : **THEFricadelle**.
+
+Merci à toutes les personnes ayant contribué du code, des correctifs ou de la
+documentation — elles sont listées dans [CONTRIBUTORS.md](CONTRIBUTORS.md).
+
+Construit sur :
+
 - [NeoForge](https://neoforged.net/) pour le framework de mods.
 - [LuckPerms](https://luckperms.net/) pour l'inspiration et l'API d'intégration propre.
 - Brigadier (Mojang) pour le système de commandes sous-jacent.

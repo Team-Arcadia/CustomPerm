@@ -748,6 +748,13 @@ plain-language summary of what is and isn't allowed, and
 
 ## Credits
 
+Author and maintainer: **THEFricadelle**.
+
+Thanks to everyone who has contributed code, fixes, or documentation — they are
+listed in [CONTRIBUTORS.md](CONTRIBUTORS.md).
+
+Built on:
+
 - [NeoForge](https://neoforged.net/) for the modding framework.
 - [LuckPerms](https://luckperms.net/) for the inspiration and a clean integration API.
 - Brigadier (Mojang) for the underlying command system.
