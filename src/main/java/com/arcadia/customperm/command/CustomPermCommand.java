@@ -10,9 +10,11 @@ import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.suggestion.SuggestionProvider;
 import net.minecraft.ChatFormatting;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -23,6 +25,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +57,119 @@ import java.util.stream.Collectors;
  */
 public class CustomPermCommand {
 
+    // ---------------- suggestion providers ----------------
+    // Toutes les données proviennent de la config vivante (configManager) ou du dispatcher :
+    // recalculées à chaque frappe, donc toujours à jour après add/remove/reload.
+
+    /** Grades existants. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRADES =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(
+            CustomPerm.configManager.getGrades().grades.keySet(), builder);
+
+    /** Alias existants. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_ALIASES =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(
+            CustomPerm.configManager.getAliases().aliases.keySet(), builder);
+
+    /** Limites de débit configurées. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_RATE_LIMITS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(
+            CustomPerm.configManager.getRateLimits().rules.keySet(), builder);
+
+    /** Commandes actuellement exposées (pour dé-exposer). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_EXPOSED_COMMANDS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(
+            CustomPerm.configManager.getCommands().grantedCommands, builder);
+
+    /** Racines du dispatcher pas encore exposées et hors /customperm (pour exposer). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_EXPOSABLE_COMMANDS =
+        (ctx, builder) -> {
+            var server = ctx.getSource().getServer();
+            if (server == null) return builder.buildFuture();
+            Set<String> exposed = CustomPerm.configManager.getCommands().grantedCommands;
+            List<String> names = server.getCommands().getDispatcher().getRoot().getChildren().stream()
+                .map(com.mojang.brigadier.tree.CommandNode::getName)
+                .filter(n -> !n.equals("customperm") && !exposed.contains(n))
+                .collect(Collectors.toList());
+            return SharedSuggestionProvider.suggest(names, builder);
+        };
+
+    /** Union commandes exposées + alias — cibles plausibles d'une limite de débit. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_EXPOSED_AND_ALIASES =
+        (ctx, builder) -> {
+            Set<String> union = new TreeSet<>(CustomPerm.configManager.getCommands().grantedCommands);
+            union.addAll(CustomPerm.configManager.getAliases().aliases.keySet());
+            return SharedSuggestionProvider.suggest(union, builder);
+        };
+
+    /** Toutes les racines du dispatcher (debug/scan : inspection arbitraire). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_ALL_COMMANDS =
+        (ctx, builder) -> {
+            var server = ctx.getSource().getServer();
+            if (server == null) return builder.buildFuture();
+            List<String> names = server.getCommands().getDispatcher().getRoot().getChildren().stream()
+                .map(com.mojang.brigadier.tree.CommandNode::getName)
+                .collect(Collectors.toList());
+            return SharedSuggestionProvider.suggest(names, builder);
+        };
+
+    /** Joueurs en ligne, par nom (debug conserve StringArgument pour supporter l'offline). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_ONLINE_PLAYERS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(
+            ctx.getSource().getOnlinePlayerNames(), builder);
+
+    /** Nodes de permission connus : customperm.command.*, customperm.alias.* et perms de grades. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_KNOWN_NODES =
+        (ctx, builder) -> {
+            Set<String> nodes = new TreeSet<>();
+            for (String c : CustomPerm.configManager.getCommands().grantedCommands) {
+                nodes.add("customperm.command." + c);
+            }
+            for (String a : CustomPerm.configManager.getAliases().aliases.keySet()) {
+                nodes.add("customperm.alias." + a);
+            }
+            for (GradesConfig.Grade g : CustomPerm.configManager.getGrades().grades.values()) {
+                nodes.addAll(g.permissions);
+            }
+            return SharedSuggestionProvider.suggest(nodes, builder);
+        };
+
+    /** Perms déjà attribuées au grade nommé par l'argument "grade" (pour removeperm). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRADE_PERMS =
+        (ctx, builder) -> {
+            String gradeName = StringArgumentType.getString(ctx, "grade");
+            GradesConfig.Grade grade = CustomPerm.configManager.getGrades().grades.get(gradeName);
+            if (grade == null) return builder.buildFuture();
+            return SharedSuggestionProvider.suggest(grade.permissions, builder);
+        };
+
+    /** Grades déjà assignés au joueur nommé par l'argument "player" (pour unassign). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_PLAYER_GRADES =
+        (ctx, builder) -> {
+            try {
+                ServerPlayer player = EntityArgument.getPlayer(ctx, "player");
+                List<String> list = CustomPerm.configManager.getGrades()
+                    .userGrades.get(player.getUUID().toString());
+                if (list == null) return builder.buildFuture();
+                return SharedSuggestionProvider.suggest(list, builder);
+            } catch (CommandSyntaxException e) {
+                return builder.buildFuture();
+            }
+        };
+
+    /** Indices de steps valides (0..n-1) pour l'alias nommé par l'argument "name". */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_ALIAS_STEP_INDEX =
+        (ctx, builder) -> {
+            String name = StringArgumentType.getString(ctx, "name");
+            List<String> steps = CustomPerm.configManager.getAliases().aliases.get(name);
+            if (steps == null) return builder.buildFuture();
+            List<String> indices = new ArrayList<>(steps.size());
+            for (int i = 0; i < steps.size(); i++) {
+                indices.add(Integer.toString(i));
+            }
+            return SharedSuggestionProvider.suggest(indices, builder);
+        };
+
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
             Commands.literal("customperm")
@@ -76,22 +192,29 @@ public class CustomPermCommand {
                             .executes(CustomPermCommand::gradeCreate)))
                     .then(Commands.literal("delete")
                         .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_GRADES)
                             .executes(CustomPermCommand::gradeDelete)))
                     .then(Commands.literal("addperm")
                         .then(Commands.argument("grade", StringArgumentType.word())
+                            .suggests(SUGGEST_GRADES)
                             .then(Commands.argument("node", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_KNOWN_NODES)
                                 .executes(CustomPermCommand::gradeAddPerm))))
                     .then(Commands.literal("removeperm")
                         .then(Commands.argument("grade", StringArgumentType.word())
+                            .suggests(SUGGEST_GRADES)
                             .then(Commands.argument("node", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_GRADE_PERMS)
                                 .executes(CustomPermCommand::gradeRemovePerm))))
                     .then(Commands.literal("assign")
                         .then(Commands.argument("player", EntityArgument.player())
                             .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_GRADES)
                                 .executes(CustomPermCommand::gradeAssign))))
                     .then(Commands.literal("unassign")
                         .then(Commands.argument("player", EntityArgument.player())
                             .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_PLAYER_GRADES)
                                 .executes(CustomPermCommand::gradeUnassign))))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::gradeList)))
@@ -102,59 +225,74 @@ public class CustomPermCommand {
                                 .executes(CustomPermCommand::aliasAdd))))
                     .then(Commands.literal("addstep")
                         .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_ALIASES)
                             .then(Commands.argument("command", StringArgumentType.greedyString())
                                 .executes(CustomPermCommand::aliasAddStep))))
                     .then(Commands.literal("removestep")
                         .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_ALIASES)
                             .then(Commands.argument("index", IntegerArgumentType.integer(0))
+                                .suggests(SUGGEST_ALIAS_STEP_INDEX)
                                 .executes(CustomPermCommand::aliasRemoveStep))))
                     .then(Commands.literal("steps")
                         .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_ALIASES)
                             .executes(CustomPermCommand::aliasSteps)))
                     .then(Commands.literal("remove")
                         .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_ALIASES)
                             .executes(CustomPermCommand::aliasRemove)))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::aliasList)))
                 .then(Commands.literal("command")
                     .then(Commands.literal("add")
                         .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_EXPOSABLE_COMMANDS)
                             .executes(CustomPermCommand::commandAdd)))
                     .then(Commands.literal("remove")
                         .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_EXPOSED_COMMANDS)
                             .executes(CustomPermCommand::commandRemove)))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::commandList)))
                 .then(Commands.literal("ratelimit")
                     .then(Commands.literal("set")
                         .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_EXPOSED_AND_ALIASES)
                             .then(Commands.argument("max", IntegerArgumentType.integer(1))
                                 .then(Commands.argument("windowSeconds", IntegerArgumentType.integer(1))
                                     .executes(CustomPermCommand::rateLimitSet)))))
                     .then(Commands.literal("enable")
                         .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_RATE_LIMITS)
                             .executes(CustomPermCommand::rateLimitEnable)))
                     .then(Commands.literal("disable")
                         .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_RATE_LIMITS)
                             .executes(CustomPermCommand::rateLimitDisable)))
                     .then(Commands.literal("remove")
                         .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_RATE_LIMITS)
                             .executes(CustomPermCommand::rateLimitRemove)))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::rateLimitList)))
                 .then(Commands.literal("test")
                     .then(Commands.argument("player", EntityArgument.player())
                         .then(Commands.argument("node", StringArgumentType.greedyString())
+                            .suggests(SUGGEST_KNOWN_NODES)
                             .executes(CustomPermCommand::testPerm))))
                 .then(Commands.literal("debug")
                     .then(Commands.argument("player", StringArgumentType.word())
+                        .suggests(SUGGEST_ONLINE_PLAYERS)
                         .then(Commands.argument("command", StringArgumentType.word())
+                            .suggests(SUGGEST_ALL_COMMANDS)
                             .executes(CustomPermCommand::debugCheck))))
                 .then(Commands.literal("status")
                     .executes(CustomPermCommand::status))
                 .then(Commands.literal("scan")
                     .executes(CustomPermCommand::scanAll)
                     .then(Commands.argument("pattern", StringArgumentType.word())
+                        .suggests(SUGGEST_ALL_COMMANDS)
                         .executes(CustomPermCommand::scanPattern)))
                 .then(Commands.literal("reload")
                     .executes(CustomPermCommand::reload))
