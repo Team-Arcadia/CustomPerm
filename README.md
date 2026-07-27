@@ -725,7 +725,15 @@ without prior written permission.
 **Modpacks are allowed** in CurseForge / Modrinth modpacks that reference the
 **unmodified official file** from the platform. Bundling the jar into an
 exported/offline pack, re-hosting it elsewhere, or shipping a modified build
-still requires written permission. See [LICENSE](LICENSE) for the full terms.
+still requires written permission.
+
+**Contributions are welcome.** You may fork the repository to submit a pull
+request — that specific use is explicitly permitted. Publishing any build made
+from your fork, rebranding it, or reusing the code elsewhere is not.
+
+See [LICENSE](LICENSE) for the full terms, [NOTICE.md](NOTICE.md) for a
+plain-language summary of what is and isn't allowed, and
+[CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.
 
 ---
 
