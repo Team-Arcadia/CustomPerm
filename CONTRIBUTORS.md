@@ -17,6 +17,24 @@ Their work is gratefully acknowledged here.
   command tree, alias manager, and config handling against audit findings
   (June 2026).
 
+## What contributors get
+
+Under Section 5.3 of the [LICENSE](LICENSE):
+
+- **Credit.** Every merged contribution is credited on this page. No
+  contribution will ever be misattributed to someone else. This credit is not
+  withdrawn if the license is later terminated for any reason.
+- **Modpack permission.** Once your pull request has concluded, you may include
+  CustomPerm in a modpack you publish, on the same terms as everyone else
+  (§3(b)): the pack must reference an Official Channel so the mod is fetched
+  from CurseForge or Modrinth at install time, the unmodified Official Build
+  must be used, and the notices must be preserved. **Having forked the
+  repository never takes this away from you.**
+
+One limit worth stating plainly: you may never ship a build produced from
+**your own fork** — in a modpack or anywhere else. The permission covers the
+Official Build only.
+
 ## What this list means — and what it does not
 
 This page exists to **credit** the people who helped. Being listed here is a
@@ -65,6 +83,25 @@ documentation au projet. Leur travail est ici salué avec gratitude.
   compatibilité LuckPerms et correction du cycle de vie des souscriptions
   d'événements ; durcissement de l'arbre de commandes, du gestionnaire d'alias
   et de la gestion de configuration suite aux constats d'audit (juin 2026).
+
+## Ce que les contributeurs obtiennent
+
+Au titre de la Section 5.3 de la [LICENSE](LICENSE) :
+
+- **Le crédit.** Toute contribution fusionnée est créditée sur cette page.
+  Aucune contribution ne sera jamais attribuée à un tiers. Ce crédit n'est pas
+  retiré si la licence est ultérieurement résiliée, pour quelque motif que ce
+  soit.
+- **La permission modpack.** Une fois votre pull request terminée, vous pouvez
+  inclure CustomPerm dans un modpack que vous publiez, aux mêmes conditions que
+  tout le monde (§3(b)) : le pack doit référencer un canal officiel pour que le
+  mod soit récupéré depuis CurseForge ou Modrinth à l'installation, le build
+  officiel non modifié doit être utilisé, et les mentions doivent être
+  préservées. **Avoir forké le dépôt ne vous en prive jamais.**
+
+Une limite à énoncer clairement : vous ne pouvez jamais diffuser un build issu
+de **votre propre fork** — ni dans un modpack, ni ailleurs. La permission ne
+couvre que le build officiel.
 
 ## Ce que cette liste signifie — et ce qu'elle ne signifie pas
 

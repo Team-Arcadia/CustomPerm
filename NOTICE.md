@@ -20,6 +20,8 @@ This file is a plain-language summary for convenience. The binding terms are in
 | Read, audit, and review the source code | ✅ Yes |
 | Report bugs, open issues | ✅ Yes |
 | Fork the repo to submit a pull request | ✅ Yes — see [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Ship the mod in your own modpack **after** contributing a PR | ✅ Yes — §5.3, official file only |
+| Be credited for a merged contribution | ✅ Yes — [CONTRIBUTORS.md](CONTRIBUTORS.md), §5.3(a) |
 | Include it in a CurseForge / Modrinth modpack that **references** the official unmodified file | ✅ Yes, no need to ask |
 | Send the official file to players joining **your own** server (launcher / host auto-sync) | ✅ Yes — see §2.2 |
 | Mention it factually: "my pack includes CustomPerm", tutorials, reviews | ✅ Yes |
@@ -104,6 +106,8 @@ LICENSE prévaut.
 | Lire, auditer et relire le code source | ✅ Oui |
 | Signaler des bugs, ouvrir des issues | ✅ Oui |
 | Forker le dépôt pour soumettre une pull request | ✅ Oui — voir [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Diffuser le mod dans votre propre modpack **après** avoir contribué une PR | ✅ Oui — §5.3, fichier officiel uniquement |
+| Être crédité pour une contribution fusionnée | ✅ Oui — [CONTRIBUTORS.md](CONTRIBUTORS.md), §5.3(a) |
 | L'inclure dans un modpack CurseForge / Modrinth qui **référence** le fichier officiel non modifié | ✅ Oui, sans demander |
 | Transmettre le fichier officiel aux joueurs rejoignant **votre propre** serveur (auto-sync launcher / hébergeur) | ✅ Oui — voir §2.2 |
 | Le mentionner factuellement : « mon pack inclut CustomPerm », tutoriels, tests | ✅ Oui |

@@ -40,9 +40,10 @@ out in this license.
 "Contributor" means a person whose contribution has been merged into the Mod.
 Contributors retain the copyright in their own contribution and have licensed it
 to the Author under Section 5.2. Contributors are credited in the CONTRIBUTORS.md
-file. That credit is an acknowledgment of authorship of a specific contribution;
-it confers no ownership or co-ownership of the Mod, no co-maintainership, and no
-right to grant any permission under this license.
+file and benefit from the modpack permission of Section 5.3. That credit is an
+acknowledgment of authorship of a specific contribution; it confers no ownership
+or co-ownership of the Mod, no co-maintainership, and no right to grant any
+permission under this license.
 
 "Official Channel" means a distribution channel operated or authorized by the
 Author — currently CurseForge, Modrinth, and the official GitHub repository and
@@ -240,17 +241,50 @@ You retain the copyright on Your own contribution. Submitting a contribution
 grants You no ownership, co-authorship, or any other right over the Mod
 itself.
 
+5.3 RECOGNITION OF CONTRIBUTORS
+
+  (a) CREDIT. Every Contributor whose contribution is merged into the Mod is
+      credited in the CONTRIBUTORS.md file distributed with the Mod. The Author
+      will not misattribute a contribution to a third party. A Contributor may
+      ask, through the official issue tracker, to be listed under a different
+      name or handle, to have a contact address removed, or not to be listed at
+      all.
+
+  (b) MODPACK PERMISSION. Once a Contributor's pull request has concluded —
+      whether merged, closed, or abandoned within the meaning of Section
+      5.1(d) — that Contributor may include the Mod in a modpack they publish,
+      on the same conditions as Section 3(b): the modpack must reference an
+      Official Channel so that the Mod is fetched from that channel at install
+      time, the exact unmodified Official Build must be used, and all
+      copyright, authorship, and license notices must be preserved.
+
+      Having forked the repository under Section 5.1 never removes or restricts
+      this permission.
+
+  (c) OFFICIAL BUILD ONLY. For the avoidance of doubt, a Contributor may never
+      distribute a build produced from their own fork, whether in a modpack or
+      by any other means. Section 5.1(b) continues to apply, and the permission
+      in paragraph (b) covers the Official Build and nothing else.
+
+  (d) NO OTHER RIGHT. This Section grants no right beyond what it states. It
+      does not permit bundling the Mod into an exported or offline pack,
+      re-hosting it on any other channel, or publishing a modified build — each
+      of which continues to require the Author's prior written permission under
+      Section 3.
+
 ====================================================================
 6. TERMINATION
 ====================================================================
 
 Any breach of this license automatically and immediately terminates the
-rights granted in Sections 2.1, 2.2, 3(b), and 5.1. Upon termination You must
-stop using and delete all copies of the Mod in Your possession, and cease any
-distribution then in progress.
+rights granted in Sections 2.1, 2.2, 3(b), 5.1, and 5.3(b). Upon termination You
+must stop using and delete all copies of the Mod in Your possession, and cease
+any distribution then in progress.
 
-Sections 1, 3, 4, 5.2, and 7 through 15, together with the reservation of
-rights stated above, survive termination.
+Sections 1, 3, 4, 5.2, 5.3(a), and 7 through 15, together with the reservation
+of rights stated above, survive termination. A Contributor's credit under
+Section 5.3(a) is an acknowledgment of authorship and is not withdrawn by
+termination.
 
 Termination under this Section is without prejudice to any other remedy
 available to the Author.
@@ -296,8 +330,8 @@ diminished by any permission granted in this license, by the public
 availability of the source code, or by any termination or revocation.
 
 The moral rights of Contributors in their own contributions are addressed in
-Section 5.2. The Author will not misattribute any contribution to a third party,
-and credits Contributors in the CONTRIBUTORS.md file.
+Section 5.2, and their credit in the CONTRIBUTORS.md file in Section 5.3(a). The
+Author will not misattribute any contribution to a third party.
 
 ====================================================================
 10. NO WAIVER
