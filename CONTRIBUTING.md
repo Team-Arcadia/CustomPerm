@@ -56,8 +56,22 @@ By submitting a pull request, patch, or code suggestion, you agree that:
    that would block the license above. In return, your contribution will never
    be misattributed to someone else.
 
-Merged contributions are credited in [CONTRIBUTORS.md](CONTRIBUTORS.md). That
-credit is recognition of your work — it does not make you a co-owner or
+## What you get in return
+
+Section 5.3 of the LICENSE gives every contributor two things:
+
+- **Credit** in [CONTRIBUTORS.md](CONTRIBUTORS.md), which is not withdrawn later
+  for any reason. Ask via the issue tracker if you want a different name or
+  handle, no contact address, or no listing at all.
+- **The modpack permission**, confirmed explicitly: once your PR has concluded,
+  you may ship CustomPerm in a modpack you publish — referencing CurseForge or
+  Modrinth, unmodified official file, notices preserved. Having forked the repo
+  never costs you this.
+
+You still may not ship a build made from your own fork. The permission covers
+the official file only.
+
+That credit is recognition of your work — it does not make you a co-owner or
 co-maintainer of the project.
 
 If you do not agree with these terms, do not submit a pull request — open an
@@ -190,9 +204,24 @@ acceptez que :
    invoquer d'une manière qui ferait obstacle à la licence ci-dessus. En
    contrepartie, votre contribution ne sera jamais attribuée à un tiers.
 
-Les contributions fusionnées sont créditées dans
-[CONTRIBUTORS.md](CONTRIBUTORS.md). Ce crédit est une reconnaissance de votre
-travail — il ne fait pas de vous un copropriétaire ni un co-mainteneur du projet.
+## Ce que vous obtenez en retour
+
+La Section 5.3 de la LICENSE accorde deux choses à tout contributeur :
+
+- **Le crédit** dans [CONTRIBUTORS.md](CONTRIBUTORS.md), qui n'est retiré
+  ultérieurement pour aucun motif. Demandez via le tracker d'issues si vous
+  souhaitez un autre nom ou pseudonyme, aucune adresse de contact, ou aucune
+  mention du tout.
+- **La permission modpack**, confirmée explicitement : une fois votre PR
+  terminée, vous pouvez diffuser CustomPerm dans un modpack que vous publiez —
+  en référençant CurseForge ou Modrinth, fichier officiel non modifié, mentions
+  préservées. Avoir forké le dépôt ne vous en prive jamais.
+
+Vous ne pouvez toujours pas diffuser un build issu de votre propre fork. La
+permission ne couvre que le fichier officiel.
+
+Ce crédit est une reconnaissance de votre travail — il ne fait pas de vous un
+copropriétaire ni un co-mainteneur du projet.
 
 Si vous n'acceptez pas ces conditions, ne soumettez pas de pull request —
 ouvrez plutôt une issue décrivant le problème. C'est tout aussi utile.
