@@ -12,10 +12,9 @@ Their work is gratefully acknowledged here.
 
 ## Contributors
 
-- **curveo** ([lcurveo@gmail.com](mailto:lcurveo@gmail.com)) — LuckPerms
-  compatibility audit and event-subscription lifecycle fix; hardening of the
-  command tree, alias manager, and config handling against audit findings
-  (June 2026).
+- **curveo** — LuckPerms compatibility audit and event-subscription lifecycle
+  fix; hardening of the command tree, alias manager, and config handling
+  against audit findings (June 2026).
 
 ## What contributors get
 
@@ -79,10 +78,10 @@ documentation au projet. Leur travail est ici salué avec gratitude.
 
 ## Contributeurs
 
-- **curveo** ([lcurveo@gmail.com](mailto:lcurveo@gmail.com)) — audit de
-  compatibilité LuckPerms et correction du cycle de vie des souscriptions
-  d'événements ; durcissement de l'arbre de commandes, du gestionnaire d'alias
-  et de la gestion de configuration suite aux constats d'audit (juin 2026).
+- **curveo** — audit de compatibilité LuckPerms et correction du cycle de vie
+  des souscriptions d'événements ; durcissement de l'arbre de commandes, du
+  gestionnaire d'alias et de la gestion de configuration suite aux constats
+  d'audit (juin 2026).
 
 ## Ce que les contributeurs obtiennent
 
