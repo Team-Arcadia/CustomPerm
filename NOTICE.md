@@ -35,6 +35,7 @@ This file is a plain-language summary for convenience. The binding terms are in
 | Claim you wrote it, or remove the copyright notices | ❌ No |
 | Use the name, mod id, or logo for another project, or to imply endorsement | ❌ No |
 | Use the code to train or fine-tune an AI / machine-learning model | ❌ No |
+| Redistribute it, or authorize someone else to, because you are a team or organization member | ❌ No — §1, membership grants no permission |
 
 ## About revocation
 
@@ -54,6 +55,19 @@ and so that anyone who spots a bug can fix it through a pull request.
 It is not open-source because the author retains exclusive control over
 distribution and derivative works. Visibility is not a license.
 
+## Ownership and maintenance
+
+CustomPerm is maintained by Team-Arcadia. Copyright in the mod is held by
+**THEFricadelle** alone, who is the only party able to grant, withhold, or
+withdraw any permission under the LICENSE.
+
+Where the repository is hosted under an organization or a team account, that
+hosting transfers nothing: being a member, a maintainer, or an administrator of
+that organization gives no right to redistribute the mod, publish a build of it,
+or authorize a third party to do either. Team members who contribute do so as
+contributors, on the same terms as anyone else (§5.2). See §1 of the
+[LICENSE](LICENSE).
+
 ## Third-party components
 
 CustomPerm builds against, but does not include or redistribute, the following:
@@ -67,6 +81,52 @@ CustomPerm builds against, but does not include or redistribute, the following:
 
 These are compile-time or runtime dependencies resolved on the user's side. No
 third-party code is bundled into the CustomPerm jar.
+
+## MIT-licensed portions
+
+Parts of CustomPerm were contributed before 2026-07-14, while the project was
+distributed under the MIT License. Those portions entered the codebase under
+MIT, and they remain available under those terms. The MIT License permits
+sublicensing, which is why they may be distributed as part of the proprietary
+mod; it also requires the notice below to be preserved, which is the purpose of
+this section.
+
+The portions concerned are the contributions merged through pull request #1,
+commits `123650a` and `53556dc`, authored by **curveo**. They affect
+`CustomPerm.java`, `perm/LuckPermsService.java`, `command/AliasManager.java`,
+`command/CommandTreeRewriter.java`, `command/CustomPermCommand.java`,
+`config/ConfigManager.java`, and `docs/LUCKPERMS_COMPATIBILITY_AUDIT.md`.
+
+The MIT License as it stood in the repository at that time:
+
+```
+MIT License
+
+Copyright (c) 2026 THEFricadelle
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+The rest of the software is governed by [LICENSE](LICENSE), the proprietary
+All Rights Reserved terms. This section preserves a notice owed for the
+portions identified above; it extends no permission to anything else, and does
+not place the mod as a whole under the MIT License.
 
 ## Requesting permission
 
@@ -121,6 +181,7 @@ LICENSE prévaut.
 | Prétendre l'avoir écrit, ou retirer les mentions de copyright | ❌ Non |
 | Utiliser le nom, le mod id ou le logo pour un autre projet, ou pour suggérer une caution | ❌ Non |
 | Utiliser le code pour entraîner ou affiner un modèle d'IA / d'apprentissage automatique | ❌ Non |
+| Le redistribuer, ou autoriser quelqu'un à le faire, au motif que vous êtes membre de l'équipe ou de l'organisation | ❌ Non — §1, l'appartenance ne donne aucune autorisation |
 
 ## À propos de la révocation
 
@@ -142,6 +203,19 @@ bug puisse le corriger via une pull request.
 Ce n'est pas open-source parce que l'auteur conserve le contrôle exclusif de la
 distribution et des œuvres dérivées. La visibilité n'est pas une licence.
 
+## Propriété et maintenance
+
+CustomPerm est maintenu par Team-Arcadia. Les droits d'auteur sur le mod sont
+détenus par **THEFricadelle** seul, unique partie en mesure d'accorder, de
+refuser ou de retirer une autorisation au titre de la LICENSE.
+
+Lorsque le dépôt est hébergé sous une organisation ou un compte d'équipe, cet
+hébergement ne transfère rien : être membre, mainteneur ou administrateur de
+cette organisation ne donne aucun droit de redistribuer le mod, d'en publier un
+build, ni d'autoriser un tiers à le faire. Les membres de l'équipe qui
+contribuent le font en tant que contributeurs, aux mêmes conditions que
+n'importe qui d'autre (§5.2). Voir §1 de la [LICENSE](LICENSE).
+
 ## Composants tiers
 
 CustomPerm compile contre les composants suivants, sans les inclure ni les
@@ -156,6 +230,52 @@ redistribuer :
 
 Ce sont des dépendances de compilation ou d'exécution résolues côté utilisateur.
 Aucun code tiers n'est empaqueté dans le jar CustomPerm.
+
+## Portions sous licence MIT
+
+Certaines parties de CustomPerm ont été contribuées avant le 2026-07-14, alors
+que le projet était distribué sous licence MIT. Ces portions sont entrées dans
+le code sous MIT et restent disponibles à ces conditions. La licence MIT
+autorise la sous-licence, ce qui permet de les distribuer au sein du mod
+propriétaire ; elle impose en contrepartie de conserver la mention ci-dessous,
+et c'est l'objet de cette section.
+
+Les portions concernées sont les contributions fusionnées via la pull request
+#1, commits `123650a` et `53556dc`, écrites par **curveo**. Elles touchent
+`CustomPerm.java`, `perm/LuckPermsService.java`, `command/AliasManager.java`,
+`command/CommandTreeRewriter.java`, `command/CustomPermCommand.java`,
+`config/ConfigManager.java` et `docs/LUCKPERMS_COMPATIBILITY_AUDIT.md`.
+
+La licence MIT telle qu'elle figurait alors dans le dépôt :
+
+```
+MIT License
+
+Copyright (c) 2026 THEFricadelle
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+Le reste du logiciel est régi par [LICENSE](LICENSE), les conditions
+propriétaires Tous droits réservés. Cette section préserve une mention due au
+titre des portions identifiées ci-dessus ; elle n'étend aucune autorisation
+au-delà, et ne place pas le mod dans son ensemble sous licence MIT.
 
 ## Demander une autorisation
 

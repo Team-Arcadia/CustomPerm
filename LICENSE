@@ -1,6 +1,6 @@
 CustomPerm — Proprietary License (All Rights Reserved)
 SPDX-License-Identifier: LicenseRef-CustomPerm-ARR
-License version: 1.1 — 2026-07-28
+License version: 1.2 — 2026-07-30
 
 Copyright (C) 2026 THEFricadelle. All rights reserved.
 
@@ -44,6 +44,28 @@ file and benefit from the modpack permission of Section 5.3. That credit is an
 acknowledgment of authorship of a specific contribution; it confers no ownership
 or co-ownership of the Mod, no co-maintainership, and no right to grant any
 permission under this license.
+
+"Maintaining Organization" means any organization, team, group, or platform
+account under which the official repository, an Official Channel, or the Mod's
+public presence is hosted or operated, whether or not it is a legal entity.
+Hosting the Mod under a Maintaining Organization, holding administrative rights
+over that organization or over the official repository, or being described
+anywhere as a maintainer, team member, or staff of the Mod:
+
+  (a) transfers no copyright or other right in the Mod;
+
+  (b) grants none of the permissions reserved to the Author, and in particular
+      no right to redistribute the Mod, to publish a build of it, or to grant
+      any permission to a third party under this license; and
+
+  (c) does not entitle that organization or person to act as the Author under
+      this license.
+
+A member of a Maintaining Organization who submits a contribution does so as a
+Contributor, on the terms of Section 5.2, exactly as any other person. Where a
+Maintaining Organization is a legal entity, it holds rights in the Mod only to
+the extent of a separate written assignment or license signed by the Author;
+this license neither creates nor evidences such an instrument.
 
 "Official Channel" means a distribution channel operated or authorized by the
 Author — currently CurseForge, Modrinth, and the official GitHub repository and
@@ -405,5 +427,10 @@ opening an issue on the official repository:
 Written permission is required and may be granted at the Author's sole
 discretion. Silence is not consent: absence of a reply, or the Author's failure
 to object to a use, never constitutes permission.
+
+Only the Author can grant a permission under this license. A statement by a
+Contributor, a maintainer, a moderator, or a member of a Maintaining
+Organization is not a permission, whatever channel it is made on, unless the
+Author has authorized it in writing.
 
 Author: THEFricadelle
