@@ -55,6 +55,10 @@ By submitting a pull request, patch, or code suggestion, you agree that:
    against the author; where it does not, you agree not to assert them in a way
    that would block the license above. In return, your contribution will never
    be misattributed to someone else.
+6. These terms apply identically whether or not you are a member of the team or
+   organization hosting the repository. Membership, maintainer status, and write
+   access to the repository grant no right over CustomPerm and no authority to
+   permit anything the LICENSE reserves to THEFricadelle (§1).
 
 ## What you get in return
 
@@ -203,6 +207,11 @@ acceptez que :
    contribution à l'égard de l'auteur ; à défaut, vous vous engagez à ne pas les
    invoquer d'une manière qui ferait obstacle à la licence ci-dessus. En
    contrepartie, votre contribution ne sera jamais attribuée à un tiers.
+6. Ces conditions s'appliquent à l'identique, que vous soyez ou non membre de
+   l'équipe ou de l'organisation qui héberge le dépôt. L'appartenance, le statut
+   de mainteneur et l'accès en écriture au dépôt ne donnent aucun droit sur
+   CustomPerm ni le pouvoir d'autoriser ce que la LICENSE réserve à
+   THEFricadelle (§1).
 
 ## Ce que vous obtenez en retour
 
