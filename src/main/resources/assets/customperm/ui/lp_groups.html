@@ -1,0 +1,35 @@
+<!-- CustomPerm — LuckPerms editor, group list. TesseraTemplate.load("customperm:ui/lp_groups").
+     Model keys (see LpGroupsScreen + AbstractLpScreen): canEdit, readOnly, statusError,
+     statusOk, noGroups, groups (count); per row: group.name.<i>, group.weight.<i>,
+     group.nodeCount.<i>, group.parents.<i>, group.editAction.<i>, group.deleteAction.<i>.
+     Handlers: back, refresh, openUsers, openTracks, createGroup. -->
+<col class="window">
+    <row class="toolbar">
+        <button class="btn" onclick="back">&lt; Menu</button>
+        <label class="tab active">Groups</label>
+        <button class="btn" onclick="openUsers">Players</button>
+        <button class="btn" onclick="openTracks">Tracks</button>
+        <button class="btn" onclick="refresh">Refresh</button>
+    </row>
+
+    <label class="status err" v-if="statusError">{{status}}</label>
+    <label class="status ok" v-if="statusOk">{{status}}</label>
+
+    <label class="readonly-note" v-if="readOnly">Read-only — you lack customperm.gui.luckperms.edit.</label>
+
+    <row class="create-row" v-if="canEdit">
+        <input id="newGroup" class="field" placeholder="new group name" maxlength="36" onsubmit="newGroup" />
+        <button class="btn" onclick="createGroup">Create</button>
+    </row>
+
+    <col class="list">
+        <label class="empty" v-if="noGroups">No groups.</label>
+        <row class="group-row" v-for="group in groups">
+            <label class="group-name">{{group.name}}</label>
+            <label class="group-meta">w {{group.weight}} · {{group.nodeCount}} nodes</label>
+            <label class="group-parents">{{group.parents}}</label>
+            <button class="btn sm" onclick="{{group.editAction}}">Edit</button>
+            <button class="btn sm danger" onclick="{{group.deleteAction}}" v-if="canEdit">Delete</button>
+        </row>
+    </col>
+</col>

@@ -1,0 +1,99 @@
+<!-- CustomPerm — LuckPerms editor, single group. TesseraTemplate.load("customperm:ui/lp_group").
+     Model keys (see LpGroupScreen + AbstractLpScreen): canEdit, readOnly, statusOk, statusError,
+     status, groupName, present, missing, displayNameValue, weightValue, prefixValue, suffixValue,
+     noNodes, nodes (count), noParents, parents (count), candidates (count).
+     Per node: node.key.<i>, node.value.<i>, node.contexts.<i>, node.expiry.<i>, node.removeAction.<i>.
+     Per parent: parent.name.<i>, parent.removeAction.<i>.
+     Per candidate: candidate.name.<i>, candidate.addAction.<i>.
+     Handlers: back, refresh, backToGroups, addAllow, addDeny, addParent, setMeta, unsetMeta,
+     setPrefix, unsetPrefix, setSuffix, unsetSuffix, setWeight, setDisplayName. -->
+<col class="window">
+    <row class="toolbar">
+        <button class="btn" onclick="backToGroups">&lt; Groups</button>
+        <label class="tab active">{{groupName}}</label>
+        <button class="btn" onclick="refresh">Refresh</button>
+    </row>
+
+    <label class="status err" v-if="statusError">{{status}}</label>
+    <label class="status ok" v-if="statusOk">{{status}}</label>
+
+    <label class="empty" v-if="missing">This group no longer exists.</label>
+
+    <col v-if="present">
+        <label class="readonly-note" v-if="readOnly">Read-only — you lack customperm.gui.luckperms.edit.</label>
+
+        <!-- Identity: display name and weight, both single-valued on a group. -->
+        <row class="edit-row" v-if="canEdit">
+            <label class="field-label">Name</label>
+            <input id="displayName" class="field" placeholder="{{displayNameValue}}" maxlength="64" onsubmit="displayName" />
+            <button class="btn sm" onclick="setDisplayName">Set</button>
+            <label class="field-label">Weight</label>
+            <input id="weight" class="field narrow" placeholder="{{weightValue}}" maxlength="6" onsubmit="weight" />
+            <button class="btn sm" onclick="setWeight">Set</button>
+        </row>
+
+        <!-- Chat meta. An empty priority field means 100, the LuckPerms convention. -->
+        <row class="edit-row" v-if="canEdit">
+            <label class="field-label">Prefix</label>
+            <input id="prefixPriority" class="field narrow" placeholder="100" maxlength="6" />
+            <input id="prefixValue" class="field" placeholder="{{prefixValue}}" maxlength="64" onsubmit="prefixValue" />
+            <button class="btn sm" onclick="setPrefix">Set</button>
+            <button class="btn sm danger" onclick="unsetPrefix">Unset</button>
+        </row>
+        <row class="edit-row" v-if="canEdit">
+            <label class="field-label">Suffix</label>
+            <input id="suffixPriority" class="field narrow" placeholder="100" maxlength="6" />
+            <input id="suffixValue" class="field" placeholder="{{suffixValue}}" maxlength="64" onsubmit="suffixValue" />
+            <button class="btn sm" onclick="setSuffix">Set</button>
+            <button class="btn sm danger" onclick="unsetSuffix">Unset</button>
+        </row>
+
+        <row class="edit-row" v-if="canEdit">
+            <label class="field-label">Meta</label>
+            <input id="metaKey" class="field" placeholder="key" maxlength="64" />
+            <input id="metaValue" class="field" placeholder="value" maxlength="64" onsubmit="metaValue" />
+            <button class="btn sm" onclick="setMeta">Set</button>
+            <button class="btn sm danger" onclick="unsetMeta">Unset</button>
+        </row>
+
+        <!-- Inheritance -->
+        <label class="section">Parents</label>
+        <col class="list short">
+            <label class="empty" v-if="noParents">Inherits nothing.</label>
+            <row class="chip-row" v-for="parent in parents">
+                <label class="chip">{{parent.name}}</label>
+                <button class="btn sm danger" onclick="{{parent.removeAction}}" v-if="canEdit">Remove</button>
+            </row>
+        </col>
+        <row class="edit-row" v-if="canEdit">
+            <input id="parentName" class="field" placeholder="parent group" maxlength="36" onsubmit="parentName" />
+            <button class="btn sm" onclick="addParent">Add parent</button>
+        </row>
+        <col class="list short" v-if="canEdit">
+            <row class="chip-row" v-for="candidate in candidates">
+                <label class="chip dim">{{candidate.name}}</label>
+                <button class="btn sm" onclick="{{candidate.addAction}}">+</button>
+            </row>
+        </col>
+
+        <!-- Permission nodes. Duration accepts a bare number of seconds or 30m / 2h / 7d. -->
+        <label class="section">Nodes</label>
+        <row class="edit-row" v-if="canEdit">
+            <input id="permNode" class="field wide" placeholder="permission.node" maxlength="256" onsubmit="permNode" />
+            <input id="permContexts" class="field" placeholder="world=nether" maxlength="128" />
+            <input id="permDuration" class="field narrow" placeholder="perm" maxlength="12" />
+            <button class="btn sm" onclick="addAllow">Allow</button>
+            <button class="btn sm danger" onclick="addDeny">Deny</button>
+        </row>
+        <col class="list">
+            <label class="empty" v-if="noNodes">No nodes.</label>
+            <row class="node-row" v-for="node in nodes">
+                <label class="node-key">{{node.key}}</label>
+                <label class="node-value">{{node.value}}</label>
+                <label class="node-ctx">{{node.contexts}}</label>
+                <label class="node-exp">{{node.expiry}}</label>
+                <button class="btn sm danger" onclick="{{node.removeAction}}" v-if="canEdit">X</button>
+            </row>
+        </col>
+    </col>
+</col>

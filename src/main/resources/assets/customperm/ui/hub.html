@@ -1,11 +1,23 @@
 <!-- CustomPerm — TesseraUI landing hub. Loaded via TesseraTemplate.load("customperm:ui/hub").
-     Carries no server data: three navigation buttons wired to handlers "openGrades",
-     "openAliases", "openStatus". -->
+     Model keys (see HubScreen): luckPermsActive, internalMode, backendLabel.
+     Handlers: openGrades, openAliases, openStatus (internal mode);
+     openLpGroups, openLpUsers, openLpTracks (LuckPerms mode). -->
 <col class="window">
     <label class="title">CustomPerm — Administration</label>
-    <label class="subtitle">Server command permissions</label>
+    <label class="subtitle">Backend: {{backendLabel}}</label>
 
-    <col class="nav">
+    <!-- LuckPerms active: the permission store belongs to LuckPerms, so the menu leads to the
+         LuckPerms editor. The internal grade screen is read-only in this mode and is hidden. -->
+    <col class="nav" v-if="luckPermsActive">
+        <button class="nav-btn" onclick="openLpGroups">LuckPerms — Groups</button>
+        <button class="nav-btn" onclick="openLpUsers">LuckPerms — Players</button>
+        <button class="nav-btn" onclick="openLpTracks">LuckPerms — Tracks</button>
+        <button class="nav-btn" onclick="openAliases">Aliases</button>
+        <button class="nav-btn" onclick="openStatus">Status</button>
+    </col>
+
+    <!-- Internal backend: grades.json is the permission store, edited through the grade screen. -->
+    <col class="nav" v-if="internalMode">
         <button class="nav-btn" onclick="openGrades">Grades</button>
         <button class="nav-btn" onclick="openAliases">Aliases</button>
         <button class="nav-btn" onclick="openStatus">Status</button>

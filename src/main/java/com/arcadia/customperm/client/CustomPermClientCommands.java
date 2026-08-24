@@ -54,7 +54,15 @@ public final class CustomPermClientCommands {
                     .executes(ctx -> openScreen(ctx, "hub"))
                     .then(Commands.literal("grades").executes(ctx -> openScreen(ctx, "grades")))
                     .then(Commands.literal("aliases").executes(ctx -> openScreen(ctx, "aliases")))
-                    .then(Commands.literal("status").executes(ctx -> openScreen(ctx, "status"))))
+                    .then(Commands.literal("status").executes(ctx -> openScreen(ctx, "status")))
+                    // LuckPerms editor entry points. Registered unconditionally: whether
+                    // LuckPerms is active is a server-side fact the client does not know at
+                    // command-registration time, and the screens themselves report an inactive
+                    // backend rather than pretending the subcommand does not exist.
+                    .then(Commands.literal("luckperms").executes(ctx -> openScreen(ctx, "luckperms"))
+                        .then(Commands.literal("groups").executes(ctx -> openScreen(ctx, "groups")))
+                        .then(Commands.literal("players").executes(ctx -> openScreen(ctx, "players")))
+                        .then(Commands.literal("tracks").executes(ctx -> openScreen(ctx, "tracks")))))
         );
     }
 
