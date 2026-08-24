@@ -1,0 +1,104 @@
+<!-- CustomPerm — LuckPerms editor, single player. TesseraTemplate.load("customperm:ui/lp_user").
+     Model keys (see LpUserScreen + AbstractLpScreen): canEdit, readOnly, statusOk, statusError,
+     status, userName, userStatus, primaryGroup, present, missing, noNodes, nodes (count),
+     noParents, parents (count), candidates (count), noTracks, tracks (count).
+     Per node: node.key.<i>, node.value.<i>, node.contexts.<i>, node.expiry.<i>, node.removeAction.<i>.
+     Per parent: parent.name.<i>, parent.primary.<i>, parent.removeAction.<i>, parent.primaryAction.<i>.
+     Per candidate: candidate.name.<i>, candidate.addAction.<i>.
+     Per track: track.name.<i>, track.groups.<i>, track.promoteAction.<i>, track.demoteAction.<i>.
+     Handlers: back, refresh, backToUsers, addAllow, addDeny, setMeta, unsetMeta, setPrefix,
+     unsetPrefix, setSuffix, unsetSuffix. -->
+<col class="window">
+    <row class="toolbar">
+        <button class="btn" onclick="backToUsers">&lt; Players</button>
+        <label class="tab active">{{userName}}</label>
+        <label class="user-status">{{userStatus}}</label>
+        <button class="btn" onclick="refresh">Refresh</button>
+    </row>
+
+    <label class="status err" v-if="statusError">{{status}}</label>
+    <label class="status ok" v-if="statusOk">{{status}}</label>
+
+    <label class="empty" v-if="missing">This player is unknown to LuckPerms.</label>
+
+    <col v-if="present">
+        <label class="readonly-note" v-if="readOnly">Read-only — you lack customperm.gui.luckperms.edit.</label>
+        <label class="subtitle">Primary group: {{primaryGroup}}</label>
+
+        <!-- Group membership. "Primary" only takes effect on a group the player already has. -->
+        <label class="section">Groups</label>
+        <col class="list short">
+            <label class="empty" v-if="noParents">No group.</label>
+            <row class="chip-row" v-for="parent in parents">
+                <label class="chip">{{parent.name}}</label>
+                <button class="btn sm" onclick="{{parent.primaryAction}}" v-if="canEdit">Primary</button>
+                <button class="btn sm danger" onclick="{{parent.removeAction}}" v-if="canEdit">Remove</button>
+            </row>
+        </col>
+        <row class="edit-row" v-if="canEdit">
+            <label class="field-label">Add for</label>
+            <input id="userParentDuration" class="field narrow" placeholder="perm" maxlength="12" />
+            <label class="field-label dim">(30m / 2h / 7d)</label>
+        </row>
+        <col class="list short" v-if="canEdit">
+            <row class="chip-row" v-for="candidate in candidates">
+                <label class="chip dim">{{candidate.name}}</label>
+                <button class="btn sm" onclick="{{candidate.addAction}}">+</button>
+            </row>
+        </col>
+
+        <!-- Tracks: promote/demote walk the ladder defined on the Tracks screen. -->
+        <label class="section">Tracks</label>
+        <col class="list short">
+            <label class="empty" v-if="noTracks">No track defined.</label>
+            <row class="track-row" v-for="track in tracks">
+                <label class="track-name">{{track.name}}</label>
+                <label class="track-groups">{{track.groups}}</label>
+                <button class="btn sm" onclick="{{track.promoteAction}}" v-if="canEdit">Promote</button>
+                <button class="btn sm" onclick="{{track.demoteAction}}" v-if="canEdit">Demote</button>
+            </row>
+        </col>
+
+        <!-- Chat meta and arbitrary meta, same shape as the group screen. -->
+        <row class="edit-row" v-if="canEdit">
+            <label class="field-label">Prefix</label>
+            <input id="userPrefixPriority" class="field narrow" placeholder="100" maxlength="6" />
+            <input id="userPrefixValue" class="field" placeholder="prefix" maxlength="64" onsubmit="userPrefixValue" />
+            <button class="btn sm" onclick="setPrefix">Set</button>
+            <button class="btn sm danger" onclick="unsetPrefix">Unset</button>
+        </row>
+        <row class="edit-row" v-if="canEdit">
+            <label class="field-label">Suffix</label>
+            <input id="userSuffixPriority" class="field narrow" placeholder="100" maxlength="6" />
+            <input id="userSuffixValue" class="field" placeholder="suffix" maxlength="64" onsubmit="userSuffixValue" />
+            <button class="btn sm" onclick="setSuffix">Set</button>
+            <button class="btn sm danger" onclick="unsetSuffix">Unset</button>
+        </row>
+        <row class="edit-row" v-if="canEdit">
+            <label class="field-label">Meta</label>
+            <input id="userMetaKey" class="field" placeholder="key" maxlength="64" />
+            <input id="userMetaValue" class="field" placeholder="value" maxlength="64" onsubmit="userMetaValue" />
+            <button class="btn sm" onclick="setMeta">Set</button>
+            <button class="btn sm danger" onclick="unsetMeta">Unset</button>
+        </row>
+
+        <label class="section">Nodes</label>
+        <row class="edit-row" v-if="canEdit">
+            <input id="userPermNode" class="field wide" placeholder="permission.node" maxlength="256" onsubmit="userPermNode" />
+            <input id="userPermContexts" class="field" placeholder="world=nether" maxlength="128" />
+            <input id="userPermDuration" class="field narrow" placeholder="perm" maxlength="12" />
+            <button class="btn sm" onclick="addAllow">Allow</button>
+            <button class="btn sm danger" onclick="addDeny">Deny</button>
+        </row>
+        <col class="list">
+            <label class="empty" v-if="noNodes">No own node.</label>
+            <row class="node-row" v-for="node in nodes">
+                <label class="node-key">{{node.key}}</label>
+                <label class="node-value">{{node.value}}</label>
+                <label class="node-ctx">{{node.contexts}}</label>
+                <label class="node-exp">{{node.expiry}}</label>
+                <button class="btn sm danger" onclick="{{node.removeAction}}" v-if="canEdit">X</button>
+            </row>
+        </col>
+    </col>
+</col>

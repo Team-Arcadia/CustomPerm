@@ -8,7 +8,12 @@
  */
 package com.arcadia.customperm.client.gui;
 
+import com.arcadia.customperm.client.gui.lp.AbstractLpScreen;
+import com.arcadia.customperm.client.gui.lp.LpGroupsScreen;
+import com.arcadia.customperm.client.gui.lp.LpTracksScreen;
+import com.arcadia.customperm.client.gui.lp.LpUsersScreen;
 import com.arcadia.customperm.network.GuiSyncPayload;
+import com.arcadia.customperm.network.lp.LpDto;
 import net.minecraft.client.Minecraft;
 
 /**
@@ -37,6 +42,9 @@ public final class TesseraGuiBridge {
             case "grades" -> mc.setScreen(new GradesScreen());
             case "aliases" -> mc.setScreen(new AliasesScreen());
             case "status" -> mc.setScreen(new StatusScreen());
+            case "luckperms", "groups" -> mc.setScreen(new LpGroupsScreen());
+            case "players" -> mc.setScreen(new LpUsersScreen());
+            case "tracks" -> mc.setScreen(new LpTracksScreen());
             default -> mc.setScreen(new HubScreen());
         }
     }
@@ -45,6 +53,20 @@ public final class TesseraGuiBridge {
     public static void deliverSync(GuiSyncPayload payload) {
         if (Minecraft.getInstance().screen instanceof AbstractSyncedScreen synced) {
             synced.onSync(payload);
+        }
+    }
+
+    /** Feeds a LuckPerms snapshot to the currently-open editor screen, if any. */
+    public static void deliverLpSync(LpDto.Snapshot snapshot) {
+        if (Minecraft.getInstance().screen instanceof AbstractLpScreen editor) {
+            editor.onLpSync(snapshot);
+        }
+    }
+
+    /** Reports the outcome of an edit on the editor screen that requested it, if still open. */
+    public static void deliverLpEditResult(boolean success, String message) {
+        if (Minecraft.getInstance().screen instanceof AbstractLpScreen editor) {
+            editor.onLpEditResult(success, message);
         }
     }
 }

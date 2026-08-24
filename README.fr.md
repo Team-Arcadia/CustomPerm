@@ -75,7 +75,8 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **Diagnostics** : `/customperm status`, `/customperm scan`, `/customperm debug` et `/customperm test` couvrent l'inspection runtime et le dépannage.
 - **Checks CI release** : GitHub Actions lance les GameTests, construit le jar distribuable et vérifie les métadonnées requises du jar.
 - **Côté serveur uniquement** : aucun mod n'est requis côté client pour les fonctionnalités de base. Un client vanilla (ou sans CustomPerm) se connecte sans problème à un serveur CustomPerm : le canal réseau du GUI optionnel est enregistré en `optional()`, il ne bloque jamais la connexion.
-- **Panneau d'administration TesseraUI (optionnel)** : `/customperm gui` ouvre un menu d'accueil graphique avec des boutons vers les écrans Grades, Aliases et Status (ou saute directement à l'un avec `/customperm gui grades|aliases|status`) lorsque [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) est installé côté client. Chaque action du panneau exécute les mêmes commandes `/customperm` documentées ci-dessous — rien n'est réimplémenté côté client.
+- **Panneau d'administration TesseraUI (optionnel)** : `/customperm gui` ouvre un menu d'accueil graphique lorsque [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) est installé côté client. Le menu suit le backend actif : avec LuckPerms il mène à l'**éditeur LuckPerms en jeu** (groupes, joueurs, tracks), sans lui à l'écran Grades interne.
+- **Éditeur LuckPerms en jeu** : `/customperm gui luckperms` modifie le magasin de permissions LuckPerms depuis le jeu — groupes, héritage, nœuds de permission avec contextes et expiration, meta, prefix/suffix, poids, joueurs, groupe principal et tracks de promotion. Les écritures passent par l'API LuckPerms côté serveur et sont protégées par `customperm.gui.luckperms.edit`.
 
 ---
 
@@ -114,12 +115,24 @@ Si aucune des deux lignes n'apparaît, le mod n'a pas chargé — vérifiez vos 
 
 ### Optionnel : panneau graphique TesseraUI
 
-Si un joueur a [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) installé côté client, `/customperm gui` ouvre un menu d'accueil graphique (boutons vers Grades, Aliases, Status ; chaque écran a un bouton « < Menu » pour revenir), et `/customperm gui grades|aliases|status` saute directement à un écran — au lieu de dépendre uniquement des commandes en chat. TesseraUI est une dépendance souple :
+Si un joueur a [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) installé côté client, `/customperm gui` ouvre un menu d'accueil graphique au lieu de dépendre uniquement des commandes en chat. TesseraUI est une dépendance souple :
 
 - Sans lui : `/customperm gui ...` répond « TesseraUI is not installed — this GUI is unavailable. Use the text commands instead. » Rien d'autre ne change.
-- Avec lui : le panneau liste les grades/aliases avec des actions intégrées, et l'écran Status reflète `/customperm status`. Chaque bouton exécute la même commande `/customperm` sous-jacente décrite dans ce README (via un champ de chat pré-rempli) — le panneau n'a aucune logique de permission ou de CRUD qui lui soit propre.
+- Avec lui : le menu d'accueil s'adapte au backend actif. Ce n'est pas une liste fixe d'écrans — proposer les deux éditeurs de permissions en même temps reviendrait à ce que la moitié du menu ouvre un écran capable seulement d'annoncer qu'il ne s'applique pas ici.
 
-`/customperm gui` est une commande purement client (elle ne quitte jamais le client si TesseraUI n'est pas installé) ; les données de grades/aliases ne sont envoyées qu'aux joueurs qui passent déjà le même contrôle op level 2 que toute autre sous-commande `/customperm`.
+**Sans LuckPerms** (backend interne), le menu mène à Grades, Aliases et Status. `/customperm gui grades|aliases|status` saute directement à un écran. Ces écrans exécutent les mêmes commandes `/customperm` décrites dans ce README, via un champ de chat pré-rempli — ils n'ont aucune logique de permission ou de CRUD qui leur soit propre.
+
+**Avec LuckPerms actif**, le menu mène à l'éditeur LuckPerms en jeu, plus Aliases et Status ; l'écran Grades est masqué, les grades étant en lecture seule tant que LuckPerms détient les permissions. `/customperm gui luckperms [groups|players|tracks]` saute directement à une section :
+
+| Écran | Ce qu'il modifie |
+|---|---|
+| Groups | Créer/supprimer un groupe ; par groupe : nœuds de permission (allow/deny, contextes, expiration), parents, meta, prefix, suffix, poids, nom d'affichage |
+| Players | Joueurs connectés et tout joueur trouvé par pseudo exact ; par joueur : groupes, groupe principal, nœuds propres, meta, prefix/suffix, promote/demote sur un track |
+| Tracks | Créer/supprimer un track ; ajouter en fin, insérer à une position, retirer un groupe |
+
+Contrairement aux écrans internes, l'éditeur LuckPerms écrit réellement : chaque action envoie une opération au serveur, qui l'applique via l'API LuckPerms puis renvoie l'écran à jour et une ligne de statut. C'est l'équivalent en jeu de `/lp editor`, pas une surcouche des commandes `/lp`.
+
+**Permissions.** `/customperm gui` est une commande purement client (elle ne quitte jamais le client si TesseraUI n'est pas installé). Lire un écran demande op level 2, le même contrôle que toute autre sous-commande `/customperm`. Écrire dans LuckPerms exige en plus le nœud `customperm.gui.luckperms.edit`, résolu par le backend actif — il s'accorde donc avec `/lp user <joueur> permission set customperm.gui.luckperms.edit true`. Sans lui, l'éditeur s'ouvre en lecture seule. Le niveau de permission 4 (propriétaire du serveur) contourne le nœud, sinon une installation neuve laisserait le propriétaire incapable de s'accorder le nœud qui déverrouille l'éditeur. Chaque modification appliquée est journalisée côté serveur avec le nom de l'admin.
 
 ---
 
@@ -235,6 +248,7 @@ Elles gèrent les nodes ALLOW. Les nodes DENY internes sont stockés dans `grade
 | `/customperm scan [pattern]` | Liste toutes les commandes du dispatcher avec leur état (exposée, alias, mod-interne). Filtre optionnel. |
 | `/customperm reload` | Recharge les fichiers de config depuis le disque. |
 | `/customperm gui [grades\|aliases\|status]` | Ouvre le panneau graphique TesseraUI — sans argument, ouvre le menu d'accueil ; avec un argument, saute à cet écran (commande client uniquement ; nécessite TesseraUI installé côté client). |
+| `/customperm gui luckperms [groups\|players\|tracks]` | Ouvre l'éditeur LuckPerms en jeu. La lecture demande op level 2, l'écriture `customperm.gui.luckperms.edit`. Signale un backend inactif au lieu d'échouer si LuckPerms est absent. |
 
 ---
 
@@ -708,7 +722,8 @@ LuckPerms stocke et résout à la fois les nodes `customperm.command.*` et `cust
 - **Pas de granularité par sous-commande** : `customperm.command.gamemode` couvre tous les sous-modes (creative, spectator, etc.). Pour scinder, utilisez les aliases.
 - **Pas de paramètres dans les aliases** : un alias est une commande sans argument. Pour faire `/heal <player>`, écrivez `/heal_target` avec `effect give @p` etc., ou créez plusieurs aliases.
 - **Contextes LP partiellement testés** : les contextes par-monde, par-serveur, etc. de LuckPerms passent par `getCachedData()` et sont en théorie supportés, mais non testés extensivement.
-- **GUI nécessite TesseraUI** : sans lui, l'administration reste entièrement en commandes. Le panneau optionnel ne remplace pas non plus le web editor de LuckPerms pour les permissions gérées par LP.
+- **GUI nécessite TesseraUI** : sans lui, l'administration reste entièrement en commandes.
+- **L'éditeur LuckPerms en jeu n'est pas le web editor** : il couvre groupes, joueurs, tracks, nœuds, meta et chat meta, mais pas les opérations en masse, la recherche de nœud sur tous les détenteurs, ni l'historique d'annulation du web editor. Pour cela, `/lp editor` reste l'outil.
 
 ---
 

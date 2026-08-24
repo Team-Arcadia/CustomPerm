@@ -24,6 +24,34 @@ respecting the mod's "server-side only, never break vanilla clients" guarantee.
 
 ---
 
+## 0.1 Amendment — the in-game LuckPerms editor
+
+This document was written when the answer to "how do I administer LuckPerms without a browser"
+was "you don't, use `/lp`". That is no longer true: the TesseraUI panel now carries an in-game
+LuckPerms editor (`/customperm gui luckperms`) covering groups, users, tracks, permission nodes
+with contexts and expiry, meta and chat meta, writing through the LuckPerms API server-side and
+gated by `customperm.gui.luckperms.edit`.
+
+What that changes here:
+
+- **Goal 3 is narrowed.** In LuckPerms mode the panel no longer delegates *everything* about
+  users and groups to `/lp`. The web panel described below still confines itself to
+  CustomPerm-owned config, but the delegation is now a scope decision for *this* document, not a
+  statement about the mod as a whole.
+- **The first non-goal is narrowed too.** Replacing `/lp editor` remains out of scope *for the
+  web panel*; in-game, CustomPerm now offers a comparable surface.
+- **Option C is no longer only "complementary".** The comparison table in §3 dismissed extending
+  TesseraUI as "not a web panel; limited layout". The first half stands — this is not a browser.
+  The second does not: TesseraUI 1.1 ships text inputs, dropdowns, checkboxes, tabs and virtual
+  lists, which is enough for a real editor. Option B remains the choice for a *web* panel; Option
+  C turned out to be the cheaper route to the actual goal (feature parity for administration UX)
+  and shipped first.
+
+Nothing else in this document is affected: the embedded-server design, the token model, the
+diff-based apply and the storage decisions all still describe the web panel as planned.
+
+---
+
 ## 1. Goals & Non-Goals
 
 ### Goals
@@ -33,6 +61,7 @@ respecting the mod's "server-side only, never break vanilla clients" guarantee.
    `/customperm applyedits <code>` in-game.
 3. Work in **both** backends: full editing in standalone mode; CustomPerm-owned config only
    (commands/aliases/ratelimits/settings) in LuckPerms mode, delegating grade/user editing to `/lp`.
+   *(Superseded in part — see §0.1.)*
 4. **Server-side only.** No client-side mod requirement; a vanilla client must still connect.
    The panel lives in the admin's browser, fully out-of-band.
 5. **Self-hostable** storage + front-end (the mod is proprietary/source-available and exports contain
@@ -41,7 +70,8 @@ respecting the mod's "server-side only, never break vanilla clients" guarantee.
    concurrency-aware, all HTTP off the server main thread.
 
 ### Non-Goals (v1)
-- Replacing `/lp editor` for LuckPerms user/group management.
+- Replacing `/lp editor` for LuckPerms user/group management *from the browser*. (An in-game
+  equivalent now exists — see §0.1.)
 - Real-time multi-admin collaborative editing (optional future — §6.6, websocket).
 - A **public, account-based, always-on** admin portal. v1 does run a lightweight embedded HTTP server
   (§17), but it is **loopback-by-default, one-time-token, opt-in, and only listens while enabled** — not a

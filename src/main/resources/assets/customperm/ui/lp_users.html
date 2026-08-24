@@ -1,0 +1,36 @@
+<!-- CustomPerm — LuckPerms editor, player list. TesseraTemplate.load("customperm:ui/lp_users").
+     Model keys (see LpUsersScreen + AbstractLpScreen): canEdit, readOnly, statusOk, statusError,
+     status, searching, searchTerm, noUsers, users (count); per row: user.name.<i>,
+     user.status.<i>, user.primary.<i>, user.parents.<i>, user.nodeCount.<i>, user.editAction.<i>.
+     Handlers: back, refresh, openGroups, openTracks, search, clearSearch. -->
+<col class="window">
+    <row class="toolbar">
+        <button class="btn" onclick="back">&lt; Menu</button>
+        <button class="btn" onclick="openGroups">Groups</button>
+        <label class="tab active">Players</label>
+        <button class="btn" onclick="openTracks">Tracks</button>
+        <button class="btn" onclick="refresh">Refresh</button>
+    </row>
+
+    <label class="status err" v-if="statusError">{{status}}</label>
+    <label class="status ok" v-if="statusOk">{{status}}</label>
+
+    <!-- Without a search the list is whoever LuckPerms has in memory, which is the online
+         players; an exact username brings an offline player into it. -->
+    <row class="edit-row">
+        <input id="userSearch" class="field wide" placeholder="exact username" maxlength="16" onsubmit="userSearch" />
+        <button class="btn sm" onclick="search">Search</button>
+        <button class="btn sm" onclick="clearSearch" v-if="searching">Clear</button>
+    </row>
+
+    <col class="list">
+        <label class="empty" v-if="noUsers">No player loaded — search by exact username.</label>
+        <row class="user-row" v-for="user in users">
+            <label class="user-name">{{user.name}}</label>
+            <label class="user-status">{{user.status}}</label>
+            <label class="user-primary">{{user.primary}}</label>
+            <label class="user-meta">{{user.parents}} · {{user.nodeCount}} nodes</label>
+            <button class="btn sm" onclick="{{user.editAction}}">Edit</button>
+        </row>
+    </col>
+</col>

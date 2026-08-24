@@ -12,6 +12,11 @@ import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.client.ClientNetworkHandler;
 import com.arcadia.customperm.config.ConfigManager;
 import com.arcadia.customperm.config.GradesConfig;
+import com.arcadia.customperm.network.lp.LpEditPayload;
+import com.arcadia.customperm.network.lp.LpEditResultPayload;
+import com.arcadia.customperm.network.lp.LpRequestHandler;
+import com.arcadia.customperm.network.lp.LpSyncPayload;
+import com.arcadia.customperm.network.lp.RequestLpSyncPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.fml.loading.FMLEnvironment;
@@ -59,6 +64,30 @@ public final class NetworkHandler {
         registrar.playToClient(GuiSyncPayload.TYPE, GuiSyncPayload.STREAM_CODEC, NetworkHandler::dispatchGuiSync);
         registrar.playToServer(RequestGuiSyncPayload.TYPE, RequestGuiSyncPayload.STREAM_CODEC,
                 NetworkHandler::handleRequestSync);
+
+        // LuckPerms editor channel (H2.2). Registered unconditionally, exactly like the payloads
+        // above: whether LuckPerms is installed is a runtime property of the server, while the
+        // handshake channel list is fixed at registration time. LpRequestHandler answers a
+        // request on a LuckPerms-less server with an empty snapshot rather than nothing at all.
+        registrar.playToClient(LpSyncPayload.TYPE, LpSyncPayload.STREAM_CODEC, NetworkHandler::dispatchLpSync);
+        registrar.playToClient(LpEditResultPayload.TYPE, LpEditResultPayload.STREAM_CODEC,
+                NetworkHandler::dispatchLpEditResult);
+        registrar.playToServer(RequestLpSyncPayload.TYPE, RequestLpSyncPayload.STREAM_CODEC,
+                LpRequestHandler::handleSync);
+        registrar.playToServer(LpEditPayload.TYPE, LpEditPayload.STREAM_CODEC,
+                LpRequestHandler::handleEdit);
+    }
+
+    private static void dispatchLpSync(LpSyncPayload payload, IPayloadContext context) {
+        if (FMLEnvironment.dist.isClient()) {
+            ClientNetworkHandler.handleLpSync(payload, context);
+        }
+    }
+
+    private static void dispatchLpEditResult(LpEditResultPayload payload, IPayloadContext context) {
+        if (FMLEnvironment.dist.isClient()) {
+            ClientNetworkHandler.handleLpEditResult(payload, context);
+        }
     }
 
     private static void dispatchGuiSync(GuiSyncPayload payload, IPayloadContext context) {

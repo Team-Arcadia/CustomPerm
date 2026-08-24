@@ -11,6 +11,8 @@ package com.arcadia.customperm.client;
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.client.gui.TesseraGuiBridge;
 import com.arcadia.customperm.network.GuiSyncPayload;
+import com.arcadia.customperm.network.lp.LpEditResultPayload;
+import com.arcadia.customperm.network.lp.LpSyncPayload;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
@@ -33,6 +35,20 @@ public final class ClientNetworkHandler {
         context.enqueueWork(() -> {
             if (!CustomPerm.isTesseraUiPresent()) return;
             TesseraGuiBridge.deliverSync(payload);
+        });
+    }
+
+    public static void handleLpSync(LpSyncPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!CustomPerm.isTesseraUiPresent()) return;
+            TesseraGuiBridge.deliverLpSync(payload.snapshot());
+        });
+    }
+
+    public static void handleLpEditResult(LpEditResultPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!CustomPerm.isTesseraUiPresent()) return;
+            TesseraGuiBridge.deliverLpEditResult(payload.success(), payload.message());
         });
     }
 }

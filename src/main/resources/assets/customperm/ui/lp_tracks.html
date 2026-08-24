@@ -1,0 +1,50 @@
+<!-- CustomPerm — LuckPerms editor, tracks. TesseraTemplate.load("customperm:ui/lp_tracks").
+     Model keys (see LpTracksScreen + AbstractLpScreen): canEdit, readOnly, statusOk, statusError,
+     status, noTracks, tracks (count); per row: track.name.<i>, track.groups.<i>, track.size.<i>,
+     track.appendAction.<i>, track.insertAction.<i>, track.removeGroupAction.<i>,
+     track.deleteAction.<i>.
+     Handlers: back, refresh, openGroups, openUsers, createTrack. -->
+<col class="window">
+    <row class="toolbar">
+        <button class="btn" onclick="back">&lt; Menu</button>
+        <button class="btn" onclick="openGroups">Groups</button>
+        <button class="btn" onclick="openUsers">Players</button>
+        <label class="tab active">Tracks</label>
+        <button class="btn" onclick="refresh">Refresh</button>
+    </row>
+
+    <label class="status err" v-if="statusError">{{status}}</label>
+    <label class="status ok" v-if="statusOk">{{status}}</label>
+
+    <label class="readonly-note" v-if="readOnly">Read-only — you lack customperm.gui.luckperms.edit.</label>
+
+    <row class="create-row" v-if="canEdit">
+        <input id="newTrack" class="field" placeholder="new track name" maxlength="36" onsubmit="newTrack" />
+        <button class="btn" onclick="createTrack">Create</button>
+    </row>
+
+    <!-- One shared group/position pair drives every row's Append / Insert / Remove: a track edit
+         is a single action at a time, and per-row fields would not fit the row width. -->
+    <row class="edit-row" v-if="canEdit">
+        <label class="field-label">Group</label>
+        <input id="trackGroup" class="field" placeholder="group name" maxlength="36" />
+        <label class="field-label">At</label>
+        <input id="trackPosition" class="field narrow" placeholder="0" maxlength="4" />
+    </row>
+
+    <col class="list">
+        <label class="empty" v-if="noTracks">No track.</label>
+        <col class="track-block" v-for="track in tracks">
+            <row class="track-head">
+                <label class="track-name">{{track.name}}</label>
+                <label class="track-groups">{{track.groups}}</label>
+                <button class="btn sm danger" onclick="{{track.deleteAction}}" v-if="canEdit">Delete</button>
+            </row>
+            <row class="track-actions" v-if="canEdit">
+                <button class="btn sm" onclick="{{track.appendAction}}">Append</button>
+                <button class="btn sm" onclick="{{track.insertAction}}">Insert</button>
+                <button class="btn sm danger" onclick="{{track.removeGroupAction}}">Remove</button>
+            </row>
+        </col>
+    </col>
+</col>

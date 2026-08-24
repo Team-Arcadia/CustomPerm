@@ -1,0 +1,228 @@
+/* CustomPerm TesseraUI theme - LuckPerms editor (group list). Sibling of lp_groups.html.
+   The five editor templates share one visual language, so they share one stylesheet body;
+   TesseraTemplate pairs a stylesheet with its template by file name, hence the copies. */
+:root {
+    --win-bg: #141824;
+    --win-border: #3a3a4c;
+    --copper: #b87333;
+    --copper-hi: #e8a24a;
+    --cream: #d8d0bc;
+    --cream-dim: #a09880;
+    --danger: #c0392b;
+    --danger-hi: #e05a4a;
+    --ok: #4cc38a;
+    --btn-bg: #1e2433;
+    --btn-hover: #2a3450;
+    --row-bg: #191f2e;
+    --field-bg: #0f1420;
+}
+
+.window {
+    background: var(--win-bg);
+    border: 1px solid var(--win-border);
+    padding: 8px;
+    gap: 4px;
+    min-width: 320px;
+}
+
+.toolbar {
+    gap: 4px;
+    min-height: 20px;
+}
+
+.tab {
+    color: var(--copper-hi);
+    font-size: 7px;
+    padding: 4px;
+    flex: 1;
+}
+
+.tab.active {
+    color: var(--copper-hi);
+}
+
+.subtitle {
+    color: var(--cream-dim);
+    font-size: 6px;
+    padding: 2px;
+}
+
+.section {
+    color: var(--copper);
+    font-size: 7px;
+    padding: 4px;
+}
+
+.status {
+    font-size: 6px;
+    padding: 3px;
+}
+
+.status.ok {
+    color: var(--ok);
+}
+
+.status.err {
+    color: var(--danger-hi);
+}
+
+.readonly-note {
+    color: var(--copper-hi);
+    font-size: 6px;
+    padding: 3px;
+}
+
+.empty {
+    color: var(--cream-dim);
+    font-size: 6px;
+    padding: 5px;
+}
+
+.list {
+    gap: 3px;
+    padding: 2px;
+}
+
+.list.short {
+    gap: 2px;
+}
+
+.create-row {
+    gap: 4px;
+    min-height: 20px;
+}
+
+.edit-row {
+    gap: 3px;
+    min-height: 18px;
+    padding: 1px;
+}
+
+.field {
+    background: var(--field-bg);
+    border: 1px solid var(--win-border);
+    color: var(--cream);
+    padding: 3px;
+    min-height: 16px;
+    font-size: 6px;
+    flex: 2;
+}
+
+.field.narrow {
+    flex: 1;
+}
+
+.field.wide {
+    flex: 4;
+}
+
+.field-label {
+    color: var(--cream-dim);
+    font-size: 6px;
+    padding: 2px;
+    flex: 1;
+}
+
+.field-label.dim {
+    color: var(--win-border);
+}
+
+.btn {
+    background: var(--btn-bg);
+    border: 1px solid var(--copper);
+    color: var(--cream);
+    padding: 4px;
+    min-height: 18px;
+    font-size: 6px;
+    transition: background 150ms ease-out, border-color 150ms ease-out;
+}
+
+.btn:hover {
+    background: var(--btn-hover);
+    border-color: var(--copper-hi);
+}
+
+.btn.sm {
+    font-size: 6px;
+    padding: 2px;
+    min-height: 16px;
+    flex: 1;
+}
+
+.btn.danger {
+    border-color: var(--danger);
+}
+
+.btn.danger:hover {
+    background: #3a1a1a;
+    border-color: var(--danger-hi);
+}
+
+.group-row, .user-row, .node-row, .track-row, .chip-row, .track-head, .track-actions {
+    background: var(--row-bg);
+    border: 1px solid var(--win-border);
+    padding: 2px;
+    gap: 3px;
+    min-height: 18px;
+}
+
+.track-actions {
+    background: var(--win-bg);
+}
+
+.track-block {
+    gap: 2px;
+}
+
+.group-name, .user-name, .track-name {
+    color: var(--cream);
+    font-size: 6px;
+    flex: 3;
+}
+
+.group-meta, .user-meta, .track-groups, .group-parents {
+    color: var(--cream-dim);
+    font-size: 6px;
+    flex: 4;
+}
+
+.user-status, .user-primary {
+    color: var(--cream-dim);
+    font-size: 6px;
+    flex: 2;
+}
+
+.node-key {
+    color: var(--cream);
+    font-size: 6px;
+    flex: 6;
+}
+
+.node-value {
+    color: var(--copper-hi);
+    font-size: 6px;
+    flex: 2;
+}
+
+.node-ctx {
+    color: var(--cream-dim);
+    font-size: 6px;
+    flex: 3;
+}
+
+.node-exp {
+    color: var(--cream-dim);
+    font-size: 6px;
+    flex: 2;
+}
+
+.chip {
+    color: var(--cream);
+    font-size: 6px;
+    padding: 2px;
+    flex: 4;
+}
+
+.chip.dim {
+    color: var(--cream-dim);
+}
