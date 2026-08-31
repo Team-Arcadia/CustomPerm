@@ -16,6 +16,13 @@ Their work is gratefully acknowledged here.
   fix; hardening of the command tree, alias manager, and config handling
   against audit findings (June 2026).
 
+- **pavlojs** — licensing and source-availability audit of the published 1.0.5
+  build: identified eleven compiled classes distributed without their
+  corresponding source under GPL-3.0, and the absence of a tag matching the
+  released jar. The report led to the `v1.0.5` tag, the correction of the
+  relicensing chronology, and the per-version licensing table in NOTICE.md
+  (issue #3, August 2026).
+
 ## What contributors get
 
 Under Section 5.3 of the [LICENSE](LICENSE):
@@ -56,8 +63,8 @@ pull request.
 
 ## Getting listed
 
-Contributions merged into the official repository are added here at the
-maintainer's discretion. If you contributed and are missing from this list, or
+Contributions merged into the official repository, and reports that led to a
+correction, are added here at the maintainer's discretion. If you contributed and are missing from this list, or
 you would prefer a different name, handle, or no contact address, open an issue:
 
   https://github.com/Team-Arcadia/CustomPerm/issues
@@ -82,6 +89,13 @@ documentation au projet. Leur travail est ici salué avec gratitude.
   des souscriptions d'événements ; durcissement de l'arbre de commandes, du
   gestionnaire d'alias et de la gestion de configuration suite aux constats
   d'audit (juin 2026).
+
+- **pavlojs** — audit de licence et de disponibilité des sources du build 1.0.5
+  publié : a identifié onze classes compilées distribuées sans leur source
+  correspondante sous GPL-3.0, ainsi que l'absence de tag correspondant au jar
+  publié. Le signalement a conduit au tag `v1.0.5`, à la correction de la
+  chronologie de relicenciement et au tableau des licences par version dans
+  NOTICE.md (issue #3, août 2026).
 
 ## Ce que les contributeurs obtiennent
 
@@ -124,8 +138,9 @@ request.
 
 ## Être ajouté à la liste
 
-Les contributions fusionnées dans le dépôt officiel sont ajoutées ici à la
-discrétion du mainteneur. Si vous avez contribué et n'apparaissez pas dans cette
+Les contributions fusionnées dans le dépôt officiel, ainsi que les
+signalements ayant conduit à une correction, sont ajoutés ici à la discrétion
+du mainteneur. Si vous avez contribué et n'apparaissez pas dans cette
 liste, ou si vous préférez un autre nom, pseudonyme ou aucune adresse de
 contact, ouvrez une issue :
 
