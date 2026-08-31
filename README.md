@@ -755,6 +755,13 @@ from your fork, rebranding it, or reusing the code elsewhere is not.
 The name, mod id, and logo may not be used for another project or to imply
 endorsement, and the code may not be used to train AI models.
 
+**Earlier releases keep their own terms.** The proprietary license was adopted
+on 2026-07-14 and applies to builds published from the next release onward.
+Every version up to and including **1.0.5** was distributed under the license
+shipped with it (MIT or `GPL-3.0-only` depending on the release) and stays
+available on those terms. The per-version table is in
+[NOTICE.md](NOTICE.md#license-history-by-version).
+
 See [LICENSE](LICENSE) for the full terms, [NOTICE.md](NOTICE.md) for a
 plain-language summary of what is and isn't allowed, and
 [CONTRIBUTING.md](CONTRIBUTING.md) before opening a pull request.

@@ -82,6 +82,36 @@ CustomPerm builds against, but does not include or redistribute, the following:
 These are compile-time or runtime dependencies resolved on the user's side. No
 third-party code is bundled into the CustomPerm jar.
 
+## License history by version
+
+Each release of CustomPerm is governed by the license distributed with that
+release. A later license never applies retroactively: a build you obtained
+lawfully stays available to you on the terms it shipped with. The proprietary
+terms in [LICENSE](LICENSE) were adopted on 2026-07-14, after 1.0.5 was
+published, and therefore govern no released build yet.
+
+| Version | Published | License of the release | Corresponding source |
+|---------|-----------|------------------------|----------------------|
+| 0.1.0, 0.9.0, 1.0.0 | 2026-05-10 → 05-18 | See the note below | `v0.1.0`, `v0.9.0`, `v1.0.0` |
+| 1.0.2 | 2026-06-05 | MIT | `v1.0.2` |
+| 1.0.3 | 2026-06-10 | MIT | `v1.0.3` |
+| 1.0.4 | 2026-06-11 | `GPL-3.0-only` | `v1.0.4` |
+| 1.0.5 | 2026-07-08 | `GPL-3.0-only` | `v1.0.5` |
+| 1.0.6 onward | not yet released | `LicenseRef-CustomPerm-ARR` | — |
+
+**Note on 0.1.0, 0.9.0 and 1.0.0.** Those three releases carried two notices
+that did not agree: the `LICENSE` file held the GPL-3.0 text, while the jar
+metadata declared `MIT`. This was a packaging mistake, not a deliberate dual
+licensing. The author does not contest the more permissive reading: whoever
+received one of those builds may rely on the MIT terms.
+
+**Note on 1.0.5.** The build published on 2026-07-08 declared `GPL-3.0-only`
+and was distributed on those terms. Its corresponding source is the `v1.0.5`
+tag, which includes the `client/` and `network/` packages present in that jar.
+Those packages were added to the repository before the release but had not been
+tagged, which left the published binary without a source reference; the tag
+closes that gap.
+
 ## MIT-licensed portions
 
 Parts of CustomPerm were contributed before 2026-07-14, while the project was
@@ -230,6 +260,37 @@ redistribuer :
 
 Ce sont des dépendances de compilation ou d'exécution résolues côté utilisateur.
 Aucun code tiers n'est empaqueté dans le jar CustomPerm.
+
+## Historique des licences par version
+
+Chaque version de CustomPerm est régie par la licence distribuée avec elle. Une
+licence ultérieure ne s'applique jamais rétroactivement : un build obtenu
+licitement reste disponible selon les termes livrés avec lui. Les termes
+propriétaires de [LICENSE](LICENSE) ont été adoptés le 2026-07-14, après la
+publication de la 1.0.5, et ne régissent donc encore aucun build publié.
+
+| Version | Publiée | Licence de la version | Source correspondante |
+|---------|---------|-----------------------|-----------------------|
+| 0.1.0, 0.9.0, 1.0.0 | 2026-05-10 → 05-18 | Voir la note ci-dessous | `v0.1.0`, `v0.9.0`, `v1.0.0` |
+| 1.0.2 | 2026-06-05 | MIT | `v1.0.2` |
+| 1.0.3 | 2026-06-10 | MIT | `v1.0.3` |
+| 1.0.4 | 2026-06-11 | `GPL-3.0-only` | `v1.0.4` |
+| 1.0.5 | 2026-07-08 | `GPL-3.0-only` | `v1.0.5` |
+| 1.0.6 et suivantes | pas encore publiée | `LicenseRef-CustomPerm-ARR` | — |
+
+**Note sur 0.1.0, 0.9.0 et 1.0.0.** Ces trois versions portaient deux mentions
+divergentes : le fichier `LICENSE` contenait le texte GPL-3.0, tandis que les
+métadonnées du jar déclaraient `MIT`. Il s'agit d'une erreur d'empaquetage, pas
+d'une double licence délibérée. L'auteur ne conteste pas la lecture la plus
+permissive : quiconque a reçu l'un de ces builds peut se prévaloir des termes
+MIT.
+
+**Note sur la 1.0.5.** Le build publié le 2026-07-08 déclarait `GPL-3.0-only` et
+a été distribué à ces conditions. Sa source correspondante est le tag `v1.0.5`,
+qui contient les paquets `client/` et `network/` présents dans ce jar. Ces
+paquets avaient été ajoutés au dépôt avant la publication mais n'avaient pas été
+taggés, ce qui laissait le binaire publié sans référence de source ; le tag
+comble ce manque.
 
 ## Portions sous licence MIT
 

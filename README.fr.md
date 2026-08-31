@@ -759,6 +759,13 @@ Le nom, le mod id et le logo ne peuvent pas être utilisés pour un autre projet
 ni pour suggérer une caution, et le code ne peut pas servir à entraîner des
 modèles d'IA.
 
+**Les versions antérieures conservent leurs propres conditions.** La licence
+propriétaire a été adoptée le 2026-07-14 et s'applique aux builds publiés à
+partir de la prochaine version. Chaque version jusqu'à la **1.0.5** incluse a
+été distribuée sous la licence livrée avec elle (MIT ou `GPL-3.0-only` selon la
+version) et reste disponible à ces conditions. Le tableau par version se trouve
+dans [NOTICE.md](NOTICE.md#historique-des-licences-par-version).
+
 Voir [LICENSE](LICENSE) pour les conditions complètes, [NOTICE.md](NOTICE.md)
 pour un résumé en langage clair de ce qui est autorisé ou non, et
 [CONTRIBUTING.md](CONTRIBUTING.md) avant d'ouvrir une pull request.
