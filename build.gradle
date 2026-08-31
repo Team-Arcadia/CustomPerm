@@ -112,6 +112,13 @@ jmh {
     resultFormat     = 'JSON'
 }
 
+// A distributed build must carry the terms it is distributed under: the jar
+// previously shipped with no license text at all.
+tasks.named('jar', Jar) {
+    from(rootProject.file('LICENSE'))   { into 'META-INF' }
+    from(rootProject.file('NOTICE.md')) { into 'META-INF' }
+}
+
 tasks.named('processResources', ProcessResources).configure {
     var replaceProperties = [
         minecraft_version: minecraft_version,
