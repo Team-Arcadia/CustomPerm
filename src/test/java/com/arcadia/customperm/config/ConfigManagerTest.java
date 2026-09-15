@@ -130,6 +130,28 @@ class ConfigManagerTest {
     }
 
     @Test
+    void shouldNotOverwriteInvalidFile_whenSavingAfterFailedLoad() throws Exception {
+        String broken = "{\"grades\":{\"vip\":{\"permissions\":[\"a.b\"]}}";  // missing closing brace
+        Files.writeString(tempDir.resolve("grades.json"), broken);
+
+        ConfigManager mgr = new ConfigManager(tempDir);
+        assertFalse(mgr.load(), "an unparseable grades.json must fail the load");
+        assertFalse(mgr.isDiskWritable());
+
+        // An admin command mutating the (empty) in-memory snapshot, then saving.
+        mgr.getCommands().grantedCommands.add("gamemode");
+        assertFalse(mgr.save(), "save must be refused while the disk holds an unparseable file");
+        assertEquals(broken, Files.readString(tempDir.resolve("grades.json")),
+                "the admin's file must survive untouched so it can be fixed");
+
+        Files.writeString(tempDir.resolve("grades.json"), broken + "}");
+        assertTrue(mgr.load(), "a fixed file must load");
+        assertTrue(mgr.isDiskWritable());
+        assertTrue(mgr.getGrades().grades.containsKey("vip"));
+        assertTrue(mgr.save(), "saving resumes after a successful load");
+    }
+
+    @Test
     void shouldCreateBackupFiles_afterSuccessfulLoad() throws Exception {
         // Arrange & Act — un load() réussi doit créer un .bak par fichier de config dans backup/
         ConfigManager mgr = new ConfigManager(tempDir);

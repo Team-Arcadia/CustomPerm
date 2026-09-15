@@ -328,7 +328,7 @@ public class CustomPermCommand {
             ctx.getSource().sendFailure(Component.literal("Command /" + name + " is already exposed."));
             return 0;
         }
-        CustomPerm.configManager.save();
+        persist(ctx);
         CommandTreeRewriter.repair(server);
         // Re-pose la vérification CustomPerm (racine + sous-arbre) par-dessus une éventuelle
         // injection LuckPerms (LuckPerms a déjà injecté au boot ; sans ceci le node serait ignoré).
@@ -346,7 +346,7 @@ public class CustomPermCommand {
             ctx.getSource().sendFailure(Component.literal("Command /" + name + " is not currently exposed."));
             return 0;
         }
-        CustomPerm.configManager.save();
+        persist(ctx);
         var server = ctx.getSource().getServer();
         CommandTreeRewriter.repair(server);
         // Restaure le requires d'origine (LuckPerms/vanilla) sur la commande dé-exposée.
@@ -382,7 +382,7 @@ public class CustomPermCommand {
         rule.normalize();
 
         CustomPerm.configManager.getRateLimits().rules.put(name, rule);
-        CustomPerm.configManager.save();
+        persist(ctx);
         warnIfNeitherExposedNorAlias(ctx, name);
         success(ctx, "Rate limit for /" + name + " set to " + rule.maxExecutions + " per " + rule.windowSeconds + "s (enabled).");
         return 1;
@@ -402,7 +402,7 @@ public class CustomPermCommand {
             return 1;
         }
         rule.enabled = true;
-        CustomPerm.configManager.save();
+        persist(ctx);
         success(ctx, "Rate limit for /" + name + " enabled (" + rule.maxExecutions + " per " + rule.windowSeconds + "s).");
         return 1;
     }
@@ -420,7 +420,7 @@ public class CustomPermCommand {
             return 1;
         }
         rule.enabled = false;
-        CustomPerm.configManager.save();
+        persist(ctx);
         success(ctx, "Rate limit for /" + name + " disabled. Settings kept — use /customperm ratelimit enable to restore.");
         return 1;
     }
@@ -432,7 +432,7 @@ public class CustomPermCommand {
             ctx.getSource().sendFailure(Component.literal("No rate limit configured for /" + name + "."));
             return 0;
         }
-        CustomPerm.configManager.save();
+        persist(ctx);
         success(ctx, "Rate limit for /" + name + " removed.");
         return 1;
     }
@@ -477,7 +477,7 @@ public class CustomPermCommand {
         GradesConfig.Grade grade = new GradesConfig.Grade();
         grade.name = name;
         g.grades.put(name, grade);
-        CustomPerm.configManager.save();
+        persist(ctx);
         success(ctx, "Created grade " + name);
         return 1;
     }
@@ -491,7 +491,7 @@ public class CustomPermCommand {
             return 0;
         }
         removeGradeFromUsers(g, name);
-        CustomPerm.configManager.save();
+        persist(ctx);
         resyncCommands(ctx);
         success(ctx, "Deleted grade " + name);
         return 1;
@@ -513,7 +513,7 @@ public class CustomPermCommand {
                 () -> Component.literal(node + " is already granted to " + gradeName + " — no change."), false);
             return 1;
         }
-        CustomPerm.configManager.save();
+        persist(ctx);
         resyncCommands(ctx);
         success(ctx, "Added " + node + " -> " + gradeName);
         return 1;
@@ -534,7 +534,7 @@ public class CustomPermCommand {
                 () -> Component.literal(node + " is not granted to " + gradeName + " — no change."), false);
             return 1;
         }
-        CustomPerm.configManager.save();
+        persist(ctx);
         resyncCommands(ctx);
         success(ctx, "Removed " + node + " from " + gradeName);
         return 1;
@@ -557,7 +557,7 @@ public class CustomPermCommand {
             return 1;
         }
         list.add(gradeName);
-        CustomPerm.configManager.save();
+        persist(ctx);
         resyncPlayer(ctx, player);
         success(ctx, "Assigned " + gradeName + " -> " + player.getGameProfile().getName());
         return 1;
@@ -578,7 +578,7 @@ public class CustomPermCommand {
         if (list.isEmpty()) {
             CustomPerm.configManager.getGrades().userGrades.remove(player.getUUID().toString());
         }
-        CustomPerm.configManager.save();
+        persist(ctx);
         resyncPlayer(ctx, player);
         success(ctx, "Unassigned " + gradeName + " from " + player.getGameProfile().getName());
         return 1;
@@ -623,7 +623,7 @@ public class CustomPermCommand {
         }
 
         CustomPerm.configManager.getAliases().aliases.put(name, steps);
-        CustomPerm.configManager.save();
+        persist(ctx);
         refreshAlias(ctx, name);
         resyncCommands(ctx);
 
@@ -661,7 +661,7 @@ public class CustomPermCommand {
                 .stream().anyMatch(n -> n.getName().equals(name));
 
         aliases.computeIfAbsent(name, k -> new ArrayList<>()).add(cmd);
-        CustomPerm.configManager.save();
+        persist(ctx);
         refreshAlias(ctx, name);
         resyncCommands(ctx);
 
@@ -690,7 +690,7 @@ public class CustomPermCommand {
         }
         String removed = steps.remove(index);
         if (steps.isEmpty()) CustomPerm.configManager.getAliases().aliases.remove(name);
-        CustomPerm.configManager.save();
+        persist(ctx);
         refreshAlias(ctx, name);
         resyncCommands(ctx);
         success(ctx, "Removed step #" + index + " from /" + name + ": " + removed);
@@ -718,7 +718,7 @@ public class CustomPermCommand {
             ctx.getSource().sendFailure(Component.literal("No such alias: " + name));
             return 0;
         }
-        CustomPerm.configManager.save();
+        persist(ctx);
         refreshAlias(ctx, name);
         resyncCommands(ctx);
         success(ctx, "Removed alias /" + name);
@@ -993,6 +993,20 @@ public class CustomPermCommand {
                 iterator.remove();
             }
         }
+    }
+
+    /**
+     * Saves the config and tells the admin when the change could not be written. The change
+     * stays live in memory either way; what the admin must know is that it will not survive a
+     * restart, and that a reload will discard it.
+     */
+    private static void persist(CommandContext<CommandSourceStack> ctx) {
+        if (CustomPerm.configManager.save()) return;
+        String reason = CustomPerm.configManager.isDiskWritable()
+            ? "disk error, see the server log"
+            : "a config file on disk is invalid; fix it, then run /customperm reload";
+        ctx.getSource().sendFailure(Component.literal(
+            "[CustomPerm] Change applied in memory but NOT saved (" + reason + ")."));
     }
 
     private static void success(CommandContext<CommandSourceStack> ctx, String msg) {

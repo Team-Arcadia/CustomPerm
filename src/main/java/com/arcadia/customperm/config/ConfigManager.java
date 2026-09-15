@@ -48,6 +48,14 @@ public class ConfigManager {
     // package-private pour accès depuis les tests unitaires (même package)
     final AtomicBoolean reloading = new AtomicBoolean(false);
 
+    /**
+     * False while the files on disk hold content that could not be parsed. Saving in that
+     * state would overwrite them with the in-memory snapshot: after a failed boot load that
+     * snapshot is empty, so a single admin command would wipe every grade, alias and
+     * assignment the admin was one typo away from keeping. Cleared by the next successful load.
+     */
+    private volatile boolean diskWritable = true;
+
     /** Constructeur production — chemin résolu via FMLPaths. */
     public ConfigManager() {
         this(
@@ -169,16 +177,23 @@ public class ConfigManager {
             } else {
                 rateLimits.normalize();
             }
-            if (anyInvalid) return false;
+            if (anyInvalid) {
+                diskWritable = false;
+                LOGGER.error("[CustomPerm] Config saves are suspended until the invalid file is fixed and "
+                        + "/customperm reload succeeds, so the file on disk is not overwritten.");
+                return false;
+            }
 
             // Tous les fichiers sont valides — mise à jour atomique du snapshot
             configRef.set(new ConfigSnapshot(grades, aliases, commands, settings, rateLimits));
+            diskWritable = true;
             if (!save()) return false;
             writeBackup();   // AR10 — backup après chargement réussi
             return true;
 
         } catch (IOException e) {
             LOGGER.error("[CustomPerm] Failed to load config", e);
+            diskWritable = false;
             return false;
         } finally {
             reloading.set(false);
@@ -208,6 +223,11 @@ public class ConfigManager {
     }
 
     public synchronized boolean save() {
+        if (!diskWritable) {
+            LOGGER.warn("[CustomPerm] Save skipped: the config on disk failed to load. "
+                    + "Fix the file and run /customperm reload before making changes.");
+            return false;
+        }
         ConfigSnapshot snap = configRef.get();
         try {
             Files.createDirectories(dir);
@@ -321,6 +341,9 @@ public class ConfigManager {
     }
 
     public boolean isReloading() { return reloading.get(); }
+
+    /** False after a load that found an unparseable file; see {@link #diskWritable}. */
+    public boolean isDiskWritable() { return diskWritable; }
 
     /** Retourne le snapshot courant — lecture atomique, jamais null. */
     public ConfigSnapshot getSnapshot() {
