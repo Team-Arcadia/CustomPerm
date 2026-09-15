@@ -122,7 +122,7 @@ mod; it also requires the notice below to be preserved, which is the purpose of
 this section.
 
 The portions concerned are the contributions merged through pull request #1,
-commits `123650a` and `53556dc`, authored by **curveo**. They affect
+commits `79ca898` and `8cd641e`, authored by **curveo**. They affect
 `CustomPerm.java`, `perm/LuckPermsService.java`, `command/AliasManager.java`,
 `command/CommandTreeRewriter.java`, `command/CustomPermCommand.java`,
 `config/ConfigManager.java`, and `docs/LUCKPERMS_COMPATIBILITY_AUDIT.md`.
@@ -302,7 +302,7 @@ propriétaire ; elle impose en contrepartie de conserver la mention ci-dessous,
 et c'est l'objet de cette section.
 
 Les portions concernées sont les contributions fusionnées via la pull request
-#1, commits `123650a` et `53556dc`, écrites par **curveo**. Elles touchent
+#1, commits `79ca898` et `8cd641e`, écrites par **curveo**. Elles touchent
 `CustomPerm.java`, `perm/LuckPermsService.java`, `command/AliasManager.java`,
 `command/CommandTreeRewriter.java`, `command/CustomPermCommand.java`,
 `config/ConfigManager.java` et `docs/LUCKPERMS_COMPATIBILITY_AUDIT.md`.
