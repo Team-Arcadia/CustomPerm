@@ -48,6 +48,15 @@ public final class LpRequestHandler {
     private static final int EDIT_MAX_PER_WINDOW = 30;
     private static final int EDIT_WINDOW_SECONDS = 10;
 
+    /**
+     * Same idea for reads: a sync can load every group and track, or resolve a username, from
+     * LuckPerms storage (possibly a remote SQL database). Navigation plus post-edit refreshes stay
+     * far below this; a client looping the packet does not.
+     */
+    private static final String SYNC_RATE_KEY = "gui:lp_sync";
+    private static final int SYNC_MAX_PER_WINDOW = 40;
+    private static final int SYNC_WINDOW_SECONDS = 10;
+
     private LpRequestHandler() {
     }
 
@@ -63,6 +72,10 @@ public final class LpRequestHandler {
                 // client renders an empty snapshot as "LuckPerms is not active" rather than
                 // hanging on "Loading...".
                 send(player, new LpSyncPayload(LpDto.Snapshot.EMPTY));
+                return;
+            }
+            if (!RateLimiter.tryAcquire(SYNC_RATE_KEY, player.getUUID(),
+                    SYNC_MAX_PER_WINDOW, SYNC_WINDOW_SECONDS).allowed()) {
                 return;
             }
             sendSnapshot(player, sanitize(payload));

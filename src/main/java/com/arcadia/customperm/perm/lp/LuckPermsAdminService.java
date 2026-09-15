@@ -359,13 +359,15 @@ public final class LuckPermsAdminService {
             if (group == null) {
                 return CompletableFuture.<String>failedFuture(new LpEditException("No such group: " + name));
             }
-            String summary;
-            try {
-                summary = mutate(group, op, args);
-            } catch (LpEditException e) {
-                return CompletableFuture.<String>failedFuture(e);
-            }
-            return api.getGroupManager().saveGroup(group).thenApply(ignored -> summary);
+            return requireParentGroup(api, op, args, name).thenCompose(ignored -> {
+                String summary;
+                try {
+                    summary = mutate(group, op, args);
+                } catch (LpEditException e) {
+                    return CompletableFuture.<String>failedFuture(e);
+                }
+                return api.getGroupManager().saveGroup(group).thenApply(saved -> summary);
+            });
         });
     }
 
@@ -375,14 +377,36 @@ public final class LuckPermsAdminService {
             if (user == null) {
                 return CompletableFuture.<String>failedFuture(new LpEditException("Unknown player: " + uuid));
             }
-            String summary;
-            try {
-                summary = mutate(user, op, args);
-            } catch (LpEditException e) {
-                return CompletableFuture.<String>failedFuture(e);
-            }
-            return api.getUserManager().saveUser(user).thenApply(ignored -> summary);
+            return requireParentGroup(api, op, args, null).thenCompose(ignored -> {
+                String summary;
+                try {
+                    summary = mutate(user, op, args);
+                } catch (LpEditException e) {
+                    return CompletableFuture.<String>failedFuture(e);
+                }
+                return api.getUserManager().saveUser(user).thenApply(saved -> summary);
+            });
         });
+    }
+
+    /**
+     * For the parent-add operations, fails unless the parent group exists and differs from the
+     * holder. LuckPerms accepts an inheritance node to any name, so without this a typo in the
+     * picker silently grants nothing, and a group made its own parent is stored as-is.
+     * Completes immediately for every other operation.
+     */
+    private static CompletableFuture<Void> requireParentGroup(LuckPerms api, LpEditOp op, List<String> args,
+                                                              String holderGroup) {
+        if (op != LpEditOp.GROUP_PARENT_ADD && op != LpEditOp.USER_PARENT_ADD) {
+            return CompletableFuture.completedFuture(null);
+        }
+        String parent = requireName(args.get(1), "group");
+        if (parent.equals(holderGroup)) {
+            return CompletableFuture.failedFuture(new LpEditException("A group cannot inherit itself."));
+        }
+        return api.getGroupManager().loadGroup(parent).thenCompose(loaded -> loaded.isPresent()
+                ? CompletableFuture.<Void>completedFuture(null)
+                : CompletableFuture.<Void>failedFuture(new LpEditException("No such group: " + parent)));
     }
 
     /**
