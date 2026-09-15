@@ -724,6 +724,9 @@ LuckPerms stocke et résout à la fois les nodes `customperm.command.*` et `cust
 - **Contextes LP partiellement testés** : les contextes par-monde, par-serveur, etc. de LuckPerms passent par `getCachedData()` et sont en théorie supportés, mais non testés extensivement.
 - **GUI nécessite TesseraUI** : sans lui, l'administration reste entièrement en commandes.
 - **L'éditeur LuckPerms en jeu n'est pas le web editor** : il couvre groupes, joueurs, tracks, nœuds, meta et chat meta, mais pas les opérations en masse, la recherche de nœud sur tous les détenteurs, ni l'historique d'annulation du web editor. Pour cela, `/lp editor` reste l'outil.
+- **Les commandes de redirection sont contrôlées et limitées sous leur propre nom uniquement** : certaines commandes sont des raccourcis qui redirigent vers une autre (`/tp` vers `/teleport`, `/msg` et `/w` vers `/tell`, `/xp` vers `/experience`). Exposer ou limiter `teleport` ne couvre pas `/tp`, et une limite de débit posée sur `tp` n'est pas appliquée, car la sous-commande exécutée appartient à `/teleport`. Exposez chaque écriture à ouvrir, et posez les limites sur la commande cible en laissant le raccourci non exposé.
+- **L'assignation de grade exige le joueur en ligne** : `/customperm grade assign|unassign` résout le joueur comme entité. Pour un joueur hors ligne, éditez `userGrades` dans `grades.json` (UUID en clé) puis `/customperm reload`.
+- **Les nœuds DENY se gèrent uniquement dans le fichier** : `deniedPermissions` est pris en compte par le résolveur mais n'a pas encore de sous-commande `/customperm grade` ; éditez `grades.json` puis rechargez.
 
 ---
 
