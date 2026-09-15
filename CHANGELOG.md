@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Removed
+
+- **GitHub releases v1.0.3 and v1.0.4** — removed on 2026-09-15. The repository history was rewritten to remove personal data from author, committer and tagger metadata; file contents are identical, but every commit hash changed, and anyone who cloned before that date must clone again. Both releases were marked immutable by GitHub, which locks their tags and made the rewrite impossible while they existed. They were development builds, never published on CurseForge or Modrinth, and 1.0.5 (beta) supersedes them. Their corresponding source remains available through the `v1.0.3` and `v1.0.4` tags. Builds are distributed on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) and [Modrinth](https://modrinth.com/mod/customperm); the next release is 1.1.0.
+
 ### Changed
 
 - **Project relicensed to proprietary, source-available terms (All Rights Reserved)** on 2026-07-14, replacing the GNU General Public License v3.0 only (`GPL-3.0-only`). The source stays publicly viewable for reference and interoperability, but redistribution, re-upload, repackaging, sale, and derivative works now require prior written permission. Inclusion in CurseForge/Modrinth modpacks is permitted only when the unmodified official file is fetched from the platform; bundling, re-hosting, or modified builds require written permission. The change is **prospective**: it applies to builds published from the next release onward. Every version released up to and including **1.0.5** was distributed under the license shipped with it and stays available on those terms, which no later license text withdraws. Per-version licensing is tabulated in [NOTICE.md](NOTICE.md).

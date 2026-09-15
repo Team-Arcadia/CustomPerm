@@ -92,11 +92,15 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 
 ### Steps
 
-1. Download the latest CustomPerm release artifact from the [Releases page](../../releases).
+1. Download CustomPerm from [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) or [Modrinth](https://modrinth.com/mod/customperm).
 2. Drop the jar into your server's `mods/` folder.
 3. (Optional) Drop the [LuckPerms](https://luckperms.net/download) jar (NeoForge 1.21.1 build) alongside.
 4. (Optional) Have admin players install [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) client-side for `/customperm gui`.
 5. Start the server.
+
+> **Where the builds are.** Published builds are distributed on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) and [Modrinth](https://modrinth.com/mod/customperm). The current version there is **1.0.5 (beta)**; the next release will be **1.1.0**.
+>
+> **GitHub releases v1.0.3 and v1.0.4 were removed on 2026-09-15.** The repository history was rewritten to remove personal data from commit metadata. Those two releases were locked by GitHub and blocked the cleanup, so they had to go. They were development builds, never published on CurseForge or Modrinth, and 1.0.5 includes everything they contained. Their source is still available through the `v1.0.3` and `v1.0.4` tags. File contents are unchanged, but every commit hash changed: if you cloned the repository before that date, clone it again.
 
 At boot you will see **one of** these two lines depending on configuration:
 
@@ -561,7 +565,7 @@ cd CustomPerm
 .\gradlew.bat build           # Windows
 ```
 
-Gradle generates the distributable mod artifact during `build`. Generated artifacts are not committed to Git; publish the artifact through GitHub Releases.
+Gradle generates the distributable mod artifact during `build`. Generated artifacts are not committed to Git; builds are published on CurseForge and Modrinth.
 
 ### Dev environment
 

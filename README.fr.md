@@ -92,11 +92,15 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 
 ### Étapes
 
-1. Téléchargez le dernier artefact de release CustomPerm depuis la [page Releases](../../releases).
+1. Téléchargez CustomPerm sur [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) ou [Modrinth](https://modrinth.com/mod/customperm).
 2. Déposez le jar dans le dossier `mods/` de votre serveur.
 3. (Optionnel) Déposez aussi le jar de [LuckPerms](https://luckperms.net/download) (build NeoForge 1.21.1).
 4. (Optionnel) Les joueurs admin peuvent installer [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) côté client pour `/customperm gui`.
 5. Démarrez le serveur.
+
+> **Où trouver les builds.** Les builds publiés sont distribués sur [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) et [Modrinth](https://modrinth.com/mod/customperm). La version actuelle y est la **1.0.5 (bêta)** ; la prochaine release sera la **1.1.0**.
+>
+> **Les releases GitHub v1.0.3 et v1.0.4 ont été retirées le 2026-09-15.** L'historique du dépôt a été réécrit pour retirer des données personnelles des métadonnées de commit. Ces deux releases étaient verrouillées par GitHub et bloquaient ce nettoyage, elles ont donc dû être supprimées. C'étaient des builds de développement, jamais publiés sur CurseForge ni Modrinth, et la 1.0.5 contient tout ce qu'ils apportaient. Leur code source reste disponible via les tags `v1.0.3` et `v1.0.4`. Le contenu des fichiers est inchangé, mais tous les identifiants de commit ont changé : si vous avez cloné le dépôt avant cette date, clonez-le à nouveau.
 
 Au démarrage, vous verrez dans les logs **une seule** des deux lignes suivantes selon votre configuration :
 
@@ -561,7 +565,7 @@ cd CustomPerm
 .\gradlew.bat build           # Windows
 ```
 
-Gradle génère l'artefact distribuable du mod pendant `build`. Les artefacts générés ne sont pas commités dans Git ; publiez l'artefact via GitHub Releases.
+Gradle génère l'artefact distribuable du mod pendant `build`. Les artefacts générés ne sont pas commités dans Git ; les builds sont publiés sur CurseForge et Modrinth.
 
 ### Tests en environnement de dev
 
