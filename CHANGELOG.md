@@ -11,7 +11,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Removed
 
-- **GitHub releases v1.0.3 and v1.0.4** — removed on 2026-09-15. The repository history was rewritten to remove personal data from author, committer and tagger metadata; file contents are identical, but every commit hash changed, and anyone who cloned before that date must clone again. Both releases were marked immutable by GitHub, which locks their tags and made the rewrite impossible while they existed. They were development builds, never published on CurseForge or Modrinth, and 1.0.5 (beta) supersedes them. Their corresponding source remains available through the `v1.0.3` and `v1.0.4` tags. Builds are distributed on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) and [Modrinth](https://modrinth.com/mod/customperm); the next release is 1.1.0.
+- **GitHub releases and tags v1.0.3 and v1.0.4** — removed on 2026-09-15. The repository history was rewritten to remove personal data from author, committer and tagger metadata; file contents are identical, but every commit hash changed, and anyone who cloned before that date must clone again. Both releases were marked immutable by GitHub, which locks their tags and made the rewrite impossible while they existed. They were development builds, never published on CurseForge or Modrinth, and 1.0.5 (beta) supersedes them. The `v1.0.3` and `v1.0.4` tags were locked the same way and removed too; the corresponding source remains in the history at commit `65ef813` (1.0.3) and `ffc4624` (1.0.4). Builds are distributed on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) and [Modrinth](https://modrinth.com/mod/customperm); the next release is 1.1.0.
 
 ### Changed
 
