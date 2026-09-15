@@ -283,6 +283,15 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         CommandNode<CommandSourceStack> root = dispatcher.getRoot();
         List<CommandNode<CommandSourceStack>> originals = new ArrayList<>(root.getChildren());
 
+        // Unwrapped command roots a redirect may be re-pointed at (see resolveRedirect). Aliases
+        // and /customperm keep their own gating and are never cloned under another name.
+        Set<CommandNode<CommandSourceStack>> redirectTargets = Collections.newSetFromMap(new IdentityHashMap<>());
+        for (CommandNode<CommandSourceStack> original : originals) {
+            if (!skipRoots.contains(original.getName()) && !WRAPPED_NODES.contains(original)) {
+                redirectTargets.add(original);
+            }
+        }
+
         int wrapped = 0;
         for (CommandNode<CommandSourceStack> original : originals) {
             String name = original.getName();
@@ -291,7 +300,9 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             try {
                 ORIGINAL_ROOTS.put(name, original);
                 IdentityHashMap<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> visited = new IdentityHashMap<>();
-                CommandNode<CommandSourceStack> wrappedRoot = wrapRecursive(original, name, visited);
+                Set<CommandNode<CommandSourceStack>> inProgress = Collections.newSetFromMap(new IdentityHashMap<>());
+                CommandNode<CommandSourceStack> wrappedRoot =
+                        wrapRecursive(original, name, visited, inProgress, redirectTargets);
                 if (wrappedRoot == original) continue;  // unknown type — the tick-time re-assert still gates it
                 replaceInParent(root, original, wrappedRoot);
                 wrapped++;
@@ -327,12 +338,46 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         return trimmed.substring(0, end);
     }
 
+    /**
+     * Picks the redirect target for a wrapped clone.
+     *
+     * <p>A shortcut such as {@code /tp} is a literal that only redirects to another command root
+     * ({@code teleport}). Keeping the original pointer sends everything typed after {@code /tp}
+     * through the ORIGINAL, unwrapped {@code teleport} subtree: no exposure check, no rate limit,
+     * under either name. When the target is an unwrapped command root, it is therefore cloned
+     * under {@code rootName}, so {@code /tp} is governed by the rules of {@code tp} and
+     * {@code /teleport} by its own.</p>
+     *
+     * <p>Other targets keep their pointer: the dispatcher root ({@code execute run}), nodes that
+     * are not roots, and roots wrapped by an earlier pass. A target already cloned in this pass is
+     * reused, which covers {@code /execute as ...} redirecting to {@code execute} itself; a target
+     * still being cloned (a redirect cycle across roots) keeps the original pointer instead of
+     * recursing forever.</p>
+     */
+    private static CommandNode<CommandSourceStack> resolveRedirect(
+            CommandNode<CommandSourceStack> redirect,
+            String rootName,
+            IdentityHashMap<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> visited,
+            Set<CommandNode<CommandSourceStack>> inProgress,
+            Set<CommandNode<CommandSourceStack>> redirectTargets) {
+        if (redirect == null) return null;
+        CommandNode<CommandSourceStack> done = visited.get(redirect);
+        if (done != null) return done;
+        if (!redirectTargets.contains(redirect) || inProgress.contains(redirect)) return redirect;
+        return wrapRecursive(redirect, rootName, visited, inProgress, redirectTargets);
+    }
+
     private static CommandNode<CommandSourceStack> wrapRecursive(
             CommandNode<CommandSourceStack> original,
             String rootName,
-            IdentityHashMap<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> visited) {
+            IdentityHashMap<CommandNode<CommandSourceStack>, CommandNode<CommandSourceStack>> visited,
+            Set<CommandNode<CommandSourceStack>> inProgress,
+            Set<CommandNode<CommandSourceStack>> redirectTargets) {
 
         if (visited.containsKey(original)) return visited.get(original);
+        if (!(original instanceof LiteralCommandNode<?>) && !(original instanceof ArgumentCommandNode<?, ?>)) {
+            return original;  // unknown node type — leave alone
+        }
 
         Predicate<CommandSourceStack> origReq = original.getRequirement();
         Predicate<CommandSourceStack> wrappedReq = source -> {
@@ -352,27 +397,35 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             return true;
         };
 
+        // The redirect is a constructor argument, so it has to be resolved before this node exists.
+        inProgress.add(original);
+        CommandNode<CommandSourceStack> redirect;
+        try {
+            redirect = resolveRedirect(original.getRedirect(), rootName, visited, inProgress, redirectTargets);
+        } finally {
+            inProgress.remove(original);
+        }
+
         CommandNode<CommandSourceStack> wrapped;
         if (original instanceof LiteralCommandNode<CommandSourceStack> literal) {
             wrapped = new LiteralCommandNode<>(
                 literal.getLiteral(),
                 wrapCommand(rootName, literal.getCommand()),
                 wrappedReq,
-                literal.getRedirect(),     // redirect: keep pointer to original (rare; not deep-cloned)
+                redirect,
                 literal.getRedirectModifier(),
                 literal.isFork()
             );
-        } else if (original instanceof ArgumentCommandNode<?, ?>) {
-            wrapped = cloneArgument(original, wrappedReq, rootName);
         } else {
-            return original;  // unknown node type — leave alone
+            wrapped = cloneArgument(original, wrappedReq, rootName, redirect);
         }
 
         visited.put(original, wrapped);
         WRAPPED_NODES.add(wrapped);
 
         for (CommandNode<CommandSourceStack> child : original.getChildren()) {
-            CommandNode<CommandSourceStack> wrappedChild = wrapRecursive(child, rootName, visited);
+            CommandNode<CommandSourceStack> wrappedChild =
+                    wrapRecursive(child, rootName, visited, inProgress, redirectTargets);
             if (wrappedChild == child
                     && !(child instanceof LiteralCommandNode<?>)
                     && !(child instanceof ArgumentCommandNode<?, ?>)) {
@@ -390,14 +443,15 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
     private static CommandNode<CommandSourceStack> cloneArgument(
             CommandNode<CommandSourceStack> original,
             Predicate<CommandSourceStack> wrappedReq,
-            String rootName) {
+            String rootName,
+            CommandNode<CommandSourceStack> redirect) {
         ArgumentCommandNode argNode = (ArgumentCommandNode) original;
         return new ArgumentCommandNode<>(
             argNode.getName(),
             argNode.getType(),
             wrapCommand(rootName, argNode.getCommand()),
             wrappedReq,
-            argNode.getRedirect(),
+            redirect,
             argNode.getRedirectModifier(),
             argNode.isFork(),
             argNode.getCustomSuggestions()

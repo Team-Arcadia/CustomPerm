@@ -13,6 +13,7 @@ import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.command.CommandTreeRewriter;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.tree.CommandNode;
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.gametest.framework.GameTest;
@@ -139,6 +140,120 @@ public class CommandInterceptionTest {
         if (afterRepair.canUse(source))
             fail("Repair changed the unexposed command requirement unexpectedly.");
 
+        helper.succeed();
+    }
+
+    /**
+     * A shortcut root that redirects to another root (vanilla /tp -> /teleport) must reach a
+     * subtree wrapped under the SHORTCUT's name. Before the fix the clone kept a pointer to the
+     * original, unwrapped target, so an exposed /tp let any source through its arguments.
+     *
+     * Uses a level-0 source with no entity: PermissionService grants it nothing, so an exposed
+     * command must deny it while an unexposed one keeps the original (always-true) requirement.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void shortcutRedirectIsGatedUnderItsOwnName(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        var dispatcher = server.getCommands().getDispatcher();
+        var exposed = CustomPerm.configManager.getCommands().grantedCommands;
+        String target = "_gt_redirect_target";
+        String shortcut = "_gt_redirect_short";
+
+        LiteralCommandNode<CommandSourceStack> targetNode = dispatcher.register(Commands.literal(target)
+            .then(Commands.literal("go").executes(ctx -> 1)));
+        dispatcher.register(Commands.literal(shortcut).redirect(targetNode));
+        CommandTreeRewriter.repair(server);
+
+        CommandSourceStack nobody = server.createCommandSourceStack().withPermission(0);
+        exposed.add(shortcut);
+        try {
+            CommandNode<CommandSourceStack> shortRoot = Customperm.findRoot(server, shortcut);
+            CommandNode<CommandSourceStack> liveTarget = Customperm.findRoot(server, target);
+            if (shortRoot == null || liveTarget == null)
+                fail("Setup failed — synthetic commands missing from the dispatcher.");
+            CommandNode<CommandSourceStack> redirect = shortRoot.getRedirect();
+            if (redirect == null)
+                fail("Wrapped shortcut lost its redirect.");
+            if (redirect == targetNode)
+                fail("Shortcut still redirects to the original, unwrapped target node.");
+            if (redirect == liveTarget)
+                fail("Shortcut must get its own clone of the target, not the target's wrapped root.");
+
+            CommandNode<CommandSourceStack> goViaShortcut = redirect.getChild("go");
+            if (goViaShortcut == null)
+                fail("Cloned target subtree is missing its child.");
+            if (goViaShortcut.canUse(nobody))
+                fail("Exposed shortcut let an ungranted source through the redirected sub-command.");
+            if (!liveTarget.getChild("go").canUse(nobody))
+                fail("Exposing the shortcut must not change the target command's own gating.");
+        } finally {
+            exposed.remove(shortcut);
+        }
+        helper.succeed();
+    }
+
+    /** Same guarantee on the real vanilla shortcut: exposing /tp gates the /teleport arguments reached through it. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void vanillaTpRedirectIsGatedAsTp(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        var exposed = CustomPerm.configManager.getCommands().grantedCommands;
+        boolean had = exposed.contains("tp");
+        CommandSourceStack nobody = server.createCommandSourceStack().withPermission(0);
+        exposed.add("tp");
+        try {
+            CommandNode<CommandSourceStack> tp = Customperm.findRoot(server, "tp");
+            CommandNode<CommandSourceStack> teleport = Customperm.findRoot(server, "teleport");
+            if (tp == null || teleport == null || tp.getRedirect() == null)
+                fail("Vanilla /tp or /teleport missing, or /tp no longer a redirect.");
+            if (tp.getRedirect() == teleport)
+                fail("/tp must redirect to its own wrapped clone of /teleport.");
+            CommandNode<CommandSourceStack> location = tp.getRedirect().getChild("location");
+            if (location == null)
+                fail("Cloned /teleport subtree is missing its 'location' argument.");
+            if (location.canUse(nobody))
+                fail("Exposed /tp let an ungranted source reach /teleport <location>.");
+        } finally {
+            if (!had) exposed.remove("tp");
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Redirect cycles must not recurse forever while cloning: a root redirecting into its own
+     * node (vanilla /execute as ...), and a shortcut root whose target redirects back to the
+     * shortcut, where the shortcut's clone does not exist yet when the back-reference is met.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void redirectCyclesWrapWithoutRecursing(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        var dispatcher = server.getCommands().getDispatcher();
+
+        LiteralCommandNode<CommandSourceStack> self = dispatcher.register(Commands.literal("_gt_cycle_self")
+            .executes(ctx -> 1));
+        self.addChild(Commands.<CommandSourceStack>literal("again").redirect(self).build());
+
+        LiteralCommandNode<CommandSourceStack> target = dispatcher.register(Commands.literal("_gt_cycle_target")
+            .executes(ctx -> 1));
+        LiteralCommandNode<CommandSourceStack> shortcut = dispatcher.register(Commands.literal("_gt_cycle_short")
+            .redirect(target));
+        target.addChild(Commands.<CommandSourceStack>literal("back").redirect(shortcut).build());
+
+        try {
+            CommandTreeRewriter.repair(server);
+        } catch (StackOverflowError e) {
+            fail("Wrapping a redirect cycle recursed without bound.");
+        }
+
+        CommandNode<CommandSourceStack> selfRoot = Customperm.findRoot(server, "_gt_cycle_self");
+        if (selfRoot == self)
+            fail("Self-redirecting root was not wrapped.");
+        if (selfRoot.getChild("again").getRedirect() != selfRoot)
+            fail("A root redirecting into itself must point at its own wrapped clone.");
+        CommandNode<CommandSourceStack> shortRoot = Customperm.findRoot(server, "_gt_cycle_short");
+        if (shortRoot == shortcut || Customperm.findRoot(server, "_gt_cycle_target") == target)
+            fail("Roots in a redirect cycle were not wrapped.");
+        if (shortRoot.getRedirect() == target)
+            fail("Shortcut in a cycle must still get a wrapped clone of its target.");
         helper.succeed();
     }
 
