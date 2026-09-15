@@ -83,6 +83,31 @@ class PermissionResolverTest {
         assertFalse(PermissionResolver.resolve(grades, player, "customperm.alias.heal"));
     }
 
+    @Test
+    void shouldReturnTrue_whenWildcardIsOnAnyAncestor() {
+        assignGradeWithAllow("staff", "customperm.*");
+        assertTrue(PermissionResolver.resolve(grades, player, "customperm.command.gamemode"));
+        assertTrue(PermissionResolver.resolve(grades, player, "customperm.alias.heal"));
+        assertTrue(PermissionResolver.resolve(grades, player, "customperm.gui.luckperms.edit"));
+        assertFalse(PermissionResolver.resolve(grades, player, "customperm"),
+            "prefix.* covers descendants only, not the prefix itself");
+        assertFalse(PermissionResolver.resolve(grades, player, "custompermx.command.tp"));
+    }
+
+    @Test
+    void shouldApplyAncestorWildcardToDenied() {
+        createGrade("staff", Set.of("customperm.command.gamemode"), Set.of("customperm.*"));
+        grades.userGrades.put(player.toString(), java.util.List.of("staff"));
+        assertFalse(PermissionResolver.resolve(grades, player, "customperm.command.gamemode"));
+    }
+
+    @Test
+    void shouldReturnFalse_whenUserGradeListIsNull() {
+        createGrade("staff", Set.of("tp"), Set.of());
+        grades.userGrades.put(player.toString(), null);
+        assertFalse(PermissionResolver.resolve(grades, player, "tp"));
+    }
+
     // ─── Cumul multi-grades (INVARIANT-102) ───────────────────────────────────
 
     @Test

@@ -29,12 +29,19 @@ public class GradesConfig {
     public void normalize() {
         if (grades == null) grades = new HashMap<>();
         if (userGrades == null) userGrades = new HashMap<>();
+        // A hand-edited "grade": null or "uuid": null parses fine, but every permission check
+        // iterates these maps from a Brigadier requires() predicate, where an NPE breaks the
+        // command tree sent to the player.
+        grades.values().removeIf(java.util.Objects::isNull);
         for (Grade g : grades.values()) {
-            if (g != null) {
-                if (g.permissions == null) g.permissions = new HashSet<>();
-                if (g.deniedPermissions == null) g.deniedPermissions = new HashSet<>();
-            }
+            if (g.permissions == null) g.permissions = new HashSet<>();
+            if (g.deniedPermissions == null) g.deniedPermissions = new HashSet<>();
+            g.permissions.remove(null);
+            g.deniedPermissions.remove(null);
         }
+        userGrades.values().removeIf(java.util.Objects::isNull);
+        userGrades.values().forEach(list -> list.removeIf(java.util.Objects::isNull));
+        userGrades.values().removeIf(List::isEmpty);
     }
 
     public boolean userHasPermission(UUID uuid, String node) {

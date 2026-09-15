@@ -73,6 +73,37 @@ class ConfigBackwardCompatTest {
         assertTrue(rateLimits.rules.isEmpty(), "rateLimits.rules doit être vide");
     }
 
+    @Test
+    void shouldDropNullEntries_whenHandEditedJsonContainsNulls() throws Exception {
+        Files.writeString(tempDir.resolve("grades.json"),
+                "{\"grades\":{\"ghost\":null,\"vip\":{\"permissions\":[null,\"a.b\"],\"deniedPermissions\":null}},"
+                        + "\"userGrades\":{\"00000000-0000-0000-0000-000000000001\":null,"
+                        + "\"00000000-0000-0000-0000-000000000002\":[null,\"vip\"]}}");
+        Files.writeString(tempDir.resolve("aliases.json"),
+                "{\"aliases\":{\"broken\":null,\"half\":[null,\"say hi\"],\"empty\":[null]}}");
+        Files.writeString(tempDir.resolve("commands.json"),
+                "{\"grantedCommands\":[null,\"tp\"],\"preserveOriginalRequires\":{\"tp\":null}}");
+
+        ConfigManager mgr = new ConfigManager(tempDir);
+        assertTrue(mgr.load());
+
+        GradesConfig grades = mgr.getGrades();
+        assertFalse(grades.grades.containsKey("ghost"));
+        assertEquals(java.util.Set.of("a.b"), grades.grades.get("vip").permissions);
+        assertNotNull(grades.grades.get("vip").deniedPermissions);
+        assertFalse(grades.userGrades.containsKey("00000000-0000-0000-0000-000000000001"));
+        assertEquals(java.util.List.of("vip"), grades.userGrades.get("00000000-0000-0000-0000-000000000002"));
+
+        AliasesConfig aliases = mgr.getAliases();
+        assertFalse(aliases.aliases.containsKey("broken"));
+        assertFalse(aliases.aliases.containsKey("empty"));
+        assertEquals(java.util.List.of("say hi"), aliases.aliases.get("half"));
+
+        CommandsConfig commands = mgr.getCommands();
+        assertEquals(java.util.Set.of("tp"), commands.grantedCommands);
+        assertFalse(commands.shouldPreserveOriginalRequires("tp"));
+    }
+
     // -------------------------------------------------------------------------
     // Scénario : JSON vide {} → rétrocompatibilité minimale
     // -------------------------------------------------------------------------

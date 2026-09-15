@@ -35,8 +35,8 @@ public final class PermissionResolver {
      */
     public static boolean resolve(GradesConfig grades, UUID uuid, String node) {
         if (node == null || uuid == null) return false;
-        List<String> assigned = grades.userGrades.getOrDefault(uuid.toString(), List.of());
-        if (assigned.isEmpty()) return false;
+        List<String> assigned = grades.userGrades.get(uuid.toString());
+        if (assigned == null || assigned.isEmpty()) return false;
 
         boolean anyAllow = false;
         for (String gradeName : assigned) {
@@ -60,14 +60,17 @@ public final class PermissionResolver {
     }
 
     /**
-     * Vérifie si {@code node} est couvert par {@code perms}.
-     * Supporte trois formes : exact, wildcard global {@code *}, wildcard préfixe {@code prefix.*}.
-     * Package-private pour être directement testable depuis PermissionResolverTest.
+     * Whether {@code node} is covered by {@code perms}: exact match, global {@code *}, or a
+     * {@code prefix.*} wildcard on any ancestor, so {@code customperm.*} covers
+     * {@code customperm.command.gamemode} the way it does under LuckPerms.
+     * Package-private so PermissionResolverTest can call it directly.
      */
     static boolean matchesNode(Set<String> perms, String node) {
         if (perms.contains(node)) return true;
         if (perms.contains("*")) return true;
-        int dot = node.lastIndexOf('.');
-        return dot > 0 && perms.contains(node.substring(0, dot) + ".*");
+        for (int dot = node.lastIndexOf('.'); dot > 0; dot = node.lastIndexOf('.', dot - 1)) {
+            if (perms.contains(node.substring(0, dot) + ".*")) return true;
+        }
+        return false;
     }
 }

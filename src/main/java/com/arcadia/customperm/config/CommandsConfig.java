@@ -28,6 +28,8 @@ public class CommandsConfig {
     public void normalize() {
         if (grantedCommands == null) grantedCommands = new LinkedHashSet<>();
         if (preserveOriginalRequires == null) preserveOriginalRequires = new LinkedHashMap<>();
+        grantedCommands.remove(null);
+        preserveOriginalRequires.values().removeIf(java.util.Objects::isNull);
     }
 
     public boolean shouldPreserveOriginalRequires(String commandName) {

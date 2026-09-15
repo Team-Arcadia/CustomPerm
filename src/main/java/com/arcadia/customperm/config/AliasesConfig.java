@@ -22,5 +22,9 @@ public class AliasesConfig {
 
     public void normalize() {
         if (aliases == null) aliases = new LinkedHashMap<>();
+        // A null step list or a null step would NPE in alias listing, GUI sync and execution.
+        aliases.values().removeIf(java.util.Objects::isNull);
+        aliases.values().forEach(steps -> steps.removeIf(java.util.Objects::isNull));
+        aliases.values().removeIf(List::isEmpty);
     }
 }
