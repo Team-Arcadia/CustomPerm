@@ -152,6 +152,32 @@ class ConfigManagerTest {
     }
 
     @Test
+    void shouldNameInvalidFiles_andForgetThemAfterSuccessfulLoad() throws Exception {
+        Files.writeString(tempDir.resolve("aliases.json"), "{ nope");
+        Files.writeString(tempDir.resolve("ratelimits.json"), "[");
+        ConfigManager mgr = new ConfigManager(tempDir);
+
+        assertFalse(mgr.load());
+        assertEquals("invalid or empty aliases.json, ratelimits.json", mgr.getLastLoadFailure(),
+                "admins are told which files to fix");
+
+        Files.delete(tempDir.resolve("aliases.json"));
+        Files.delete(tempDir.resolve("ratelimits.json"));
+        assertTrue(mgr.load());
+        assertNull(mgr.getLastLoadFailure());
+    }
+
+    @Test
+    void shouldRefuseSaves_whenSuspendedBeforeAnyLoad() throws Exception {
+        ConfigManager mgr = new ConfigManager(tempDir);
+        mgr.suspendSaves("config initialisation failed");
+
+        assertFalse(mgr.save(), "an empty snapshot that never came from disk must not be written");
+        assertFalse(Files.exists(tempDir.resolve("grades.json")));
+        assertEquals("config initialisation failed", mgr.getLastLoadFailure());
+    }
+
+    @Test
     void shouldCreateBackupFiles_afterSuccessfulLoad() throws Exception {
         // Arrange & Act — un load() réussi doit créer un .bak par fichier de config dans backup/
         ConfigManager mgr = new ConfigManager(tempDir);

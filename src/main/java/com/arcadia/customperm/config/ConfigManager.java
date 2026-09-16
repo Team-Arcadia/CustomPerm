@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -55,6 +56,9 @@ public class ConfigManager {
      * assignment the admin was one typo away from keeping. Cleared by the next successful load.
      */
     private volatile boolean diskWritable = true;
+
+    /** What made the last load fail, for admin-facing messages; null after a successful load. */
+    private volatile String lastLoadFailure;
 
     /** Constructeur production — chemin résolu via FMLPaths. */
     public ConfigManager() {
@@ -107,18 +111,18 @@ public class ConfigManager {
             // Parsing avec catch individuel par fichier — INVARIANT-401 :
             // si un fichier est invalide, on retourne false AVANT configRef.set(),
             // le snapshot précédent reste intact.
-            boolean anyInvalid = false;
+            List<String> invalidFiles = new ArrayList<>();
             if (Files.exists(gradesFile)) {
                 try {
                     GradesConfig parsed = GSON.fromJson(Files.readString(gradesFile), GradesConfig.class);
                     if (parsed != null) { grades = parsed; grades.normalize(); }
                     else {
                         LOGGER.warn("[CustomPerm] Configuration reload failed — grades.json is empty or null. Keeping previous config.");
-                        anyInvalid = true;
+                        invalidFiles.add("grades.json");
                     }
                 } catch (Exception e) {
                     LOGGER.warn("[CustomPerm] Configuration reload failed — invalid JSON in grades.json. Keeping previous config.");
-                    anyInvalid = true;
+                    invalidFiles.add("grades.json");
                 }
             }
             if (Files.exists(aliasesFile)) {
@@ -127,11 +131,11 @@ public class ConfigManager {
                     if (parsed != null) { aliases = parsed; aliases.normalize(); }
                     else {
                         LOGGER.warn("[CustomPerm] Configuration reload failed — aliases.json is empty or null. Keeping previous config.");
-                        anyInvalid = true;
+                        invalidFiles.add("aliases.json");
                     }
                 } catch (Exception e) {
                     LOGGER.warn("[CustomPerm] Configuration reload failed — invalid JSON in aliases.json. Keeping previous config.");
-                    anyInvalid = true;
+                    invalidFiles.add("aliases.json");
                 }
             }
             if (Files.exists(commandsFile)) {
@@ -140,11 +144,11 @@ public class ConfigManager {
                     if (parsed != null) { commands = parsed; commands.normalize(); }
                     else {
                         LOGGER.warn("[CustomPerm] Configuration reload failed — commands.json is empty or null. Keeping previous config.");
-                        anyInvalid = true;
+                        invalidFiles.add("commands.json");
                     }
                 } catch (Exception e) {
                     LOGGER.warn("[CustomPerm] Configuration reload failed — invalid JSON in commands.json. Keeping previous config.");
-                    anyInvalid = true;
+                    invalidFiles.add("commands.json");
                 }
             }
             if (Files.exists(settingsFile)) {
@@ -153,11 +157,11 @@ public class ConfigManager {
                     if (parsed != null) { settings = parsed; settings.normalize(); }
                     else {
                         LOGGER.warn("[CustomPerm] Configuration reload failed — settings.json is empty or null. Keeping previous config.");
-                        anyInvalid = true;
+                        invalidFiles.add("settings.json");
                     }
                 } catch (Exception e) {
                     LOGGER.warn("[CustomPerm] Configuration reload failed — invalid JSON in settings.json. Keeping previous config.");
-                    anyInvalid = true;
+                    invalidFiles.add("settings.json");
                 }
             } else {
                 settings.normalize();
@@ -168,17 +172,18 @@ public class ConfigManager {
                     if (parsed != null) { rateLimits = parsed; rateLimits.normalize(); }
                     else {
                         LOGGER.warn("[CustomPerm] Configuration reload failed — ratelimits.json is empty or null. Keeping previous config.");
-                        anyInvalid = true;
+                        invalidFiles.add("ratelimits.json");
                     }
                 } catch (Exception e) {
                     LOGGER.warn("[CustomPerm] Configuration reload failed — invalid JSON in ratelimits.json. Keeping previous config.");
-                    anyInvalid = true;
+                    invalidFiles.add("ratelimits.json");
                 }
             } else {
                 rateLimits.normalize();
             }
-            if (anyInvalid) {
+            if (!invalidFiles.isEmpty()) {
                 diskWritable = false;
+                lastLoadFailure = "invalid or empty " + String.join(", ", invalidFiles);
                 LOGGER.error("[CustomPerm] Config saves are suspended until the invalid file is fixed and "
                         + "/customperm reload succeeds, so the file on disk is not overwritten.");
                 return false;
@@ -187,13 +192,17 @@ public class ConfigManager {
             // Tous les fichiers sont valides — mise à jour atomique du snapshot
             configRef.set(new ConfigSnapshot(grades, aliases, commands, settings, rateLimits));
             diskWritable = true;
+            lastLoadFailure = null;
             if (!save()) return false;
             writeBackup();   // AR10 — backup après chargement réussi
             return true;
 
-        } catch (IOException e) {
+        } catch (IOException | RuntimeException e) {
+            // Any failure, not only I/O: an unexpected exception here used to leave saves enabled
+            // on top of a snapshot that never reflected the disk.
             LOGGER.error("[CustomPerm] Failed to load config", e);
             diskWritable = false;
+            lastLoadFailure = e.getClass().getSimpleName() + (e.getMessage() == null ? "" : ": " + e.getMessage());
             return false;
         } finally {
             reloading.set(false);
@@ -344,6 +353,18 @@ public class ConfigManager {
 
     /** False after a load that found an unparseable file; see {@link #diskWritable}. */
     public boolean isDiskWritable() { return diskWritable; }
+
+    /** Reason of the last failed load, or null when the last load succeeded. */
+    public String getLastLoadFailure() { return lastLoadFailure; }
+
+    /**
+     * Suspends saves when the config could not be read at all (see the mod constructor's fallback):
+     * an empty snapshot that never came from disk must not overwrite the files.
+     */
+    public void suspendSaves(String reason) {
+        diskWritable = false;
+        lastLoadFailure = reason;
+    }
 
     /** Retourne le snapshot courant — lecture atomique, jamais null. */
     public ConfigSnapshot getSnapshot() {
