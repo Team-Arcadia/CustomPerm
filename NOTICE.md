@@ -121,7 +121,7 @@ sublicensing, which is why they may be distributed as part of the proprietary
 mod; it also requires the notice below to be preserved, which is the purpose of
 this section.
 
-The portions concerned are the contributions merged through pull request #1,
+The portions concerned are the contributions merged on 2026-06-10 as
 commits `79ca898` and `8cd641e`, authored by **curveo**. They affect
 `CustomPerm.java`, `perm/LuckPermsService.java`, `command/AliasManager.java`,
 `command/CommandTreeRewriter.java`, `command/CustomPermCommand.java`,
@@ -301,8 +301,8 @@ autorise la sous-licence, ce qui permet de les distribuer au sein du mod
 propriétaire ; elle impose en contrepartie de conserver la mention ci-dessous,
 et c'est l'objet de cette section.
 
-Les portions concernées sont les contributions fusionnées via la pull request
-#1, commits `79ca898` et `8cd641e`, écrites par **curveo**. Elles touchent
+Les portions concernées sont les contributions fusionnées le 2026-06-10 sous
+forme des commits `79ca898` et `8cd641e`, écrites par **curveo**. Elles touchent
 `CustomPerm.java`, `perm/LuckPermsService.java`, `command/AliasManager.java`,
 `command/CommandTreeRewriter.java`, `command/CustomPermCommand.java`,
 `config/ConfigManager.java` et `docs/LUCKPERMS_COMPATIBILITY_AUDIT.md`.
