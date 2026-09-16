@@ -35,10 +35,13 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Run GameTest server
+      - name: Run GameTest server (internal backend, no LuckPerms)
         run: ./gradlew runGameTestServer --no-daemon
         # The task's exit code = number of failed required tests.
         # Non-zero will fail the job automatically.
+
+      - name: Run GameTest server (LuckPerms backend)
+        run: ./gradlew runGameTestServerLuckPerms --no-daemon
 
       - name: Build distributable jar
         run: ./gradlew build --no-daemon
@@ -58,5 +61,6 @@ jobs:
         with:
           name: gametest-logs
           path: |
-            run/logs
+            run/gametest/logs
+            run/gametest-luckperms/logs
             build/reports

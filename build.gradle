@@ -19,6 +19,14 @@ repositories {
     maven { name = 'CurseMaven'; url = 'https://cursemaven.com' }
 }
 
+configurations {
+    luckPermsGameTestMod {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
+}
+
 sourceSets {
     gameTest {
         compileClasspath += sourceSets.main.output + configurations.compileClasspath
@@ -42,9 +50,19 @@ neoForge {
         }
         client { client() }
         server { server() }
+        // Two explicit GameTest modes, each in its own game directory so the result never depends on
+        // whatever sits in run/mods. The system property lets GameTestModeTest fail if a mode drifts.
         gameTestServer {
             type = 'gameTestServer'
+            gameDirectory = project.file('run/gametest')
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'customperm.gametest.luckperms', 'false'
+        }
+        gameTestServerLuckPerms {
+            type = 'gameTestServer'
+            gameDirectory = project.file('run/gametest-luckperms')
+            systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
+            systemProperty 'customperm.gametest.luckperms', 'true'
         }
     }
 
@@ -68,6 +86,10 @@ dependencies {
     // GameTest source set depends on main output
     gameTestImplementation sourceSets.main.output
 
+    // LuckPerms NeoForge 5.4.150 (CurseForge file 5971552), the minimum CustomPerm accepts. Only copied
+    // into the LuckPerms GameTest mode's mods folder, never on a compile or runtime classpath.
+    luckPermsGameTestMod "curse.maven:luckperms-431733:5971552"
+
     // JMH benchmarks depend on main compiled classes only (no transitive NeoForge deps).
     // files() évite le conflit Gson entre testImplementation:2.11.0 et NeoForge:strictly 2.10.1.
     // Les benchmarks n'utilisent que des classes pur-Java (PermissionResolver, GradesConfig).
@@ -88,6 +110,18 @@ dependencies {
 test {
     useJUnitPlatform()
 }
+
+// GameTest mods folders are rebuilt before every run: empty for the internal mode, LuckPerms only for
+// the LuckPerms mode.
+def prepareInternalGameTestMods = tasks.register('prepareInternalGameTestMods', Delete) {
+    delete 'run/gametest/mods'
+}
+def prepareLuckPermsGameTestMods = tasks.register('prepareLuckPermsGameTestMods', Sync) {
+    from configurations.luckPermsGameTestMod
+    into 'run/gametest-luckperms/mods'
+}
+tasks.matching { it.name == 'runGameTestServer' }.configureEach { dependsOn prepareInternalGameTestMods }
+tasks.matching { it.name == 'runGameTestServerLuckPerms' }.configureEach { dependsOn prepareLuckPermsGameTestMods }
 
 // jmhJar regroupe le runtime NeoForge (>65535 entries) — zip64 obligatoire.
 tasks.named('jmhJar', Jar) { zip64 = true }
