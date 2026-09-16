@@ -80,6 +80,7 @@ public class LuckPermsService implements PermissionService {
                 } else {
                     CustomPerm.LOGGER.warn("[CustomPerm] LuckPerms unavailable — failing closed (luckPermsFallbackMode={}).", mode, t);
                 }
+                CustomPerm.raiseLuckPermsUnavailable("API error: " + t.getClass().getSimpleName());
             }
             // AC4/AC5 : politique de fallback appliquée immédiatement à cette requête aussi.
             return handleUnavailable(source, node);

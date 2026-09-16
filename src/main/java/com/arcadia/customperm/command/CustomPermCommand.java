@@ -11,6 +11,7 @@ package com.arcadia.customperm.command;
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
+import com.arcadia.customperm.notify.AdminNotifier;
 import com.arcadia.customperm.perm.LuckPermsService;
 import com.arcadia.customperm.perm.PermissionService;
 import com.mojang.brigadier.CommandDispatcher;
@@ -873,6 +874,15 @@ public class CustomPermCommand {
         } else {
             ctx.getSource().sendSuccess(() -> Component.literal("  (Grades & user perms managed by /lp)").withStyle(ChatFormatting.GRAY), false);
         }
+
+        var alerts = AdminNotifier.activeAlerts();
+        if (alerts.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal("  Admin alerts       : none"), false);
+        } else {
+            ctx.getSource().sendSuccess(() -> Component.literal("  Admin alerts       : " + alerts.size()).withStyle(ChatFormatting.RED), false);
+            alerts.values().forEach(message ->
+                ctx.getSource().sendSuccess(() -> AdminNotifier.alertLine(message), false));
+        }
         return 1;
     }
 
@@ -934,6 +944,7 @@ public class CustomPermCommand {
 
     private static int reload(CommandContext<CommandSourceStack> ctx) {
         boolean reloaded = CustomPerm.configManager.load();
+        CustomPerm.syncConfigAlert();
         if (!reloaded) {
             String msg = CustomPerm.configManager.isReloading()
                 ? "[CustomPerm] Reload already in progress — try again in a moment."

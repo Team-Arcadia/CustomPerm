@@ -13,6 +13,8 @@ import com.arcadia.customperm.command.CommandTreeRewriter;
 import com.arcadia.customperm.command.ICommandTreeReloader;
 import com.arcadia.customperm.config.ConfigManager;
 import com.arcadia.customperm.network.NetworkHandler;
+import com.arcadia.customperm.notify.AdminAlerts;
+import com.arcadia.customperm.notify.AdminNotifier;
 import com.arcadia.customperm.perm.DenyPermissionService;
 import com.arcadia.customperm.perm.InternalPermService;
 import com.arcadia.customperm.perm.LuckPermsService;
@@ -52,8 +54,11 @@ public class CustomPerm {
         } catch (Throwable t) {
             LOGGER.error("[CustomPerm] Config init failed; falling back to in-memory empty config.", t);
             configManager = new ConfigManager();
+            // The empty fallback never came from disk: saving it would erase the real files.
+            configManager.suspendSaves("config initialisation failed (" + t.getClass().getSimpleName() + ")");
             LOGGER.warn("[CustomPerm] Starting with EMPTY config — all permissions, grades and aliases are inactive until a successful reload.");
         }
+        syncConfigAlert();
 
         // P6 : instance partagée — évite de créer plusieurs InternalPermService sur le même configManager.
         // Utilisée soit comme backend principal (sans LP), soit comme fallback interne de LuckPermsService.
@@ -90,10 +95,14 @@ public class CustomPerm {
         NeoForge.EVENT_BUS.register(CommandTreeRewriter.class);
         NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStarted);
         NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(AdminNotifier::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(AdminNotifier::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(AdminNotifier::onPlayerLoggedIn);
         modBus.addListener(NetworkHandler::register);
     }
 
     private static PermissionService unavailableLuckPermsBackend(InternalPermService internalBackend, String reason) {
+        raiseLuckPermsUnavailable(reason);
         if (configManager.getSettings().useInternalLuckPermsFallback()) {
             LOGGER.warn("[CustomPerm] {} — using internal backend (luckPermsFallbackMode=internal).", reason);
             return internalBackend;
@@ -101,6 +110,30 @@ public class CustomPerm {
         LOGGER.error("[CustomPerm] {} — failing closed (luckPermsFallbackMode={}).",
                 reason, configManager.getSettings().luckPermsFallbackMode);
         return new DenyPermissionService();
+    }
+
+    /**
+     * Tells online and joining admins that LuckPerms is out of the loop until restart, and what
+     * CustomPerm does instead. Safe to call repeatedly and from any thread: an unchanged alert is
+     * not re-sent.
+     */
+    public static void raiseLuckPermsUnavailable(String reason) {
+        String effect = configManager.getSettings().useInternalLuckPermsFallback()
+                ? "CustomPerm now resolves its permissions from the internal grades (grades.json)"
+                : "CustomPerm now denies every permission it manages (luckPermsFallbackMode=deny)";
+        AdminNotifier.raise(AdminAlerts.Key.LUCKPERMS_UNAVAILABLE,
+                "LuckPerms is unavailable (" + reason + "). " + effect + " until the server restarts. See the server log.");
+    }
+
+    /** Raises or resolves the config alert to match the outcome of the last load. */
+    public static void syncConfigAlert() {
+        if (configManager.isDiskWritable()) {
+            AdminNotifier.clear(AdminAlerts.Key.CONFIG_LOAD_FAILED, "configuration loaded, saving is enabled again.");
+        } else {
+            AdminNotifier.raise(AdminAlerts.Key.CONFIG_LOAD_FAILED,
+                    "Configuration failed to load (" + configManager.getLastLoadFailure() + "). Changes are kept in "
+                            + "memory but NOT saved until the file is fixed and /customperm reload succeeds.");
+        }
     }
 
     private static void onServerStarted(ServerStartedEvent event) {

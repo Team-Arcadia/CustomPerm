@@ -57,6 +57,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **LuckPerms version gate** — requires LuckPerms `5.4.150+`; older or prerelease-style versions are rejected for safety.
 - **Configurable LP degradation fallback** — if LuckPerms becomes unavailable at runtime, `settings.json` controls whether CustomPerm fails closed (`deny`, default) or switches to the internal backend (`internal`).
 - **Backend visibility** — boot logs and `/customperm status`, `/customperm debug`, `/customperm test` report whether the active backend is Internal, LuckPerms, Internal fallback from LuckPerms, or deny mode.
+- **Admin alerts** — when LuckPerms becomes unavailable or a config file fails to load, every online op (level 2+) gets a chat alert, ops who join later get it on login, and `/customperm status` lists it until it is resolved.
 - **Multi-grade RBAC** — a player can hold multiple internal grades; permissions are resolved as a union of all assigned grades.
 - **Explicit DENY support** — internal grades support `deniedPermissions`, and any matching DENY overrides ALLOW.
 - **Wildcard permission nodes** — `*`, `customperm.command.*`, and `customperm.alias.*` are supported.
@@ -248,7 +249,7 @@ They manage ALLOW nodes. Internal DENY nodes are stored in `grades.json` under `
 |---|---|
 | `/customperm test <player> <node>` | Verifies whether a player holds a permission node. Returns `GRANTED` or `DENIED`. |
 | `/customperm debug <player> <command>` | Detailed report: is the command in the dispatcher? exposed? does op-level pass? is the perm granted? what does the wrapper actually return? |
-| `/customperm status` | Global snapshot: backend, wrapped commands, exposed commands, aliases, grades. |
+| `/customperm status` | Global snapshot: backend, wrapped commands, exposed commands, aliases, grades, active admin alerts. |
 | `/customperm scan [pattern]` | Lists every command in the dispatcher with its state (exposed, alias, mod-internal). Optional substring filter. |
 | `/customperm reload` | Reloads config files from disk. |
 | `/customperm gui [grades\|aliases\|status]` | Opens the graphical TesseraUI panel — no argument opens the landing menu, an argument jumps to that screen (client-only command; requires TesseraUI installed client-side). |
@@ -508,6 +509,13 @@ Inspect `commands.json`, `aliases.json`, and (in internal mode) `grades.json` pe
 
 - Check the boot log — the line `[CustomPerm] Ready —` must appear.
 - If LP is present but its initialisation throws, `settings.json` decides the behavior: `deny` fails closed by default, `internal` falls back to `grades.json`. Check that your LP version is compatible.
+
+### A red `[CustomPerm] ALERT` appears in chat
+
+Ops (permission level 2+) receive it when something needs action, once when it happens and again on each login while it lasts. `/customperm status` lists the active ones.
+
+- **LuckPerms is unavailable**: CustomPerm stopped using LuckPerms until the next restart and now follows `luckPermsFallbackMode` (`internal` grades or `deny`). Check the server log for the LuckPerms error, fix it, restart.
+- **Configuration failed to load**: the alert names the invalid file. Changes made in game stay in memory but are not written to disk, so the broken file is not overwritten. Fix the file, then run `/customperm reload`: the alert is replaced by a green "Resolved" message and saving resumes.
 
 ### An exposed command doesn't work for an authorized player
 
