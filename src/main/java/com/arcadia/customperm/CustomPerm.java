@@ -198,8 +198,25 @@ public class CustomPerm {
         return permissions instanceof LuckPermsService lps && !lps.isDegraded();
     }
 
+    /** The mod list is fixed once loading is done; cached because command predicates ask on every node. */
+    private static volatile Boolean luckPermsPresent;
+
     public static boolean isLuckPermsPresent() {
-        return ModList.get().isLoaded("luckperms");
+        Boolean present = luckPermsPresent;
+        if (present == null) {
+            present = ModList.get().isLoaded("luckperms");
+            luckPermsPresent = present;
+        }
+        return present;
+    }
+
+    /**
+     * Whether every root command reads its {@code customperm.command.<name>} node, not only exposed ones.
+     * Never with LuckPerms installed: LuckPerms replaces every command requirement with its own check,
+     * which already covers every command.
+     */
+    public static boolean gatesAllCommands() {
+        return configManager.getSettings().gateAllCommands && !isLuckPermsPresent();
     }
 
     public static boolean isDirectCommandExposureEnabled() {

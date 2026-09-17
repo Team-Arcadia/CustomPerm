@@ -58,7 +58,7 @@ public class GuiPayloadCodecGameTest {
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
                 new GuiContext(BackendKind.LUCKPERMS, 0, 0, true), new CommandsData(List.of(
                         new CommandsData.Row("gamemode", true, true, false, true, false),
-                        new CommandsData.Row("oldmod", true, false, true, false, true)), true)));
+                        new CommandsData.Row("oldmod", true, false, true, false, true)), true, true)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.ALIASES.bit(), 0, true), new AliasesData(List.of(
                         new AliasesData.Alias("heal", List.of("effect give @s instant_health", "say healed"), true, 3, 60, true),
@@ -72,7 +72,7 @@ public class GuiPayloadCodecGameTest {
                 new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0, true), new GradesData(List.of(
                         new GradesData.Grade("vip", List.of("customperm.command.fly"), List.of("customperm.command.op"),
                                 List.of(new GradesData.Member("00000000-0000-0000-0000-000000000001", "Alex", true)))),
-                        List.of("Alex", "Steve"), "internal")));
+                        List.of("Alex", "Steve"), "internal", "vip", true)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.LUCKPERMS, GuiArea.LUCKPERMS.bit(), 0, true), new LuckPermsData(LuckPermsData.TRACKS)));
         expectRoundTrip(GuiRequestPayload.STREAM_CODEC, new GuiRequestPayload("dashboard"));

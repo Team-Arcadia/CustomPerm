@@ -140,6 +140,8 @@ public final class GuiRequestHandler {
             case COMMAND_KEEP_ORIGINAL -> bool(args.get(1)) == null
                     ? malformed(action)
                     : CommandAdmin.setPreserveOriginal(player.getServer(), args.get(0), bool(args.get(1)));
+            case COMMAND_GATE_ALL -> bool(args.get(0)) == null ? malformed(action)
+                    : CommandAdmin.setGateAll(player.getServer(), bool(args.get(0)));
             case ALIAS_CREATE -> AliasAdmin.create(player.getServer(), args.get(0), args.get(1));
             case ALIAS_DELETE -> AliasAdmin.remove(player.getServer(), args.get(0));
             case ALIAS_STEP_ADD -> AliasAdmin.addStep(player.getServer(), args.get(0), args.get(1));
@@ -156,14 +158,20 @@ public final class GuiRequestHandler {
             case RATELIMIT_REMOVE -> RateLimitAdmin.remove(args.get(0));
             case RATELIMIT_PERSISTENCE -> RateLimitAdmin.setPersistence(args.get(0), args.get(1));
             case GRADE_CREATE -> GradeAdmin.create(args.get(0));
-            case GRADE_DELETE -> GradeAdmin.delete(player.getServer(), args.get(0));
+            case GRADE_DELETE -> guarded(player, () -> GradeAdmin.delete(player.getServer(), args.get(0)));
             case GRADE_NODE_ADD -> kind(args.get(2)) == null ? malformed(action)
-                    : GradeAdmin.addNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2)));
+                    : guarded(player, () -> GradeAdmin.addNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2))));
             case GRADE_NODE_REMOVE -> kind(args.get(2)) == null ? malformed(action)
-                    : GradeAdmin.removeNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2)));
-            case GRADE_ASSIGN -> assignByName(player, args.get(0), args.get(1));
-            case GRADE_UNASSIGN -> unassignByUuid(player, args.get(0), args.get(1));
+                    : guarded(player, () -> GradeAdmin.removeNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2))));
+            case GRADE_ASSIGN -> guarded(player, () -> assignByName(player, args.get(0), args.get(1)));
+            case GRADE_UNASSIGN -> guarded(player, () -> unassignByUuid(player, args.get(0), args.get(1)));
+            case GRADE_DEFAULT -> guarded(player, () -> GradeAdmin.setDefault(player.getServer(), args.get(0)));
         };
+    }
+
+    /** Refuses a grade change that would lock this admin out of /customperm and the interface. */
+    private static AdminResult guarded(ServerPlayer admin, java.util.function.Supplier<AdminResult> change) {
+        return GradeAdmin.guarded(admin.createCommandSourceStack(), admin.getServer(), change);
     }
 
     private static AdminResult assignByName(ServerPlayer admin, String name, String grade) {

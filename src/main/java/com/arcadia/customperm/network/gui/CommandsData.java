@@ -19,8 +19,10 @@ import java.util.List;
  * longer has (a mod was removed), so a stale entry can still be seen and hidden.
  *
  * @param truncated true when the server had more commands than {@link GuiCodecs#SERVER_LIST_MAX}
+ * @param gateAll   the {@code gateAllCommands} setting: every command reads its node, not only exposed ones
+ *                  (never in effect with LuckPerms installed)
  */
-public record CommandsData(List<Row> rows, boolean truncated) implements GuiPageData {
+public record CommandsData(List<Row> rows, boolean truncated, boolean gateAll) implements GuiPageData {
 
     /**
      * One root command.
@@ -51,6 +53,7 @@ public record CommandsData(List<Row> rows, boolean truncated) implements GuiPage
     public static final StreamCodec<ByteBuf, CommandsData> CODEC = StreamCodec.composite(
             GuiCodecs.list(Row.CODEC, GuiCodecs.SERVER_LIST_MAX), CommandsData::rows,
             ByteBufCodecs.BOOL, CommandsData::truncated,
+            ByteBufCodecs.BOOL, CommandsData::gateAll,
             CommandsData::new);
 
     @Override

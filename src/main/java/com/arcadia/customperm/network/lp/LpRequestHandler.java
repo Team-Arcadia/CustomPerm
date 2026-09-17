@@ -9,6 +9,7 @@
 package com.arcadia.customperm.network.lp;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.perm.AdminAccess;
 import com.arcadia.customperm.command.RateLimiter;
 import com.arcadia.customperm.network.gui.GuiAccess;
 import com.arcadia.customperm.network.gui.GuiArea;
@@ -73,7 +74,7 @@ public final class LpRequestHandler {
     public static void handleSync(RequestLpSyncPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
-            if (!player.createCommandSourceStack().hasPermission(2)) return;
+            if (!AdminAccess.canAdminister(player)) return;
 
             if (!CustomPerm.isLuckPermsActive()) {
                 // Not an error: the editor is simply not applicable on this server, and the
@@ -125,7 +126,7 @@ public final class LpRequestHandler {
     public static void handleEdit(LpEditPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
             if (!(context.player() instanceof ServerPlayer player)) return;
-            if (!player.createCommandSourceStack().hasPermission(2)) return;
+            if (!AdminAccess.canAdminister(player)) return;
 
             if (!CustomPerm.isLuckPermsActive()) {
                 send(player, LpEditResultPayload.fail("LuckPerms is not active on this server."));

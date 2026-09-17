@@ -34,8 +34,9 @@ import java.util.Objects;
 
 /**
  * Internal grade editor. Left: grades and creation. Right: the selected grade, on two tabs: its
- * permission nodes (ALLOW, or DENY which wins over any ALLOW) and its players, who can be assigned
- * while offline as long as they joined the server before.
+ * permission nodes (ALLOW or DENY, the most specific entry winning) and its players, who can be assigned
+ * while offline as long as they joined the server before. One grade can be the default grade, applied to
+ * every player below their own grades.
  *
  * <p>The page is always reachable, so the fallback grades can be read while LuckPerms runs or fails.
  * A banner says whether grades currently decide permissions; while LuckPerms is the active backend the
@@ -138,7 +139,10 @@ public final class GradesScreen extends AdminScreen {
     protected Banner banner() {
         boolean internalFallback = "internal".equalsIgnoreCase(data.fallbackMode());
         return switch (context.backend()) {
-            case INTERNAL -> null;
+            case INTERNAL -> !data.defaultGrade().isEmpty() && !data.gateAll()
+                    ? new Banner(Icon.INFO, "Default grade " + data.defaultGrade() + " only restricts exposed commands and "
+                    + "aliases: turn on Gate all on the Commands page to cover every command.", Palette.INFO)
+                    : null;
             case LUCKPERMS -> new Banner(Icon.INFO, "Not active: LuckPerms decides permissions, these grades are read-only. "
                     + (internalFallback
                     ? "They take over if LuckPerms becomes unavailable (luckPermsFallbackMode=internal)."
@@ -236,6 +240,16 @@ public final class GradesScreen extends AdminScreen {
         CpButton delete = CpButton.danger(Component.literal("Delete grade"), () -> confirmDelete(grade))
                 .iconOnly(Icon.TRASH).enabled(editable);
         addRenderableWidget(delete.at(new Rect(in.right() - FIELD, in.y(), FIELD, FIELD)));
+        boolean isDefault = grade.name().equals(data.defaultGrade());
+        CpButton makeDefault = CpButton.ghost(Component.literal("Default"), () -> toggleDefault(grade))
+                .icon(isDefault ? Icon.CHECK : Icon.USER)
+                .selected(isDefault)
+                .enabled(editable)
+                .tooltip(Component.literal(isDefault
+                        ? "Applies to every player, below their own grades. Click to stop."
+                        : "Apply this grade to every player, below their own grades, operators included."));
+        int defaultW = makeDefault.preferredWidth(font, 6);
+        addRenderableWidget(makeDefault.at(new Rect(in.right() - FIELD - 4 - defaultW, in.y(), defaultW, FIELD)));
 
         Rect tabs = new Rect(in.x(), in.y() + 24, in.w(), FIELD);
         CpButton nodesTab = CpButton.ghost(Component.literal("Nodes (" + (grade.allow().size() + grade.deny().size()) + ")"),
@@ -256,7 +270,8 @@ public final class GradesScreen extends AdminScreen {
             NodeRow selected = nodeList.getSelected();
             CpButton allow = CpButton.good(Component.literal("Allow"), () -> addNode(false)).icon(Icon.CHECK).enabled(editable);
             CpButton deny = CpButton.danger(Component.literal("Deny"), () -> addNode(true)).icon(Icon.CROSS).enabled(editable)
-                    .tooltip(Component.literal("A denied node is refused even if another grade of the player allows it."));
+                    .tooltip(Component.literal("Refused, operators included, unless a more specific node allows it: "
+                            + "deny * and allow one command to open only that command."));
             int allowW = allow.preferredWidth(font, 6);
             addRenderableWidget(allow.at(buttonRow.left(allowW)));
             addRenderableWidget(deny.at(new Rect(buttonRow.x() + allowW + 4, buttonRow.y(), deny.preferredWidth(font, 6), BUTTON)));
@@ -299,6 +314,17 @@ public final class GradesScreen extends AdminScreen {
                 () -> act(GuiAction.GRADE_DELETE, grade.name()));
     }
 
+    private void toggleDefault(GradesData.Grade grade) {
+        if (grade.name().equals(data.defaultGrade())) {
+            act(GuiAction.GRADE_DEFAULT, "");
+            return;
+        }
+        confirm("Default grade: " + grade.name(),
+                "Every player follows it below their own grades, operators included.",
+                "Set as default",
+                () -> act(GuiAction.GRADE_DEFAULT, grade.name()));
+    }
+
     private void addNode(boolean deny) {
         GradesData.Grade grade = gradeList.getSelected();
         String node = nodeField.getValue().trim();
@@ -334,10 +360,11 @@ public final class GradesScreen extends AdminScreen {
     // ------------------------------------------------------------------ rendering
 
     private void renderGrade(GuiGraphics g, Font font, GradesData.Grade grade, Rect r, boolean hovered, boolean selected) {
-        String count = String.valueOf(grade.members().size());
+        boolean isDefault = grade.name().equals(data.defaultGrade());
+        String count = isDefault ? "all" : String.valueOf(grade.members().size());
         int cw = font.width(count);
-        Skin.icon(g, Icon.USER, r.right() - cw - 14, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
-        Skin.text(g, font, count, r.right() - cw - 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
+        Skin.icon(g, Icon.USER, r.right() - cw - 14, r.y() + (r.h() - 8) / 2, isDefault ? Palette.ACCENT_HI : Palette.TEXT_MUTE);
+        Skin.text(g, font, count, r.right() - cw - 4, r.y() + (r.h() - 8) / 2, isDefault ? Palette.ACCENT_HI : Palette.TEXT_MUTE);
         Skin.text(g, font, grade.name(), r.x() + 6, r.y() + (r.h() - 8) / 2, r.w() - cw - 26, Palette.TEXT);
     }
 
@@ -363,16 +390,21 @@ public final class GradesScreen extends AdminScreen {
         Skin.panel(g, in.inset(-8));
         GradesData.Grade grade = gradeList.getSelected();
         if (grade == null) {
-            paragraph(g, "Select a grade to edit its nodes and players. A player can hold several grades; a DENY in any "
-                    + "of them wins over an ALLOW in another.", in, in.y(), Palette.TEXT_MUTE);
+            paragraph(g, "Select a grade to edit its nodes and players. A player can hold several grades: the most specific "
+                    + "node wins (exact, then a.b.*, then *), a DENY wins at the same level, and it applies to operators too.",
+                    in, in.y(), Palette.TEXT_MUTE);
             if (!canEdit(GuiArea.GRADES)) {
                 paragraph(g, "Read-only: editing grades needs " + GuiArea.GRADES.node() + ".", in, in.y() + 44, Palette.TEXT_MUTE);
             }
             return;
         }
-        Skin.text(g, font, grade.name(), in.x(), in.y(), in.w() - FIELD - 6, Palette.TEXT);
-        String sub = grade.allow().size() + " allowed, " + grade.deny().size() + " denied, " + grade.members().size()
-                + " player(s)" + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
-        Skin.text(g, font, sub, in.x(), in.y() + 11, in.w() - FIELD - 6, Palette.TEXT_MUTE);
+        boolean isDefault = grade.name().equals(data.defaultGrade());
+        int headerW = in.w() - FIELD - 10 - font.width("Default") - 26;
+        Skin.text(g, font, grade.name(), in.x(), in.y(), headerW, Palette.TEXT);
+        // Player and node totals are on the tabs: keep this line short enough for the Default button beside it.
+        String sub = grade.allow().size() + " allow, " + grade.deny().size() + " deny"
+                + (isDefault ? ", every player" : "")
+                + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
+        Skin.text(g, font, sub, in.x(), in.y() + 11, headerW, Palette.TEXT_MUTE);
     }
 }

@@ -8,15 +8,13 @@
  */
 package com.arcadia.customperm.perm;
 
-import net.minecraft.commands.CommandSourceStack;
-
 /**
- * Fail-closed backend when LuckPerms is required but unusable: no node is ever granted, so only the
- * vanilla permission level still opens anything.
+ * The explicit value of a permission node for a player: granted, refused, or not set at all. Keeping
+ * "not set" apart from "refused" is what lets an operator keep the vanilla behaviour by default while
+ * an explicit refusal still applies to them.
  */
-public class DenyPermissionService implements PermissionService {
-    @Override
-    public Tristate check(CommandSourceStack source, String node) {
-        return Tristate.UNSET;
-    }
+public enum Tristate {
+    ALLOW,
+    DENY,
+    UNSET
 }

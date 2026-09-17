@@ -59,15 +59,16 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **Visibilité du backend** : logs de boot, `/customperm status`, `/customperm debug` et `/customperm test` indiquent Internal, LuckPerms, Internal fallback from LuckPerms ou le mode deny.
 - **Alertes admin** : quand LuckPerms devient indisponible ou qu'un fichier de config ne se charge pas, chaque op connecté (niveau 2+) reçoit une alerte dans le chat, les ops qui se connectent ensuite la reçoivent à la connexion, et `/customperm status` la liste jusqu'à sa résolution.
 - **RBAC multi-grades** : un joueur peut avoir plusieurs grades internes ; les permissions sont résolues par union des grades assignés.
-- **DENY explicite** : les grades internes supportent `deniedPermissions`, et tout DENY correspondant l'emporte sur les ALLOW.
-- **Wildcards de permissions** : `*`, `customperm.command.*` et `customperm.alias.*` sont supportés.
+- **DENY explicite** : les grades internes supportent `deniedPermissions`. L'entrée la plus spécifique l'emporte, comme LuckPerms (nœud exact, puis `a.b.*`, puis `*`), et un DENY gagne à niveau égal.
+- **Wildcards de permissions** : `*`, `customperm.command.*` et `customperm.alias.*` sont supportés, dans les deux sens : un `*` refusé refuse tout sauf les autorisations explicites.
+- **Opérateurs restreignables** : un DENY explicite s'applique aussi aux opérateurs, sur les deux backends, pour tenir à l'écart un joueur mis op par erreur. Un grade par défaut s'applique à tous les joueurs, et `gateAllCommands` étend le contrôle de CustomPerm à toutes les commandes. Voir [Restreindre les opérateurs](#restreindre-les-opérateurs).
 - **Aliases et macros** : créez des commandes racine personnalisées (`/fly`, `/heal`, `/starter`) qui exécutent une ou plusieurs commandes configurées.
 - **Edition des steps d'alias** : ajout, suppression et inspection de steps individuels avec indices 0-based.
 - **Elévation des aliases** : les steps d'alias s'exécutent avec op level 4 pour permettre aux macros signées par l'admin d'appeler des commandes op-only.
 - **Garde-fous sur les aliases** : `/customperm` est réservé, les steps vides sont ignorés, les aliases sans step sont refusés, le shadow d'une commande existante émet un warning et les chaînes récursives sont arrêtées à la profondeur 8.
 - **Enregistrement runtime des aliases** : ajout, remplacement ou retrait d'alias sans redémarrage ; `/customperm reload` applique aussi les ajouts, suppressions et changements de steps provenant d'`aliases.json`.
 - **Politique indépendante du backend** : l'exposition directe des commandes fonctionne avec ou sans LuckPerms ; le node `customperm.command.<nom>` est résolu par LuckPerms lorsqu'il est installé (accordé via `/lp`), sinon par les grades internes.
-- **Préservation des ops** : les sources réellement op level 2+ gardent toujours l'accès ; le mod ne retire pas les droits opérateur.
+- **Préservation des ops par défaut** : un opérateur garde toute commande dont le nœud n'est pas défini ; seul un DENY explicite le restreint. La console n'est jamais restreinte.
 - **Re-sync du command tree client** : après changement interne ou event LuckPerms, les joueurs concernés reçoivent un arbre de commandes à jour.
 - **Hot-reload atomique** : `/customperm reload` charge `grades.json`, `aliases.json`, `commands.json` et `settings.json` en transaction ; un JSON invalide conserve le snapshot précédent.
 - **Création et normalisation automatique des configs** : fichiers manquants, `{}`, champs inconnus et collections explicitement `null` sont normalisés vers des structures vides sûres.
@@ -131,7 +132,7 @@ L'interface est dessinée nativement (sans bibliothèque d'interface) et remplac
 | LuckPerms | Uniquement quand LuckPerms est installé : pas d'entrée de navigation sinon, et `/customperm gui luckperms` explique pourquoi. Installé mais pas démarré (solo, échec au démarrage), la page affiche une bannière au lieu de l'éditeur. **Groupes** : créer, supprimer, nœuds de permission allow/deny avec contextes et durée, parents, poids, nom affiché, préfixe, suffixe, meta. **Joueurs** : joueurs connectés et tout joueur trouvé par pseudo exact, leurs nœuds, groupes avec durée, groupe principal, promotion et rétrogradation sur un track, préfixe, suffixe, meta. **Tracks** : créer, supprimer, ajouter, insérer à une position, retirer un groupe. Les écritures passent par l'API LuckPerms côté serveur, protégées par `customperm.gui.luckperms.edit` |
 | Grades | Toujours accessible, pour pouvoir lire le repli quand LuckPerms fonctionne ou tombe. Une bannière indique quand les grades ne décident pas des permissions ; avec LuckPerms actif la page est en lecture seule, comme les commandes de grade : grades avec recherche et création ; par grade, nœuds ALLOW et DENY, et joueurs avec leur état en ligne, attribués par pseudo avec complétion, y compris hors ligne s'ils sont déjà venus sur le serveur ; suppression d'un grade (avec confirmation) |
 
-**Permissions.** Lire une page demande op level 2, le même contrôle que `/customperm`. Écrire demande en plus le nœud du domaine : `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.luckperms.edit`. Ces nœuds sont vérifiés comme accordés au joueur, sans le court-circuit opérateur habituel du backend interne, pour pouvoir déléguer un domaine à un modérateur de niveau 2 sans ouvrir les autres. Le niveau de permission 4 (propriétaire du serveur) les contourne. Les actions qui ne modifient pas la configuration, comme le rechargement, demandent seulement op level 2, comme leur commande. Chaque action appliquée est journalisée côté serveur avec le nom de l'admin.
+**Permissions.** Lire une page demande le même accès que `/customperm` : op level 2, et `customperm.admin` non refusé. Écrire demande en plus le nœud du domaine : `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.luckperms.edit`. Un opérateur de niveau 2 a besoin du nœud explicitement autorisé, pour pouvoir déléguer un domaine à un modérateur sans ouvrir les autres. Le niveau de permission 4 (propriétaire du serveur) peut écrire là où le nœud n'est pas défini ; un DENY explicite ferme le domaine au propriétaire aussi. Les actions qui ne modifient pas la configuration, comme le rechargement, demandent seulement op level 2, comme leur commande. Chaque action appliquée est journalisée côté serveur avec le nom de l'admin.
 
 **Compatibilité.** L'interface utilise le protocole réseau 2. Un client avec un CustomPerm plus ancien se connecte toujours à un serveur 1.1.0 mais n'y a pas d'interface, et inversement.
 
@@ -197,7 +198,7 @@ Même résultat : `Steve` peut utiliser `/gamemode`.
 
 ## Commandes
 
-Toutes les commandes admin sont sous `/customperm` et **requièrent op level 2**.
+Toutes les commandes admin sont sous `/customperm` et **requièrent op level 2**, et `customperm.admin` non refusé (voir [Restreindre les opérateurs](#restreindre-les-opérateurs)). La console y a toujours accès.
 
 ### Exposition des commandes
 
@@ -210,6 +211,7 @@ Définit quelles commandes sont éligibles au système de permissions. Une comma
 | `/customperm command add <name>` | Expose la commande `<name>` au système. |
 | `/customperm command remove <name>` | Retire la commande, retour au comportement vanilla. |
 | `/customperm command preserve <name> <true\|false>` | Pour une commande exposée : `true` exige le nœud ET l'exigence d'origine de la commande, `false` (défaut) le nœud seul. Équivaut à `preserveOriginalRequires` dans `commands.json`. |
+| `/customperm command gateall <true\|false>` | Backend interne uniquement. `true` : toutes les commandes lisent leur nœud `customperm.command.<nom>`, pas seulement les exposées. Équivaut à `gateAllCommands` dans `settings.json`. |
 | `/customperm command list` | Liste les commandes exposées. |
 
 ### Aliases (macros)
@@ -238,11 +240,15 @@ Elles gèrent les nodes ALLOW. Les nodes DENY internes sont stockés dans `grade
 | `/customperm grade delete <name>` | Supprime un grade et le désassigne de tous les joueurs. |
 | `/customperm grade addperm <grade> <node>` | Ajoute une perm au grade. |
 | `/customperm grade removeperm <grade> <node>` | Retire une perm du grade. |
-| `/customperm grade adddeny <grade> <node>` | Ajoute un nœud DENY : refusé même si un autre grade du joueur l'autorise. |
+| `/customperm grade adddeny <grade> <node>` | Ajoute un nœud DENY : refusé, opérateurs compris, sauf si un nœud plus spécifique l'autorise. |
 | `/customperm grade removedeny <grade> <node>` | Retire un nœud DENY. |
 | `/customperm grade assign <player> <grade>` | Assigne le grade à un joueur, en ligne ou hors ligne s'il est déjà venu sur le serveur. |
 | `/customperm grade unassign <player> <grade>` | Désassigne, en ligne ou hors ligne. |
+| `/customperm grade setdefault <grade>` | Applique le grade à tous les joueurs, sous leurs propres grades. |
+| `/customperm grade cleardefault` | Plus aucun grade ne s'applique à tous les joueurs. |
 | `/customperm grade list` | Liste les grades définis. |
+
+Une modification de grade qui vous retirerait votre propre accès à `/customperm` est refusée et annulée : autorisez d'abord `customperm.admin` pour vous-même, ou faites la modification depuis la console.
 
 ### Limites d'exécution
 
@@ -260,7 +266,7 @@ Plafonne le nombre d'utilisations d'une commande ou d'un alias par joueur sur un
 
 | Commande | Effet |
 |---|---|
-| `/customperm test <player> <node>` | Vérifie si un joueur a un node de permission donné. Retourne `GRANTED` ou `DENIED`. |
+| `/customperm test <player> <node>` | Vérifie si un joueur a un node de permission donné. Retourne `GRANTED` ou `DENIED`, avec la raison : ALLOW ou DENY explicite, ou non défini (accordé aux opérateurs). |
 | `/customperm debug <player> <command>` | Rapport détaillé : commande dans le dispatcher ? exposée ? l'op-level passe ? la perm est granted ? le wrapper renvoie quoi ? |
 | `/customperm status` | Snapshot global : backend, nb de commandes wrappées, exposées, aliases, grades, alertes admin actives. |
 | `/customperm scan [pattern]` | Liste toutes les commandes du dispatcher avec leur état (exposée, alias, mod-interne). Filtre optionnel. |
@@ -276,9 +282,10 @@ CustomPerm utilise un schéma de nodes hiérarchique compatible LuckPerms (et so
 
 | Node | Effet |
 |---|---|
-| `*` | Wildcard global du backend interne. À utiliser avec précaution. |
-| `customperm.command.<name>` | Autorise `<name>` (effectif seulement une fois la commande exposée). Résolu par LuckPerms s'il est installé, sinon par les grades internes. |
-| `customperm.command.*` | Wildcard couvrant toutes les commandes exposées. Avec LuckPerms, c'est son propre moteur de wildcard qui le résout. |
+| `*` | Wildcard global. Autorisé, il accorde tous les nœuds ; refusé, il refuse tous les nœuds sauf ceux autorisés plus spécifiquement, opérateurs compris. À utiliser avec précaution. |
+| `customperm.admin` | Ne fait que restreindre : refusé, il retire `/customperm`, l'interface d'administration et les alertes admin à un opérateur. L'accorder à un non-op n'ouvre rien. |
+| `customperm.command.<name>` | Autorise `<name>`, une fois la commande exposée (ou pour toutes les commandes avec `gateAllCommands`). Refusé, il refuse la commande aux opérateurs aussi. Résolu par LuckPerms s'il est installé, sinon par les grades internes. |
+| `customperm.command.*` | Wildcard couvrant toutes les commandes exposées (toutes les commandes avec `gateAllCommands`). Avec LuckPerms, c'est son propre moteur de wildcard qui le résout. |
 | `customperm.alias.<name>` | Autorise l'alias `<name>`. Ex: `customperm.alias.fly` |
 | `customperm.alias.*` | Wildcard alias. |
 
@@ -315,9 +322,14 @@ Réglages de sécurité runtime.
 
 ```json
 {
-  "luckPermsFallbackMode": "deny"
+  "luckPermsFallbackMode": "deny",
+  "gateAllCommands": false,
+  "defaultGrade": ""
 }
 ```
+
+- `gateAllCommands` (backend interne, `false` par défaut) : `true` fait lire à chaque commande son nœud `customperm.command.<nom>`. Un DENY explicite bloque alors n'importe quelle commande pour les opérateurs aussi, et un ALLOW ouvre n'importe quelle commande : un grade qui a `*` ou `customperm.command.*` obtient toutes les commandes du serveur. Sans effet avec LuckPerms installé, qui contrôle déjà toutes les commandes.
+- `defaultGrade` (backend interne, vide par défaut) : un grade appliqué à tous les joueurs, sous leurs propres grades.
 
 `luckPermsFallbackMode` accepte :
 
@@ -388,7 +400,7 @@ Grades et assignations utilisateurs.
 
 Avec LuckPerms actif, ce fichier est ignoré (les perms passent par LP).
 
-`deniedPermissions` est utilisé uniquement par le backend interne. Un DENY correspondant l'emporte sur n'importe quel ALLOW provenant des grades assignés.
+`deniedPermissions` est utilisé uniquement par le backend interne. L'entrée la plus spécifique l'emporte sur l'ensemble des grades assignés (nœud exact, puis `a.b.*`, puis `a.*`, puis `*`) ; à niveau égal un DENY gagne. Les grades du joueur décident d'abord ; seul un nœud qu'aucun d'eux ne mentionne passe au grade par défaut.
 
 ---
 
@@ -445,7 +457,7 @@ customperm command add effect
 customperm grade addperm staff customperm.command.*
 ```
 
-Le wildcard ne couvre que les commandes **exposées**. Les autres commandes vanilla restent op-only.
+Le wildcard ne couvre que les commandes **exposées**. Les autres commandes vanilla restent op-only, sauf si `gateAllCommands` est actif.
 
 ### Permettre uniquement `/gamemode spectator` sans creative
 
@@ -526,9 +538,30 @@ Sans cette élévation, l'alias `gamemode spectator` échouerait : la commande i
 
 Si vous créez `/customperm alias add gamemode ...`, l'alias **shadow** la commande native. Le mod affiche un warning explicite à la création. Les joueurs auront besoin de `customperm.alias.gamemode` (pas `customperm.command.gamemode`) pour utiliser cette version.
 
+### Restreindre les opérateurs
+
+Être op ne compte que là où rien ne dit le contraire. Un DENY explicite s'applique aux opérateurs, propriétaires compris, sur les deux backends : `customperm.command.<nom>` refusé refuse la commande, `customperm.alias.<nom>` refusé l'alias, `customperm.admin` refusé (ou `*`, ou `customperm.*`) retire `/customperm` et l'interface d'administration. La console et les blocs de commande ne sont jamais soumis à un nœud.
+
+Avec LuckPerms, refusez les nœuds comme d'habitude (`/lp group default permission set * false`, puis autorisez ce dont l'équipe a besoin) : LuckPerms contrôle déjà toutes les commandes, et CustomPerm respecte désormais un `false` sur les commandes qu'il expose au lieu de laisser passer les opérateurs.
+
+Sans LuckPerms, pour protéger le serveur contre un joueur mis op par erreur :
+
+```
+customperm grade create everyone
+customperm grade adddeny everyone *
+customperm grade addperm everyone customperm.command.list
+customperm grade create owner
+customperm grade addperm owner *
+customperm grade assign <vous> owner
+customperm grade setdefault everyone
+customperm command gateall true
+```
+
+Chaque joueur suit désormais `everyone` sous ses propres grades, et chaque commande lit son nœud : un op sans grade à lui peut lancer `/list` et rien d'autre, `/customperm` compris. Lancez ces commandes depuis la console, ou assignez-vous `owner` avant `setdefault` : en jeu, une modification qui vous fermerait `/customperm` est refusée.
+
 ### Wildcards à manier avec précaution
 
-`customperm.command.*` couvre **toutes** les commandes exposées. Si vous exposez `/op` (déconseillé) ou `/whitelist`, le wildcard les couvre aussi. **Préférez** des nodes explicites pour les commandes sensibles.
+`customperm.command.*` couvre **toutes** les commandes exposées. Si vous exposez `/op` (déconseillé) ou `/whitelist`, le wildcard les couvre aussi. Avec `gateAllCommands`, lui et `*` couvrent toutes les commandes du serveur. **Préférez** des nodes explicites pour les commandes sensibles.
 
 ### Audit régulier
 
@@ -572,7 +605,7 @@ Si la décision réelle ≠ décision logique → mismatch, ouvrez une issue.
 /customperm test <pseudo> <node>
 ```
 
-Retourne `GRANTED` (vert) ou `DENIED` (rouge) avec le backend en clair.
+Retourne `GRANTED` (vert) ou `DENIED` (rouge) avec le backend en clair et la raison : ALLOW ou DENY explicite, ou nœud non défini, que seuls les opérateurs passent.
 
 ### Le joueur ne voit pas la commande dans l'autocomplétion
 
@@ -658,7 +691,7 @@ Les benchmarks de performance se lancent avec :
 
 | Zone | Valide |
 |---|---|
-| Résolution de permissions | Deny par défaut, ALLOW direct, wildcard ALLOW, wildcard global, DENY explicite, DENY-over-ALLOW entre plusieurs grades. |
+| Résolution de permissions | Deny par défaut, ALLOW direct, wildcard ALLOW, wildcard global, DENY explicite, entrée la plus spécifique gagnante entre grades, DENY à égalité, `*` refusé avec autorisations explicites, couche du grade par défaut. |
 | Grades internes | Création/listage/suppression de grades, assignation/désassignation joueurs, prévention des doublons, cascade lors de la suppression d'un grade. |
 | Exposition de commandes | Ajout/retrait/listage de commandes exposées, changements idempotents, commandes non exposées refusées par CustomPerm. |
 | Config aliases | Création, overwrite, suppression, listage, ordre des aliases, parsing par `;`, steps vides ignorés. |
@@ -666,8 +699,8 @@ Les benchmarks de performance se lancent avec :
 | Config manager | Lectures atomiques du snapshot, sauvegardes atomiques sérialisées, rejet de reload concurrent, rollback après JSON invalide, création et rotation des backups. |
 | Compatibilité config | Fichiers manquants, fichiers `{}`, collections explicitement `null`, champs futurs inconnus, configs partielles. |
 | Sélection LuckPerms | Backend interne sans LP, parsing de versions, version minimale, sélection stable du backend. |
-| GameTests, deux modes | Exposition et retrait de commande avec un joueur non-op, préservation des ops, `/customperm` refusé aux non-ops, reconnexion, aliases exécutés en op 4 par les seuls détenteurs du node et incapables d'atteindre `/customperm`, édition des steps, gardes de récursion et de shadowing, reload d'un `aliases.json` modifié à la main, limites de débit (message de refus, compteur partagé par racine, isolation par joueur, console exemptée, expiration de fenêtre, reconnexion, reloads répétés, suppression de règle, aliases), reload tout-ou-rien, refus du reload concurrent, changements non sauvegardés après un reload en échec, entrées `null`, repush du command tree au reload, alertes admin dans le chat des ops, paquets du GUI et de l'éditeur refusés aux non-ops, sorties de diagnostic, autocomplétion de chaque argument de `/customperm` et aucune suggestion pour un non-op. |
-| GameTests, mode interne | Commandes de grade, union des grades, DENY sur un ancêtre prioritaire sur ALLOW, toutes les formes de wildcard, éditeur sans LuckPerms. |
+| GameTests, deux modes | Exposition et retrait de commande avec un joueur non-op, préservation des ops, `/customperm` refusé aux non-ops, reconnexion, aliases exécutés en op 4 par les seuls détenteurs du node et incapables d'atteindre `/customperm`, édition des steps, gardes de récursion et de shadowing, reload d'un `aliases.json` modifié à la main, limites de débit (message de refus, compteur partagé par racine, isolation par joueur, console exemptée, expiration de fenêtre, reconnexion, reloads répétés, suppression de règle, aliases), reload tout-ou-rien, refus du reload concurrent, changements non sauvegardés après un reload en échec, entrées `null`, repush du command tree au reload, alertes admin dans le chat des ops, paquets du GUI et de l'éditeur refusés aux non-ops, sorties de diagnostic, autocomplétion de chaque argument de `/customperm` et aucune suggestion pour un non-op, opérateurs refusés sur une commande exposée, un alias, `/customperm` ou un domaine de l'interface par un DENY explicite pendant que la console garde l'accès, `*` refusé bloquant tout sauf les autorisations explicites. |
+| GameTests, mode interne | Commandes de grade, union des grades, entrée la plus spécifique gagnante, toutes les formes de wildcard, éditeur sans LuckPerms, `gateAllCommands` et `*` autorisé, grade par défaut restreignant un op accidentel, auto-verrouillage refusé par commande et par l'interface. |
 | GameTests, mode LuckPerms | Éditeur en jeu face à un vrai LuckPerms : groupes, nodes avec contextes et expiration, héritage, meta, prefix et suffix, poids, nom d'affichage, groupes et groupe principal d'un joueur, tracks, promote et demote, verrouillage des écritures par node et niveau, limites d'édition et de sync ; command tree renvoyé après un changement LuckPerms ; repli `deny` et `internal` quand LuckPerms devient indisponible. |
 | Performance | `PermissionResolver.resolve()` et lecture concurrente du snapshot config via JMH. |
 

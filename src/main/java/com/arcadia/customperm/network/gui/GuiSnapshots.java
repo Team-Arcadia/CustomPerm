@@ -76,7 +76,9 @@ public final class GuiSnapshots {
         }
         List<String> known = server == null ? List.of()
                 : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
-        return new GradesData(grades, known, CustomPerm.configManager.getSettings().luckPermsFallbackMode);
+        var settings = CustomPerm.configManager.getSettings();
+        return new GradesData(grades, known, settings.luckPermsFallbackMode, settings.defaultGrade,
+                CustomPerm.gatesAllCommands());
     }
 
     static RateLimitsData rateLimits() {
@@ -140,7 +142,7 @@ public final class GuiSnapshots {
                     config.getCommands().shouldPreserveOriginalRequires(name), aliases.contains(name),
                     rule != null && rule.enabled, !dispatcher.contains(name)));
         }
-        return new CommandsData(rows, names.size() > rows.size());
+        return new CommandsData(rows, names.size() > rows.size(), config.getSettings().gateAllCommands);
     }
 
     static DashboardData dashboard(MinecraftServer server) {

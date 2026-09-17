@@ -29,6 +29,8 @@ public enum GuiAction {
     COMMAND_HIDE(1, GuiArea.COMMANDS),
     /** {@code [command, "true"|"false"]} Keeps or drops the command's original requirement. */
     COMMAND_KEEP_ORIGINAL(2, GuiArea.COMMANDS),
+    /** {@code ["true"|"false"]} Whether every command reads its node, like {@code /customperm command gateall}. */
+    COMMAND_GATE_ALL(1, GuiArea.COMMANDS),
 
     /** {@code [alias, firstStep]} Creates an alias; refused when the name is taken. */
     ALIAS_CREATE(2, GuiArea.ALIASES),
@@ -65,7 +67,9 @@ public enum GuiAction {
     /** {@code [playerName, grade]} Assigns a grade to a player online or known to the server. */
     GRADE_ASSIGN(2, GuiArea.GRADES),
     /** {@code [playerUuid, grade]} Unassigns a grade, by UUID so unnamed entries can be cleaned up. */
-    GRADE_UNASSIGN(2, GuiArea.GRADES);
+    GRADE_UNASSIGN(2, GuiArea.GRADES),
+    /** {@code [grade]} Makes a grade apply to every player; an empty name clears the default grade. */
+    GRADE_DEFAULT(1, GuiArea.GRADES);
 
     private final int arity;
     private final GuiArea area;

@@ -21,8 +21,11 @@ import java.util.List;
  * @param knownPlayers online players and players who joined before, sorted; the only names a grade
  *                     can be assigned to
  * @param fallbackMode {@code luckPermsFallbackMode}: whether grades take over when LuckPerms fails
+ * @param defaultGrade grade applied to every player, empty for none
+ * @param gateAll      whether every command reads its node ({@code gateAllCommands} in effect)
  */
-public record GradesData(List<Grade> grades, List<String> knownPlayers, String fallbackMode) implements GuiPageData {
+public record GradesData(List<Grade> grades, List<String> knownPlayers, String fallbackMode, String defaultGrade,
+                         boolean gateAll) implements GuiPageData {
 
     /** Most nodes carried per grade, per kind. */
     public static final int NODES_MAX = 1024;
@@ -49,6 +52,8 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
             GuiCodecs.list(Grade.CODEC, GuiCodecs.SERVER_LIST_MAX), GradesData::grades,
             GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), GradesData::knownPlayers,
             GuiCodecs.TEXT, GradesData::fallbackMode,
+            GuiCodecs.TEXT, GradesData::defaultGrade,
+            ByteBufCodecs.BOOL, GradesData::gateAll,
             GradesData::new);
 
     @Override

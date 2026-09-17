@@ -47,6 +47,8 @@ public final class CommandsScreen extends AdminScreen {
     private final CpList<CommandsData.Row> list;
     private boolean exposedOnly;
     private int filtersRight;
+    /** Left edge of the right-aligned toolbar controls: the exposed count is drawn before it. */
+    private int toolbarRight;
 
     public CommandsScreen(GuiContext context, CommandsData data) {
         super(Component.literal("Exposed commands"), context);
@@ -119,16 +121,32 @@ public final class CommandsScreen extends AdminScreen {
     @Override
     protected void buildPage() {
         Rect bar = toolbar();
-        int searchW = Math.min(180, bar.w() / 2);
-        addRenderableWidget(search.at(bar.left(searchW)));
-
-        int x = bar.x() + searchW + GAP;
         CpButton all = CpButton.ghost(Component.literal("All"), () -> setFilter(false)).selected(!exposedOnly);
         int allW = all.preferredWidth(font, 8);
-        addRenderableWidget(all.at(x, bar.y(), allW, bar.h()));
-        x += allW + 2;
         CpButton exposed = CpButton.ghost(Component.literal("Exposed"), () -> setFilter(true)).selected(exposedOnly);
         int exposedW = exposed.preferredWidth(font, 8);
+
+        // LuckPerms already checks every command: no switch that would do nothing.
+        toolbarRight = bar.right();
+        if (!context.luckPermsInstalled()) {
+            CpButton gate = CpButton.neutral(Component.literal(data.gateAll() ? "All gated" : "Gate all"), this::toggleGateAll)
+                    .icon(data.gateAll() ? Icon.LOCK : Icon.SHIELD)
+                    .selected(data.gateAll())
+                    .enabled(canEdit(GuiArea.COMMANDS))
+                    .tooltip(Component.literal(data.gateAll()
+                            ? "Every command follows its customperm.command.<name> node. Click to go back to exposed commands only."
+                            : "Only exposed commands follow their node. Click to make every command follow it, so a denied * can restrict operators."));
+            int gateW = gate.preferredWidth(font, 6);
+            toolbarRight = bar.right() - gateW;
+            addRenderableWidget(gate.at(toolbarRight, bar.y(), gateW, bar.h()));
+        }
+
+        // The search field takes what the buttons leave, up to its usual width.
+        int searchW = Math.max(60, Math.min(180, toolbarRight - bar.x() - allW - 2 - exposedW - 2 * GAP));
+        addRenderableWidget(search.at(bar.left(searchW)));
+        int x = bar.x() + searchW + GAP;
+        addRenderableWidget(all.at(x, bar.y(), allW, bar.h()));
+        x += allW + 2;
         addRenderableWidget(exposed.at(x, bar.y(), exposedW, bar.h()));
         filtersRight = x + exposedW;
 
@@ -161,6 +179,17 @@ public final class CommandsScreen extends AdminScreen {
                 .tooltip(Component.literal("On: players need customperm.command." + row.name()
                         + " AND the command's own requirement. Off: the node alone is enough."));
         addRenderableWidget(keep.at(actions.bottom(Atlas.BUTTON_HEIGHT)));
+    }
+
+    private void toggleGateAll() {
+        if (data.gateAll()) {
+            act(GuiAction.COMMAND_GATE_ALL, "false");
+            return;
+        }
+        confirm("Gate every command",
+                "Every command follows its node: a DENY blocks operators too, an ALLOW (or *) opens it to anyone.",
+                "Gate all",
+                () -> act(GuiAction.COMMAND_GATE_ALL, "true"));
     }
 
     private void primaryAction(CommandsData.Row row) {
@@ -216,8 +245,9 @@ public final class CommandsScreen extends AdminScreen {
         long exposedCount = data.rows().stream().filter(CommandsData.Row::exposed).count();
         String count = exposedCount + " exposed / " + data.rows().size() + (data.truncated() ? "+" : "");
         int w = font.width(count);
-        if (bar.right() - w >= filtersRight + GAP) {
-            Skin.text(g, font, count, bar.right() - w, bar.y() + (bar.h() - 8) / 2, Palette.TEXT_MUTE);
+        int countRight = toolbarRight < bar.right() ? toolbarRight - GAP : bar.right();
+        if (countRight - w >= filtersRight + GAP) {
+            Skin.text(g, font, count, countRight - w, bar.y() + (bar.h() - 8) / 2, Palette.TEXT_MUTE);
         }
 
         Rect panel = details();
@@ -238,9 +268,12 @@ public final class CommandsScreen extends AdminScreen {
 
         Rect text = new Rect(inner.x(), inner.y(), inner.w(), inner.h() - 2 * Atlas.BUTTON_HEIGHT - 4 - GAP);
         int y = inner.y() + 28;
+        boolean gated = data.gateAll() && !context.luckPermsInstalled();
         if (row.exposed()) {
             y = paragraph(g, "Players holding customperm.command." + row.name() + " can run it"
                     + (row.keepOriginal() ? ", if they also pass the command's own requirement." : "."), text, y, Palette.TEXT_DIM);
+        } else if (gated) {
+            y = paragraph(g, "Gated: its node opens it to anyone, a DENY blocks operators too.", text, y, Palette.TEXT_DIM);
         } else {
             y = paragraph(g, "Only its original requirement applies (usually operators). Expose it to grant it with customperm.command."
                     + row.name() + ".", text, y, Palette.TEXT_DIM);

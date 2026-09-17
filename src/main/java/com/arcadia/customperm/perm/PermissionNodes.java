@@ -27,6 +27,13 @@ public final class PermissionNodes {
     public static final String LP_EDIT = "customperm.gui.luckperms.edit";
 
     /**
+     * Access to {@code /customperm}, the admin interface and admin alerts. It only restricts: op level 2
+     * stays required, and an explicit DENY (or a denied {@code *} / {@code customperm.*}) takes access
+     * away from an operator. Granting it to a non-operator opens nothing.
+     */
+    public static final String ADMIN = "customperm.admin";
+
+    /**
      * Write access to one area of the admin interface. Same rule as {@link #LP_EDIT}: reading needs
      * op level 2, writing needs the area's node, level 4 bypasses. One node per area rather than a
      * single "edit everything" node, so a helper can be trusted with aliases without being able to
@@ -39,7 +46,7 @@ public final class PermissionNodes {
 
     /** Every fixed node above, for command suggestions. */
     public static java.util.List<String> all() {
-        return java.util.List.of(GUI_COMMANDS_EDIT, GUI_ALIASES_EDIT, GUI_RATELIMITS_EDIT, GUI_GRADES_EDIT, LP_EDIT);
+        return java.util.List.of(ADMIN, GUI_COMMANDS_EDIT, GUI_ALIASES_EDIT, GUI_RATELIMITS_EDIT, GUI_GRADES_EDIT, LP_EDIT);
     }
 
     private PermissionNodes() {

@@ -13,25 +13,39 @@ import com.arcadia.customperm.config.ConfigSnapshot;
 import net.minecraft.commands.CommandSourceStack;
 
 public interface PermissionService {
-    /** Returns true if the source has the given permission node. Console / non-player sources return false here — vanilla op-level checks already cover them. */
-    boolean hasPermission(CommandSourceStack source, String node);
 
     /**
-     * Whether {@code node} is granted to the player itself, without the operator short-circuit a
-     * backend may apply in {@link #hasPermission}. Used for delegation nodes such as
-     * {@code customperm.gui.aliases.edit}, whose whole point is to tell operators apart: with the
-     * short-circuit, every level-2 operator would hold every such node on the internal backend.
-     * Backends without a short-circuit keep the default.
+     * Explicit value of {@code node} for the source's player, as stored by the backend, with no operator
+     * logic. Sources that are not players (console, command blocks, functions) are always
+     * {@link Tristate#UNSET}: the vanilla permission level decides for them, so the console can never be
+     * locked out.
      */
-    default boolean hasGrantedNode(CommandSourceStack source, String node) {
-        return hasPermission(source, node);
+    Tristate check(CommandSourceStack source, String node);
+
+    /**
+     * Effective permission: an explicit ALLOW or DENY decides, operators included; a node that is not
+     * set falls back to op level 2. This is what makes an operator restrictable: being op only matters
+     * where nothing says otherwise.
+     */
+    default boolean hasPermission(CommandSourceStack source, String node) {
+        return switch (check(source, node)) {
+            case ALLOW -> true;
+            case DENY -> false;
+            case UNSET -> source.hasPermission(2);
+        };
     }
 
     /**
-     * Appelée après chaque hot-reload réussi pour notifier le service du nouveau snapshot.
-     * Implémentation par défaut : no-op — les implémentations lisant dynamiquement
-     * depuis ConfigManager (InternalPermService) ou gérant leurs propres données (LuckPermsService)
-     * n'ont rien à faire. Contrat existant pour les implémentations futures (É4.x).
+     * Whether {@code node} is explicitly granted, operator level ignored. Used for delegation nodes such
+     * as {@code customperm.gui.aliases.edit}, whose whole point is to tell operators apart.
+     */
+    default boolean hasGrantedNode(CommandSourceStack source, String node) {
+        return check(source, node) == Tristate.ALLOW;
+    }
+
+    /**
+     * Called after each successful hot reload with the new snapshot. No-op by default: the internal
+     * backend reads the live config and LuckPerms keeps its own data.
      */
     default void onConfigReload(ConfigSnapshot snapshot) {}
 

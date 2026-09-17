@@ -62,6 +62,32 @@ public final class CommandAdmin {
     }
 
     /**
+     * Turns {@code gateAllCommands} on or off: whether every root command reads its node, not only
+     * exposed ones. Read at check time: only the command trees need resending.
+     */
+    public static AdminResult setGateAll(MinecraftServer server, boolean enabled) {
+        if (CustomPerm.isLuckPermsPresent()) {
+            return AdminResult.fail("No effect with LuckPerms installed: LuckPerms already checks every command. "
+                    + "Deny nodes with /lp instead.");
+        }
+        var settings = CustomPerm.configManager.getSettings();
+        if (settings.gateAllCommands == enabled) {
+            return AdminResult.ok((enabled ? "Every command already follows" : "Only exposed commands already follow")
+                    + " their customperm.command.<name> node. No change.");
+        }
+        settings.gateAllCommands = enabled;
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
+        if (!enabled) {
+            return AdminResult.ok("Only exposed commands follow their customperm.command.<name> node again.").warn(warning);
+        }
+        return AdminResult.ok("Every command now follows its customperm.command.<name> node.").warn(warning)
+                .note("An explicit DENY, including a denied * or customperm.command.*, now blocks any command, operators included.")
+                .note("An ALLOW now opens any command: a grade holding * or customperm.command.* can run every command of the server.")
+                .note("/customperm is never affected: it needs op level 2, and customperm.admin not denied.");
+    }
+
+    /**
      * Whether an exposed command also keeps its original Brigadier requirement, so the CustomPerm node
      * adds to the command's own check instead of replacing it. Read at check time: only the command
      * trees need resending.

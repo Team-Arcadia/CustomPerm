@@ -95,16 +95,27 @@ public class GradeAndDiagnosticsGameTest {
         helper.succeed();
     }
 
-    /** A3.3 / W03: a DENY on any ancestor wins over an explicit ALLOW, across grades. */
+    /**
+     * A3.3, revised for 1.1.0: the most specific entry wins, like LuckPerms. An explicit ALLOW beats a DENY
+     * on an ancestor (this used to be refused: W03), and a DENY still wins at the same level.
+     */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void ancestorDenyBeatsExplicitAllow(GameTestHelper helper) {
+    public static void mostSpecificEntryWins(GameTestHelper helper) {
         if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
         try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_g_deny", 0);
-             Exposure ignored = Exposure.of(helper.getLevel().getServer(), "gamemode");
-             Grants allow = Grants.allow(player, "customperm.command.gamemode")) {
-            if (!player.canUse("gamemode")) fail("Setup: explicit ALLOW did not open /gamemode.");
-            Grants.deny(player, "customperm.*");
-            if (player.canUse("gamemode")) fail("customperm.* in DENY must beat an explicit ALLOW.");
+             Exposure gamemode = Exposure.of(server, "gamemode");
+             Exposure time = Exposure.of(server, "time")) {
+            try (Grants allow = Grants.allow(player, "customperm.command.gamemode");
+                 Grants deny = Grants.deny(player, "customperm.*")) {
+                if (!player.canUse("gamemode")) fail("An exact ALLOW must beat customperm.* in DENY.");
+                if (player.canUse("time")) fail("customperm.* in DENY must still close what nothing more specific allows.");
+            }
+            try (Grants allow = Grants.allow(player, "customperm.command.gamemode", "customperm.command.time");
+                 Grants deny = Grants.deny(player, "customperm.command.time")) {
+                if (player.canUse("time")) fail("A DENY on the same node must beat the ALLOW.");
+                if (!player.canUse("gamemode")) fail("A DENY on another node must not close /gamemode.");
+            }
         }
         helper.succeed();
     }

@@ -21,8 +21,8 @@ import static org.junit.jupiter.api.Assertions.*;
 /**
  * Tests unitaires pour PermissionResolver — pur Java, zéro import Minecraft/NeoForge (AR8).
  *
- * Couvre INVARIANT-101 (DENY > ALLOW), INVARIANT-102 (union cumulative),
- * FR2 (pas de grade = refus), wildcards, et cas limites.
+ * Covers most-specific-wins, INVARIANT-101 (DENY wins at the same specificity), INVARIANT-102
+ * (cumulative union), FR2 (no grade = nothing granted), the default grade layer, wildcards and edge cases.
  */
 class PermissionResolverTest {
 
@@ -95,10 +95,95 @@ class PermissionResolverTest {
     }
 
     @Test
-    void shouldApplyAncestorWildcardToDenied() {
+    void exactAllowBeatsAncestorDeny() {
         createGrade("staff", Set.of("customperm.command.gamemode"), Set.of("customperm.*"));
         grades.userGrades.put(player.toString(), java.util.List.of("staff"));
-        assertFalse(PermissionResolver.resolve(grades, player, "customperm.command.gamemode"));
+        assertTrue(PermissionResolver.resolve(grades, player, "customperm.command.gamemode"),
+            "the exact node is more specific than customperm.*");
+        assertEquals(Tristate.DENY, check("customperm.command.tp"), "the ancestor DENY still covers the rest");
+    }
+
+    @Test
+    void deniedStarBlocksEverythingExceptExplicitAllows() {
+        createGrade("locked", Set.of("customperm.command.home"), Set.of("*"));
+        grades.userGrades.put(player.toString(), java.util.List.of("locked"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.home"));
+        assertEquals(Tristate.DENY, check("customperm.command.stop"));
+        assertEquals(Tristate.DENY, check("customperm.admin"));
+    }
+
+    @Test
+    void allowedStarGrantsEverythingExceptExplicitDenies() {
+        createGrade("owner", Set.of("*"), Set.of("customperm.command.stop"));
+        grades.userGrades.put(player.toString(), java.util.List.of("owner"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.op"));
+        assertEquals(Tristate.DENY, check("customperm.command.stop"));
+    }
+
+    @Test
+    void deeperWildcardBeatsShallowerOne() {
+        createGrade("mixed", Set.of("customperm.command.*"), Set.of("customperm.*"));
+        grades.userGrades.put(player.toString(), java.util.List.of("mixed"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.gamemode"));
+        assertEquals(Tristate.DENY, check("customperm.alias.heal"));
+    }
+
+    @Test
+    void specificityComparesAcrossGrades() {
+        createGrade("base", Set.of(), Set.of("*"));
+        createGrade("builder", Set.of("customperm.command.gamemode"), Set.of());
+        grades.userGrades.put(player.toString(), java.util.List.of("base", "builder"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.gamemode"));
+        assertEquals(Tristate.DENY, check("customperm.command.give"));
+    }
+
+    @Test
+    void nothingMatchingIsUnset() {
+        assignGradeWithAllow("staff", "customperm.command.tp");
+        assertEquals(Tristate.UNSET, check("customperm.command.give"));
+        assertEquals(Tristate.UNSET, PermissionResolver.check(grades, UUID.randomUUID(), "customperm.command.tp", null));
+    }
+
+    // ─── Default grade ────────────────────────────────────────────────────────
+
+    @Test
+    void defaultGradeAppliesToPlayersWithoutGrades() {
+        createGrade("everyone", Set.of("customperm.command.spawn"), Set.of("*"));
+        UUID stranger = UUID.randomUUID();
+        assertEquals(Tristate.DENY, PermissionResolver.check(grades, stranger, "customperm.command.op", "everyone"));
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, stranger, "customperm.command.spawn", "everyone"));
+        assertEquals(Tristate.UNSET, PermissionResolver.check(grades, stranger, "customperm.command.op", ""),
+            "no default grade configured");
+        assertEquals(Tristate.UNSET, PermissionResolver.check(grades, stranger, "customperm.command.op", "missing"),
+            "a default grade that does not exist grants and denies nothing");
+    }
+
+    @Test
+    void ownGradesDecideBeforeTheDefaultGrade() {
+        createGrade("everyone", Set.of(), Set.of("*"));
+        assignGradeWithAllow("staff", "customperm.command.*");
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.gamemode", "everyone"),
+            "the player's own grade answers first, even with a less specific node than the default would need");
+        assertEquals(Tristate.DENY, PermissionResolver.check(grades, player, "customperm.admin", "everyone"),
+            "nodes the own grades do not mention fall through to the default grade");
+    }
+
+    @Test
+    void explicitlyAssignedDefaultGradeStaysInTheDefaultLayer() {
+        createGrade("everyone", Set.of(), Set.of("*"));
+        createGrade("staff", Set.of("customperm.command.tp"), Set.of());
+        grades.userGrades.put(player.toString(), java.util.List.of("everyone", "staff"));
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.tp", "everyone"));
+    }
+
+    @Test
+    void specificityValues() {
+        assertEquals(Integer.MAX_VALUE, PermissionResolver.specificity(Set.of("a.b.c"), "a.b.c"));
+        assertEquals(2, PermissionResolver.specificity(Set.of("a.b.*"), "a.b.c"));
+        assertEquals(1, PermissionResolver.specificity(Set.of("a.*"), "a.b.c"));
+        assertEquals(0, PermissionResolver.specificity(Set.of("*"), "a.b.c"));
+        assertEquals(-1, PermissionResolver.specificity(Set.of("a.b.*"), "a.b"));
+        assertEquals(2, PermissionResolver.specificity(Set.of("a.*", "a.b.*", "*"), "a.b.c"), "the deepest wildcard counts");
     }
 
     @Test
@@ -122,7 +207,7 @@ class PermissionResolverTest {
         assertFalse(PermissionResolver.resolve(grades, player, "cmd.baz"), "non accordé");
     }
 
-    // ─── DENY > ALLOW (INVARIANT-101) ─────────────────────────────────────────
+    // ─── DENY wins at the same specificity (INVARIANT-101) ─────────────────────
 
     @Test
     void shouldDenyOverrideAllow_whenGradeAAllowsAndGradeBDenies() {
@@ -170,6 +255,10 @@ class PermissionResolverTest {
     }
 
     // ─── Helpers ──────────────────────────────────────────────────────────────
+
+    private Tristate check(String node) {
+        return PermissionResolver.check(grades, player, node, null);
+    }
 
     private void assignGradeWithAllow(String gradeName, String allowNode) {
         createGrade(gradeName, Set.of(allowNode), Set.of());

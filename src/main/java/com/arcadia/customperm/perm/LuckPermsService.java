@@ -56,34 +56,32 @@ public class LuckPermsService implements PermissionService {
         return degraded.get();
     }
 
+    /**
+     * The player's LuckPerms value for {@code node}: {@code true} is ALLOW, {@code false} is DENY, undefined
+     * is UNSET. A {@code false} therefore applies to operators too, as it does for LuckPerms' own checks.
+     */
     @Override
-    public boolean hasPermission(CommandSourceStack source, String node) {
-        return resolve(source, node, false);
-    }
+    public Tristate check(CommandSourceStack source, String node) {
+        // AC3: once degraded, LuckPerms is never asked again.
+        if (degraded.get()) return handleUnavailable(source, node);
 
-    /** LuckPerms has no operator short-circuit; only the internal fallback path differs. */
-    @Override
-    public boolean hasGrantedNode(CommandSourceStack source, String node) {
-        return resolve(source, node, true);
-    }
-
-    private boolean resolve(CommandSourceStack source, String node, boolean grantedOnly) {
-        // AC3 : une fois dégradé, LP n'est plus consulté.
-        if (degraded.get()) return handleUnavailable(source, node, grantedOnly);
-
-        if (!(source.getEntity() instanceof ServerPlayer player)) return false;
+        if (!(source.getEntity() instanceof ServerPlayer player)) return Tristate.UNSET;
         try {
             LuckPerms api = LuckPermsProvider.get();
             User user = api.getUserManager().getUser(player.getUUID());
-            if (user == null) return false;
-            return user.getCachedData().getPermissionData().checkPermission(node).asBoolean();
+            if (user == null) return Tristate.UNSET;
+            return switch (user.getCachedData().getPermissionData().checkPermission(node)) {
+                case TRUE -> Tristate.ALLOW;
+                case FALSE -> Tristate.DENY;
+                case UNDEFINED -> Tristate.UNSET;
+            };
         } catch (Throwable t) {
-            // D1 : ne pas absorber les erreurs JVM fatales (OOM, SOE…) — LP n'en est pas responsable.
+            // D1: fatal JVM errors (OOM, SOE) are not LuckPerms' fault and must not be swallowed.
             if (t instanceof Error e) throw e;
-            // AC1/D2 : bascule permanente sur toute exception LP (IllegalStateException incluse).
+            // AC1/D2: any LuckPerms exception switches permanently, IllegalStateException included.
             markUnavailable("API error: " + t.getClass().getSimpleName(), t);
-            // AC4/AC5 : politique de fallback appliquée immédiatement à cette requête aussi.
-            return handleUnavailable(source, node, grantedOnly);
+            // AC4/AC5: the fallback policy applies to this very request too.
+            return handleUnavailable(source, node);
         }
     }
 
@@ -103,24 +101,25 @@ public class LuckPermsService implements PermissionService {
         CustomPerm.raiseLuckPermsUnavailable(reason);
     }
 
-    private boolean handleUnavailable(CommandSourceStack source, String node, boolean grantedOnly) {
+    /** Internal fallback: the grades decide. Deny mode: nothing is granted, only vanilla levels open commands. */
+    private Tristate handleUnavailable(CommandSourceStack source, String node) {
         if (CustomPerm.configManager.getSettings().useInternalLuckPermsFallback()) {
-            return safeCallFallback(source, node, grantedOnly);
+            return safeCallFallback(source, node);
         }
-        return false;
+        return Tristate.UNSET;
     }
 
     /**
-     * Délègue à InternalPermService avec protection contre les exceptions inattendues (P5).
-     * InternalPermService est très stable, mais un guard explicite évite une remontée brute
-     * vers le dispatcher de commandes en cas de corruption config.
+     * Delegates to InternalPermService, guarded against unexpected exceptions (P5): a corrupted config
+     * must not surface raw into the command dispatcher.
      */
-    private boolean safeCallFallback(CommandSourceStack source, String node, boolean grantedOnly) {
+    private Tristate safeCallFallback(CommandSourceStack source, String node) {
         try {
-            return grantedOnly ? fallback.hasGrantedNode(source, node) : fallback.hasPermission(source, node);
+            return fallback.check(source, node);
         } catch (Throwable t) {
-            CustomPerm.LOGGER.warn("[CustomPerm] Fallback InternalPermService.hasPermission() failed for node {}", node, t);
-            return false;
+            if (t instanceof Error e) throw e;
+            CustomPerm.LOGGER.warn("[CustomPerm] Fallback InternalPermService.check() failed for node {}", node, t);
+            return Tristate.UNSET;
         }
     }
 

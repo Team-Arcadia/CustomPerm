@@ -62,9 +62,12 @@ public class CommandCompletionGameTest {
             expect(problems, op, "customperm ", "gui", "grade", "alias", "command", "ratelimit", "status", "reload", "scan", "test", "debug");
             expect(problems, op, "customperm gui ", "dashboard", "commands", "aliases", "ratelimits", "grades", "luckperms");
             expect(problems, op, "customperm gui luckperms ", "groups", "players", "tracks");
-            expect(problems, op, "customperm command ", "add", "remove", "preserve", "list");
+            expect(problems, op, "customperm command ", "add", "remove", "preserve", "gateall", "list");
+            expect(problems, op, "customperm command gateall ", "true", "false");
             expect(problems, op, "customperm alias ", "add", "addstep", "removestep", "movestep", "setstep", "steps", "remove", "list");
-            expect(problems, op, "customperm grade ", "create", "delete", "addperm", "removeperm", "adddeny", "removedeny", "assign", "unassign", "list");
+            expect(problems, op, "customperm grade ", "create", "delete", "addperm", "removeperm", "adddeny", "removedeny", "assign", "unassign",
+                    "setdefault", "cleardefault", "list");
+            expect(problems, op, "customperm grade setdefault ", GRADE);
             expect(problems, op, "customperm ratelimit ", "set", "persistence", "enable", "disable", "remove", "list");
 
             // Command exposure.
@@ -99,7 +102,8 @@ public class CommandCompletionGameTest {
             expect(problems, op, "customperm grade removedeny " + GRADE + " ", "cp.s.denied");
             expectAbsent(problems, op, "customperm grade removedeny " + GRADE + " ", "cp.s.allowed");
             expect(problems, op, "customperm grade addperm " + GRADE + " ", "customperm.command." + COMMAND,
-                    "customperm.alias." + ALIAS, "cp.s.allowed", PermissionNodes.GUI_ALIASES_EDIT, PermissionNodes.LP_EDIT);
+                    "customperm.alias." + ALIAS, "cp.s.allowed", PermissionNodes.GUI_ALIASES_EDIT, PermissionNodes.LP_EDIT,
+                    PermissionNodes.ADMIN);
             expect(problems, op, "customperm grade adddeny " + GRADE + " ", "cp.s.denied", PermissionNodes.GUI_GRADES_EDIT);
             expect(problems, op, "customperm test cp_s_owner ", "customperm.command." + COMMAND, PermissionNodes.GUI_COMMANDS_EDIT);
             expect(problems, op, "customperm grade assign ", "cp_s_owner");

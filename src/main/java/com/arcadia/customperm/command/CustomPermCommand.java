@@ -21,9 +21,10 @@ import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.notify.AdminNotifier;
+import com.arcadia.customperm.perm.AdminAccess;
 import com.arcadia.customperm.perm.LuckPermsService;
 import com.arcadia.customperm.perm.PermissionNodes;
-import com.arcadia.customperm.perm.PermissionService;
+import com.arcadia.customperm.perm.Tristate;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -50,11 +51,13 @@ import java.util.stream.Collectors;
 /**
  * /customperm command add|remove <name>             # expose / hide a vanilla or modded command
  *             command preserve <name> <true|false>  # also keep the command's original requirement
+ *             command gateall <true|false>          # every command reads its node, not only exposed ones
  *             command list                          # show currently exposed commands
  * /customperm grade   create|delete <name>
  *                     addperm|removeperm <grade> <node>
- *                     adddeny|removedeny <grade> <node>   # DENY nodes win over any ALLOW
+ *                     adddeny|removedeny <grade> <node>   # most specific entry wins, DENY on a tie
  *                     assign|unassign <player> <grade>    # online, or joined the server before
+ *                     setdefault <grade> | cleardefault   # grade applied to every player
  *                     list
  * /customperm alias   add <name> <cmd1[; cmd2; ...]>    # macro: split on ';'
  *                     addstep <name> <cmd>              # append a step to existing alias
@@ -78,7 +81,7 @@ import java.util.stream.Collectors;
  * The mod ships with NO commands pre-exposed. Each admin chooses what to expose via
  * /customperm command add. Until exposed, every command keeps its vanilla op-only behaviour.
  *
- * Always requires op level 2 — this is the management command.
+ * Requires op level 2, and customperm.admin not denied: this is the management command.
  * When LuckPerms is the active backend, grade subcommands print a hint to use `/lp` instead.
  */
 public class CustomPermCommand {
@@ -154,6 +157,12 @@ public class CustomPermCommand {
             for (String c : CustomPerm.configManager.getCommands().grantedCommands) {
                 nodes.add("customperm.command." + c);
             }
+            var server = ctx.getSource().getServer();
+            if (CustomPerm.gatesAllCommands() && server != null) {
+                server.getCommands().getDispatcher().getRoot().getChildren().forEach(node -> {
+                    if (!node.getName().equals("customperm")) nodes.add("customperm.command." + node.getName());
+                });
+            }
             for (String a : CustomPerm.configManager.getAliases().aliases.keySet()) {
                 nodes.add("customperm.alias." + a);
             }
@@ -216,19 +225,9 @@ public class CustomPermCommand {
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
             Commands.literal("customperm")
-                .requires(src -> {
-                    // Vérifie le statut OP réel du joueur, pas le niveau virtuel de la source.
-                    // AliasManager élève la source à op-4 via withPermission(4) : si on se fiait
-                    // uniquement à hasPermission(2), tout joueur exécutant un alias contenant
-                    // une sous-commande /customperm contournerait INVARIANT-503 (NFR6).
-                    // createCommandSourceStack() recrée un stack au niveau OP réel du joueur
-                    // (non-élevé) — contrairement à isOp(profile) qui ignorait le niveau requis
-                    // et accordait l'accès dès le niveau OP 1 au lieu de 2 minimum.
-                    if (src.getEntity() instanceof ServerPlayer player) {
-                        return player.createCommandSourceStack().hasPermission(2);
-                    }
-                    return src.hasPermission(2); // Console, command blocks, serveur : inchangé
-                })
+                // Real op level of the player, never the elevated level an alias step runs at
+                // (INVARIANT-503, NFR6), and customperm.admin can take access away from an operator.
+                .requires(AdminAccess::canAdminister)
                 .then(Commands.literal("grade")
                     .then(Commands.literal("create")
                         .then(Commands.argument("name", StringArgumentType.word())
@@ -273,6 +272,12 @@ public class CustomPermCommand {
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_PLAYER_GRADES)
                                 .executes(CustomPermCommand::gradeUnassign))))
+                    .then(Commands.literal("setdefault")
+                        .then(Commands.argument("grade", StringArgumentType.word())
+                            .suggests(SUGGEST_GRADES)
+                            .executes(CustomPermCommand::gradeSetDefault)))
+                    .then(Commands.literal("cleardefault")
+                        .executes(CustomPermCommand::gradeClearDefault))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::gradeList)))
                 .then(Commands.literal("alias")
@@ -330,6 +335,10 @@ public class CustomPermCommand {
                             .suggests(SUGGEST_EXPOSED_COMMANDS)
                             .then(Commands.argument("keepOriginal", BoolArgumentType.bool())
                                 .executes(CustomPermCommand::commandPreserve))))
+                    .then(Commands.literal("gateall")
+                        .then(Commands.argument("enabled", BoolArgumentType.bool())
+                            .executes(ctx -> report(ctx, CommandAdmin.setGateAll(ctx.getSource().getServer(),
+                                BoolArgumentType.getBool(ctx, "enabled"))))))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::commandList)))
                 .then(Commands.literal("ratelimit")
@@ -511,27 +520,41 @@ public class CustomPermCommand {
     }
 
     private static int gradeDelete(CommandContext<CommandSourceStack> ctx) {
-        return report(ctx, GradeAdmin.delete(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "name")));
+        return report(ctx, guarded(ctx, () -> GradeAdmin.delete(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "name"))));
     }
 
     private static int gradeAddPerm(CommandContext<CommandSourceStack> ctx) {
-        return report(ctx, GradeAdmin.addNode(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"),
-            StringArgumentType.getString(ctx, "node"), false));
+        return report(ctx, guarded(ctx, () -> GradeAdmin.addNode(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "node"), false)));
     }
 
     private static int gradeRemovePerm(CommandContext<CommandSourceStack> ctx) {
-        return report(ctx, GradeAdmin.removeNode(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"),
-            StringArgumentType.getString(ctx, "node"), false));
+        return report(ctx, guarded(ctx, () -> GradeAdmin.removeNode(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "node"), false)));
     }
 
     private static int gradeAddDeny(CommandContext<CommandSourceStack> ctx) {
-        return report(ctx, GradeAdmin.addNode(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"),
-            StringArgumentType.getString(ctx, "node"), true));
+        return report(ctx, guarded(ctx, () -> GradeAdmin.addNode(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "node"), true)));
     }
 
     private static int gradeRemoveDeny(CommandContext<CommandSourceStack> ctx) {
-        return report(ctx, GradeAdmin.removeNode(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"),
-            StringArgumentType.getString(ctx, "node"), true));
+        return report(ctx, guarded(ctx, () -> GradeAdmin.removeNode(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "node"), true)));
+    }
+
+    private static int gradeSetDefault(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, guarded(ctx, () -> GradeAdmin.setDefault(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"))));
+    }
+
+    private static int gradeClearDefault(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, guarded(ctx, () -> GradeAdmin.setDefault(ctx.getSource().getServer(), "")));
+    }
+
+    /** Refuses a grade change that would lock the admin running it out of /customperm. */
+    private static AdminResult guarded(CommandContext<CommandSourceStack> ctx, java.util.function.Supplier<AdminResult> change) {
+        return GradeAdmin.guarded(ctx.getSource(), ctx.getSource().getServer(), change);
     }
 
     private static int gradeAssign(CommandContext<CommandSourceStack> ctx) {
@@ -543,7 +566,7 @@ public class CustomPermCommand {
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, name);
         var profile = resolution.profile();
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
-        return report(ctx, GradeAdmin.assign(server, profile.get(), StringArgumentType.getString(ctx, "grade")));
+        return report(ctx, guarded(ctx, () -> GradeAdmin.assign(server, profile.get(), StringArgumentType.getString(ctx, "grade"))));
     }
 
     private static int gradeUnassign(CommandContext<CommandSourceStack> ctx) {
@@ -555,8 +578,8 @@ public class CustomPermCommand {
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, name);
         var profile = resolution.profile();
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
-        return report(ctx, GradeAdmin.unassign(server, profile.get().getId(), profile.get().getName(),
-            StringArgumentType.getString(ctx, "grade")));
+        return report(ctx, guarded(ctx, () -> GradeAdmin.unassign(server, profile.get().getId(), profile.get().getName(),
+            StringArgumentType.getString(ctx, "grade"))));
     }
 
     private static int gradeList(CommandContext<CommandSourceStack> ctx) {
@@ -670,7 +693,7 @@ public class CustomPermCommand {
         boolean op2 = source.hasPermission(2);
         boolean op4 = source.hasPermission(4);
         String permNode = "customperm.command." + cmd;
-        boolean permGranted = PermissionService.get().hasPermission(source, permNode);
+        Tristate explicitValue = AdminAccess.explicit(source, permNode);
         boolean preserveOriginalRequires = CustomPerm.configManager.getCommands().shouldPreserveOriginalRequires(cmd);
 
         var rootNode = server.getCommands().getDispatcher().getRoot().getChildren()
@@ -682,9 +705,20 @@ public class CustomPermCommand {
             } catch (Throwable ignored) {}
         }
 
-        boolean customPermAllows = op2 || (inGrantedList && permGranted);
-        boolean comparableDecision = !inGrantedList || !preserveOriginalRequires;
-        boolean shouldPass = inGrantedList ? customPermAllows : actualWrapper;
+        // What CommandTreeRewriter.decide should answer, or null when the command's own requirement decides.
+        boolean gated = inGrantedList || CustomPerm.gatesAllCommands();
+        boolean keepOriginal = inGrantedList && preserveOriginalRequires;
+        Boolean expected = !gated ? null : switch (explicitValue) {
+            case DENY -> false;
+            case ALLOW -> keepOriginal ? null : Boolean.TRUE;
+            case UNSET -> !inGrantedList ? null
+                : op2 ? (keepOriginal ? null : Boolean.TRUE)
+                : (CustomPerm.isLuckPermsPresent() ? null : Boolean.FALSE);
+        };
+        boolean comparableDecision = expected != null;
+        boolean shouldPass = comparableDecision && expected;
+        String gating = CustomPerm.isLuckPermsPresent() ? "exposed commands (LuckPerms checks the others)"
+            : CustomPerm.gatesAllCommands() ? "every command (gateAllCommands)" : "exposed commands only";
 
         String backend = CustomPerm.backendLabel();
         ctx.getSource().sendSuccess(() -> Component.literal(
@@ -693,9 +727,10 @@ public class CustomPermCommand {
         ctx.getSource().sendSuccess(() -> Component.literal("  Direct command exposure     : "
                 + (directCommandsEnabled ? "enabled" : "disabled (LuckPerms installed)")), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  In granted-commands list    : " + inGrantedList), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  CustomPerm gates            : " + gating), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Source has op level 2       : " + op2), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Source has op level 4       : " + op4), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("  PermService says " + permNode + " : " + permGranted), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Explicit value of " + permNode + " : " + explicitValue), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Preserve original requires : " + preserveOriginalRequires), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Logical decision (computed) : "
                 + (comparableDecision ? Boolean.toString(shouldPass) : "requires original predicate")), false);
@@ -714,12 +749,16 @@ public class CustomPermCommand {
     private static int testPerm(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
         ServerPlayer player = EntityArgument.getPlayer(ctx, "player");
         String node = StringArgumentType.getString(ctx, "node");
-        boolean granted = PermissionService.get().hasPermission(player.createCommandSourceStack(), node);
+        CommandSourceStack source = player.createCommandSourceStack();
+        Tristate value = AdminAccess.explicit(source, node);
+        boolean granted = value == Tristate.ALLOW || (value == Tristate.UNSET && source.hasPermission(2));
         String backend = CustomPerm.backendLabel();
         ChatFormatting color = granted ? ChatFormatting.GREEN : ChatFormatting.RED;
         String verdict = granted ? "GRANTED" : "DENIED";
+        String reason = value != Tristate.UNSET ? " (explicit " + value + ")"
+            : granted ? " (not set, operator)" : " (not set)";
         ctx.getSource().sendSuccess(() -> Component.literal(
-            "[" + backend + "] " + player.getGameProfile().getName() + " :: " + node + " -> " + verdict
+            "[" + backend + "] " + player.getGameProfile().getName() + " :: " + node + " -> " + verdict + reason
         ).withStyle(color), false);
         return granted ? 1 : 0;
     }
@@ -746,12 +785,18 @@ public class CustomPermCommand {
         ctx.getSource().sendSuccess(() -> Component.literal("  Exposed commands   : " + exposed
             + (CustomPerm.isLuckPermsActive() ? " (nodes resolved by LuckPerms)" : "")), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Custom aliases     : " + aliases), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  Command gating     : " + (CustomPerm.isLuckPermsPresent()
+            ? "exposed commands (LuckPerms checks every command)"
+            : CustomPerm.gatesAllCommands() ? "every command (gateAllCommands)" : "exposed commands only")), false);
 
         // AC1 grades-fallback : afficher grades si Internal pur OU si fallback (InternalPermService actif dans les deux cas)
         boolean showGrades = !CustomPerm.isLuckPermsActive();
         if (showGrades) {
             ctx.getSource().sendSuccess(() -> Component.literal("  Internal grades    : " + grades), false);
             ctx.getSource().sendSuccess(() -> Component.literal("  Users with grade   : " + users), false);
+            String defaultGrade = CustomPerm.configManager.getSettings().defaultGrade;
+            ctx.getSource().sendSuccess(() -> Component.literal("  Default grade      : "
+                + (defaultGrade.isEmpty() ? "none" : defaultGrade)), false);
         } else {
             ctx.getSource().sendSuccess(() -> Component.literal("  (Grades & user perms managed by /lp)").withStyle(ChatFormatting.GRAY), false);
         }

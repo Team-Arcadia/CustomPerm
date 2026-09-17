@@ -9,6 +9,7 @@
 package com.arcadia.customperm.notify;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.perm.AdminAccess;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
@@ -20,8 +21,8 @@ import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import java.util.Map;
 
 /**
- * Delivers {@link AdminAlerts} to the people who can act on them: every online player with
- * permission level 2, the same gate as {@code /customperm}.
+ * Delivers {@link AdminAlerts} to the people who can act on them: every online player who may run
+ * {@code /customperm} ({@link AdminAccess}).
  *
  * <p>A new or changed alert is broadcast once to the ops online at that moment; an op who joins
  * while an alert is active receives it on login. That is the whole anti-spam policy: no repeat
@@ -65,7 +66,7 @@ public final class AdminNotifier {
     }
 
     static boolean isAdmin(ServerPlayer player) {
-        return player.createCommandSourceStack().hasPermission(2);
+        return AdminAccess.canAdminister(player);
     }
 
     private static void broadcast(Component line) {

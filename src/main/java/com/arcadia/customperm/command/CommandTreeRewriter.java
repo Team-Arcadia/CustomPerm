@@ -11,7 +11,8 @@ package com.arcadia.customperm.command;
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.ConfigSnapshot;
 import com.arcadia.customperm.config.RateLimitsConfig;
-import com.arcadia.customperm.perm.PermissionService;
+import com.arcadia.customperm.perm.AdminAccess;
+import com.arcadia.customperm.perm.Tristate;
 import com.mojang.brigadier.Command;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
@@ -267,18 +268,44 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             if (!CustomPerm.configManager.getCommands().grantedCommands.contains(rootName)) {
                 return delegate == null || delegate.test(source);
             }
-            boolean op2 = source.hasPermission(2);
-            boolean customPermAllows = op2
-                || PermissionService.get().hasPermission(source, "customperm.command." + rootName);
-            if (!customPermAllows) {
-                // Not granted by CustomPerm — keep whatever gating was there before (additive).
-                return delegate != null && delegate.test(source);
-            }
-            if (CustomPerm.configManager.getCommands().shouldPreserveOriginalRequires(rootName)) {
-                return delegate == null || delegate.test(source);
-            }
-            return true;
+            // Additive for a player without any value: the delegate (LuckPerms' own check) still decides.
+            // An explicit false in LuckPerms now refuses the command, operators included, instead of
+            // letting op level 2 through before LuckPerms is asked.
+            return decide(source, rootName, true, () -> delegate == null || delegate.test(source), true);
         }
+    }
+
+    /** Node read for a root command, exposed or gated by {@code gateAllCommands}. */
+    public static String commandNode(String rootName) {
+        return "customperm.command." + rootName;
+    }
+
+    /**
+     * CustomPerm's decision for a root command it gates, shared by the cloned requirement and
+     * {@link ExposureGate}.
+     *
+     * <ul>
+     *   <li>DENY: refused, operators included.</li>
+     *   <li>ALLOW: granted, on top of the original requirement when the command keeps it.</li>
+     *   <li>UNSET, exposed command: operators keep it; other players get the original requirement when
+     *       {@code additive}, nothing otherwise.</li>
+     *   <li>UNSET, command gated only by {@code gateAllCommands}: the original requirement, unchanged.</li>
+     * </ul>
+     * Non-player sources are always UNSET, so the console and command blocks keep their vanilla access.
+     */
+    static boolean decide(CommandSourceStack source, String rootName, boolean exposed,
+                          java.util.function.BooleanSupplier original, boolean additive) {
+        Tristate value = AdminAccess.explicit(source, commandNode(rootName));
+        boolean keepOriginal = exposed && CustomPerm.configManager.getCommands().shouldPreserveOriginalRequires(rootName);
+        return switch (value) {
+            case DENY -> false;
+            case ALLOW -> !keepOriginal || original.getAsBoolean();
+            case UNSET -> {
+                if (!exposed) yield original.getAsBoolean();
+                if (source.hasPermission(2)) yield !keepOriginal || original.getAsBoolean();
+                yield additive && original.getAsBoolean();
+            }
+        };
     }
 
     private static int wrapUnwrappedRoots(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -391,20 +418,15 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
 
         Predicate<CommandSourceStack> origReq = original.getRequirement();
         Predicate<CommandSourceStack> wrappedReq = source -> {
-            boolean originalAllows = origReq == null || origReq.test(source);
+            java.util.function.BooleanSupplier originalAllows = () -> origReq == null || origReq.test(source);
             if (!CustomPerm.isDirectCommandExposureEnabled()) {
-                return originalAllows;
+                return originalAllows.getAsBoolean();
             }
-            if (!CustomPerm.configManager.getCommands().grantedCommands.contains(rootName)) {
-                return originalAllows;
+            boolean exposed = CustomPerm.configManager.getCommands().grantedCommands.contains(rootName);
+            if (!exposed && !CustomPerm.gatesAllCommands()) {
+                return originalAllows.getAsBoolean();
             }
-            boolean customPermAllows = source.hasPermission(2)
-                    || PermissionService.get().hasPermission(source, "customperm.command." + rootName);
-            if (!customPermAllows) return false;
-            if (CustomPerm.configManager.getCommands().shouldPreserveOriginalRequires(rootName)) {
-                return originalAllows;
-            }
-            return true;
+            return decide(source, rootName, exposed, originalAllows, false);
         };
 
         // The redirect is a constructor argument, so it has to be resolved before this node exists.

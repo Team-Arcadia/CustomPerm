@@ -10,12 +10,15 @@ package com.arcadia.customperm.admin;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.GradesConfig;
+import com.arcadia.customperm.perm.AdminAccess;
 import com.mojang.authlib.GameProfile;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.common.UsernameCache;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +26,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -66,6 +70,9 @@ public final class GradeAdmin {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
         if (grades().grades.remove(name) == null) return AdminResult.fail("No such grade: " + name);
+        // A dangling default would silently apply to everyone again if a grade of that name is recreated.
+        boolean wasDefault = name.equals(CustomPerm.configManager.getSettings().defaultGrade);
+        if (wasDefault) CustomPerm.configManager.getSettings().defaultGrade = "";
         Iterator<Map.Entry<String, List<String>>> iterator = grades().userGrades.entrySet().iterator();
         while (iterator.hasNext()) {
             List<String> assigned = iterator.next().getValue();
@@ -78,12 +85,14 @@ public final class GradeAdmin {
         }
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
-        return AdminResult.ok("Deleted grade " + name).warn(warning);
+        AdminResult result = AdminResult.ok("Deleted grade " + name).warn(warning);
+        return wasDefault ? result.note("It was the default grade: no grade applies to every player any more.") : result;
     }
 
     /**
-     * Adds an ALLOW or a DENY node. A DENY in any of a player's grades wins over an ALLOW in another, so
-     * a denied node stays denied whatever else the player holds.
+     * Adds an ALLOW or a DENY node. The most specific entry wins (the exact node over {@code a.*} over
+     * {@code *}); at the same level a DENY wins, whichever grade it comes from. An explicit value applies
+     * to operators too.
      */
     public static AdminResult addNode(MinecraftServer server, String gradeName, String rawNode, boolean deny) {
         AdminResult refusal = unavailable();
@@ -143,6 +152,79 @@ public final class GradeAdmin {
         String warning = ConfigAdmin.persist();
         resyncPlayer(server, uuid);
         return AdminResult.ok("Unassigned " + gradeName + " from " + displayName).warn(warning);
+    }
+
+    /**
+     * Makes {@code gradeName} apply to every player, below their own grades; an empty name clears it.
+     * This is how a player made operator by mistake is restricted: they have no grade of their own.
+     */
+    public static AdminResult setDefault(MinecraftServer server, String gradeName) {
+        AdminResult refusal = unavailable();
+        if (refusal != null) return refusal;
+        var settings = CustomPerm.configManager.getSettings();
+        String name = gradeName.trim();
+        if (name.isEmpty()) {
+            if (settings.defaultGrade.isEmpty()) return AdminResult.ok("No default grade is set. No change.");
+            String previous = settings.defaultGrade;
+            settings.defaultGrade = "";
+            String warning = ConfigAdmin.persist();
+            ConfigAdmin.resyncCommands(server);
+            return AdminResult.ok(previous + " no longer applies to every player.").warn(warning);
+        }
+        if (!grades().grades.containsKey(name)) return AdminResult.fail("No such grade: " + name);
+        if (name.equals(settings.defaultGrade)) return AdminResult.ok(name + " is already the default grade. No change.");
+        settings.defaultGrade = name;
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
+        AdminResult result = AdminResult.ok(name + " now applies to every player, below their own grades.").warn(warning)
+                .note("Operators included: a node it denies is refused to them unless one of their own grades allows it.");
+        return CustomPerm.gatesAllCommands() ? result
+                : result.note("Commands that are not exposed ignore grades until /customperm command gateall true.");
+    }
+
+    /**
+     * Runs a grade change for {@code actor} and undoes it if it takes away the actor's own access to
+     * {@code /customperm}: a denied {@code *} in their grade, or in the default grade, would otherwise lock
+     * the admin out of the very command that can repair it. The console is never checked, it cannot be
+     * locked out.
+     */
+    public static AdminResult guarded(CommandSourceStack actor, MinecraftServer server, Supplier<AdminResult> change) {
+        if (!(actor.getEntity() instanceof ServerPlayer player) || !AdminAccess.canAdminister(player)) {
+            return change.get();
+        }
+        GradesConfig saved = copy(grades());
+        String savedDefault = CustomPerm.configManager.getSettings().defaultGrade;
+        AdminResult result = change.get();
+        if (!result.success() || AdminAccess.canAdminister(player)) return result;
+
+        restore(grades(), saved);
+        CustomPerm.configManager.getSettings().defaultGrade = savedDefault;
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
+        CustomPerm.LOGGER.warn("[CustomPerm] Refused a grade change by {}: it would have denied them customperm.admin.",
+                player.getGameProfile().getName());
+        return AdminResult.fail("Refused: you would lose /customperm yourself (customperm.admin denied). Allow "
+                + "customperm.admin in one of your grades first, or make this change from the console.").warn(warning);
+    }
+
+    private static GradesConfig copy(GradesConfig source) {
+        GradesConfig copy = new GradesConfig();
+        source.grades.forEach((name, grade) -> {
+            GradesConfig.Grade g = new GradesConfig.Grade();
+            g.name = grade.name;
+            g.permissions = new HashSet<>(grade.permissions);
+            g.deniedPermissions = new HashSet<>(grade.deniedPermissions);
+            copy.grades.put(name, g);
+        });
+        source.userGrades.forEach((uuid, list) -> copy.userGrades.put(uuid, new ArrayList<>(list)));
+        return copy;
+    }
+
+    private static void restore(GradesConfig target, GradesConfig saved) {
+        target.grades.clear();
+        target.grades.putAll(saved.grades);
+        target.userGrades.clear();
+        target.userGrades.putAll(saved.userGrades);
     }
 
     /** Outcome of resolving a player name: the profile, or why there is none. */

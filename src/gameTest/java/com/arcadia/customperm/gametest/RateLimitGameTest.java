@@ -300,8 +300,10 @@ public class RateLimitGameTest {
             RateLimitPersistence.write();
             runGamemode(player, 1);
             if (historyFileMentions(player)) fail("world_save wrote the history on use instead of with the world.");
-            ServerCommands.run(server, "save-all");
-            if (!historyFileMentions(player)) fail("save-all did not write the rate-limit history.");
+            // What /save-all runs. Not the command itself: a vanilla /reload earlier in the run rebuilds the
+            // dispatcher with the integrated-server selection, which has no /save-all on a GameTest server.
+            server.saveEverything(false, true, true);
+            if (!historyFileMentions(player)) fail("A world save did not write the rate-limit history.");
         } finally {
             removeRule(server);
             RateLimitPersistence.write();

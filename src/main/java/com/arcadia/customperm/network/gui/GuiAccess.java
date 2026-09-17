@@ -8,7 +8,7 @@
  */
 package com.arcadia.customperm.network.gui;
 
-import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.perm.AdminAccess;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -21,29 +21,24 @@ public final class GuiAccess {
     private GuiAccess() {
     }
 
-    /**
-     * Reading any page: op level 2, like {@code /customperm}. Checked on a source rebuilt from the
-     * player's real op level, never an elevated one (an alias runs its steps at level 4).
-     */
+    /** Reading any page: the {@code /customperm} gate ({@link AdminAccess}). */
     public static boolean canRead(ServerPlayer player) {
-        return player.createCommandSourceStack().hasPermission(2);
+        return AdminAccess.canAdminister(player);
     }
 
     /**
-     * Writing to an area: its node on top of op level 2, with permission level 4 as the escape hatch,
-     * so a server owner is never locked out by a node they would need the interface to grant.
+     * Writing to an area: read access, then the area's node. An explicit ALLOW opens it, an explicit DENY
+     * closes it even to the server owner, and a node that is not set opens it at permission level 4 only,
+     * so a fresh install's owner is not locked out by a node they would need the interface to grant.
      */
     public static boolean canEdit(ServerPlayer player, GuiArea area) {
+        if (!canRead(player)) return false;
         CommandSourceStack source = player.createCommandSourceStack();
-        if (!source.hasPermission(2)) return false;
-        if (source.hasPermission(4)) return true;
-        try {
-            return CustomPerm.permissions.hasGrantedNode(source, area.node());
-        } catch (Throwable t) {
-            if (t instanceof Error e) throw e;
-            CustomPerm.LOGGER.warn("[CustomPerm] Permission check for {} failed; denying interface writes.", area.node(), t);
-            return false;
-        }
+        return switch (AdminAccess.explicit(source, area.node())) {
+            case ALLOW -> true;
+            case DENY -> false;
+            case UNSET -> source.hasPermission(4);
+        };
     }
 
     /** One bit per area this player may write to. */

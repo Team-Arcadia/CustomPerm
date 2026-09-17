@@ -145,7 +145,8 @@ public class AliasManager {
 
         dispatcher.register(
             Commands.literal(alias)
-                .requires(src -> src.hasPermission(2) || PermissionService.get().hasPermission(src, permNode))
+                // Explicit node first, operators included; op level 2 only when the node is not set.
+                .requires(src -> PermissionService.get().hasPermission(src, permNode))
                 .executes(ctx -> {
                     CommandSourceStack source = ctx.getSource();
                     RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(alias);
