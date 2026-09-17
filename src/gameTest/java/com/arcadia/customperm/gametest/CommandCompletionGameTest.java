@@ -75,8 +75,9 @@ public class CommandCompletionGameTest {
             expect(problems, op, "customperm alias ", "add", "addstep", "removestep", "movestep", "setstep", "steps", "remove", "list");
             expect(problems, op, "customperm grade ", "create", "delete", "addperm", "removeperm", "adddeny", "removedeny", "assign", "unassign",
                     "setdefault", "cleardefault", "weight", "parent", "list");
-            expect(problems, op, "customperm grade parent ", "add", "remove", "list");
-            expect(problems, op, "customperm user ", "addperm", "removeperm", "adddeny", "removedeny", "list");
+            expect(problems, op, "customperm grade parent ", "add", "remove", "adddeny", "removedeny", "list");
+            expect(problems, op, "customperm user ", "addperm", "removeperm", "adddeny", "removedeny", "denygrade",
+                    "undenygrade", "list");
             expect(problems, op, "customperm grade setdefault ", GRADE);
             expect(problems, op, "customperm ratelimit ", "set", "persistence", "enable", "disable", "remove", "list");
 
@@ -128,6 +129,10 @@ public class CommandCompletionGameTest {
             expect(problems, op, "customperm grade parent add cp_s_parent ", GRADE);
             expectAbsent(problems, op, "customperm grade parent add " + GRADE + " ", "cp_s_parent", GRADE);
             expect(problems, op, "customperm grade parent remove " + GRADE + " ", "cp_s_parent");
+            // A refusable grade is any other grade neither inherited nor already refused.
+            expect(problems, op, "customperm grade parent adddeny cp_s_parent ", GRADE);
+            expectAbsent(problems, op, "customperm grade parent adddeny " + GRADE + " ", "cp_s_parent", GRADE);
+            expect(problems, op, "customperm user denygrade cp_s_owner ", GRADE);
 
             // Nodes carried by a player themselves.
             for (String sub : List.of("addperm", "removeperm", "adddeny", "removedeny", "list")) {

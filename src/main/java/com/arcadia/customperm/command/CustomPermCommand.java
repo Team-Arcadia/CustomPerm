@@ -68,13 +68,15 @@ import java.util.stream.Collectors;
  *                     adddeny|removedeny <grade> <node>   # most specific entry wins, DENY on a tie
  *                     weight <grade> <weight>             # breaks ties at the same specificity
  *                     parent add|remove <grade> <parent>  # inherit another grade, nearest entry wins
+ *                     parent adddeny|removedeny <grade> <parent>  # refuse a grade, wherever it is inherited
  *                     parent list <grade>
  *                     assign|unassign <player> <grade>    # online, or joined the server before
  *                     setdefault <grade> | cleardefault   # grade applied to every player
  *                     list
  * /customperm user    addperm|removeperm <player> <node>  # nodes carried by one player, above their grades
  *                     adddeny|removedeny <player> <node>
- *                     list <player>                       # grades held and own nodes
+ *                     denygrade|undenygrade <player> <grade>  # refuse a grade for one player
+ *                     list <player>                       # grades held, refused, and own nodes
  * /customperm alias   add <name> <cmd1[; cmd2; ...]>    # macro: split on ';'
  *                     addstep <name> <cmd>              # append a step to existing alias
  *                     removestep <name> <index>         # 0-based
@@ -234,6 +236,32 @@ public class CustomPermCommand {
                 .toList(), builder);
         };
 
+    /** Grades the grade named by the "grade" argument already refuses (for parent removedeny). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRADE_DENIED_PARENTS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(
+            GradeAdmin.deniedParents(StringArgumentType.getString(ctx, "grade")), builder);
+
+    /** Grades that could be refused: every other grade it does not inherit directly or refuse already. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_REFUSABLE_PARENTS =
+        (ctx, builder) -> {
+            String gradeName = StringArgumentType.getString(ctx, "grade");
+            List<String> parents = GradeAdmin.parents(gradeName);
+            List<String> refused = GradeAdmin.deniedParents(gradeName);
+            return SharedSuggestionProvider.suggest(CustomPerm.configManager.getGrades().grades.keySet().stream()
+                .filter(name -> !name.equals(gradeName) && !parents.contains(name) && !refused.contains(name))
+                .toList(), builder);
+        };
+
+    /** Grades the player named by the "player" argument refuses (for undenygrade). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_PLAYER_REFUSED_GRADES =
+        (ctx, builder) -> {
+            var server = ctx.getSource().getServer();
+            if (server == null) return builder.buildFuture();
+            return GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player")).profile()
+                .map(profile -> SharedSuggestionProvider.suggest(UserAdmin.refusedGrades(profile.getId()), builder))
+                .orElseGet(builder::buildFuture);
+        };
+
     /** Nodes the player named by the "player" argument carries themselves (for the remove subcommands). */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_USER_PERMS = userNodes(false);
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_USER_DENIES = userNodes(true);
@@ -326,6 +354,18 @@ public class CustomPermCommand {
                                 .then(Commands.argument("parent", StringArgumentType.word())
                                     .suggests(SUGGEST_GRADE_PARENTS)
                                     .executes(CustomPermCommand::gradeParentRemove))))
+                        .then(Commands.literal("adddeny").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_GRADES)
+                                .then(Commands.argument("parent", StringArgumentType.word())
+                                    .suggests(SUGGEST_REFUSABLE_PARENTS)
+                                    .executes(CustomPermCommand::gradeParentDeny))))
+                        .then(Commands.literal("removedeny").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_GRADES)
+                                .then(Commands.argument("parent", StringArgumentType.word())
+                                    .suggests(SUGGEST_GRADE_DENIED_PARENTS)
+                                    .executes(CustomPermCommand::gradeParentAllow))))
                         .then(Commands.literal("list")
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
@@ -375,6 +415,18 @@ public class CustomPermCommand {
                             .then(Commands.argument("node", StringArgumentType.greedyString())
                                 .suggests(SUGGEST_USER_DENIES)
                                 .executes(ctx -> userNode(ctx, true, false)))))
+                    .then(Commands.literal("denygrade").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("player", StringArgumentType.word())
+                            .suggests(SUGGEST_KNOWN_PLAYERS)
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_GRADES)
+                                .executes(ctx -> userGradeRefusal(ctx, true)))))
+                    .then(Commands.literal("undenygrade").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("player", StringArgumentType.word())
+                            .suggests(SUGGEST_KNOWN_PLAYERS)
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_PLAYER_REFUSED_GRADES)
+                                .executes(ctx -> userGradeRefusal(ctx, false)))))
                     .then(Commands.literal("list")
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
@@ -706,6 +758,16 @@ public class CustomPermCommand {
             StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"))));
     }
 
+    private static int gradeParentDeny(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, guarded(ctx, () -> GradeAdmin.denyParent(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"))));
+    }
+
+    private static int gradeParentAllow(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, guarded(ctx, () -> GradeAdmin.allowParent(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"))));
+    }
+
     private static int gradeParentList(CommandContext<CommandSourceStack> ctx) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return report(ctx, refusal);
@@ -714,9 +776,13 @@ public class CustomPermCommand {
             return report(ctx, AdminResult.fail("No such grade: " + gradeName));
         }
         List<String> parents = GradeAdmin.parents(gradeName);
+        List<String> refused = GradeAdmin.deniedParents(gradeName);
         ctx.getSource().sendSuccess(() -> Component.literal(parents.isEmpty()
             ? gradeName + " inherits nothing."
             : gradeName + " inherits: " + String.join(", ", parents)), false);
+        if (!refused.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal("  refuses: " + String.join(", ", refused)), false);
+        }
         return 1;
     }
 
@@ -794,6 +860,21 @@ public class CustomPermCommand {
             : UserAdmin.removeNode(server, profile.get().getId(), profile.get().getName(), node, deny)));
     }
 
+    /** Makes a player refuse a grade, or stop refusing it. */
+    private static int userGradeRefusal(CommandContext<CommandSourceStack> ctx, boolean refuse) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        var server = ctx.getSource().getServer();
+        if (server == null) return 0;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
+        var profile = resolution.profile();
+        if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
+        String grade = StringArgumentType.getString(ctx, "grade");
+        return report(ctx, guarded(ctx, () -> refuse
+            ? UserAdmin.refuseGrade(server, profile.get().getId(), profile.get().getName(), grade)
+            : UserAdmin.acceptGrade(server, profile.get().getId(), profile.get().getName(), grade)));
+    }
+
     /** What one player holds: their grades, then the nodes they carry themselves. */
     private static int userList(CommandContext<CommandSourceStack> ctx) {
         AdminResult refusal = GradeAdmin.unavailable();
@@ -807,7 +888,11 @@ public class CustomPermCommand {
         java.util.UUID uuid = profile.get().getId();
         List<String> assigned = CustomPerm.configManager.getGrades().userGrades
             .getOrDefault(uuid.toString(), List.of());
+        List<String> refused = UserAdmin.refusedGrades(uuid);
         ctx.getSource().sendSuccess(() -> Component.literal(name + " — grades: " + join(assigned)), false);
+        if (!refused.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal("  refuses: " + String.join(", ", refused)), false);
+        }
         ctx.getSource().sendSuccess(() -> Component.literal("  own allow: " + join(UserAdmin.nodes(uuid, false))), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  own deny : " + join(UserAdmin.nodes(uuid, true))), false);
         return 1;

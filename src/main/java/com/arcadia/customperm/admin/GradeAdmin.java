@@ -160,6 +160,10 @@ public final class GradeAdmin {
         if (grade.parents.contains(parentName)) {
             return AdminResult.ok(gradeName + " already inherits " + parentName + " — no change.");
         }
+        if (grade.deniedParents.contains(parentName)) {
+            return AdminResult.fail(gradeName + " refuses " + parentName + ": remove that refusal first, "
+                    + "or the file would say both at once.");
+        }
         List<String> loop = inheritancePath(parentName, gradeName);
         if (loop != null) {
             return AdminResult.fail("Refused: " + String.join(" inherits ", loop) + ", so " + gradeName
@@ -183,6 +187,50 @@ public final class GradeAdmin {
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
         return AdminResult.ok(gradeName + " no longer inherits " + parentName).warn(warning);
+    }
+
+    /**
+     * Makes {@code gradeName} refuse {@code parentName}, so nothing it inherits brings that grade back. The
+     * refusal removes the grade from this chain; it never turns what that grade allows into a denial.
+     */
+    public static AdminResult denyParent(MinecraftServer server, String gradeName, String parentName) {
+        AdminResult refusal = unavailable();
+        if (refusal != null) return refusal;
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        if (!grades().grades.containsKey(parentName)) return AdminResult.fail("No such grade: " + parentName);
+        if (gradeName.equals(parentName)) return AdminResult.fail("A grade cannot refuse itself.");
+        if (grade.parents.contains(parentName)) {
+            return AdminResult.fail(gradeName + " inherits " + parentName + " directly: remove that parent "
+                    + "instead of refusing it.");
+        }
+        if (grade.deniedParents.contains(parentName)) {
+            return AdminResult.ok(gradeName + " already refuses " + parentName + " — no change.");
+        }
+        grade.deniedParents.add(parentName);
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
+        return AdminResult.ok(gradeName + " now refuses " + parentName).warn(warning)
+                .note("Nothing " + gradeName + " inherits brings it back. Other grades a player holds are unaffected.");
+    }
+
+    public static AdminResult allowParent(MinecraftServer server, String gradeName, String parentName) {
+        AdminResult refusal = unavailable();
+        if (refusal != null) return refusal;
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        if (!grade.deniedParents.remove(parentName)) {
+            return AdminResult.ok(gradeName + " does not refuse " + parentName + " — no change.");
+        }
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
+        return AdminResult.ok(gradeName + " no longer refuses " + parentName).warn(warning);
+    }
+
+    /** The grades {@code gradeName} refuses, empty for an unknown grade. */
+    public static List<String> deniedParents(String gradeName) {
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        return grade == null ? List.of() : List.copyOf(grade.deniedParents);
     }
 
     /** The grades {@code gradeName} inherits directly, nearest first; empty for an unknown grade. */
@@ -223,6 +271,10 @@ public final class GradeAdmin {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
         if (!grades().grades.containsKey(gradeName)) return AdminResult.fail("No such grade: " + gradeName);
+        if (grades().userDeniedGrades.getOrDefault(profile.getId().toString(), List.of()).contains(gradeName)) {
+            return AdminResult.fail(profile.getName() + " refuses " + gradeName + ": remove that refusal first, "
+                    + "or the file would say both at once.");
+        }
         List<String> list = grades().userGrades.computeIfAbsent(profile.getId().toString(), k -> new ArrayList<>());
         if (list.contains(gradeName)) {
             return AdminResult.ok(profile.getName() + " is already assigned to " + gradeName + " — no change.");

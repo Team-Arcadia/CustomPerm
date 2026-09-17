@@ -332,6 +332,65 @@ public class GradeAndDiagnosticsGameTest {
         helper.succeed();
     }
 
+    /**
+     * A refused grade is not read: a grade can refuse what it inherits further up, a player can refuse a
+     * grade one of their grades brings, and the two ways of saying a thing and its opposite are answered.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void refusedGradesAreNotRead(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        String uuid = null;
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_g_refuse", 0);
+             Exposure gamemode = Exposure.of(server, "gamemode")) {
+            uuid = player.uuid().toString();
+            for (String name : List.of("cp_gt_r_base", "cp_gt_r_mid", "cp_gt_r_leaf")) {
+                expect(ServerCommands.run(server, "customperm grade create " + name), "Created grade");
+            }
+            ServerCommands.run(server, "customperm grade addperm cp_gt_r_base customperm.command.gamemode");
+            ServerCommands.run(server, "customperm grade parent add cp_gt_r_mid cp_gt_r_base");
+            ServerCommands.run(server, "customperm grade parent add cp_gt_r_leaf cp_gt_r_mid");
+            grades.userGrades.put(uuid, new java.util.ArrayList<>(List.of("cp_gt_r_leaf")));
+            if (!player.canUse("gamemode")) fail("The grandparent ALLOW must reach the player first.");
+
+            // A grade refuses what it inherits further up.
+            expect(ServerCommands.run(server, "customperm grade parent adddeny cp_gt_r_leaf cp_gt_r_base"),
+                    "cp_gt_r_leaf now refuses cp_gt_r_base");
+            if (player.canUse("gamemode")) fail("The refused grade must not be reached through the chain.");
+            expect(ServerCommands.run(server, "customperm grade parent list cp_gt_r_leaf"), "refuses: cp_gt_r_base");
+            expect(ServerCommands.run(server, "customperm grade parent add cp_gt_r_leaf cp_gt_r_base"),
+                    "refuses cp_gt_r_base: remove that refusal first");
+            expect(ServerCommands.run(server, "customperm grade parent adddeny cp_gt_r_leaf cp_gt_r_mid"),
+                    "inherits cp_gt_r_mid directly: remove that parent instead");
+            expect(ServerCommands.run(server, "customperm grade parent adddeny cp_gt_r_leaf cp_gt_r_leaf"),
+                    "cannot refuse itself");
+            expect(ServerCommands.run(server, "customperm grade parent removedeny cp_gt_r_leaf cp_gt_r_base"),
+                    "no longer refuses");
+            if (!player.canUse("gamemode")) fail("Taking the refusal back must open the command again.");
+
+            // A player refuses a grade one of their grades brings.
+            expect(ServerCommands.run(server, "customperm user denygrade cp_g_refuse cp_gt_r_base"),
+                    "cp_g_refuse now refuses cp_gt_r_base");
+            if (player.canUse("gamemode")) fail("A grade the player refuses must not be read for them.");
+            expect(ServerCommands.run(server, "customperm user list cp_g_refuse"), "refuses: cp_gt_r_base");
+            expect(ServerCommands.run(server, "customperm grade assign cp_g_refuse cp_gt_r_base"),
+                    "refuses cp_gt_r_base: remove that refusal first");
+            expect(ServerCommands.run(server, "customperm user denygrade cp_g_refuse cp_gt_r_leaf"),
+                    "is assigned cp_gt_r_leaf directly: unassign it instead");
+            expect(ServerCommands.run(server, "customperm user undenygrade cp_g_refuse cp_gt_r_base"),
+                    "no longer refuses");
+            if (!player.canUse("gamemode")) fail("Taking the player refusal back must open the command again.");
+        } finally {
+            grades.grades.keySet().removeIf(name -> name.startsWith("cp_gt_r_"));
+            if (uuid != null) {
+                grades.userGrades.remove(uuid);
+                grades.userDeniedGrades.remove(uuid);
+            }
+        }
+        helper.succeed();
+    }
+
     private static void expect(List<String> lines, String fragment) {
         if (!ServerCommands.contains(lines, fragment)) fail("Expected output containing '" + fragment + "', got: " + lines);
     }

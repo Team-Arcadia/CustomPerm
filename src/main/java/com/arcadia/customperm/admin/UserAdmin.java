@@ -12,6 +12,7 @@ import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.GradesConfig;
 import net.minecraft.server.MinecraftServer;
 
+import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -80,6 +81,48 @@ public final class UserAdmin {
                 .warn(warning);
     }
 
+    /**
+     * Makes one player refuse {@code gradeName}: it is not read for them, whichever grade of theirs would
+     * have inherited it, the default grade included. The refusal removes the grade from their resolution;
+     * it never turns what that grade allows into a denial.
+     */
+    public static AdminResult refuseGrade(MinecraftServer server, UUID uuid, String displayName, String gradeName) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        if (!grades().grades.containsKey(gradeName)) return AdminResult.fail("No such grade: " + gradeName);
+        if (grades().userGrades.getOrDefault(uuid.toString(), List.of()).contains(gradeName)) {
+            return AdminResult.fail(displayName + " is assigned " + gradeName + " directly: unassign it instead "
+                    + "of refusing it.");
+        }
+        List<String> refused = grades().userDeniedGrades.computeIfAbsent(uuid.toString(), key -> new ArrayList<>());
+        if (refused.contains(gradeName)) {
+            return AdminResult.ok(displayName + " already refuses " + gradeName + " — no change.");
+        }
+        refused.add(gradeName);
+        String warning = ConfigAdmin.persist();
+        GradeAdmin.resyncPlayer(server, uuid);
+        return AdminResult.ok(displayName + " now refuses " + gradeName).warn(warning)
+                .note("Nothing they hold brings it back, the default grade included.");
+    }
+
+    public static AdminResult acceptGrade(MinecraftServer server, UUID uuid, String displayName, String gradeName) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        List<String> refused = grades().userDeniedGrades.get(uuid.toString());
+        if (refused == null || !refused.remove(gradeName)) {
+            return AdminResult.ok(displayName + " does not refuse " + gradeName + " — no change.");
+        }
+        if (refused.isEmpty()) grades().userDeniedGrades.remove(uuid.toString());
+        String warning = ConfigAdmin.persist();
+        GradeAdmin.resyncPlayer(server, uuid);
+        return AdminResult.ok(displayName + " no longer refuses " + gradeName).warn(warning);
+    }
+
+    /** The grades this player refuses, empty when they refuse none. */
+    public static List<String> refusedGrades(UUID uuid) {
+        return List.copyOf(grades().userDeniedGrades.getOrDefault(uuid.toString(), List.of()));
+    }
+
     /** The player's own nodes of one kind, sorted, empty when they carry none. */
     public static List<String> nodes(UUID uuid, boolean deny) {
         Set<String> nodes = holder(deny).get(uuid.toString());
@@ -89,6 +132,7 @@ public final class UserAdmin {
     /** Every player who carries a node of their own or a grade, as UUID strings. */
     public static Set<String> knownHolders() {
         Set<String> holders = new LinkedHashSet<>(grades().userGrades.keySet());
+        holders.addAll(grades().userDeniedGrades.keySet());
         holders.addAll(grades().userPermissions.keySet());
         holders.addAll(grades().userDeniedPermissions.keySet());
         return holders;
