@@ -8,12 +8,14 @@
  */
 package com.arcadia.customperm.client.gui.admin;
 
+import com.arcadia.customperm.client.gui.kit.Atlas;
 import com.arcadia.customperm.client.gui.kit.CpButton;
 import com.arcadia.customperm.client.gui.kit.CpScreen;
 import com.arcadia.customperm.client.gui.kit.Icon;
 import com.arcadia.customperm.client.gui.kit.Palette;
 import com.arcadia.customperm.client.gui.kit.Rect;
 import com.arcadia.customperm.client.gui.kit.Skin;
+import com.arcadia.customperm.client.gui.kit.WindowLayout;
 import com.arcadia.customperm.network.gui.GuiAction;
 import com.arcadia.customperm.network.gui.GuiActionPayload;
 import com.arcadia.customperm.network.gui.GuiArea;
@@ -86,8 +88,30 @@ public abstract class AdminScreen extends CpScreen {
         return true;
     }
 
+    /** A banner shown above the page content, e.g. why this page is not active. */
+    public record Banner(Icon icon, String text, int color) {
+    }
+
+    /** The banner for the current state, or {@code null} for none. */
+    protected Banner banner() {
+        return null;
+    }
+
+    private Rect bannerRect;
+
     @Override
     protected final void build() {
+        Banner banner = banner();
+        bannerRect = null;
+        if (banner != null) {
+            // Reserve the banner's height at the top of the content area, so every page lays out under it.
+            Rect content = layout.content();
+            int textW = content.w() - Atlas.ICON_SIZE - 16;
+            int lines = Math.max(1, Math.min(3, font.split(Component.literal(banner.text()), textW).size()));
+            bannerRect = content.top(lines * 10 + 8);
+            layout = new WindowLayout(layout.window(), layout.header(), layout.sidebar(),
+                    content.belowTop(bannerRect.h() + 6), layout.footer());
+        }
         buildNavigation();
         buildToolbar();
         buildPage();
@@ -122,6 +146,16 @@ public abstract class AdminScreen extends CpScreen {
 
     @Override
     protected void renderPage(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        Banner banner = banner();
+        if (banner != null && bannerRect != null) {
+            g.fill(bannerRect.x(), bannerRect.y(), bannerRect.right(), bannerRect.bottom(),
+                    Palette.mix(Palette.BG1, banner.color(), 0.18f));
+            Skin.outline(g, bannerRect, Palette.mix(Palette.BG1, banner.color(), 0.6f));
+            g.fill(bannerRect.x(), bannerRect.y(), bannerRect.x() + 2, bannerRect.bottom(), banner.color());
+            Skin.icon(g, banner.icon(), bannerRect.x() + 7, bannerRect.y() + 5, banner.color());
+            paragraph(g, banner.text(), new Rect(bannerRect.x() + Atlas.ICON_SIZE + 12, bannerRect.y() + 4,
+                    bannerRect.w() - Atlas.ICON_SIZE - 16, bannerRect.h() - 4), bannerRect.y() + 5, Palette.TEXT);
+        }
         renderContent(g, mouseX, mouseY, partialTick);
     }
 

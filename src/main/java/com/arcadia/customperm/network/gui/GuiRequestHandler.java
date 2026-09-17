@@ -64,16 +64,19 @@ public final class GuiRequestHandler {
         sendPage(player, page, true);
     }
 
-    /** Opens the LuckPerms editor on a section; does nothing unless LuckPerms is the active backend. */
+    /** Opens the LuckPerms editor on a section; does nothing unless the LuckPerms mod is installed. */
     public static void openLuckPerms(ServerPlayer player, String section) {
-        if (!CustomPerm.isLuckPermsActive() || player.hasDisconnected() || !clientSupportsInterface(player)) return;
+        if (!CustomPerm.isLuckPermsPresent() || player.hasDisconnected() || !clientSupportsInterface(player)) return;
         PacketDistributor.sendToPlayer(player,
                 new GuiPagePayload(true, GuiSnapshots.context(player), new LuckPermsData(section)));
     }
 
-    /** Whether a page can be shown at all: the LuckPerms editor only exists while LuckPerms is active. */
+    /**
+     * Whether a page can be shown at all: the LuckPerms editor exists only when the LuckPerms mod is
+     * installed. Installed but not running, it is still shown, with a banner saying why it cannot edit.
+     */
     public static boolean available(GuiPage page) {
-        return page != GuiPage.LUCKPERMS || CustomPerm.isLuckPermsActive();
+        return page != GuiPage.LUCKPERMS || CustomPerm.isLuckPermsPresent();
     }
 
     // ------------------------------------------------------------------ packets

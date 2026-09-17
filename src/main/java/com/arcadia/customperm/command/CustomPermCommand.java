@@ -72,7 +72,7 @@ import java.util.stream.Collectors;
  * /customperm test    <player> <node>                   # debug: report grant/deny + backend
  * /customperm reload
  * /customperm gui [page]                            # open the admin interface (CustomPerm needed client-side)
- * /customperm gui luckperms [groups|players|tracks]  # LuckPerms editor, only while LuckPerms is active
+ * /customperm gui luckperms [groups|players|tracks]  # LuckPerms editor, only when LuckPerms is installed
  *
  * The mod ships with NO commands pre-exposed. Each admin chooses what to expose via
  * /customperm command add. Until exposed, every command keeps its vanilla op-only behaviour.
@@ -397,10 +397,9 @@ public class CustomPermCommand {
     }
 
     private static int openLuckPermsEditor(CommandContext<CommandSourceStack> ctx, String section) {
-        if (!CustomPerm.isLuckPermsActive()) {
-            ctx.getSource().sendFailure(Component.literal(CustomPerm.isLuckPermsPresent()
-                ? "The LuckPerms editor is unavailable: LuckPerms is installed but not active on this server (see /customperm status)."
-                : "The LuckPerms editor is only available when LuckPerms is installed. Permissions here come from CustomPerm grades: /customperm gui grades."));
+        if (!CustomPerm.isLuckPermsPresent()) {
+            ctx.getSource().sendFailure(Component.literal(
+                "The LuckPerms editor is only available when LuckPerms is installed. Permissions here come from CustomPerm grades: /customperm gui grades."));
             return 0;
         }
         ServerPlayer player = guiPlayer(ctx);

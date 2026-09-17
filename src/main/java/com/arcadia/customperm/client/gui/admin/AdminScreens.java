@@ -53,10 +53,11 @@ public final class AdminScreens {
         entries.add(new NavEntry(GuiPage.COMMANDS, "Commands", Icon.COMMAND));
         entries.add(new NavEntry(GuiPage.ALIASES, "Aliases", Icon.ALIAS));
         entries.add(new NavEntry(GuiPage.RATE_LIMITS, "Rate limits", Icon.CLOCK));
-        // Grades decide nothing while LuckPerms is active: no entry rather than a page that only says so.
-        if (context.backend().usesInternalGrades()) entries.add(new NavEntry(GuiPage.GRADES, "Grades", Icon.SHIELD));
-        // The LuckPerms editor only exists while LuckPerms is active: without it the entry would open nothing.
-        if (context.luckPermsActive()) entries.add(new NavEntry(GuiPage.LUCKPERMS, "LuckPerms", Icon.SHIELD));
+        // Grades are always reachable, even when they decide nothing: an admin must be able to read the
+        // fallback while LuckPerms is down. The page says whether it is active.
+        entries.add(new NavEntry(GuiPage.GRADES, "Grades", Icon.SHIELD));
+        // The LuckPerms editor needs the LuckPerms mod; installed but not running, it opens on a banner.
+        if (context.luckPermsInstalled()) entries.add(new NavEntry(GuiPage.LUCKPERMS, "LuckPerms", Icon.LOCK));
         return entries;
     }
 

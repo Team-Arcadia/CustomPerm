@@ -54,27 +54,27 @@ public class GuiPayloadCodecGameTest {
         DashboardData data = new DashboardData("internal", true, 140, 3, 2, 4, 1, 5, 7, true,
                 List.of(new DashboardData.Alert("CONFIG_LOAD_FAILED", "grades.json is invalid")));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
-                new GuiContext(BackendKind.INTERNAL_FALLBACK, GuiArea.ALIASES.bit() | GuiArea.GRADES.bit(), 1), data));
+                new GuiContext(BackendKind.INTERNAL_FALLBACK, GuiArea.ALIASES.bit() | GuiArea.GRADES.bit(), 1, false), data));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
-                new GuiContext(BackendKind.LUCKPERMS, 0, 0), new CommandsData(List.of(
+                new GuiContext(BackendKind.LUCKPERMS, 0, 0, true), new CommandsData(List.of(
                         new CommandsData.Row("gamemode", true, true, false, true, false),
                         new CommandsData.Row("oldmod", true, false, true, false, true)), true)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
-                new GuiContext(BackendKind.INTERNAL, GuiArea.ALIASES.bit(), 0), new AliasesData(List.of(
+                new GuiContext(BackendKind.INTERNAL, GuiArea.ALIASES.bit(), 0, true), new AliasesData(List.of(
                         new AliasesData.Alias("heal", List.of("effect give @s instant_health", "say healed"), true, 3, 60, true),
                         new AliasesData.Alias("kit", List.of("give @s bread 8"), false, 0, 0, false)))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
-                new GuiContext(BackendKind.DENY, 0, 2), new RateLimitsData(List.of(
+                new GuiContext(BackendKind.DENY, 0, 2, true), new RateLimitsData(List.of(
                         new RateLimitsData.Rule("gamemode", 3, 3600, true, false, RateLimitsData.Target.EXPOSED_COMMAND),
                         new RateLimitsData.Rule("ghost", 1, 5, false, true, RateLimitsData.Target.NONE)),
                         List.of("heal", "tp"))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
-                new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0), new GradesData(List.of(
+                new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0, true), new GradesData(List.of(
                         new GradesData.Grade("vip", List.of("customperm.command.fly"), List.of("customperm.command.op"),
                                 List.of(new GradesData.Member("00000000-0000-0000-0000-000000000001", "Alex", true)))),
-                        List.of("Alex", "Steve"))));
+                        List.of("Alex", "Steve"), "internal")));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
-                new GuiContext(BackendKind.LUCKPERMS, GuiArea.LUCKPERMS.bit(), 0), new LuckPermsData(LuckPermsData.TRACKS)));
+                new GuiContext(BackendKind.LUCKPERMS, GuiArea.LUCKPERMS.bit(), 0, true), new LuckPermsData(LuckPermsData.TRACKS)));
         expectRoundTrip(GuiRequestPayload.STREAM_CODEC, new GuiRequestPayload("dashboard"));
         expectRoundTrip(GuiActionPayload.STREAM_CODEC, new GuiActionPayload("RELOAD", List.of("a", "b c"), "dashboard"));
         expectRoundTrip(GuiActionResultPayload.STREAM_CODEC, GuiActionResultPayload.fail("You do not have x."));

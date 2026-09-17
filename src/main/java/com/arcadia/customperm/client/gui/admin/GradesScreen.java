@@ -37,8 +37,9 @@ import java.util.Objects;
  * permission nodes (ALLOW, or DENY which wins over any ALLOW) and its players, who can be assigned
  * while offline as long as they joined the server before.
  *
- * <p>While LuckPerms is the active backend, grades decide nothing: the page says so and stays read-only
- * rather than offering edits that would have no effect.
+ * <p>The page is always reachable, so the fallback grades can be read while LuckPerms runs or fails.
+ * A banner says whether grades currently decide permissions; while LuckPerms is the active backend the
+ * page is read-only, like the grade commands.
  */
 public final class GradesScreen extends AdminScreen {
 
@@ -131,6 +132,24 @@ public final class GradesScreen extends AdminScreen {
         if (pendingGrade != null) gradeList.selectByKey(pendingGrade);
         pendingGrade = null;
         fillDetails();
+    }
+
+    @Override
+    protected Banner banner() {
+        boolean internalFallback = "internal".equalsIgnoreCase(data.fallbackMode());
+        return switch (context.backend()) {
+            case INTERNAL -> null;
+            case LUCKPERMS -> new Banner(Icon.INFO, "Not active: LuckPerms decides permissions, these grades are read-only. "
+                    + (internalFallback
+                    ? "They take over if LuckPerms becomes unavailable (luckPermsFallbackMode=internal)."
+                    : "They are not used even if LuckPerms fails (luckPermsFallbackMode=" + data.fallbackMode() + ")."),
+                    Palette.INFO);
+            case INTERNAL_FALLBACK -> new Banner(Icon.WARN, "Active as a fallback: LuckPerms is unavailable, these grades "
+                    + "decide permissions until the server restarts.", Palette.WARN);
+            case DENY -> new Banner(Icon.WARN, "Not active: LuckPerms is unavailable and luckPermsFallbackMode=deny, so every "
+                    + "permission CustomPerm manages is denied until restart. Grades stay editable for luckPermsFallbackMode=internal.",
+                    Palette.DANGER);
+        };
     }
 
     private boolean editable() {
@@ -343,14 +362,6 @@ public final class GradesScreen extends AdminScreen {
         Rect in = inner();
         Skin.panel(g, in.inset(-8));
         GradesData.Grade grade = gradeList.getSelected();
-        if (context.luckPermsActive()) {
-            Skin.icon(g, Icon.INFO, in.x(), in.y(), Palette.INFO);
-            int bottom = grade == null ? in.bottom() : listArea().y() - 4;
-            paragraph(g, "LuckPerms manages permissions on this server: internal grades are kept but decide nothing. "
-                    + "Groups and players are edited with LuckPerms.",
-                    new Rect(in.x() + 14, in.y(), in.w() - 14 - FIELD - 6, bottom - in.y()), in.y(), Palette.INFO);
-            if (grade == null) return;
-        }
         if (grade == null) {
             paragraph(g, "Select a grade to edit its nodes and players. A player can hold several grades; a DENY in any "
                     + "of them wins over an ALLOW in another.", in, in.y(), Palette.TEXT_MUTE);
@@ -359,11 +370,9 @@ public final class GradesScreen extends AdminScreen {
             }
             return;
         }
-        if (!context.luckPermsActive()) {
-            Skin.text(g, font, grade.name(), in.x(), in.y(), in.w() - FIELD - 6, Palette.TEXT);
-            String sub = grade.allow().size() + " allowed, " + grade.deny().size() + " denied, " + grade.members().size()
-                    + " player(s)" + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
-            Skin.text(g, font, sub, in.x(), in.y() + 11, in.w() - FIELD - 6, Palette.TEXT_MUTE);
-        }
+        Skin.text(g, font, grade.name(), in.x(), in.y(), in.w() - FIELD - 6, Palette.TEXT);
+        String sub = grade.allow().size() + " allowed, " + grade.deny().size() + " denied, " + grade.members().size()
+                + " player(s)" + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
+        Skin.text(g, font, sub, in.x(), in.y() + 11, in.w() - FIELD - 6, Palette.TEXT_MUTE);
     }
 }

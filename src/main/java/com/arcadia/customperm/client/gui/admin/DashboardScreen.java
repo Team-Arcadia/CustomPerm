@@ -117,17 +117,15 @@ public final class DashboardScreen extends AdminScreen {
     }
 
     private CpTile gradesTile() {
-        if (context.backend().usesInternalGrades()) {
-            return new CpTile(Icon.SHIELD, "Grades", String.valueOf(data.grades()),
-                    data.playersWithGrades() + (data.playersWithGrades() == 1 ? " player" : " players"),
-                    Palette.TEXT, () -> navigate(GuiPage.GRADES));
-        }
-        if (context.luckPermsActive()) {
-            return new CpTile(Icon.SHIELD, "Grades", "LuckPerms", "edit groups", Palette.TEXT,
-                    () -> navigate(GuiPage.LUCKPERMS));
-        }
-        // Deny backend: neither grades nor LuckPerms decide anything until restart.
-        return new CpTile(Icon.SHIELD, "Grades", "Unused", "all denied", Palette.DANGER, null);
+        // Grades exist on every backend; the detail says whether they are the ones deciding.
+        String detail = switch (context.backend()) {
+            case INTERNAL_FALLBACK -> "fallback, active";
+            case LUCKPERMS -> "LuckPerms decides";
+            case DENY -> "not used: all denied";
+            case INTERNAL -> data.playersWithGrades() + (data.playersWithGrades() == 1 ? " player" : " players");
+        };
+        return new CpTile(Icon.SHIELD, "Grades", String.valueOf(data.grades()), detail,
+                context.backend().usesInternalGrades() ? Palette.TEXT : Palette.TEXT_DIM, () -> navigate(GuiPage.GRADES));
     }
 
     private void confirmReload() {

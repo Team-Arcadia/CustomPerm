@@ -32,7 +32,7 @@ public final class GuiSnapshots {
 
     public static GuiContext context(ServerPlayer player) {
         return new GuiContext(CustomPerm.backendKind(), GuiAccess.editMask(player),
-                AdminNotifier.activeAlerts().size());
+                AdminNotifier.activeAlerts().size(), CustomPerm.isLuckPermsPresent());
     }
 
     public static GuiPageData page(GuiPage page, ServerPlayer player) {
@@ -76,7 +76,7 @@ public final class GuiSnapshots {
         }
         List<String> known = server == null ? List.of()
                 : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
-        return new GradesData(grades, known);
+        return new GradesData(grades, known, CustomPerm.configManager.getSettings().luckPermsFallbackMode);
     }
 
     static RateLimitsData rateLimits() {

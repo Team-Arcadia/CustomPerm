@@ -20,8 +20,9 @@ import java.util.List;
  *
  * @param knownPlayers online players and players who joined before, sorted; the only names a grade
  *                     can be assigned to
+ * @param fallbackMode {@code luckPermsFallbackMode}: whether grades take over when LuckPerms fails
  */
-public record GradesData(List<Grade> grades, List<String> knownPlayers) implements GuiPageData {
+public record GradesData(List<Grade> grades, List<String> knownPlayers, String fallbackMode) implements GuiPageData {
 
     /** Most nodes carried per grade, per kind. */
     public static final int NODES_MAX = 1024;
@@ -47,6 +48,7 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers) implemen
     public static final StreamCodec<ByteBuf, GradesData> CODEC = StreamCodec.composite(
             GuiCodecs.list(Grade.CODEC, GuiCodecs.SERVER_LIST_MAX), GradesData::grades,
             GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), GradesData::knownPlayers,
+            GuiCodecs.TEXT, GradesData::fallbackMode,
             GradesData::new);
 
     @Override

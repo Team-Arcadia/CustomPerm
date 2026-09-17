@@ -46,8 +46,8 @@ import java.util.function.Supplier;
  * section the admin left is ignored. An edit names the scope to refresh, and a successful edit also
  * reloads the list, whose counts may have changed.
  *
- * <p>Only reachable while LuckPerms is the active backend: the server refuses to open it otherwise and
- * the navigation has no entry for it.
+ * <p>Only reachable when the LuckPerms mod is installed. Installed but not running (singleplayer, failed
+ * enable), the page shows a banner explaining why and no editor, since there is no store to read.
  */
 public final class LuckPermsScreen extends AdminScreen implements AdminScreens.LpSnapshotConsumer {
 
@@ -183,10 +183,22 @@ public final class LuckPermsScreen extends AdminScreen implements AdminScreens.L
 
     @Override
     protected void apply(GuiPageData data) {
+        if (!context.luckPermsActive()) return;
         // Refresh button or navigation onto this page: reload what is on screen.
         showLoading();
         requestList();
         requestDetail();
+    }
+
+    @Override
+    protected Banner banner() {
+        if (context.luckPermsActive()) return null;
+        String effect = context.backend() == com.arcadia.customperm.perm.BackendKind.INTERNAL_FALLBACK
+                ? "CustomPerm grades decide permissions instead"
+                : "every permission CustomPerm manages is denied";
+        return new Banner(Icon.WARN, "Not active: LuckPerms is installed but not running on this server (" + effect
+                + "). The editor needs LuckPerms running: see the dashboard alert, then restart the server once fixed.",
+                Palette.DANGER);
     }
 
     private boolean editable() {
@@ -400,6 +412,7 @@ public final class LuckPermsScreen extends AdminScreen implements AdminScreens.L
 
     @Override
     protected void buildPage() {
+        if (!context.luckPermsActive()) return;
         if (!requested) {
             requested = true;
             showLoading();
@@ -463,7 +476,7 @@ public final class LuckPermsScreen extends AdminScreen implements AdminScreens.L
             String label = switch (t) {
                 case NODES -> "Nodes";
                 case PARENTS -> parentsLabel;
-                case META -> "Chat & meta";
+                case META -> "Meta";
             };
             CpButton button = CpButton.ghost(Component.literal(label), () -> {
                 tab = t;
@@ -853,6 +866,7 @@ public final class LuckPermsScreen extends AdminScreen implements AdminScreens.L
 
     @Override
     protected void renderContent(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        if (!context.luckPermsActive()) return;
         Rect in = inner();
         Skin.panel(g, in.inset(-8));
         if (!editable()) {

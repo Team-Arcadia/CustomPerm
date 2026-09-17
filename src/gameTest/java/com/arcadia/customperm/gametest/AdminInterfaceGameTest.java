@@ -452,7 +452,7 @@ public class AdminInterfaceGameTest {
         helper.succeed();
     }
 
-    /** Area 7: the LuckPerms editor page exists only while LuckPerms is active, whichever way it is asked for. */
+    /** Area 7: the LuckPerms editor page exists only when LuckPerms is installed, whichever way it is asked for. */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void luckPermsEditorOpensOnlyWithLuckPerms(GameTestHelper helper) {
         try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_lpeditor", 4)) {
@@ -460,7 +460,9 @@ public class AdminInterfaceGameTest {
             owner.type("customperm gui luckperms players");
             GuiRequestHandler.handleRequest(new GuiRequestPayload(GuiPage.LUCKPERMS.id()), owner.payloadContext());
             var pages = owner.payloads(GuiPagePayload.class);
-            if (CustomPerm.isLuckPermsActive()) {
+            if (pages.stream().anyMatch(p -> p.context().luckPermsInstalled() != CustomPerm.isLuckPermsPresent()))
+                fail("The page context must say whether LuckPerms is installed.");
+            if (CustomPerm.isLuckPermsPresent()) {
                 if (pages.size() != 2 || !(pages.get(0).data() instanceof LuckPermsData first)
                         || !first.section().equals(LuckPermsData.PLAYERS) || !pages.get(0).open())
                     fail("With LuckPerms active the command must open the editor on the players section, got " + pages);

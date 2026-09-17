@@ -14,8 +14,8 @@ import net.minecraft.network.codec.StreamCodec;
 /**
  * LuckPerms editor page. Only an entry point: the editor's content travels on the dedicated LuckPerms
  * channel ({@code RequestLpSyncPayload} / {@code LpSyncPayload}), loaded per section because LuckPerms
- * storage reads are asynchronous and can be remote. The server never sends this page unless LuckPerms
- * is the active backend.
+ * storage reads are asynchronous and can be remote. The server sends this page only when the LuckPerms
+ * mod is installed; the client shows a banner instead of the editor while LuckPerms is not running.
  *
  * @param section section to show first: {@link #GROUPS}, {@link #PLAYERS} or {@link #TRACKS}
  */
