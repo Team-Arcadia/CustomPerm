@@ -8,6 +8,7 @@
  */
 package com.arcadia.customperm.config;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -33,6 +34,13 @@ public class GradesConfig {
         public Set<String> permissions = new HashSet<>();        // ALLOW nodes
         public Set<String> deniedPermissions = new HashSet<>();  // DENY nodes (H2.1)
         /**
+         * Grades this one inherits from, like a LuckPerms group parent. A parent's entry applies where
+         * this grade says nothing as precise about the node, so an entry here overrides the same entry
+         * inherited from a parent. A name that matches no grade is ignored, and a cycle stops at the
+         * grade it comes back to rather than looping.
+         */
+        public List<String> parents = new ArrayList<>();
+        /**
          * Tie-break between two grades held by the same player, like a LuckPerms group weight. It is read
          * only when they cover a node at the same specificity: the heaviest grade decides, and a DENY still
          * wins between equal weights. Absent from a file, it deserializes to 0, which is the behaviour that
@@ -53,6 +61,13 @@ public class GradesConfig {
             if (g.deniedPermissions == null) g.deniedPermissions = new HashSet<>();
             g.permissions.remove(null);
             g.deniedPermissions.remove(null);
+            if (g.parents == null) g.parents = new ArrayList<>();
+            g.parents.removeIf(java.util.Objects::isNull);
+            // A grade inheriting from itself is a no-op the resolver would have to guard anyway, and a
+            // name repeated twice costs a second walk for nothing.
+            g.parents.removeIf(parent -> parent.equals(g.name));
+            java.util.Set<String> seen = new java.util.LinkedHashSet<>(g.parents);
+            if (seen.size() != g.parents.size()) g.parents = new ArrayList<>(seen);
         }
         userGrades.values().removeIf(java.util.Objects::isNull);
         userGrades.values().forEach(list -> list.removeIf(java.util.Objects::isNull));

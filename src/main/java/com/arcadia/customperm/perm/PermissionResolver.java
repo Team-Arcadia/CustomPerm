@@ -10,6 +10,8 @@ package com.arcadia.customperm.perm;
 
 import com.arcadia.customperm.config.GradesConfig;
 
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -25,6 +27,10 @@ import java.util.UUID;
  *   <li>At the same specificity, the heaviest grade decides ({@link GradesConfig.Grade#weight}), like a
  *       LuckPerms group weight. Weight never beats specificity: it only breaks a tie between grades that
  *       cover the node just as precisely.</li>
+ *   <li>A grade inherits its parents ({@link GradesConfig.Grade#parents}): where it says nothing as
+ *       precise about the node, what its parents say applies, nearest first, so a grade overrides what
+ *       it inherits. A chain answers with one verdict, which then competes with the player's other
+ *       grades at the weight of the grade they actually hold.</li>
  *   <li>Nodes carried by the player themselves ({@link GradesConfig#userPermissions},
  *       {@link GradesConfig#userDeniedPermissions}) rank above every grade at the same specificity,
  *       whatever its weight, like a node set on a LuckPerms user rather than on one of their groups.
@@ -46,6 +52,12 @@ public final class PermissionResolver {
 
     /** Rank of the nodes a player carries themselves: above any grade weight, including {@code Integer.MAX_VALUE}. */
     private static final long PLAYER_RANK = Long.MAX_VALUE;
+
+    /**
+     * How far a grade's ancestry is followed. Already-seen grades are skipped, so this only bounds a
+     * hand-written file with a very long chain, on a path called once per command per player.
+     */
+    private static final int MAX_INHERITANCE_DEPTH = 16;
 
     private PermissionResolver() {}
 
@@ -85,8 +97,45 @@ public final class PermissionResolver {
             if (gradeName == null || gradeName.equals(skip)) continue;
             GradesConfig.Grade grade = grades.grades.get(gradeName);
             if (grade == null) continue;
-            best.offer(specificity(grade.permissions, node), specificity(grade.deniedPermissions, node),
-                    grade.weight);
+            if (grade.parents.isEmpty()) {
+                // The overwhelming case, and the one that must stay free of the walk's allocations.
+                best.offer(specificity(grade.permissions, node), specificity(grade.deniedPermissions, node),
+                        grade.weight);
+                continue;
+            }
+            // A chain answers with one verdict, which then competes with the other grades at the weight of
+            // the grade the player actually holds: what a parent says arrives through its child.
+            Ranked chain = new Ranked();
+            walkChain(chain, grades, gradeName, grade, node);
+            best.merge(chain, grade.weight);
+        }
+    }
+
+    /**
+     * Resolves one grade and its ancestors, nearest first. Breadth-first, so the first time a grade is
+     * reached is by its shortest path and the nearer holder wins a tie on specificity, which is what makes
+     * a child override what it inherits. A grade already seen is not walked again, so a cycle stops at the
+     * grade it comes back to instead of recursing, and {@link #MAX_INHERITANCE_DEPTH} bounds the rest.
+     */
+    private static void walkChain(Ranked chain, GradesConfig grades, String rootName, GradesConfig.Grade root,
+                                  String node) {
+        // Grades are followed by the key they are stored under, never by their name field: a hand-edited
+        // file can disagree on the two, and the key is what a parent entry names.
+        Set<String> seen = new HashSet<>();
+        List<GradesConfig.Grade> level = new ArrayList<>();
+        seen.add(rootName);
+        level.add(root);
+        for (int depth = 0; depth <= MAX_INHERITANCE_DEPTH && !level.isEmpty(); depth++) {
+            List<GradesConfig.Grade> next = new ArrayList<>();
+            for (GradesConfig.Grade grade : level) {
+                chain.offer(specificity(grade.permissions, node), specificity(grade.deniedPermissions, node), -depth);
+                for (String parent : grade.parents) {
+                    if (parent == null || !seen.add(parent)) continue;
+                    GradesConfig.Grade inherited = grades.grades.get(parent);
+                    if (inherited != null) next.add(inherited);
+                }
+            }
+            level = next;
         }
     }
 
@@ -105,8 +154,15 @@ public final class PermissionResolver {
             if (allow == NONE && deny == NONE) return;
             // Inside one holder the same rule applies, DENY included: a grade that both allows and denies
             // a node at the same level refuses it.
-            Tristate candidate = deny >= allow ? Tristate.DENY : Tristate.ALLOW;
-            int reach = Math.max(allow, deny);
+            offer(Math.max(allow, deny), deny >= allow ? Tristate.DENY : Tristate.ALLOW, rank);
+        }
+
+        /** Takes the verdict of a resolved inheritance chain as one entry, at the rank of the grade held. */
+        void merge(Ranked chain, long rank) {
+            if (chain.verdict != Tristate.UNSET) offer(chain.specificity, chain.verdict, rank);
+        }
+
+        private void offer(int reach, Tristate candidate, long rank) {
             if (reach > specificity) {
                 specificity = reach;
                 this.rank = rank;

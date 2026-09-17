@@ -238,6 +238,7 @@ public final class GradeAdmin {
             g.permissions = new HashSet<>(grade.permissions);
             g.deniedPermissions = new HashSet<>(grade.deniedPermissions);
             g.weight = grade.weight;
+            g.parents = new ArrayList<>(grade.parents);
             copy.grades.put(name, g);
         });
         source.userGrades.forEach((uuid, list) -> copy.userGrades.put(uuid, new ArrayList<>(list)));

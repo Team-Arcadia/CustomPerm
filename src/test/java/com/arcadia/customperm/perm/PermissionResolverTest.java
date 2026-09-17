@@ -384,10 +384,106 @@ class PermissionResolverTest {
         assertEquals(Tristate.UNSET, PermissionResolver.check(grades, UUID.randomUUID(), "customperm.command.tp", null));
     }
 
+    // ─── Héritage entre grades ────────────────────────────────────────────────
+
+    @Test
+    void aGradeInheritsWhatItsParentAllows() {
+        createGrade("base", Set.of("customperm.command.tp"), Set.of());
+        inherit("vip", "base");
+        grades.userGrades.put(player.toString(), java.util.List.of("vip"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"));
+        assertEquals(Tristate.UNSET, check("customperm.command.ban"));
+    }
+
+    @Test
+    void aGradeOverridesWhatItInheritsAtTheSameLevel() {
+        createGrade("base", Set.of(), Set.of("customperm.command.tp"));
+        createGrade("vip", Set.of("customperm.command.tp"), Set.of()).parents.add("base");
+        grades.userGrades.put(player.toString(), java.util.List.of("vip"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"), "the child decides over its parent");
+    }
+
+    @Test
+    void aMoreSpecificParentEntryStillBeatsTheChild() {
+        createGrade("base", Set.of("customperm.command.tp"), Set.of());
+        createGrade("vip", Set.of(), Set.of("*")).parents.add("base");
+        grades.userGrades.put(player.toString(), java.util.List.of("vip"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"),
+            "inheritance does not change which entry is the most specific");
+        assertEquals(Tristate.DENY, check("customperm.command.ban"));
+    }
+
+    @Test
+    void theNearestAncestorWinsOnATie() {
+        createGrade("root", Set.of("customperm.command.tp"), Set.of());
+        createGrade("middle", Set.of(), Set.of("customperm.command.tp")).parents.add("root");
+        inherit("vip", "middle");
+        grades.userGrades.put(player.toString(), java.util.List.of("vip"));
+        assertEquals(Tristate.DENY, check("customperm.command.tp"), "the closer parent answers first");
+    }
+
+    @Test
+    void twoParentsAtTheSameDistanceFallBackToDeny() {
+        createGrade("left", Set.of("customperm.command.tp"), Set.of());
+        createGrade("right", Set.of(), Set.of("customperm.command.tp"));
+        createGrade("vip", Set.of(), Set.of()).parents.addAll(java.util.List.of("left", "right"));
+        grades.userGrades.put(player.toString(), java.util.List.of("vip"));
+        assertEquals(Tristate.DENY, check("customperm.command.tp"));
+    }
+
+    @Test
+    void aCycleResolvesInsteadOfLooping() {
+        createGrade("a", Set.of("customperm.command.tp"), Set.of()).parents.add("b");
+        createGrade("b", Set.of("customperm.command.fly"), Set.of()).parents.add("a");
+        grades.userGrades.put(player.toString(), java.util.List.of("a"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.fly"), "the cycle is walked once, not refused");
+        assertEquals(Tristate.UNSET, check("customperm.command.ban"));
+    }
+
+    @Test
+    void anUnknownParentIsIgnored() {
+        createGrade("vip", Set.of("customperm.command.tp"), Set.of()).parents.add("deleted");
+        grades.userGrades.put(player.toString(), java.util.List.of("vip"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"));
+    }
+
+    @Test
+    void aChainCompetesAtTheWeightOfTheGradeHeld() {
+        // The parent weighs a lot, but the player holds "vip": what a parent says arrives at vip's weight.
+        createGrade("heavy", Set.of("customperm.command.tp"), Set.of()).weight = 1000;
+        createGrade("vip", Set.of(), Set.of()).parents.add("heavy");
+        createGrade("restricted", Set.of(), Set.of("customperm.command.tp")).weight = 5;
+        grades.userGrades.put(player.toString(), java.util.List.of("vip", "restricted"));
+        assertEquals(Tristate.DENY, check("customperm.command.tp"));
+    }
+
+    @Test
+    void anOwnNodeStillOutranksAnInheritedOne() {
+        createGrade("base", Set.of(), Set.of("customperm.command.tp"));
+        inherit("vip", "base");
+        grades.userGrades.put(player.toString(), java.util.List.of("vip"));
+        allowOwn("customperm.command.tp");
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"));
+    }
+
+    @Test
+    void normalizeDropsSelfInheritanceAndDuplicates() {
+        GradesConfig.Grade vip = createGrade("vip", Set.of("customperm.command.tp"), Set.of());
+        vip.parents.addAll(java.util.Arrays.asList("vip", "base", "base", null));
+        grades.normalize();
+        assertEquals(java.util.List.of("base"), vip.parents);
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private Tristate check(String node) {
         return PermissionResolver.check(grades, player, node, null);
+    }
+
+    /** An empty grade inheriting from {@code parent}, so a test reads as what it is about. */
+    private void inherit(String name, String parent) {
+        createGrade(name, Set.of(), Set.of()).parents.add(parent);
     }
 
     private void allowOwn(String node) {

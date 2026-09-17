@@ -37,6 +37,8 @@ public class PermissionResolverBenchmark {
 
     private GradesConfig grades;
     private UUID         uuid;
+    /** Holds a single grade at the end of a three-deep inheritance chain. */
+    private UUID         heir;
 
     private static final String ALLOWED_NODE = "customperm.command.fly";
     private static final String DENIED_NODE  = "customperm.command.ban";
@@ -74,6 +76,21 @@ public class PermissionResolverBenchmark {
         grades.grades.put("restricted", g3);
 
         grades.userGrades.put(uuid.toString(), List.of("default", "member", "restricted"));
+
+        // Inheritance: heir -> mid -> base, 10 ALLOW each, the node answered by the farthest ancestor.
+        // Measures the walk, which a grade without parents never pays for.
+        heir = UUID.randomUUID();
+        String child = null;
+        for (String name : List.of("chain_base", "chain_mid", "chain_leaf")) {
+            GradesConfig.Grade g = new GradesConfig.Grade();
+            g.name = name;
+            for (int i = 0; i < 10; i++) g.permissions.add("customperm." + name + ".perm" + i);
+            if (child != null) g.parents.add(child);
+            grades.grades.put(name, g);
+            child = name;
+        }
+        grades.grades.get("chain_base").permissions.add(ALLOWED_NODE);
+        grades.userGrades.put(heir.toString(), List.of("chain_leaf"));
     }
 
     /**
@@ -93,6 +110,15 @@ public class PermissionResolverBenchmark {
     @Benchmark
     public boolean resolveDeny() {
         return PermissionResolver.resolve(grades, uuid, DENIED_NODE);
+    }
+
+    /**
+     * Inheritance: the node is answered two levels up, so the whole chain is walked.
+     * Résultat attendu : {@code true}.
+     */
+    @Benchmark
+    public boolean resolveAllowThroughInheritance() {
+        return PermissionResolver.resolve(grades, heir, ALLOWED_NODE);
     }
 
     /**
