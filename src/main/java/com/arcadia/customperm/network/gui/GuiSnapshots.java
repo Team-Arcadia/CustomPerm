@@ -66,13 +66,19 @@ public final class GuiSnapshots {
             }
         });
 
+        // Heaviest first, then by name: the order in which two grades covering a node just as specifically
+        // break the tie, so the list itself reads as the precedence.
+        List<String> ordered = new ArrayList<>(config.grades.keySet());
+        ordered.sort(java.util.Comparator.comparingInt((String n) -> -config.grades.get(n).weight)
+                .thenComparing(java.util.function.Function.identity(), String.CASE_INSENSITIVE_ORDER));
+
         List<GradesData.Grade> grades = new ArrayList<>();
-        for (String name : new TreeSet<>(config.grades.keySet())) {
+        for (String name : ordered) {
             if (grades.size() == GuiCodecs.SERVER_LIST_MAX) break;
             var grade = config.grades.get(name);
             List<GradesData.Member> assigned = members.getOrDefault(name, new ArrayList<>());
             assigned.sort(java.util.Comparator.comparing(GradesData.Member::name, String.CASE_INSENSITIVE_ORDER));
-            grades.add(new GradesData.Grade(name,
+            grades.add(new GradesData.Grade(name, grade.weight,
                     new TreeSet<>(grade.permissions).stream().limit(GradesData.NODES_MAX).toList(),
                     new TreeSet<>(grade.deniedPermissions).stream().limit(GradesData.NODES_MAX).toList(),
                     assigned.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList()));

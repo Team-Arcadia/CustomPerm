@@ -24,6 +24,13 @@ public class GradesConfig {
         public String name;
         public Set<String> permissions = new HashSet<>();        // ALLOW nodes
         public Set<String> deniedPermissions = new HashSet<>();  // DENY nodes (H2.1)
+        /**
+         * Tie-break between two grades held by the same player, like a LuckPerms group weight. It is read
+         * only when they cover a node at the same specificity: the heaviest grade decides, and a DENY still
+         * wins between equal weights. Absent from a file, it deserializes to 0, which is the behaviour that
+         * predates the field.
+         */
+        public int weight = 0;
     }
 
     public void normalize() {

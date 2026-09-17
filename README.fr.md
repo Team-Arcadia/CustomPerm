@@ -61,6 +61,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **Alertes admin** : quand LuckPerms devient indisponible ou qu'un fichier de config ne se charge pas, chaque op connecté (niveau 2+) reçoit une alerte dans le chat, les ops qui se connectent ensuite la reçoivent à la connexion, et `/customperm status` la liste jusqu'à sa résolution.
 - **RBAC multi-grades** : un joueur peut avoir plusieurs grades internes ; les permissions sont résolues par union des grades assignés.
 - **DENY explicite** : les grades internes supportent `deniedPermissions`. L'entrée la plus spécifique l'emporte, comme LuckPerms (nœud exact, puis `a.b.*`, puis `*`), et un DENY gagne à niveau égal.
+- **Poids de grade** : un grade porte un poids, comme le weight d'un groupe LuckPerms. Il départage deux grades d'un même joueur qui couvrent un nœud avec la même précision : le plus lourd décide, et un DENY gagne toujours entre poids égaux. Un poids ne bat jamais un nœud plus spécifique : il ne permet pas de contourner celui-ci.
 - **Wildcards de permissions** : `*`, `customperm.command.*` et `customperm.alias.*` sont supportés, dans les deux sens : un `*` refusé refuse tout sauf les autorisations explicites.
 - **Administration derrière une permission** : `/customperm` et l'interface demandent op level 2 **et** des nœuds explicitement accordés (`customperm.admin` pour entrer, `customperm.manage.<domaine>` pour modifier), donc un joueur mis op par erreur, niveau 4 compris, n'obtient rien. La console garde toujours l'accès, et l'hôte d'un monde solo ou LAN en tient lieu.
 - **Opérateurs restreignables** : un DENY explicite s'applique aussi aux opérateurs, sur les deux backends, pour tenir à l'écart un joueur mis op par erreur. Un grade par défaut s'applique à tous les joueurs, et `gateAllCommands` étend le contrôle de CustomPerm à toutes les commandes. Voir [Restreindre les opérateurs](#restreindre-les-opérateurs).
@@ -262,6 +263,7 @@ Elles gèrent les nodes ALLOW. Les nodes DENY internes sont stockés dans `grade
 | `/customperm grade removeperm <grade> <node>` | Retire une perm du grade. |
 | `/customperm grade adddeny <grade> <node>` | Ajoute un nœud DENY : refusé, opérateurs compris, sauf si un nœud plus spécifique l'autorise. |
 | `/customperm grade removedeny <grade> <node>` | Retire un nœud DENY. |
+| `/customperm grade weight <grade> <poids>` | Définit le poids de départage, 0 par défaut, négatif accepté. |
 | `/customperm grade assign <player> <grade>` | Assigne le grade à un joueur, en ligne ou hors ligne s'il est déjà venu sur le serveur. |
 | `/customperm grade unassign <player> <grade>` | Désassigne, en ligne ou hors ligne. |
 | `/customperm grade setdefault <grade>` | Applique le grade à tous les joueurs, sous leurs propres grades. |
@@ -427,6 +429,7 @@ Grades et assignations utilisateurs.
     },
     "staff": {
       "name": "staff",
+      "weight": 10,
       "permissions": ["customperm.command.*", "customperm.alias.*"],
       "deniedPermissions": ["customperm.command.op"]
     }
@@ -440,7 +443,7 @@ Grades et assignations utilisateurs.
 
 Avec LuckPerms actif, ce fichier est ignoré (les perms passent par LP).
 
-`deniedPermissions` est utilisé uniquement par le backend interne. L'entrée la plus spécifique l'emporte sur l'ensemble des grades assignés (nœud exact, puis `a.b.*`, puis `a.*`, puis `*`) ; à niveau égal un DENY gagne. Les grades du joueur décident d'abord ; seul un nœud qu'aucun d'eux ne mentionne passe au grade par défaut.
+`deniedPermissions` est utilisé uniquement par le backend interne. L'entrée la plus spécifique l'emporte sur l'ensemble des grades assignés (nœud exact, puis `a.b.*`, puis `a.*`, puis `*`) ; à niveau égal le grade le plus lourd décide, et un DENY gagne entre poids égaux. `weight` est facultatif et vaut 0 s'il est absent, ce qui laisse la règle du DENY comme seul départage, comme avant l'existence du champ. Les grades du joueur décident d'abord ; seul un nœud qu'aucun d'eux ne mentionne passe au grade par défaut.
 
 ---
 
@@ -739,7 +742,7 @@ Les benchmarks de performance se lancent avec :
 
 | Zone | Valide |
 |---|---|
-| Résolution de permissions | Deny par défaut, ALLOW direct, wildcard ALLOW, wildcard global, DENY explicite, entrée la plus spécifique gagnante entre grades, DENY à égalité, `*` refusé avec autorisations explicites, couche du grade par défaut. |
+| Résolution de permissions | Deny par défaut, ALLOW direct, wildcard ALLOW, wildcard global, DENY explicite, entrée la plus spécifique gagnante entre grades, poids de grade départageant quel que soit l'ordre d'assignation, DENY à poids égaux, poids ne battant jamais la précision, `*` refusé avec autorisations explicites, couche du grade par défaut. |
 | Grades internes | Création/listage/suppression de grades, assignation/désassignation joueurs, prévention des doublons, cascade lors de la suppression d'un grade. |
 | Exposition de commandes | Ajout/retrait/listage de commandes exposées, changements idempotents, commandes non exposées refusées par CustomPerm. |
 | Config aliases | Création, overwrite, suppression, listage, ordre des aliases, parsing par `;`, steps vides ignorés. |
@@ -748,7 +751,7 @@ Les benchmarks de performance se lancent avec :
 | Compatibilité config | Fichiers manquants, fichiers `{}`, collections explicitement `null`, champs futurs inconnus, configs partielles. |
 | Sélection LuckPerms | Backend interne sans LP, parsing de versions, version minimale, sélection stable du backend. |
 | GameTests, deux modes | Exposition et retrait de commande avec un joueur non-op, préservation des ops, `/customperm` refusé aux non-ops, reconnexion, aliases exécutés en op 4 par les seuls détenteurs du node et incapables d'atteindre `/customperm`, édition des steps, gardes de récursion et de shadowing, reload d'un `aliases.json` modifié à la main, limites de débit (message de refus, compteur partagé par racine, isolation par joueur, console exemptée, expiration de fenêtre, reconnexion, reloads répétés, suppression de règle, aliases), reload tout-ou-rien, refus du reload concurrent, changements non sauvegardés après un reload en échec, entrées `null`, repush du command tree au reload, alertes admin dans le chat des ops, paquets du GUI et de l'éditeur refusés aux non-ops, sorties de diagnostic, autocomplétion de chaque argument de `/customperm` et aucune suggestion pour un non-op, opérateurs refusés sur une commande exposée, un alias, `/customperm` ou un domaine de l'interface par un DENY explicite pendant que la console garde l'accès, `*` refusé bloquant tout sauf les autorisations explicites, modifications d'administration par commande et par l'interface enregistrées avec les refus, commandes des joueurs enregistrées seulement si actif et masquées par défaut, fichiers sur disque, rechargement depuis le disque ignorant les lignes illisibles, rétention, boutons de la page Journaux soumis à leur nœud, modifications `/lp` enregistrées (mode LuckPerms), opérateurs sans les nœuds refusés sur `/customperm` et l'interface pendant que la console garde l'accès, chaque domaine exigeant son propre nœud `customperm.manage` pour la commande comme pour la page, les nœuds seuls n'ouvrant rien à un non-op, avertissement de mise à jour donné une fois pour une configuration écrite avant la 1.1.0 puis configuration estampillée. |
-| GameTests, mode interne | Commandes de grade, union des grades, entrée la plus spécifique gagnante, toutes les formes de wildcard, éditeur sans LuckPerms, `gateAllCommands` et `*` autorisé, grade par défaut restreignant un op accidentel, auto-verrouillage refusé par commande et par l'interface. |
+| GameTests, mode interne | Commandes de grade, union des grades, entrée la plus spécifique gagnante, poids de grade départageant, toutes les formes de wildcard, éditeur sans LuckPerms, `gateAllCommands` et `*` autorisé, grade par défaut restreignant un op accidentel, auto-verrouillage refusé par commande et par l'interface. |
 | GameTests, mode LuckPerms | Éditeur en jeu face à un vrai LuckPerms : groupes, nodes avec contextes et expiration, héritage, meta, prefix et suffix, poids, nom d'affichage, groupes et groupe principal d'un joueur, tracks, promote et demote, verrouillage des écritures par node et niveau, limites d'édition et de sync ; command tree renvoyé après un changement LuckPerms ; repli `deny` et `internal` quand LuckPerms devient indisponible. |
 | Performance | `PermissionResolver.resolve()` et lecture concurrente du snapshot config via JMH. |
 
@@ -803,11 +806,13 @@ La sélection se fait au boot via `ModList.get().isLoaded("luckperms")` avec con
 Le resolver interne applique cet ordre :
 
 ```
-1. Joueur ou node null => false
-2. Aucun grade assigné => false
-3. Un node deniedPermissions correspondant => false
-4. Un node permissions correspondant => true
-5. Sinon => false
+1. Joueur ou nœud null                                  => UNSET
+2. Dans les grades propres du joueur, l'entrée qui couvre
+   le nœud le plus précisément gagne (exact, a.b.*, a.*, *)
+   - égalité de précision => le grade le plus lourd décide
+   - égalité de poids     => le DENY gagne
+3. Nœud qu'aucun d'eux ne mentionne => même règle sur le grade par défaut
+4. Rien ne correspond => UNSET, l'appelant tranche selon le niveau d'op
 ```
 
 ### Re-synchronisation

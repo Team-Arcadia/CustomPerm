@@ -39,9 +39,11 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
                 Member::new);
     }
 
-    public record Grade(String name, List<String> allow, List<String> deny, List<Member> members) {
+    /** {@code weight} breaks ties between two grades covering a node just as specifically; 0 for most. */
+    public record Grade(String name, int weight, List<String> allow, List<String> deny, List<Member> members) {
         public static final StreamCodec<ByteBuf, Grade> CODEC = StreamCodec.composite(
                 GuiCodecs.TEXT, Grade::name,
+                ByteBufCodecs.VAR_INT, Grade::weight,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Grade::allow,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Grade::deny,
                 GuiCodecs.list(Member.CODEC, GuiCodecs.SERVER_LIST_MAX), Grade::members,

@@ -10,6 +10,7 @@
 package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.gametest.CommandExposureGameTest.Exposure;
 import com.arcadia.customperm.gametest.support.Grants;
 import com.arcadia.customperm.gametest.support.Modes;
@@ -182,6 +183,52 @@ public class GradeAndDiagnosticsGameTest {
         List<String> filtered = ServerCommands.run(server, "customperm scan game");
         expect(filtered, "/gamemode");
         if (ServerCommands.contains(filtered, "/teleport")) fail("scan game must not list /teleport: " + filtered);
+        helper.succeed();
+    }
+
+    /**
+     * Grade weight: between two grades covering the same node just as specifically, the heaviest decides,
+     * and the command that sets it applies live. A DENY still wins between equal weights.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void weightBreaksTiesBetweenGrades(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_g_weight", 0);
+             Exposure gamemode = Exposure.of(server, "gamemode")) {
+            expect(ServerCommands.run(server, "customperm grade create cp_gt_w_allow"), "Created grade");
+            expect(ServerCommands.run(server, "customperm grade create cp_gt_w_deny"), "Created grade");
+            grades.grades.get("cp_gt_w_allow").permissions.add("customperm.command.gamemode");
+            grades.grades.get("cp_gt_w_deny").deniedPermissions.add("customperm.command.gamemode");
+            grades.userGrades.put(player.uuid().toString(),
+                    new java.util.ArrayList<>(List.of("cp_gt_w_allow", "cp_gt_w_deny")));
+
+            if (player.canUse("gamemode")) fail("Equal weights must keep the DENY winning.");
+
+            expect(ServerCommands.run(server, "customperm grade weight cp_gt_w_allow 10"),
+                    "Weight of cp_gt_w_allow set to 10");
+            if (!player.canUse("gamemode")) fail("The heavier grade must win the tie.");
+
+            expect(ServerCommands.run(server, "customperm grade weight cp_gt_w_deny 10"), "set to 10");
+            if (player.canUse("gamemode")) fail("Back to equal weights, the DENY must win again.");
+
+            expect(ServerCommands.run(server, "customperm grade weight cp_gt_w_allow 10"), "already weighs 10");
+            expect(ServerCommands.run(server, "customperm grade weight cp_gt_w_missing 5"), "No such grade");
+            expect(ServerCommands.run(server, "customperm grade list"), "cp_gt_w_allow (weight 10)");
+
+            // A more specific node in a weightless grade still beats a heavy wildcard DENY.
+            grades.grades.get("cp_gt_w_deny").deniedPermissions.clear();
+            grades.grades.get("cp_gt_w_deny").deniedPermissions.add("*");
+            expect(ServerCommands.run(server, "customperm grade weight cp_gt_w_deny 1000"), "set to 1000");
+            expect(ServerCommands.run(server, "customperm grade weight cp_gt_w_allow 0"), "set to 0");
+            if (!player.canUse("gamemode")) fail("A weight must not beat a more specific node.");
+        } finally {
+            grades.grades.remove("cp_gt_w_allow");
+            grades.grades.remove("cp_gt_w_deny");
+            grades.userGrades.values().forEach(list -> list.removeAll(List.of("cp_gt_w_allow", "cp_gt_w_deny")));
+            grades.userGrades.values().removeIf(List::isEmpty);
+        }
         helper.succeed();
     }
 

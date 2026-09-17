@@ -22,8 +22,12 @@ import java.util.UUID;
  *   <li>The most specific entry wins, like LuckPerms: the exact node beats {@code a.b.*}, which beats
  *       {@code a.*}, which beats {@code *}. So a grade denying {@code *} and allowing
  *       {@code customperm.command.home} refuses everything except {@code /home}.</li>
- *   <li>At the same specificity, a DENY wins over an ALLOW, whichever grades they come from
- *       (INVARIANT-101).</li>
+ *   <li>At the same specificity, the heaviest grade decides ({@link GradesConfig.Grade#weight}), like a
+ *       LuckPerms group weight. Weight never beats specificity: it only breaks a tie between grades that
+ *       cover the node just as precisely.</li>
+ *   <li>Between equal weights, a DENY wins over an ALLOW, whichever grades they come from
+ *       (INVARIANT-101). Every weight left at 0, which is what a file written before the field
+ *       deserializes to, makes this the only tie-break, as it was.</li>
  *   <li>The grades assigned to the player decide first. Only when none of them mentions the node does
  *       the default grade, which applies to every player, decide.</li>
  *   <li>Nothing matching at all is {@link Tristate#UNSET}: the caller decides, usually from the
@@ -59,18 +63,40 @@ public final class PermissionResolver {
         return check(grades, uuid, node, null) == Tristate.ALLOW;
     }
 
+    /**
+     * Verdict of one layer of grades: the most specific entry wins, the heaviest grade breaks a tie on
+     * specificity, and a DENY breaks a tie on weight. Written so the outcome does not depend on the order
+     * the grades are iterated in, which is the order they were assigned in and carries no meaning.
+     */
     private static Tristate layer(GradesConfig grades, List<String> gradeNames, String node, String skip) {
-        int allow = NONE;
-        int deny = NONE;
+        int bestSpecificity = NONE;
+        int bestWeight = 0;
+        Tristate best = Tristate.UNSET;
         for (String gradeName : gradeNames) {
             if (gradeName == null || gradeName.equals(skip)) continue;
             GradesConfig.Grade grade = grades.grades.get(gradeName);
             if (grade == null) continue;
-            allow = Math.max(allow, specificity(grade.permissions, node));
-            deny = Math.max(deny, specificity(grade.deniedPermissions, node));
+            int allow = specificity(grade.permissions, node);
+            int deny = specificity(grade.deniedPermissions, node);
+            if (allow == NONE && deny == NONE) continue;
+            // Inside one grade the same rule applies, DENY included: a grade that both allows and denies
+            // a node at the same level refuses it.
+            Tristate verdict = deny >= allow ? Tristate.DENY : Tristate.ALLOW;
+            int specificity = Math.max(allow, deny);
+            if (specificity > bestSpecificity) {
+                bestSpecificity = specificity;
+                bestWeight = grade.weight;
+                best = verdict;
+            } else if (specificity == bestSpecificity) {
+                if (grade.weight > bestWeight) {
+                    bestWeight = grade.weight;
+                    best = verdict;
+                } else if (grade.weight == bestWeight && verdict == Tristate.DENY) {
+                    best = Tristate.DENY;
+                }
+            }
         }
-        if (allow == NONE && deny == NONE) return Tristate.UNSET;
-        return deny >= allow ? Tristate.DENY : Tristate.ALLOW;
+        return best;
     }
 
     /**

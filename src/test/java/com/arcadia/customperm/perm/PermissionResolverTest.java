@@ -254,6 +254,77 @@ class PermissionResolverTest {
             "Wildcard DENY doit couvrir les nœuds descendants");
     }
 
+    // ─── Poids de grade (départage à spécificité égale) ───────────────────────
+
+    @Test
+    void heaviestGradeWins_whenTwoGradesTieOnSpecificity() {
+        createGrade("vip", Set.of("customperm.command.tp"), Set.of()).weight = 10;
+        createGrade("restricted", Set.of(), Set.of("customperm.command.tp"));
+        grades.userGrades.put(player.toString(), java.util.List.of("vip", "restricted"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"),
+            "the heavier grade decides when both cover the node exactly");
+    }
+
+    @Test
+    void heaviestGradeWins_whateverTheAssignmentOrder() {
+        createGrade("vip", Set.of("customperm.command.tp"), Set.of()).weight = 10;
+        createGrade("restricted", Set.of(), Set.of("customperm.command.tp"));
+        grades.userGrades.put(player.toString(), java.util.List.of("restricted", "vip"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"),
+            "the order grades were assigned in carries no meaning");
+    }
+
+    @Test
+    void heaviestGradeWins_whenItIsTheDenyingOne() {
+        createGrade("vip", Set.of("customperm.command.tp"), Set.of());
+        createGrade("restricted", Set.of(), Set.of("customperm.command.tp")).weight = 3;
+        grades.userGrades.put(player.toString(), java.util.List.of("vip", "restricted"));
+        assertEquals(Tristate.DENY, check("customperm.command.tp"));
+    }
+
+    @Test
+    void denyWins_whenWeightsAreEqual() {
+        // INVARIANT-101 survives the weight: every grade at 0 is what an existing file deserializes to.
+        createGrade("vip", Set.of("customperm.command.tp"), Set.of());
+        createGrade("restricted", Set.of(), Set.of("customperm.command.tp"));
+        grades.userGrades.put(player.toString(), java.util.List.of("vip", "restricted"));
+        assertEquals(Tristate.DENY, check("customperm.command.tp"));
+
+        createGrade("vip2", Set.of("customperm.command.fly"), Set.of()).weight = 7;
+        createGrade("restricted2", Set.of(), Set.of("customperm.command.fly")).weight = 7;
+        grades.userGrades.put(player.toString(), java.util.List.of("vip2", "restricted2"));
+        assertEquals(Tristate.DENY, check("customperm.command.fly"), "equal weights fall back to DENY");
+    }
+
+    @Test
+    void weightNeverBeatsSpecificity() {
+        // A heavy grade denying everything must not swallow an exact node allowed by a light one,
+        // otherwise a weight would become a way around the most-specific-wins rule.
+        createGrade("locked", Set.of(), Set.of("*")).weight = 1000;
+        createGrade("vip", Set.of("customperm.command.tp"), Set.of());
+        grades.userGrades.put(player.toString(), java.util.List.of("locked", "vip"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"));
+        assertEquals(Tristate.DENY, check("customperm.command.op"), "everything else stays denied");
+    }
+
+    @Test
+    void negativeWeightRanksBelowTheDefaultZero() {
+        createGrade("vip", Set.of("customperm.command.tp"), Set.of()).weight = -5;
+        createGrade("restricted", Set.of(), Set.of("customperm.command.tp"));
+        grades.userGrades.put(player.toString(), java.util.List.of("vip", "restricted"));
+        assertEquals(Tristate.DENY, check("customperm.command.tp"));
+    }
+
+    @Test
+    void weightDoesNotCrossTheDefaultGradeLayer() {
+        // The default grade is read only when the player's own grades say nothing about the node:
+        // weighing it heavily must not promote it above them.
+        createGrade("everyone", Set.of(), Set.of("customperm.command.tp")).weight = 1000;
+        createGrade("staff", Set.of("customperm.command.tp"), Set.of());
+        grades.userGrades.put(player.toString(), java.util.List.of("staff"));
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.tp", "everyone"));
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private Tristate check(String node) {

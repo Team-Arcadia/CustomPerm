@@ -174,6 +174,8 @@ public final class GuiRequestHandler {
                     : guarded(player, () -> GradeAdmin.addNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2))));
             case GRADE_NODE_REMOVE -> kind(args.get(2)) == null ? malformed(action)
                     : guarded(player, () -> GradeAdmin.removeNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2))));
+            case GRADE_WEIGHT_SET -> signed(args.get(1)) == null ? malformed(action)
+                    : guarded(player, () -> GradeAdmin.setWeight(player.getServer(), args.get(0), signed(args.get(1))));
             case GRADE_ASSIGN -> guarded(player, () -> assignByName(player, args.get(0), args.get(1)));
             case GRADE_UNASSIGN -> guarded(player, () -> unassignByUuid(player, args.get(0), args.get(1)));
             case GRADE_DEFAULT -> guarded(player, () -> GradeAdmin.setDefault(player.getServer(), args.get(0)));
@@ -222,6 +224,13 @@ public final class GuiRequestHandler {
     /** Strict non-negative index argument: plain decimal digits only, anything else is malformed. */
     private static Integer index(String value) {
         if (value.isEmpty() || value.length() > 9 || !value.chars().allMatch(Character::isDigit)) return null;
+        return Integer.parseInt(value);
+    }
+
+    /** Strict signed integer argument, for a grade weight: an optional minus then decimal digits. */
+    private static Integer signed(String value) {
+        String digits = value.startsWith("-") ? value.substring(1) : value;
+        if (digits.isEmpty() || digits.length() > 9 || !digits.chars().allMatch(Character::isDigit)) return null;
         return Integer.parseInt(value);
     }
 

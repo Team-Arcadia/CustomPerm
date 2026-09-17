@@ -127,6 +127,26 @@ public final class GradeAdmin {
         return AdminResult.ok((deny ? "Removed the denial of " : "Removed ") + node + " from " + gradeName).warn(warning);
     }
 
+    /**
+     * Sets the tie-break weight of a grade. It only decides between grades held by the same player that
+     * cover a node at the same specificity: the heaviest wins, and a DENY still wins between equal weights.
+     * A more specific node in a lighter grade keeps winning, so a weight cannot be used to bypass one.
+     */
+    public static AdminResult setWeight(MinecraftServer server, String gradeName, int weight) {
+        AdminResult refusal = unavailable();
+        if (refusal != null) return refusal;
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        if (grade.weight == weight) {
+            return AdminResult.ok(gradeName + " already weighs " + weight + " — no change.");
+        }
+        grade.weight = weight;
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
+        return AdminResult.ok("Weight of " + gradeName + " set to " + weight).warn(warning)
+                .note("Only breaks ties at the same specificity: an exact node in a lighter grade still wins.");
+    }
+
     public static AdminResult assign(MinecraftServer server, GameProfile profile, String gradeName) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
@@ -219,6 +239,7 @@ public final class GradeAdmin {
             g.name = grade.name;
             g.permissions = new HashSet<>(grade.permissions);
             g.deniedPermissions = new HashSet<>(grade.deniedPermissions);
+            g.weight = grade.weight;
             copy.grades.put(name, g);
         });
         source.userGrades.forEach((uuid, list) -> copy.userGrades.put(uuid, new ArrayList<>(list)));

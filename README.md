@@ -61,6 +61,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Admin alerts** — when LuckPerms becomes unavailable or a config file fails to load, every online op (level 2+) gets a chat alert, ops who join later get it on login, and `/customperm status` lists it until it is resolved.
 - **Multi-grade RBAC** — a player can hold multiple internal grades; permissions are resolved as a union of all assigned grades.
 - **Explicit DENY support** — internal grades support `deniedPermissions`. The most specific entry wins, like LuckPerms (exact node, then `a.b.*`, then `*`), and a DENY wins at the same level.
+- **Grade weight** — a grade carries a weight, like a LuckPerms group weight. It breaks a tie between two grades held by the same player that cover a node just as specifically: the heaviest decides, and a DENY still wins between equal weights. A weight never beats a more specific node, so it cannot be used to work around one.
 - **Wildcard permission nodes** — `*`, `customperm.command.*`, and `customperm.alias.*` are supported, in both directions: a denied `*` refuses everything except explicit allows.
 - **Administration behind a permission** — `/customperm` and the admin interface need op level 2 **and** explicitly granted nodes (`customperm.admin` to enter, `customperm.manage.<area>` to change), so a player made operator by mistake, level 4 included, gets nothing. The console always has access, and the host of a singleplayer or LAN world stands in for it.
 - **Restrictable operators** — an explicit DENY applies to operators too, on both backends, so a player made op by mistake can be kept away from commands. A default grade applies to every player, and `gateAllCommands` extends CustomPerm's check to every command. See [Restricting operators](#restricting-operators).
@@ -261,6 +262,7 @@ They manage ALLOW nodes. Internal DENY nodes are stored in `grades.json` under `
 | `/customperm grade removeperm <grade> <node>` | Removes a node. |
 | `/customperm grade adddeny <grade> <node>` | Adds a DENY node: refused, operators included, unless a more specific node allows it. |
 | `/customperm grade removedeny <grade> <node>` | Removes a DENY node. |
+| `/customperm grade weight <grade> <weight>` | Sets the tie-break weight, 0 by default, negative allowed. |
 | `/customperm grade assign <player> <grade>` | Assigns the grade to a player, online or offline if they joined the server before. |
 | `/customperm grade unassign <player> <grade>` | Unassigns, online or offline. |
 | `/customperm grade setdefault <grade>` | Applies the grade to every player, below their own grades. |
@@ -426,6 +428,7 @@ Grades and user assignments.
     },
     "staff": {
       "name": "staff",
+      "weight": 10,
       "permissions": ["customperm.command.*", "customperm.alias.*"],
       "deniedPermissions": ["customperm.command.op"]
     }
@@ -439,7 +442,7 @@ Grades and user assignments.
 
 When LuckPerms is active, this file is ignored (permissions go through LP).
 
-`deniedPermissions` is only used by the internal backend. The most specific entry wins across all assigned grades (exact node, then `a.b.*`, then `a.*`, then `*`); at the same level a DENY wins. The player's own grades decide first; only a node none of them mentions falls through to the default grade.
+`deniedPermissions` is only used by the internal backend. The most specific entry wins across all assigned grades (exact node, then `a.b.*`, then `a.*`, then `*`); at the same level the heaviest grade decides, and a DENY wins between equal weights. `weight` is optional and 0 when absent, which makes the DENY rule the only tie-break, as it was before the field existed. The player's own grades decide first; only a node none of them mentions falls through to the default grade.
 
 ---
 
@@ -738,7 +741,7 @@ Performance benchmarks can be run with:
 
 | Area | Validates |
 |---|---|
-| Permission resolver | Default deny, direct ALLOW, wildcard ALLOW, global wildcard, explicit DENY, most specific entry wins across grades, DENY on a tie, denied `*` with explicit allows, default grade layer. |
+| Permission resolver | Default deny, direct ALLOW, wildcard ALLOW, global wildcard, explicit DENY, most specific entry wins across grades, grade weight breaking a tie whatever the assignment order, DENY on equal weights, weight never beating specificity, denied `*` with explicit allows, default grade layer. |
 | Internal grades | Create/list/delete grades, assign/unassign players, prevent duplicates, cascade grade deletion through player assignments. |
 | Command exposure | Add/remove/list exposed commands, idempotent changes, non-exposed commands remain denied by CustomPerm. |
 | Alias config | Create, overwrite, remove, list aliases, preserve order, split semicolon-delimited steps, ignore blank steps. |
@@ -747,7 +750,7 @@ Performance benchmarks can be run with:
 | Backward compatibility | Missing files, `{}` files, explicit `null` collections, unknown future fields, partial config files. |
 | LuckPerms selection | Internal backend when LP is absent, version parsing, minimum version gate, stable backend selection. |
 | GameTests, both modes | Command exposure and removal with a non-op player, operator preservation, `/customperm` refused to non-ops, reconnection, aliases run with op-4 elevation by node holders only and unable to reach `/customperm`, step editing, recursion and shadowing guards, reload of hand-edited `aliases.json`, rate limits (refusal message, shared counter per root, per-player isolation, console exemption, window expiry, reconnection, repeated reloads, rule removal, aliases), all-or-nothing reload, concurrent reload refusal, unsaved changes after a failed reload, `null` entries, command-tree repush on reload, admin alerts in operators' chat, GUI and editor packets refused to non-operators, diagnostics output, tab-completion of every `/customperm` argument and no suggestions for non-operators, operators refused an exposed command, an alias, `/customperm` or an interface area by an explicit DENY while the console keeps access, a denied `*` blocking everything but explicit allows, admin changes from commands and the interface recorded with refusals, player commands recorded only when on and masked by default, files on disk, reload from disk skipping unreadable lines, retention, Logs page switches gated by their node, `/lp` changes recorded (LuckPerms mode), operators without the nodes refused `/customperm` and the interface while the console keeps access, each area needing its own `customperm.manage` node for the command and the page alike, the nodes alone opening nothing to a non-operator, the upgrade notice announced once for a configuration written before 1.1.0 and the configuration stamped afterwards. |
-| GameTests, internal mode | Grade commands, union of grades, most specific entry wins, every wildcard form, editor without LuckPerms, `gateAllCommands` and an allowed `*`, a default grade restricting an accidental operator, refused self-lockout by command and interface. |
+| GameTests, internal mode | Grade commands, union of grades, most specific entry wins, grade weight breaking a tie, every wildcard form, editor without LuckPerms, `gateAllCommands` and an allowed `*`, a default grade restricting an accidental operator, refused self-lockout by command and interface. |
 | GameTests, LuckPerms mode | In-game editor against a real LuckPerms: groups, nodes with contexts and expiry, inheritance, meta, prefix and suffix, weight, display name, player groups and primary group, tracks, promote and demote, write gating by node and level, edit and sync rate limits; command tree resent after a LuckPerms change; `deny` and `internal` fallback when LuckPerms becomes unavailable. |
 | Performance | `PermissionResolver.resolve()` and concurrent config snapshot reads via JMH. |
 
@@ -802,11 +805,13 @@ Selection happens at boot through `ModList.get().isLoaded("luckperms")` plus a m
 The internal resolver applies this order:
 
 ```
-1. Null player or node => false
-2. No assigned grade => false
-3. Any matching deniedPermissions node => false
-4. Any matching permissions node => true
-5. Otherwise => false
+1. Null player or node                                  => UNSET
+2. In the player's own grades, the entry covering the node
+   most specifically wins (exact, a.b.*, a.*, *)
+   - tie on specificity  => the heaviest grade decides
+   - tie on weight       => DENY wins
+3. Node mentioned by none of them => same rule on the default grade
+4. Nothing matching at all => UNSET, the caller decides from the op level
 ```
 
 ### Re-sync

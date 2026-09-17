@@ -64,6 +64,8 @@ public enum GuiAction {
     GRADE_NODE_ADD(3, GuiArea.GRADES),
     /** {@code [grade, node, "allow"|"deny"]} Removes an ALLOW or a DENY node. */
     GRADE_NODE_REMOVE(3, GuiArea.GRADES),
+    /** {@code [grade, weight]} Sets the tie-break weight, which decides between grades at the same specificity. */
+    GRADE_WEIGHT_SET(2, GuiArea.GRADES),
     /** {@code [playerName, grade]} Assigns a grade to a player online or known to the server. */
     GRADE_ASSIGN(2, GuiArea.GRADES),
     /** {@code [playerUuid, grade]} Unassigns a grade, by UUID so unnamed entries can be cleaned up. */

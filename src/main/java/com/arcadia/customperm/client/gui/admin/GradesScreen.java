@@ -36,7 +36,8 @@ import java.util.Objects;
  * Internal grade editor. Left: grades and creation. Right: the selected grade, on two tabs: its
  * permission nodes (ALLOW or DENY, the most specific entry winning) and its players, who can be assigned
  * while offline as long as they joined the server before. One grade can be the default grade, applied to
- * every player below their own grades.
+ * every player below their own grades. The header carries the weight, which breaks a tie between two
+ * grades covering a node just as specifically; the list is ordered by it.
  *
  * <p>The page is always reachable, so the fallback grades can be read while LuckPerms runs or fails.
  * A banner says whether grades currently decide permissions; while LuckPerms is the active backend the
@@ -48,6 +49,8 @@ public final class GradesScreen extends AdminScreen {
     private static final int FIELD = Atlas.INPUT_HEIGHT;
     private static final int BUTTON = Atlas.BUTTON_HEIGHT;
     private static final int GAP = 6;
+    /** Width of the weight box in the header: enough for a minus sign and four digits. */
+    private static final int WEIGHT_FIELD = 40;
 
     /** One node of the selected grade. */
     private record NodeRow(String node, boolean deny) {
@@ -63,6 +66,7 @@ public final class GradesScreen extends AdminScreen {
     private final CpEditBox nodeField;
     private final CpList<GradesData.Member> memberList;
     private final CpEditBox playerField;
+    private final CpEditBox weightField;
     /** Grade to select once the next refresh lands, after creating it. */
     private String pendingGrade;
 
@@ -76,13 +80,16 @@ public final class GradesScreen extends AdminScreen {
                 .hint(Component.literal("player name"))
                 .onSubmit(this::assign);
         playerField.onChange(this::suggestPlayer);
+        this.weightField = new CpEditBox(Component.literal("Grade weight"), 7)
+                .hint(Component.literal("weight"))
+                .onSubmit(this::applyWeight);
         this.search = new CpEditBox(Component.literal("Search grades"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
                 .onChange(text -> refilter());
         this.gradeList = new CpList<GradesData.Grade>(Component.literal("Grades"), ROW)
                 .renderer(this::renderGrade)
-                .label(g -> g.name() + ", " + g.allow().size() + " allowed, " + g.deny().size() + " denied, "
-                        + g.members().size() + " players")
+                .label(g -> g.name() + ", weight " + g.weight() + ", " + g.allow().size() + " allowed, "
+                        + g.deny().size() + " denied, " + g.members().size() + " players")
                 .identity(GradesData.Grade::name)
                 .emptyText("No grade yet: create one below.")
                 .onSelect(g -> {
@@ -182,6 +189,8 @@ public final class GradesScreen extends AdminScreen {
         }
         nodeList.setItems(nodes);
         memberList.setItems(grade == null ? List.of() : grade.members());
+        // The box shows the weight in force, so submitting it unchanged is a no-op rather than a reset.
+        weightField.setValue(grade == null ? "" : String.valueOf(grade.weight()));
     }
 
     /** Shows the rest of the first known player name that starts with what was typed. */
@@ -250,6 +259,9 @@ public final class GradesScreen extends AdminScreen {
                         : "Apply this grade to every player, below their own grades, operators included."));
         int defaultW = makeDefault.preferredWidth(font, 6);
         addRenderableWidget(makeDefault.at(new Rect(in.right() - FIELD - 4 - defaultW, in.y(), defaultW, FIELD)));
+        addRenderableWidget(weightField.at(new Rect(in.right() - FIELD - 4 - defaultW - 4 - WEIGHT_FIELD, in.y(),
+                WEIGHT_FIELD, FIELD)));
+        weightField.setEditable(editable);
 
         Rect tabs = new Rect(in.x(), in.y() + 24, in.w(), FIELD);
         CpButton nodesTab = CpButton.ghost(Component.literal("Nodes (" + (grade.allow().size() + grade.deny().size()) + ")"),
@@ -325,6 +337,21 @@ public final class GradesScreen extends AdminScreen {
                 () -> act(GuiAction.GRADE_DEFAULT, grade.name()));
     }
 
+    /** Submits the weight box. A grade that weighs nothing is the norm, so a blank box means 0. */
+    private void applyWeight() {
+        GradesData.Grade grade = gradeList.getSelected();
+        if (grade == null) return;
+        String typed = weightField.getValue().trim();
+        if (typed.isEmpty()) typed = "0";
+        try {
+            Integer.parseInt(typed);
+        } catch (NumberFormatException e) {
+            status("A weight is a whole number, negative allowed.", false);
+            return;
+        }
+        act(GuiAction.GRADE_WEIGHT_SET, grade.name(), typed);
+    }
+
     private void addNode(boolean deny) {
         GradesData.Grade grade = gradeList.getSelected();
         String node = nodeField.getValue().trim();
@@ -365,7 +392,13 @@ public final class GradesScreen extends AdminScreen {
         int cw = font.width(count);
         Skin.icon(g, Icon.USER, r.right() - cw - 14, r.y() + (r.h() - 8) / 2, isDefault ? Palette.ACCENT_HI : Palette.TEXT_MUTE);
         Skin.text(g, font, count, r.right() - cw - 4, r.y() + (r.h() - 8) / 2, isDefault ? Palette.ACCENT_HI : Palette.TEXT_MUTE);
-        Skin.text(g, font, grade.name(), r.x() + 6, r.y() + (r.h() - 8) / 2, r.w() - cw - 26, Palette.TEXT);
+        // The list is ordered by weight: show it, or the order looks arbitrary. Zero is the norm, left blank.
+        String weight = grade.weight() == 0 ? "" : "w" + grade.weight();
+        int ww = weight.isEmpty() ? 0 : font.width(weight) + 6;
+        if (!weight.isEmpty()) {
+            Skin.text(g, font, weight, r.right() - cw - 14 - ww, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
+        }
+        Skin.text(g, font, grade.name(), r.x() + 6, r.y() + (r.h() - 8) / 2, r.w() - cw - 26 - ww, Palette.TEXT);
     }
 
     private void renderNode(GuiGraphics g, Font font, NodeRow row, Rect r, boolean hovered, boolean selected) {
@@ -391,7 +424,8 @@ public final class GradesScreen extends AdminScreen {
         GradesData.Grade grade = gradeList.getSelected();
         if (grade == null) {
             paragraph(g, "Select a grade to edit its nodes and players. A player can hold several grades: the most specific "
-                    + "node wins (exact, then a.b.*, then *), a DENY wins at the same level, and it applies to operators too.",
+                    + "node wins (exact, then a.b.*, then *), the heaviest grade breaks a tie at the same level, a DENY wins "
+                    + "between equal weights, and it applies to operators too.",
                     in, in.y(), Palette.TEXT_MUTE);
             if (!canEdit(GuiArea.GRADES)) {
                 paragraph(g, "Read-only: editing grades needs " + GuiArea.GRADES.node() + ".", in, in.y() + 44, Palette.TEXT_MUTE);
@@ -399,10 +433,11 @@ public final class GradesScreen extends AdminScreen {
             return;
         }
         boolean isDefault = grade.name().equals(data.defaultGrade());
-        int headerW = in.w() - FIELD - 10 - font.width("Default") - 26;
+        int headerW = in.w() - FIELD - 10 - font.width("Default") - 26 - WEIGHT_FIELD - 4;
         Skin.text(g, font, grade.name(), in.x(), in.y(), headerW, Palette.TEXT);
         // Player and node totals are on the tabs: keep this line short enough for the Default button beside it.
         String sub = grade.allow().size() + " allow, " + grade.deny().size() + " deny"
+                + ", weight " + grade.weight()
                 + (isDefault ? ", every player" : "")
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, headerW, Palette.TEXT_MUTE);

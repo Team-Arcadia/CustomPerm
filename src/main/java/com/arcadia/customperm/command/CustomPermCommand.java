@@ -49,8 +49,10 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
@@ -63,6 +65,7 @@ import java.util.stream.Collectors;
  * /customperm grade   create|delete <name>
  *                     addperm|removeperm <grade> <node>
  *                     adddeny|removedeny <grade> <node>   # most specific entry wins, DENY on a tie
+ *                     weight <grade> <weight>             # breaks ties at the same specificity
  *                     assign|unassign <player> <grade>    # online, or joined the server before
  *                     setdefault <grade> | cleardefault   # grade applied to every player
  *                     list
@@ -270,6 +273,11 @@ public class CustomPermCommand {
                             .then(Commands.argument("node", StringArgumentType.greedyString())
                                 .suggests(SUGGEST_GRADE_DENIES)
                                 .executes(CustomPermCommand::gradeRemoveDeny))))
+                    .then(Commands.literal("weight").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("grade", StringArgumentType.word())
+                            .suggests(SUGGEST_GRADES)
+                            .then(Commands.argument("weight", IntegerArgumentType.integer())
+                                .executes(CustomPermCommand::gradeWeight))))
                     .then(Commands.literal("assign").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
@@ -602,6 +610,11 @@ public class CustomPermCommand {
             StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "node"), true)));
     }
 
+    private static int gradeWeight(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, guarded(ctx, () -> GradeAdmin.setWeight(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"), IntegerArgumentType.getInteger(ctx, "weight"))));
+    }
+
     private static int gradeSetDefault(CommandContext<CommandSourceStack> ctx) {
         return report(ctx, guarded(ctx, () -> GradeAdmin.setDefault(ctx.getSource().getServer(),
             StringArgumentType.getString(ctx, "grade"))));
@@ -644,11 +657,17 @@ public class CustomPermCommand {
     private static int gradeList(CommandContext<CommandSourceStack> ctx) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return report(ctx, refusal);
-        Set<String> names = CustomPerm.configManager.getGrades().grades.keySet();
-        if (names.isEmpty()) {
+        Map<String, GradesConfig.Grade> defined = CustomPerm.configManager.getGrades().grades;
+        if (defined.isEmpty()) {
             ctx.getSource().sendSuccess(() -> Component.literal("No grades defined."), false);
         } else {
-            ctx.getSource().sendSuccess(() -> Component.literal("Grades: " + String.join(", ", names)), false);
+            // Heaviest first: that is the order in which they break a tie on the same node.
+            String list = defined.entrySet().stream()
+                .sorted(Comparator.comparingInt((Map.Entry<String, GradesConfig.Grade> e) -> -e.getValue().weight)
+                    .thenComparing(Map.Entry::getKey))
+                .map(e -> e.getValue().weight == 0 ? e.getKey() : e.getKey() + " (weight " + e.getValue().weight + ")")
+                .collect(Collectors.joining(", "));
+            ctx.getSource().sendSuccess(() -> Component.literal("Grades: " + list), false);
         }
         return 1;
     }
