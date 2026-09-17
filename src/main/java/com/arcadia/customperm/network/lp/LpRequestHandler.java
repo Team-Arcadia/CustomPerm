@@ -57,6 +57,13 @@ public final class LpRequestHandler {
     private static final int SYNC_MAX_PER_WINDOW = 40;
     private static final int SYNC_WINDOW_SECONDS = 10;
 
+    static {
+        // Anti-spam caps, not admin rules: kept out of the persisted history, and pruned by their own
+        // window instead of being dropped by the sweep for lack of a configured rule.
+        RateLimiter.registerInternalBudget(EDIT_RATE_KEY, EDIT_WINDOW_SECONDS);
+        RateLimiter.registerInternalBudget(SYNC_RATE_KEY, SYNC_WINDOW_SECONDS);
+    }
+
     private LpRequestHandler() {
     }
 

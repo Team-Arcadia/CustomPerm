@@ -127,6 +127,89 @@ class RateLimiterTest {
                 "Le bucket d'une commande sans règle active doit être supprimé");
     }
 
+    // ---------------- persistence ----------------
+
+    @Test
+    void snapshotAndRestore_carryHistoryAcrossAClear() {
+        UUID player = UUID.randomUUID();
+        long now = System.currentTimeMillis();
+        assertTrue(RateLimiter.tryAcquire("persisted", player, 1, 3600, now).allowed());
+
+        var saved = RateLimiter.snapshot(now, name -> 3_600_000L);
+        RateLimiter.clearServerState();
+        RateLimiter.restore(saved, now + 1_000L, name -> 3_600_000L);
+
+        assertFalse(RateLimiter.tryAcquire("persisted", player, 1, 3600, now + 2_000L).allowed(),
+                "a use recorded before the restart must still count after restore");
+    }
+
+    @Test
+    void restore_appliesTheCurrentWindowAndDropsRulesThatNoLongerExist() {
+        UUID player = UUID.randomUUID();
+        long now = 10_000_000L;
+        var persisted = java.util.Map.of(
+                "shortened", java.util.Map.of(player, java.util.List.of(now - 120_000L, now - 10_000L)),
+                "removed", java.util.Map.of(player, java.util.List.of(now - 1_000L)));
+
+        RateLimiter.restore(persisted, now, name -> name.equals("shortened") ? 60_000L : -1L);
+
+        assertTrue(RateLimiter.isTracked("shortened", player));
+        assertFalse(RateLimiter.isTracked("removed", player), "history of a removed rule must not be restored");
+        assertTrue(RateLimiter.tryAcquire("shortened", player, 2, 60, now).allowed(),
+                "the use older than the current 60s window must no longer count");
+        assertFalse(RateLimiter.tryAcquire("shortened", player, 2, 60, now).allowed());
+    }
+
+    @Test
+    void clockGoingBackwards_doesNotLockPlayersOut() {
+        UUID player = UUID.randomUUID();
+        long before = 50_000_000L;
+        assertTrue(RateLimiter.tryAcquire("clock", player, 1, 10, before).allowed());
+
+        long afterClockMovedBackOneHour = before - 3_600_000L;
+        assertFalse(RateLimiter.tryAcquire("clock", player, 1, 10, afterClockMovedBackOneHour).allowed(),
+                "the use still counts right after the clock change");
+        assertTrue(RateLimiter.tryAcquire("clock", player, 1, 10, afterClockMovedBackOneHour + 11_000L).allowed(),
+                "one window later the player must be free again, not an hour later");
+    }
+
+    @Test
+    void restore_clampsTimestampsFromTheFuture() {
+        UUID player = UUID.randomUUID();
+        long now = 20_000_000L;
+        RateLimiter.restore(java.util.Map.of("future", java.util.Map.of(player, java.util.List.of(now + 86_400_000L))),
+                now, name -> 10_000L);
+        assertTrue(RateLimiter.tryAcquire("future", player, 1, 10, now + 11_000L).allowed(),
+                "a timestamp saved with a clock set a day ahead must expire one window after now");
+    }
+
+    @Test
+    void internalBudgets_areNeitherPersistedNorDroppedBySweep() {
+        String key = "gui:test_budget_" + UUID.randomUUID();
+        RateLimiter.registerInternalBudget(key, 10);
+        UUID player = UUID.randomUUID();
+        long now = System.currentTimeMillis();
+        assertTrue(RateLimiter.tryAcquire(key, player, 5, 10, now).allowed());
+
+        assertFalse(RateLimiter.snapshot(now, name -> 3_600_000L).containsKey(key));
+        RateLimiter.sweep(now + 1_000L, name -> -1L);
+        assertTrue(RateLimiter.isTracked(key, player),
+                "a registered internal budget must survive a sweep that finds no admin rule for it");
+    }
+
+    @Test
+    void dirtyFlag_tracksPersistedChangesOnly() {
+        RateLimiter.consumeDirty();
+        String key = "gui:dirty_budget_" + UUID.randomUUID();
+        RateLimiter.registerInternalBudget(key, 10);
+        RateLimiter.tryAcquire(key, UUID.randomUUID(), 5, 10);
+        assertFalse(RateLimiter.consumeDirty(), "internal budgets must not trigger a history write");
+
+        RateLimiter.tryAcquire("dirty", UUID.randomUUID(), 5, 10);
+        assertTrue(RateLimiter.consumeDirty());
+        assertFalse(RateLimiter.consumeDirty(), "consuming the flag resets it");
+    }
+
     @Test
     void maybeSweep_runsAtMostOncePerInterval() {
         UUID player = UUID.randomUUID();

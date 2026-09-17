@@ -154,6 +154,7 @@ public class AliasManager {
                                     + " per " + rule.windowSeconds + "s)."));
                             return 0;
                         }
+                        RateLimitPersistence.afterAcceptedUse(rule);
                     }
                     return executeAlias(source, alias, steps);
                 })

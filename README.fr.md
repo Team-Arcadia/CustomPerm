@@ -168,7 +168,7 @@ Sur un serveur dédié, cela reste invisible — une installation, un monde. En 
 - **Les alias et macros** — la principale raison d'utiliser CustomPerm en solo. Enchaînez plusieurs commandes derrière une seule, exécutées en op niveau 4.
 - **Le panneau TesseraUI** — `/customperm gui` fonctionne en solo comme ailleurs, si TesseraUI est installé.
 - **Les grades et nodes de permission** — de peu d'intérêt tant que vous êtes seul et déjà opérateur. Ils prennent tout leur sens dès que vous **ouvrez le monde en LAN** : les invités rejoignent en non-op, et les grades permettent de leur accorder exactement les commandes voulues.
-- **Les limites d'exécution** — attention, elles s'appliquent aussi à vous. Une limite définie dans un monde s'applique dans tous, conformément au point ci-dessus.
+- **Les limites d'exécution** — attention, elles s'appliquent aussi à vous. Une règle définie dans un monde s'applique dans tous, conformément au point ci-dessus ; les compteurs d'utilisation, eux, sont stockés dans la sauvegarde de chaque monde.
 
 ---
 
@@ -243,6 +243,18 @@ Elles gèrent les nodes ALLOW. Les nodes DENY internes sont stockés dans `grade
 | `/customperm grade unassign <player> <grade>` | Désassigne. |
 | `/customperm grade list` | Liste les grades définis. |
 
+### Limites d'exécution
+
+Plafonne le nombre d'utilisations d'une commande ou d'un alias par joueur sur une fenêtre glissante. Les limites s'appliquent à tous les joueurs, ops compris ; la console et les blocs de commande ne sont jamais limités.
+
+| Commande | Effet |
+|---|---|
+| `/customperm ratelimit set <name> <max> <windowSeconds>` | Autorise `<max>` utilisations par joueur toutes les `<windowSeconds>`. Redéfinir une règle conserve son mode de persistance. |
+| `/customperm ratelimit persistence <name> <world_save\|immediate>` | Choisit quand l'historique d'utilisation de cette commande est écrit sur le disque (voir `ratelimits.json`). |
+| `/customperm ratelimit disable <name>` / `enable <name>` | Suspend ou reprend l'application d'une règle sans perdre ses valeurs. |
+| `/customperm ratelimit remove <name>` | Supprime la règle. |
+| `/customperm ratelimit list` | Liste les règles avec leur état et leur mode de persistance. |
+
 ### Diagnostic et utilitaires
 
 | Commande | Effet |
@@ -310,6 +322,26 @@ Réglages de sécurité runtime.
 
 - `deny` : défaut recommandé pour serveur public. Si LuckPerms est chargé mais indisponible, les checks CustomPerm retournent false.
 - `internal` : mode compatibilité. Si LuckPerms est chargé mais indisponible, CustomPerm utilise `grades.json`.
+
+### `ratelimits.json`
+
+Règles de limite d'exécution, indexées par nom de commande ou d'alias.
+
+```json
+{
+  "rules": {
+    "gamemode": { "enabled": true, "maxExecutions": 3, "windowSeconds": 60, "persistence": "world_save" },
+    "heal": { "enabled": true, "maxExecutions": 1, "windowSeconds": 3600, "persistence": "immediate" }
+  }
+}
+```
+
+L'historique d'utilisation est conservé entre les redémarrages et les `/reload` vanilla. C'est un état du serveur, pas un réglage : il vit dans la sauvegarde du monde, dans `<monde>/data/customperm_ratelimits.json` (timestamps Unix en millisecondes), et non dans ce dossier. `persistence` décide quand il est écrit :
+
+- `world_save` (défaut) : avec le monde, à la sauvegarde automatique, à `/save-all` et à l'arrêt du serveur. Aucun coût par commande ; un crash du serveur perd au plus les utilisations depuis la dernière sauvegarde.
+- `immediate` : juste après chaque utilisation acceptée de cette commande. Rien n'est perdu en cas de crash, au prix d'une écriture disque par utilisation. À réserver aux commandes rares et sensibles.
+
+Au chargement, l'historique plus ancien que la fenêtre actuelle de la règle est ignoré : une fenêtre raccourcie pendant l'arrêt du serveur s'applique immédiatement. Si l'horloge système recule, les utilisations enregistrées « dans le futur » comptent à partir de maintenant pour une fenêtre au lieu de bloquer les joueurs. Un fichier d'historique illisible est renommé `customperm_ratelimits.json.corrupt-<date>` et les compteurs repartent de zéro.
 
 ### `aliases.json`
 

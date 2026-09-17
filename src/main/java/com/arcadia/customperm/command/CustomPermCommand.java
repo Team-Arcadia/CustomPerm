@@ -51,6 +51,7 @@ import java.util.stream.Collectors;
  *                     remove <name>
  *                     list
  * /customperm ratelimit set <name> <max> <windowSeconds>   # cap executions per player per window
+ *                     persistence <name> <world_save|immediate>  # when usage history is written
  *                     enable <name>                        # re-enable a previously configured limit
  *                     disable <name>                       # keep the limit's numbers, stop enforcing it
  *                     remove <name>                        # delete the limit entirely
@@ -271,6 +272,13 @@ public class CustomPermCommand {
                             .then(Commands.argument("max", IntegerArgumentType.integer(1))
                                 .then(Commands.argument("windowSeconds", IntegerArgumentType.integer(1))
                                     .executes(CustomPermCommand::rateLimitSet)))))
+                    .then(Commands.literal("persistence")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_RATE_LIMITS)
+                            .then(Commands.argument("mode", StringArgumentType.word())
+                                .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
+                                    List.of(RateLimitsConfig.PERSISTENCE_WORLD_SAVE, RateLimitsConfig.PERSISTENCE_IMMEDIATE), builder))
+                                .executes(CustomPermCommand::rateLimitPersistence))))
                     .then(Commands.literal("enable")
                         .then(Commands.argument("name", StringArgumentType.word())
                             .suggests(SUGGEST_RATE_LIMITS)
@@ -380,12 +388,36 @@ public class CustomPermCommand {
         rule.enabled = true;
         rule.maxExecutions = max;
         rule.windowSeconds = windowSeconds;
+        // Redefining the numbers must not silently reset a persistence mode the admin chose.
+        RateLimitsConfig.Rule previous = CustomPerm.configManager.getRateLimits().rules.get(name);
+        if (previous != null) rule.persistence = previous.persistence;
         rule.normalize();
 
         CustomPerm.configManager.getRateLimits().rules.put(name, rule);
         persist(ctx);
         warnIfNeitherExposedNorAlias(ctx, name);
         success(ctx, "Rate limit for /" + name + " set to " + rule.maxExecutions + " per " + rule.windowSeconds + "s (enabled).");
+        return 1;
+    }
+
+    private static int rateLimitPersistence(CommandContext<CommandSourceStack> ctx) {
+        String name = StringArgumentType.getString(ctx, "name");
+        String mode = StringArgumentType.getString(ctx, "mode").toLowerCase(Locale.ROOT);
+        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().rules.get(name);
+        if (rule == null) {
+            ctx.getSource().sendFailure(Component.literal(
+                "No rate limit configured for /" + name + ". Use /customperm ratelimit set first."));
+            return 0;
+        }
+        if (!mode.equals(RateLimitsConfig.PERSISTENCE_WORLD_SAVE) && !mode.equals(RateLimitsConfig.PERSISTENCE_IMMEDIATE)) {
+            ctx.getSource().sendFailure(Component.literal(
+                "Unknown persistence mode '" + mode + "'. Use world_save or immediate."));
+            return 0;
+        }
+        rule.persistence = mode;
+        persist(ctx);
+        success(ctx, "Usage history of /" + name + " is now written "
+            + (rule.persistsImmediately() ? "after every accepted use (immediate)." : "with the world save (world_save)."));
         return 1;
     }
 
@@ -450,6 +482,7 @@ public class CustomPermCommand {
             ChatFormatting color = rule.enabled ? ChatFormatting.GREEN : ChatFormatting.GRAY;
             ctx.getSource().sendSuccess(() -> Component.literal(
                 "/" + name + "  " + rule.maxExecutions + " per " + rule.windowSeconds + "s  [" + status + "]"
+                    + "  persistence=" + rule.persistence
             ).withStyle(color), false);
         });
         return 1;

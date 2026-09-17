@@ -76,4 +76,24 @@ class RateLimitsConfigTest {
         assertEquals(1, rule.maxExecutions);
         assertEquals(1, rule.windowSeconds);
     }
+
+    @Test
+    void shouldNormalizePersistenceMode_toWorldSaveUnlessImmediate() {
+        RateLimitsConfig.Rule fresh = new RateLimitsConfig.Rule();
+        assertEquals(RateLimitsConfig.PERSISTENCE_WORLD_SAVE, fresh.persistence, "default is world_save");
+
+        RateLimitsConfig.Rule loud = new RateLimitsConfig.Rule();
+        loud.persistence = "  IMMEDIATE ";
+        loud.normalize();
+        assertEquals(RateLimitsConfig.PERSISTENCE_IMMEDIATE, loud.persistence);
+        assertTrue(loud.persistsImmediately());
+
+        for (String invalid : new String[] {null, "", "always", "worldsave"}) {
+            RateLimitsConfig.Rule rule = new RateLimitsConfig.Rule();
+            rule.persistence = invalid;
+            rule.normalize();
+            assertEquals(RateLimitsConfig.PERSISTENCE_WORLD_SAVE, rule.persistence, "invalid value " + invalid);
+            assertFalse(rule.persistsImmediately());
+        }
+    }
 }

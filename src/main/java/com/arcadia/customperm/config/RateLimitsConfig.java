@@ -22,14 +22,26 @@ import java.util.Map;
 public class RateLimitsConfig {
     public Map<String, Rule> rules = new LinkedHashMap<>();
 
+    /** Usage history written with the world save (autosave, save-all, stop). */
+    public static final String PERSISTENCE_WORLD_SAVE = "world_save";
+    /** Usage history written right after each accepted use: nothing lost on a crash, one disk write per use. */
+    public static final String PERSISTENCE_IMMEDIATE = "immediate";
+
     public static class Rule {
         public boolean enabled = true;
         public int maxExecutions = 10;
         public int windowSeconds = 3600;
+        public String persistence = PERSISTENCE_WORLD_SAVE;
 
         public void normalize() {
             if (maxExecutions < 1) maxExecutions = 1;
             if (windowSeconds < 1) windowSeconds = 1;
+            persistence = persistence == null ? PERSISTENCE_WORLD_SAVE : persistence.trim().toLowerCase(java.util.Locale.ROOT);
+            if (!PERSISTENCE_IMMEDIATE.equals(persistence)) persistence = PERSISTENCE_WORLD_SAVE;
+        }
+
+        public boolean persistsImmediately() {
+            return PERSISTENCE_IMMEDIATE.equals(persistence);
         }
     }
 

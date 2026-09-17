@@ -10,6 +10,8 @@
 package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.command.RateLimitPersistence;
+import com.arcadia.customperm.command.RateLimiter;
 import com.arcadia.customperm.gametest.support.ServerCommands;
 import com.arcadia.customperm.gametest.support.TestPlayer;
 import com.mojang.authlib.GameProfile;
@@ -21,8 +23,12 @@ import net.minecraft.world.level.GameType;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Per-player rate limits with connected players, in both backends (procedure 1.0.5 A6 and A7, audit
@@ -107,6 +113,13 @@ public class RateLimitGameTest {
             expect(ServerCommands.run(server, "customperm ratelimit list"), "[disabled]");
 
             expect(ServerCommands.run(server, "customperm ratelimit enable gamemode"), "enabled (1 per 60s)");
+            expect(ServerCommands.run(server, "customperm ratelimit list"), "persistence=world_save");
+            expect(ServerCommands.run(server, "customperm ratelimit persistence gamemode immediate"),
+                    "is now written after every accepted use (immediate)");
+            ServerCommands.run(server, "customperm ratelimit set gamemode 2 60");
+            expect(ServerCommands.run(server, "customperm ratelimit list"), "/gamemode  2 per 60s  [enabled]  persistence=immediate");
+            expect(ServerCommands.run(server, "customperm ratelimit persistence gamemode sometimes"), "Unknown persistence mode");
+            expect(ServerCommands.run(server, "customperm ratelimit persistence cp_r_none immediate"), "No rate limit configured for /cp_r_none");
             expect(ServerCommands.run(server, "customperm ratelimit remove gamemode"), "Rate limit for /gamemode removed.");
             expect(ServerCommands.run(server, "customperm ratelimit enable cp_r_none"), "No rate limit configured for /cp_r_none");
 
@@ -220,6 +233,119 @@ public class RateLimitGameTest {
                 player.close();
             }
         });
+    }
+
+    /**
+     * A restart keeps the counters: history saved, memory wiped as on server stop, history loaded as on
+     * server start, and the player is still limited. Own batch: it clears the limiter's global state.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100, batch = "customperm_ratelimit_restart")
+    public static void countersSurviveARestart(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_r_restart", 2)) {
+            ServerCommands.run(server, "customperm ratelimit set gamemode 1 3600");
+            player.clearReceived();
+            if (runGamemode(player, 1) != 0) fail("Setup: the first call must be accepted.");
+
+            RateLimitPersistence.write();
+            RateLimiter.clearServerState();
+            RateLimitPersistence.load();
+
+            if (runGamemode(player, 1) != 1) fail("The counter was reset by the restart: " + player.chat());
+            if (!historyFileMentions(player)) fail("The history file does not contain the player's use.");
+        } finally {
+            removeRule(server);
+            RateLimitPersistence.write();
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A vanilla /reload rebuilds the whole command dispatcher; it used to wipe the counters with it and
+     * hand every player a fresh quota. The player reconnects after the reload (see TestPlayer's known
+     * limit). Own batch: the reload replaces the dispatcher for everyone.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 600, batch = "customperm_ratelimit_vanilla_reload")
+    public static void vanillaReloadKeepsCounters(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        GameProfile profile = new GameProfile(UUID.randomUUID(), "cp_r_datapack");
+        ServerCommands.run(server, "customperm ratelimit set gamemode 1 3600");
+        try (TestPlayer before = TestPlayer.join(helper.getLevel(), profile, 2, true)) {
+            before.clearReceived();
+            if (runGamemode(before, 2) != 1) {
+                removeRule(server);
+                fail("Setup: the second call before the reload must be refused.");
+            }
+        }
+        CompletableFuture<Void> reload = server.reloadResources(server.getPackRepository().getSelectedIds());
+        whenDone(helper, reload, 500, () -> {
+            try (TestPlayer after = TestPlayer.join(helper.getLevel(), profile, 2, true)) {
+                if (reload.isCompletedExceptionally()) fail("The vanilla reload failed.");
+                after.clearReceived();
+                if (runGamemode(after, 1) != 1) fail("A vanilla /reload reset the rate-limit counter: " + after.chat());
+                helper.succeed();
+            } finally {
+                removeRule(server);
+                RateLimitPersistence.write();
+            }
+        });
+    }
+
+    /** world_save: an accepted use is not written on its own, the next world save writes it. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "customperm_ratelimit_world_save")
+    public static void worldSaveModeWritesWithTheWorld(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_r_worldsave", 2)) {
+            ServerCommands.run(server, "customperm ratelimit set gamemode 5 3600");
+            RateLimitPersistence.write();
+            runGamemode(player, 1);
+            if (historyFileMentions(player)) fail("world_save wrote the history on use instead of with the world.");
+            ServerCommands.run(server, "save-all");
+            if (!historyFileMentions(player)) fail("save-all did not write the rate-limit history.");
+        } finally {
+            removeRule(server);
+            RateLimitPersistence.write();
+        }
+        helper.succeed();
+    }
+
+    /** immediate: the history is on disk as soon as the use is accepted. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100, batch = "customperm_ratelimit_immediate")
+    public static void immediateModeWritesOnEachUse(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_r_immediate", 2)) {
+            ServerCommands.run(server, "customperm ratelimit set gamemode 5 3600");
+            ServerCommands.run(server, "customperm ratelimit persistence gamemode immediate");
+            RateLimitPersistence.write();
+            if (historyFileMentions(player)) fail("Setup: the player must not be in the history yet.");
+            runGamemode(player, 1);
+            if (!historyFileMentions(player)) fail("immediate did not write the history right after the use.");
+        } finally {
+            removeRule(server);
+            RateLimitPersistence.write();
+        }
+        helper.succeed();
+    }
+
+    private static boolean historyFileMentions(TestPlayer player) {
+        Path file = RateLimitPersistence.file();
+        if (file == null) fail("No rate-limit history file: RateLimitPersistence did not see the server start.");
+        try {
+            return Files.exists(file) && Files.readString(file).contains(player.uuid().toString());
+        } catch (IOException e) {
+            fail("Cannot read " + file + ": " + e.getMessage());
+            return false;
+        }
+    }
+
+    private static void whenDone(GameTestHelper helper, CompletableFuture<?> future, int ticksLeft, Runnable check) {
+        if (!future.isDone() && ticksLeft > 0) {
+            helper.runAfterDelay(10, () -> whenDone(helper, future, ticksLeft - 10, check));
+            return;
+        }
+        if (!future.isDone()) fail("The vanilla reload did not finish in time.");
+        // Command re-assertion over other handlers runs on the next tick after RegisterCommandsEvent.
+        helper.runAfterDelay(5, check);
     }
 
     /** Runs /gamemode {@code times} times, alternating modes, and returns how many calls were refused. */

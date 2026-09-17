@@ -168,7 +168,7 @@ On a dedicated server this is invisible — one installation, one world. In sing
 - **Aliases and macros** — the main reason to run CustomPerm solo. Chain several commands behind one, executed at op level 4.
 - **The TesseraUI panel** — `/customperm gui` works in singleplayer like anywhere else, if TesseraUI is installed.
 - **Grades and permission nodes** — of little use while you are alone and already an operator. They become meaningful the moment you **open the world to LAN**: guests join as non-ops, and grades let you hand out exactly the commands you want them to have.
-- **Rate limits** — note these apply to you as well. A limit set in one world applies in all of them, per the point above.
+- **Rate limits** — note these apply to you as well. A rule set in one world applies in all of them, per the point above; the usage counters, however, are stored in each world's save.
 
 ---
 
@@ -243,6 +243,18 @@ They manage ALLOW nodes. Internal DENY nodes are stored in `grades.json` under `
 | `/customperm grade unassign <player> <grade>` | Unassigns. |
 | `/customperm grade list` | Lists defined grades. |
 
+### Rate limits
+
+Cap how many times one player may run a command or an alias within a sliding window. Limits apply to every player, operators included; the console and command blocks are never limited.
+
+| Command | Effect |
+|---|---|
+| `/customperm ratelimit set <name> <max> <windowSeconds>` | Allows `<max>` uses per player per `<windowSeconds>`. Redefining a rule keeps its persistence mode. |
+| `/customperm ratelimit persistence <name> <world_save\|immediate>` | Chooses when the usage history of that command is written to disk (see `ratelimits.json`). |
+| `/customperm ratelimit disable <name>` / `enable <name>` | Stops or resumes enforcing a rule without losing its numbers. |
+| `/customperm ratelimit remove <name>` | Deletes the rule. |
+| `/customperm ratelimit list` | Lists rules with their state and persistence mode. |
+
 ### Diagnostic and utilities
 
 | Command | Effect |
@@ -310,6 +322,26 @@ Runtime safety settings.
 
 - `deny`: default and recommended for public servers. If LuckPerms is loaded but unavailable, CustomPerm permission checks return false.
 - `internal`: compatibility mode. If LuckPerms is loaded but unavailable, CustomPerm falls back to `grades.json`.
+
+### `ratelimits.json`
+
+Rate-limit rules, keyed by command or alias name.
+
+```json
+{
+  "rules": {
+    "gamemode": { "enabled": true, "maxExecutions": 3, "windowSeconds": 60, "persistence": "world_save" },
+    "heal": { "enabled": true, "maxExecutions": 1, "windowSeconds": 3600, "persistence": "immediate" }
+  }
+}
+```
+
+Usage history is kept across restarts and vanilla `/reload`. It is a server state, not a setting, so it lives in the world save, in `<world>/data/customperm_ratelimits.json` (Unix timestamps in milliseconds), not in this folder. `persistence` decides when it is written:
+
+- `world_save` (default): with the world, on autosave, `/save-all` and server stop. No cost per command; a server crash loses at most the uses since the last save.
+- `immediate`: right after each accepted use of that command. Nothing is lost on a crash, at the price of one disk write per use. Keep it for rare, sensitive commands.
+
+On load, history older than the rule's current window is dropped, so a window shortened while the server was stopped applies at once. If the system clock moves backwards, uses recorded "in the future" count from now for one window instead of locking players out. An unreadable history file is renamed `customperm_ratelimits.json.corrupt-<date>` and counters start empty.
 
 ### `aliases.json`
 

@@ -159,11 +159,15 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         }
     }
 
-    /** Purge l'état statique lié au dispatcher courant — voir onRegisterCommands. */
+    /**
+     * Purge l'état statique lié au dispatcher courant — voir onRegisterCommands.
+     * Rate-limit history is deliberately not cleared here: a vanilla /reload rebuilds the dispatcher,
+     * and wiping the counters with it handed every player a fresh quota. RateLimitPersistence clears
+     * it on server stop, after saving it.
+     */
     public static void clearServerState() {
         ORIGINAL_ROOTS.clear();
         WRAPPED_NODES.clear();
-        RateLimiter.clearServerState();
     }
 
     public static int repair(MinecraftServer server) {
@@ -490,13 +494,14 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
                             + " per " + rule.windowSeconds + "s)."));
                     return 0;
                 }
+                RateLimitPersistence.afterAcceptedUse(rule);
             }
             return original.run(ctx);
         };
     }
 
     /** Active window (ms) for {@code commandName}, or {@code <= 0} when no enabled rule exists. */
-    private static long rateLimitWindowMillis(String commandName) {
+    static long rateLimitWindowMillis(String commandName) {
         RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(commandName);
         if (rule == null || !rule.enabled) return -1L;
         return rule.windowSeconds * 1000L;

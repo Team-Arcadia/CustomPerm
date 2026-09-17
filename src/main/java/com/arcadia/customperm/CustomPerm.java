@@ -11,6 +11,7 @@ package com.arcadia.customperm;
 import com.arcadia.customperm.command.AliasManager;
 import com.arcadia.customperm.command.CommandTreeRewriter;
 import com.arcadia.customperm.command.ICommandTreeReloader;
+import com.arcadia.customperm.command.RateLimitPersistence;
 import com.arcadia.customperm.config.ConfigManager;
 import com.arcadia.customperm.network.NetworkHandler;
 import com.arcadia.customperm.notify.AdminAlerts;
@@ -98,6 +99,9 @@ public class CustomPerm {
         NeoForge.EVENT_BUS.addListener(AdminNotifier::onServerStarted);
         NeoForge.EVENT_BUS.addListener(AdminNotifier::onServerStopped);
         NeoForge.EVENT_BUS.addListener(AdminNotifier::onPlayerLoggedIn);
+        NeoForge.EVENT_BUS.addListener(RateLimitPersistence::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(RateLimitPersistence::onLevelSave);
+        NeoForge.EVENT_BUS.addListener(RateLimitPersistence::onServerStopped);
         modBus.addListener(NetworkHandler::register);
     }
 

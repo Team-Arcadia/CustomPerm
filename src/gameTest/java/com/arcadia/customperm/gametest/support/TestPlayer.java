@@ -51,6 +51,11 @@ import java.util.function.Supplier;
  *
  * <p>Always {@link #close()} it (try-with-resources): a player left in the list would receive the
  * broadcasts of later tests and skew their assertions.</p>
+ *
+ * <p>Known limit: after a vanilla {@code /reload} ({@code MinecraftServer.reloadResources}), a test player
+ * that stayed connected during the reload remains in the player list with an open channel, but receives
+ * no further packets. Tests that reload data packs reconnect their players afterwards. Whether a real
+ * client behaves the same was not established; it is checked by hand in the test procedure.</p>
  */
 public final class TestPlayer implements AutoCloseable {
 
