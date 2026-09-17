@@ -69,6 +69,29 @@ public class AliasGameTest {
         helper.succeed();
     }
 
+    /**
+     * Security (INVARIANT-503): alias steps run at op level 4, but /customperm checks the real player's
+     * level. A non-operator allowed to run an alias that calls /customperm must not change anything.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void aliasCannotEscalateToCustompermAdmin(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        var exposed = CustomPerm.configManager.getCommands().grantedCommands;
+        boolean wasExposed = exposed.contains("seed");
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_a_escalate", 0);
+             Grants ignored = Grants.allow(player, "customperm.alias.cp_a_escalate")) {
+            ServerCommands.run(server, "customperm alias add cp_a_escalate customperm command add seed");
+            player.clearReceived();
+            player.type("cp_a_escalate");
+            if (exposed.contains("seed") && !wasExposed)
+                fail("A non-operator used an alias to run /customperm command add.");
+        } finally {
+            ServerCommands.run(server, "customperm alias remove cp_a_escalate");
+            if (!wasExposed && exposed.contains("seed")) ServerCommands.run(server, "customperm command remove seed");
+        }
+        helper.succeed();
+    }
+
     /** A5.3: zero-based step editing, and an out-of-range index refused. */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void stepEditingKeepsIndicesConsistent(GameTestHelper helper) {

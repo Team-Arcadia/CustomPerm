@@ -174,21 +174,6 @@ public class Customperm {
         helper.succeed();
     }
 
-    /**
-     * End-to-end with a real player would require {@code (ServerPlayer) helper.makeMockPlayer(...)},
-     * but {@code GameTestHelper.makeMockPlayer} in 1.21.1 returns an anonymous Player subclass
-     * that is NOT a ServerPlayer — the cast crashes. {@link InternalPermService#hasPermission}
-     * gates on {@code instanceof ServerPlayer}, so a non-ServerPlayer mock returns false anyway.
-     *
-     * The full flow is exercised in the manual procedure (see test-complete.html, phase H);
-     * the components are covered by the other tests in this file. We keep the slot here as a
-     * placeholder for when a future MC version exposes a real ServerPlayer mock.
-     */
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void wrappedCanUseFullFlow(GameTestHelper helper) {
-        helper.succeed();
-    }
-
     @GameTest(template = TEMPLATE, timeoutTicks = 100, skyAccess = true)
     public static void opAlwaysPasses(GameTestHelper helper) {
         var commandsCfg = CustomPerm.configManager.getCommands();

@@ -11,6 +11,8 @@ package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.GradesConfig;
+import com.arcadia.customperm.gametest.support.ServerCommands;
+import com.arcadia.customperm.gametest.support.TestPlayer;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -109,13 +111,25 @@ public class HotReloadTest {
     }
 
     /**
-     * Placeholder — re-push of the client CommandTree after hot-reload requires connected
-     * clients. GameTestServer runs without clients so this is deferred.
+     * INVARIANT-501: a successful reload pushes a fresh command tree to every connected player, so a
+     * change in exposure or grades shows up in their tab completion without reconnecting. Own batch:
+     * other tests resend command trees to all players, which would make this pass on their packets.
      */
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    @GameTest(template = TEMPLATE, timeoutTicks = 100, batch = "customperm_reload_repush")
     public static void hotReloadCommandTreeRepush(GameTestHelper helper) {
-        // Placeholder: CommandTree re-push requires connected clients (not available in GameTestServer).
-        helper.succeed();
+        TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_hr_repush", 0);
+        player.clearReceived();
+        ServerCommands.run(helper.getLevel().getServer(), "customperm reload");
+        // The push is scheduled with server.execute(), so it is delivered on a later tick.
+        helper.runAfterDelay(2, () -> {
+            try {
+                if (player.commandTreesReceived() < 1)
+                    fail("A successful /customperm reload did not resend the command tree to a connected player.");
+                helper.succeed();
+            } finally {
+                player.close();
+            }
+        });
     }
 
     private static void fail(String msg) {

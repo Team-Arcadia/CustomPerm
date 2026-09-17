@@ -335,16 +335,6 @@ public class AliasExecutionTest {
         }
     }
 
-    /**
-     * Placeholder — verifying that a non-OP player cannot use /customperm requires a real
-     * ServerPlayer mock, which is unavailable in MC 1.21.1 GameTest.
-     */
-    @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void custompermBlockedForNonOpPlaceholder(GameTestHelper helper) {
-        // Placeholder: mock player ≠ ServerPlayer in 1.21.1 — E2E OP check deferred.
-        helper.succeed();
-    }
-
     private static void fail(String msg) {
         throw new GameTestAssertException(msg);
     }
