@@ -57,6 +57,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **Contrôle de version LuckPerms** : LuckPerms `5.4.150+` requis ; les versions trop anciennes ou prerelease sont refusées par sécurité.
 - **Fallback LP configurable** : si LuckPerms devient indisponible au runtime, `settings.json` décide si CustomPerm refuse les permissions (`deny`, défaut) ou bascule sur le backend interne (`internal`).
 - **Visibilité du backend** : logs de boot, `/customperm status`, `/customperm debug` et `/customperm test` indiquent Internal, LuckPerms, Internal fallback from LuckPerms ou le mode deny.
+- **Journal d'activité** : chaque modification d'administration (commandes, interface, éditeur LuckPerms, `/lp`) est enregistrée avec qui, quand et le résultat ; les commandes tapées par les joueurs peuvent l'être aussi, désactivé par défaut, avec les arguments des messages privés et mots de passe masqués. Fichiers quotidiens dans le dossier du monde, gardés 30 jours par défaut, et une page Journaux dans l'interface.
 - **Alertes admin** : quand LuckPerms devient indisponible ou qu'un fichier de config ne se charge pas, chaque op connecté (niveau 2+) reçoit une alerte dans le chat, les ops qui se connectent ensuite la reçoivent à la connexion, et `/customperm status` la liste jusqu'à sa résolution.
 - **RBAC multi-grades** : un joueur peut avoir plusieurs grades internes ; les permissions sont résolues par union des grades assignés.
 - **DENY explicite** : les grades internes supportent `deniedPermissions`. L'entrée la plus spécifique l'emporte, comme LuckPerms (nœud exact, puis `a.b.*`, puis `*`), et un DENY gagne à niveau égal.
@@ -131,8 +132,9 @@ L'interface est dessinée nativement (sans bibliothèque d'interface) et remplac
 | Limites d'exécution | Toutes les règles avec leurs valeurs et badges (désactivée, cible ni exposée ni alias) ; ajouter une limite, changer usages et fenêtre, activer ou désactiver, choisir quand l'historique est écrit (sauvegarde du monde ou à chaque usage), supprimer (avec confirmation) ; les commandes exposées et alias sans limite sont listés et remplissent le formulaire en un clic |
 | LuckPerms | Uniquement quand LuckPerms est installé : pas d'entrée de navigation sinon, et `/customperm gui luckperms` explique pourquoi. Installé mais pas démarré (solo, échec au démarrage), la page affiche une bannière au lieu de l'éditeur. **Groupes** : créer, supprimer, nœuds de permission allow/deny avec contextes et durée, parents, poids, nom affiché, préfixe, suffixe, meta. **Joueurs** : joueurs connectés et tout joueur trouvé par pseudo exact, leurs nœuds, groupes avec durée, groupe principal, promotion et rétrogradation sur un track, préfixe, suffixe, meta. **Tracks** : créer, supprimer, ajouter, insérer à une position, retirer un groupe. Les écritures passent par l'API LuckPerms côté serveur, protégées par `customperm.gui.luckperms.edit` |
 | Grades | Toujours accessible, pour pouvoir lire le repli quand LuckPerms fonctionne ou tombe. Une bannière indique quand les grades ne décident pas des permissions ; avec LuckPerms actif la page est en lecture seule, comme les commandes de grade : grades avec recherche et création ; par grade, nœuds ALLOW et DENY, et joueurs avec leur état en ligne, attribués par pseudo avec complétion, y compris hors ligne s'ils sont déjà venus sur le serveur ; suppression d'un grade (avec confirmation) |
+| Journaux | Deux onglets, du plus récent au plus ancien, avec recherche. **Admin** : chaque modification faite par les commandes `/customperm`, l'interface et l'éditeur LuckPerms, et les modifications que LuckPerms enregistre lui-même (`/lp`, éditeur web) : quand, qui, d'où, quoi, et le résultat ou le refus. **Joueurs** : chaque commande tapée par les joueurs, seulement quand l'enregistrement est actif (désactivé par défaut) ; arguments des commandes de message privé et de mot de passe masqués sauf si le masquage est désactivé. Changer l'enregistrement et le masquage demande `customperm.gui.logs.edit` |
 
-**Permissions.** Lire une page demande le même accès que `/customperm` : op level 2, et `customperm.admin` non refusé. Écrire demande en plus le nœud du domaine : `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.luckperms.edit`. Un opérateur de niveau 2 a besoin du nœud explicitement autorisé, pour pouvoir déléguer un domaine à un modérateur sans ouvrir les autres. Le niveau de permission 4 (propriétaire du serveur) peut écrire là où le nœud n'est pas défini ; un DENY explicite ferme le domaine au propriétaire aussi. Les actions qui ne modifient pas la configuration, comme le rechargement, demandent seulement op level 2, comme leur commande. Chaque action appliquée est journalisée côté serveur avec le nom de l'admin.
+**Permissions.** Lire une page demande le même accès que `/customperm` : op level 2, et `customperm.admin` non refusé. Écrire demande en plus le nœud du domaine : `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.logs.edit`, `customperm.gui.luckperms.edit`. Un opérateur de niveau 2 a besoin du nœud explicitement autorisé, pour pouvoir déléguer un domaine à un modérateur sans ouvrir les autres. Le niveau de permission 4 (propriétaire du serveur) peut écrire là où le nœud n'est pas défini ; un DENY explicite ferme le domaine au propriétaire aussi. Les actions qui ne modifient pas la configuration, comme le rechargement, demandent seulement op level 2, comme leur commande. Chaque action, appliquée ou refusée, est enregistrée dans le journal d'activité avec le nom de l'admin.
 
 **Compatibilité.** L'interface utilise le protocole réseau 2. Un client avec un CustomPerm plus ancien se connecte toujours à un serveur 1.1.0 mais n'y a pas d'interface, et inversement.
 
@@ -271,7 +273,11 @@ Plafonne le nombre d'utilisations d'une commande ou d'un alias par joueur sur un
 | `/customperm status` | Snapshot global : backend, nb de commandes wrappées, exposées, aliases, grades, alertes admin actives. |
 | `/customperm scan [pattern]` | Liste toutes les commandes du dispatcher avec leur état (exposée, alias, mod-interne). Filtre optionnel. |
 | `/customperm reload` | Recharge les fichiers de config depuis le disque. |
-| `/customperm gui [dashboard\|commands\|aliases\|ratelimits\|grades]` | Ouvre l'interface d'administration en jeu (demande CustomPerm côté client). La lecture demande op level 2, l'écriture le nœud `customperm.gui.<domaine>.edit` du domaine. |
+| `/customperm log admin [nombre]` | Les dernières modifications d'administration (10 par défaut, jusqu'à 100), les refus en rouge. |
+| `/customperm log players [nombre]` | Les dernières commandes tapées par les joueurs, quand l'enregistrement est actif. |
+| `/customperm log record <true\|false>` | Démarre ou arrête l'enregistrement des commandes des joueurs. Équivaut à `playerCommandLog` dans `settings.json`. |
+| `/customperm log mask <true\|false>` | Masque ou garde les arguments des commandes listées dans `maskedCommands`. |
+| `/customperm gui [dashboard\|commands\|aliases\|ratelimits\|grades\|logs]` | Ouvre l'interface d'administration en jeu (demande CustomPerm côté client). La lecture demande op level 2, l'écriture le nœud `customperm.gui.<domaine>.edit` du domaine. |
 | `/customperm gui luckperms [groups\|players\|tracks]` | Ouvre l'éditeur LuckPerms en jeu. Uniquement quand LuckPerms est installé ; s'il ne fonctionne pas, la page explique pourquoi. L'écriture demande `customperm.gui.luckperms.edit`. |
 
 ---
@@ -324,12 +330,19 @@ Réglages de sécurité runtime.
 {
   "luckPermsFallbackMode": "deny",
   "gateAllCommands": false,
-  "defaultGrade": ""
+  "defaultGrade": "",
+  "playerCommandLog": false,
+  "maskPlayerCommandArguments": true,
+  "maskedCommands": ["msg", "tell", "w", "teammsg", "tm", "login", "l", "register", "reg", "changepassword", "changepw"],
+  "logRetentionDays": 30
 }
 ```
 
 - `gateAllCommands` (backend interne, `false` par défaut) : `true` fait lire à chaque commande son nœud `customperm.command.<nom>`. Un DENY explicite bloque alors n'importe quelle commande pour les opérateurs aussi, et un ALLOW ouvre n'importe quelle commande : un grade qui a `*` ou `customperm.command.*` obtient toutes les commandes du serveur. Sans effet avec LuckPerms installé, qui contrôle déjà toutes les commandes.
 - `defaultGrade` (backend interne, vide par défaut) : un grade appliqué à tous les joueurs, sous leurs propres grades.
+- `playerCommandLog` (`false` par défaut) : enregistre chaque commande tapée par les joueurs dans le journal d'activité. Les modifications d'administration sont toujours enregistrées.
+- `maskPlayerCommandArguments` (`true` par défaut) et `maskedCommands` : les arguments de ces commandes racines sont stockés sous la forme `[masked]` (`/msg Alex salut` devient `/msg [masked]`). Un préfixe de namespace est ignoré.
+- `logRetentionDays` (`30` par défaut) : les fichiers quotidiens plus anciens sont supprimés au démarrage et à chaque changement de jour ; `0` les garde indéfiniment. Fichiers : `<monde>/customperm/logs/admin-AAAA-MM-JJ.jsonl` et `players-AAAA-MM-JJ.jsonl`, un objet JSON par ligne.
 
 `luckPermsFallbackMode` accepte :
 
@@ -563,6 +576,10 @@ Chaque joueur suit désormais `everyone` sous ses propres grades, et chaque comm
 
 `customperm.command.*` couvre **toutes** les commandes exposées. Si vous exposez `/op` (déconseillé) ou `/whitelist`, le wildcard les couvre aussi. Avec `gateAllCommands`, lui et `*` couvrent toutes les commandes du serveur. **Préférez** des nodes explicites pour les commandes sensibles.
 
+### Journal des commandes joueurs et données personnelles
+
+L'onglet joueurs enregistre quel joueur a lancé quelle commande et quand : c'est une donnée personnelle. Il est désactivé par défaut. Avant de l'activer, prévenez vos joueurs, gardez la rétention aussi courte que nécessaire, et laissez le masquage actif sauf raison de lire les messages privés. Les entrées déjà enregistrées ne sont pas réécrites quand le masquage change. Toute personne qui administre CustomPerm peut lire le journal, et les fichiers sont dans le dossier du monde, lisibles par qui a accès aux fichiers du serveur.
+
 ### Audit régulier
 
 Inspectez les fichiers `commands.json`, `aliases.json`, et (en mode interne) `grades.json` régulièrement, ou utilisez `/customperm status` et `/customperm scan` en jeu.
@@ -699,7 +716,7 @@ Les benchmarks de performance se lancent avec :
 | Config manager | Lectures atomiques du snapshot, sauvegardes atomiques sérialisées, rejet de reload concurrent, rollback après JSON invalide, création et rotation des backups. |
 | Compatibilité config | Fichiers manquants, fichiers `{}`, collections explicitement `null`, champs futurs inconnus, configs partielles. |
 | Sélection LuckPerms | Backend interne sans LP, parsing de versions, version minimale, sélection stable du backend. |
-| GameTests, deux modes | Exposition et retrait de commande avec un joueur non-op, préservation des ops, `/customperm` refusé aux non-ops, reconnexion, aliases exécutés en op 4 par les seuls détenteurs du node et incapables d'atteindre `/customperm`, édition des steps, gardes de récursion et de shadowing, reload d'un `aliases.json` modifié à la main, limites de débit (message de refus, compteur partagé par racine, isolation par joueur, console exemptée, expiration de fenêtre, reconnexion, reloads répétés, suppression de règle, aliases), reload tout-ou-rien, refus du reload concurrent, changements non sauvegardés après un reload en échec, entrées `null`, repush du command tree au reload, alertes admin dans le chat des ops, paquets du GUI et de l'éditeur refusés aux non-ops, sorties de diagnostic, autocomplétion de chaque argument de `/customperm` et aucune suggestion pour un non-op, opérateurs refusés sur une commande exposée, un alias, `/customperm` ou un domaine de l'interface par un DENY explicite pendant que la console garde l'accès, `*` refusé bloquant tout sauf les autorisations explicites. |
+| GameTests, deux modes | Exposition et retrait de commande avec un joueur non-op, préservation des ops, `/customperm` refusé aux non-ops, reconnexion, aliases exécutés en op 4 par les seuls détenteurs du node et incapables d'atteindre `/customperm`, édition des steps, gardes de récursion et de shadowing, reload d'un `aliases.json` modifié à la main, limites de débit (message de refus, compteur partagé par racine, isolation par joueur, console exemptée, expiration de fenêtre, reconnexion, reloads répétés, suppression de règle, aliases), reload tout-ou-rien, refus du reload concurrent, changements non sauvegardés après un reload en échec, entrées `null`, repush du command tree au reload, alertes admin dans le chat des ops, paquets du GUI et de l'éditeur refusés aux non-ops, sorties de diagnostic, autocomplétion de chaque argument de `/customperm` et aucune suggestion pour un non-op, opérateurs refusés sur une commande exposée, un alias, `/customperm` ou un domaine de l'interface par un DENY explicite pendant que la console garde l'accès, `*` refusé bloquant tout sauf les autorisations explicites, modifications d'administration par commande et par l'interface enregistrées avec les refus, commandes des joueurs enregistrées seulement si actif et masquées par défaut, fichiers sur disque, rechargement depuis le disque ignorant les lignes illisibles, rétention, boutons de la page Journaux soumis à leur nœud, modifications `/lp` enregistrées (mode LuckPerms). |
 | GameTests, mode interne | Commandes de grade, union des grades, entrée la plus spécifique gagnante, toutes les formes de wildcard, éditeur sans LuckPerms, `gateAllCommands` et `*` autorisé, grade par défaut restreignant un op accidentel, auto-verrouillage refusé par commande et par l'interface. |
 | GameTests, mode LuckPerms | Éditeur en jeu face à un vrai LuckPerms : groupes, nodes avec contextes et expiration, héritage, meta, prefix et suffix, poids, nom d'affichage, groupes et groupe principal d'un joueur, tracks, promote et demote, verrouillage des écritures par node et niveau, limites d'édition et de sync ; command tree renvoyé après un changement LuckPerms ; repli `deny` et `internal` quand LuckPerms devient indisponible. |
 | Performance | `PermissionResolver.resolve()` et lecture concurrente du snapshot config via JMH. |

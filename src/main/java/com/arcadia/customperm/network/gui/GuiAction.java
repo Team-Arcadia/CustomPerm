@@ -69,7 +69,12 @@ public enum GuiAction {
     /** {@code [playerUuid, grade]} Unassigns a grade, by UUID so unnamed entries can be cleaned up. */
     GRADE_UNASSIGN(2, GuiArea.GRADES),
     /** {@code [grade]} Makes a grade apply to every player; an empty name clears the default grade. */
-    GRADE_DEFAULT(1, GuiArea.GRADES);
+    GRADE_DEFAULT(1, GuiArea.GRADES),
+
+    /** {@code ["true"|"false"]} Records player commands, like {@code /customperm log record}. */
+    LOG_PLAYERS(1, GuiArea.LOGS),
+    /** {@code ["true"|"false"]} Masks the arguments of sensitive commands, like {@code /customperm log mask}. */
+    LOG_MASK(1, GuiArea.LOGS);
 
     private final int arity;
     private final GuiArea area;

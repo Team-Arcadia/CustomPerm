@@ -11,7 +11,9 @@ package com.arcadia.customperm.perm;
 import com.arcadia.customperm.CustomPerm;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
+import net.luckperms.api.actionlog.Action;
 import net.luckperms.api.event.EventSubscription;
+import net.luckperms.api.event.log.LogPublishEvent;
 import net.luckperms.api.event.user.UserDataRecalculateEvent;
 import net.luckperms.api.model.user.User;
 import net.minecraft.commands.CommandSourceStack;
@@ -42,6 +44,8 @@ public class LuckPermsService implements PermissionService {
      */
     private final Object hooksLock = new Object();
     private volatile ServerHooks serverHooks;
+    /** Copies LuckPerms' own action log (/lp, web editor) into CustomPerm's activity log. */
+    private volatile EventSubscription<LogPublishEvent> logSubscription;
 
     public LuckPermsService(InternalPermService fallback) {
         // P7 : fail-fast si fallback null — NPE tardif lors d'une vraie défaillance LP serait bien pire.
@@ -167,6 +171,19 @@ public class LuckPermsService implements PermissionService {
             } catch (Throwable t) {
                 CustomPerm.LOGGER.warn("[CustomPerm] Could not subscribe LP events; permission checks may still work but live command tree resync is disabled.", t);
             }
+            try {
+                logSubscription = api.getEventBus().subscribe(LogPublishEvent.class, event -> {
+                    Action action = event.getEntry();
+                    Action.Target target = action.getTarget();
+                    com.arcadia.customperm.log.ActivityLog.luckPerms(action.getTimestamp().toEpochMilli(),
+                            action.getSource().getName(), action.getSource().getUniqueId().toString(),
+                            target.getName() + " " + action.getDescription(),
+                            target.getType().name().toLowerCase(java.util.Locale.ROOT) + " " + target.getName());
+                });
+            } catch (Throwable t) {
+                if (t instanceof Error e) throw e;
+                CustomPerm.LOGGER.warn("[CustomPerm] Could not subscribe to the LuckPerms action log; /lp changes will not appear in the activity log.", t);
+            }
         }
     }
 
@@ -177,7 +194,10 @@ public class LuckPermsService implements PermissionService {
      */
     public void closeServerHooks() {
         ServerHooks hooks;
+        EventSubscription<LogPublishEvent> log;
         synchronized (hooksLock) {
+            log = logSubscription;
+            logSubscription = null;
             hooks = serverHooks;
             serverHooks = null;
             if (hooks != null) {
@@ -185,6 +205,13 @@ public class LuckPermsService implements PermissionService {
             }
         }
 
+        if (log != null) {
+            try {
+                log.close();
+            } catch (Throwable t) {
+                CustomPerm.LOGGER.warn("[CustomPerm] Failed to close the LuckPerms action log subscription.", t);
+            }
+        }
         if (hooks != null) {
             try {
                 hooks.subscription().close();

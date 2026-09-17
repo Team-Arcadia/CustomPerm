@@ -20,7 +20,8 @@ public enum GuiArea {
     ALIASES(PermissionNodes.GUI_ALIASES_EDIT),
     RATE_LIMITS(PermissionNodes.GUI_RATELIMITS_EDIT),
     GRADES(PermissionNodes.GUI_GRADES_EDIT),
-    LUCKPERMS(PermissionNodes.LP_EDIT);
+    LUCKPERMS(PermissionNodes.LP_EDIT),
+    LOGS(PermissionNodes.GUI_LOGS_EDIT);
 
     private final String node;
 

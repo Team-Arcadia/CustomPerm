@@ -14,8 +14,11 @@ import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.admin.GradeAdmin;
+import com.arcadia.customperm.admin.LogAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
 import com.arcadia.customperm.command.RateLimiter;
+import com.arcadia.customperm.log.ActivityLog;
+import com.arcadia.customperm.log.LogEntry;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.PacketDistributor;
@@ -109,7 +112,9 @@ public final class GuiRequestHandler {
                 return;
             }
             if (action.area() != null && !GuiAccess.canEdit(player, action.area())) {
-                send(player, GuiActionResultPayload.fail("You do not have " + action.area().node() + "."));
+                AdminResult refused = AdminResult.fail("You do not have " + action.area().node() + ".");
+                logAction(player, action, payload.args(), refused);
+                send(player, GuiActionResultPayload.fail(refused.message()));
                 return;
             }
             RateLimiter.Result budget = RateLimiter.tryAcquire(
@@ -121,6 +126,7 @@ public final class GuiRequestHandler {
             }
 
             AdminResult result = apply(player, action, payload.args());
+            logAction(player, action, payload.args(), result);
             if (result.success()) {
                 // Audit line: a click in the interface changes what players are allowed to do.
                 CustomPerm.LOGGER.info("[CustomPerm] Admin interface: {} performed {} {} ({})",
@@ -130,6 +136,11 @@ public final class GuiRequestHandler {
             GuiPage page = GuiPage.fromId(payload.page());
             if (result.success() && page != null) sendPage(player, page, false);
         });
+    }
+
+    private static void logAction(ServerPlayer player, GuiAction action, List<String> args, AdminResult result) {
+        ActivityLog.admin(player.createCommandSourceStack(), LogEntry.SOURCE_INTERFACE,
+                action.name() + (args.isEmpty() ? "" : " " + String.join(" ", args)), result);
     }
 
     private static AdminResult apply(ServerPlayer player, GuiAction action, List<String> args) {
@@ -166,6 +177,8 @@ public final class GuiRequestHandler {
             case GRADE_ASSIGN -> guarded(player, () -> assignByName(player, args.get(0), args.get(1)));
             case GRADE_UNASSIGN -> guarded(player, () -> unassignByUuid(player, args.get(0), args.get(1)));
             case GRADE_DEFAULT -> guarded(player, () -> GradeAdmin.setDefault(player.getServer(), args.get(0)));
+            case LOG_PLAYERS -> bool(args.get(0)) == null ? malformed(action) : LogAdmin.setPlayerLog(bool(args.get(0)));
+            case LOG_MASK -> bool(args.get(0)) == null ? malformed(action) : LogAdmin.setMasking(bool(args.get(0)));
         };
     }
 

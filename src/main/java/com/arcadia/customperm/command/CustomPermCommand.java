@@ -17,6 +17,10 @@ import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
+import com.arcadia.customperm.admin.LogAdmin;
+import com.arcadia.customperm.log.ActivityLog;
+import com.arcadia.customperm.log.LogEntry;
+import com.arcadia.customperm.log.LogKind;
 import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.network.gui.LuckPermsData;
@@ -40,6 +44,9 @@ import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -75,6 +82,8 @@ import java.util.stream.Collectors;
  *                     list                                 # show configured limits
  * /customperm test    <player> <node>                   # debug: report grant/deny + backend
  * /customperm reload
+ * /customperm log admin|players [count]            # latest admin changes / player commands
+ *             log record|mask <true|false>          # player command log, argument masking
  * /customperm gui [page]                            # open the admin interface (CustomPerm needed client-side)
  * /customperm gui luckperms [groups|players|tracks]  # LuckPerms editor, only when LuckPerms is installed
  *
@@ -389,8 +398,57 @@ public class CustomPermCommand {
                         .executes(CustomPermCommand::scanPattern)))
                 .then(Commands.literal("reload")
                     .executes(CustomPermCommand::reload))
+                .then(logCommand())
                 .then(guiCommand())
         );
+    }
+
+    // ---------------- activity log ----------------
+
+    private static final int LOG_LINES_DEFAULT = 10;
+    private static final DateTimeFormatter LOG_TIME = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    /** {@code /customperm log admin|players [count]}, {@code log record|mask <true|false>}. */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> logCommand() {
+        return Commands.literal("log")
+            .then(Commands.literal("admin")
+                .executes(ctx -> showLog(ctx, LogKind.ADMIN, LOG_LINES_DEFAULT))
+                .then(Commands.argument("count", IntegerArgumentType.integer(1, 100))
+                    .executes(ctx -> showLog(ctx, LogKind.ADMIN, IntegerArgumentType.getInteger(ctx, "count")))))
+            .then(Commands.literal("players")
+                .executes(ctx -> showLog(ctx, LogKind.PLAYERS, LOG_LINES_DEFAULT))
+                .then(Commands.argument("count", IntegerArgumentType.integer(1, 100))
+                    .executes(ctx -> showLog(ctx, LogKind.PLAYERS, IntegerArgumentType.getInteger(ctx, "count")))))
+            .then(Commands.literal("record")
+                .then(Commands.argument("enabled", BoolArgumentType.bool())
+                    .executes(ctx -> report(ctx, LogAdmin.setPlayerLog(BoolArgumentType.getBool(ctx, "enabled"))))))
+            .then(Commands.literal("mask")
+                .then(Commands.argument("enabled", BoolArgumentType.bool())
+                    .executes(ctx -> report(ctx, LogAdmin.setMasking(BoolArgumentType.getBool(ctx, "enabled"))))));
+    }
+
+    /** Prints the latest entries oldest first, so the newest ends up just above the chat input. */
+    private static int showLog(CommandContext<CommandSourceStack> ctx, LogKind kind, int count) {
+        List<LogEntry> entries = new ArrayList<>(ActivityLog.recent(kind, count));
+        java.util.Collections.reverse(entries);
+        var settings = CustomPerm.configManager.getSettings();
+        if (kind == LogKind.PLAYERS && !settings.playerCommandLog) {
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "The player command log is off. /customperm log record true turns it on.").withStyle(ChatFormatting.GRAY), false);
+        }
+        if (entries.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal("No entry recorded yet."), false);
+            return 1;
+        }
+        for (LogEntry entry : entries) {
+            String when = LOG_TIME.format(Instant.ofEpochMilli(entry.time()).atZone(ZoneId.systemDefault()));
+            String line = "[" + when + "] " + entry.actor()
+                + (kind == LogKind.ADMIN ? " (" + entry.source() + ")" : "") + " " + sanitizePlain(entry.action())
+                + (entry.result().isEmpty() ? "" : " -> " + sanitizePlain(entry.result()));
+            ChatFormatting color = entry.success() ? ChatFormatting.WHITE : ChatFormatting.RED;
+            ctx.getSource().sendSuccess(() -> Component.literal(line).withStyle(color), false);
+        }
+        return 1;
     }
 
     // ---------------- admin interface ----------------
@@ -886,6 +944,7 @@ public class CustomPermCommand {
 
     /** Prints a shared admin result: warnings in red, then the message as success or failure. */
     private static int report(CommandContext<CommandSourceStack> ctx, AdminResult result) {
+        ActivityLog.admin(ctx.getSource(), LogEntry.SOURCE_COMMAND, "/" + ctx.getInput(), result);
         result.warnings().forEach(warning -> ctx.getSource().sendFailure(Component.literal(warning)));
         if (!result.success()) {
             ctx.getSource().sendFailure(Component.literal(result.message()));

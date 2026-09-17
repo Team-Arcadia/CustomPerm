@@ -59,8 +59,10 @@ public class CommandCompletionGameTest {
 
             List<String> problems = new ArrayList<>();
             // Literals, including the ones added by the interface rework.
-            expect(problems, op, "customperm ", "gui", "grade", "alias", "command", "ratelimit", "status", "reload", "scan", "test", "debug");
-            expect(problems, op, "customperm gui ", "dashboard", "commands", "aliases", "ratelimits", "grades", "luckperms");
+            expect(problems, op, "customperm ", "gui", "log", "grade", "alias", "command", "ratelimit", "status", "reload", "scan", "test", "debug");
+            expect(problems, op, "customperm log ", "admin", "players", "record", "mask");
+            expect(problems, op, "customperm log record ", "true", "false");
+            expect(problems, op, "customperm gui ", "dashboard", "commands", "aliases", "ratelimits", "grades", "logs", "luckperms");
             expect(problems, op, "customperm gui luckperms ", "groups", "players", "tracks");
             expect(problems, op, "customperm command ", "add", "remove", "preserve", "gateall", "list");
             expect(problems, op, "customperm command gateall ", "true", "false");

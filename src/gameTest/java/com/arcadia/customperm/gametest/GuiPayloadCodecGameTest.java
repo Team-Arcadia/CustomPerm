@@ -21,6 +21,7 @@ import com.arcadia.customperm.network.gui.GuiCodecs;
 import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
+import com.arcadia.customperm.network.gui.LogsData;
 import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.network.gui.RateLimitsData;
 import com.arcadia.customperm.perm.BackendKind;
@@ -75,6 +76,12 @@ public class GuiPayloadCodecGameTest {
                         List.of("Alex", "Steve"), "internal", "vip", true)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.LUCKPERMS, GuiArea.LUCKPERMS.bit(), 0, true), new LuckPermsData(LuckPermsData.TRACKS)));
+        expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
+                new GuiContext(BackendKind.INTERNAL, GuiArea.LOGS.bit(), 0, false), new LogsData(
+                        List.of(new LogsData.Entry(1_789_000_000_000L, "Alex", "interface", "ALIAS_DELETE heal", false,
+                                "You do not have customperm.gui.aliases.edit.")),
+                        List.of(new LogsData.Entry(1_789_000_000_001L, "Steve", "player", "/msg [masked]", true, "")),
+                        true, false, 30)));
         expectRoundTrip(GuiRequestPayload.STREAM_CODEC, new GuiRequestPayload("dashboard"));
         expectRoundTrip(GuiActionPayload.STREAM_CODEC, new GuiActionPayload("RELOAD", List.of("a", "b c"), "dashboard"));
         expectRoundTrip(GuiActionResultPayload.STREAM_CODEC, GuiActionResultPayload.fail("You do not have x."));

@@ -13,6 +13,7 @@ import com.arcadia.customperm.command.CommandTreeRewriter;
 import com.arcadia.customperm.command.ICommandTreeReloader;
 import com.arcadia.customperm.command.RateLimitPersistence;
 import com.arcadia.customperm.config.ConfigManager;
+import com.arcadia.customperm.log.ActivityLog;
 import com.arcadia.customperm.network.NetworkHandler;
 import com.arcadia.customperm.notify.AdminAlerts;
 import com.arcadia.customperm.notify.AdminNotifier;
@@ -103,6 +104,10 @@ public class CustomPerm {
         NeoForge.EVENT_BUS.addListener(RateLimitPersistence::onServerStarted);
         NeoForge.EVENT_BUS.addListener(RateLimitPersistence::onLevelSave);
         NeoForge.EVENT_BUS.addListener(RateLimitPersistence::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(ActivityLog::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(ActivityLog::onServerStopped);
+        // Lowest: a command another mod cancels is not recorded as used.
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, ActivityLog::onCommand);
         modBus.addListener(NetworkHandler::register);
     }
 

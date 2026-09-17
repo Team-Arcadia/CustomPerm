@@ -41,6 +41,11 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- **Activity log** — a record of who changed what, and optionally of what players run.
+  - **Admin tab**, always on: every change made through `/customperm` commands, the admin interface and the LuckPerms editor, refusals included, and the changes LuckPerms records itself (`/lp`, web editor). Each entry has the time, the admin, where it came from, what was done and the result.
+  - **Player tab**, off by default (`playerCommandLog`, `/customperm log record <true|false>`, **Record** on the Logs page): every command players type. The arguments of private-message and login commands are masked by default (`maskPlayerCommandArguments`, `maskedCommands`, `/customperm log mask <true|false>`).
+  - Stored as daily JSON Lines files in `<world>/customperm/logs/`, written off the server thread, deleted after `logRetentionDays` (30 by default, 0 keeps them); the latest 1000 entries per tab are reloaded at start.
+  - **Logs** page in the interface (search, full entry, recording and masking switches gated by `customperm.gui.logs.edit`) and `/customperm log admin|players [count]` in chat. Reading needs the same access as `/customperm`.
 - **Restrictable operators** — making a player operator by mistake no longer hands them the server, with or without LuckPerms.
   - `customperm.admin`: denied (directly, or through `*` or `customperm.*`), it takes `/customperm`, the admin interface and admin alerts away from an operator. It only restricts: granting it to a non-operator opens nothing.
   - **Default grade** (`settings.json` `defaultGrade`, `/customperm grade setdefault <grade>`, `/customperm grade cleardefault`, **Default** button on the Grades page): an internal grade applied to every player below their own grades, like the LuckPerms `default` group. Deleting it clears the setting.

@@ -8,6 +8,9 @@
  */
 package com.arcadia.customperm.config;
 
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Locale;
 
 public class SettingsConfig {
@@ -39,8 +42,40 @@ public class SettingsConfig {
      */
     public String defaultGrade = "";
 
+    /** Default {@link #maskedCommands}: private messages, and the password commands of common login mods. */
+    public static final List<String> DEFAULT_MASKED_COMMANDS = List.of(
+            "msg", "tell", "w", "teammsg", "tm", "login", "l", "register", "reg", "changepassword", "changepw");
+
+    /** Days a daily activity log file is kept; 0 keeps them forever. */
+    public static final int DEFAULT_LOG_RETENTION_DAYS = 30;
+
+    /**
+     * Records every command players type in the activity log (player tab). Off by default: a command
+     * history is personal data. Admin changes are always recorded.
+     */
+    public boolean playerCommandLog = false;
+
+    /** Replaces the arguments of {@link #maskedCommands} with {@code [masked]} in the player log. */
+    public boolean maskPlayerCommandArguments = true;
+
+    /** Root commands whose arguments are masked, without the slash; a namespace prefix is ignored. */
+    public List<String> maskedCommands = new ArrayList<>(DEFAULT_MASKED_COMMANDS);
+
+    /** Days the activity log files are kept, 0 for no limit. */
+    public int logRetentionDays = DEFAULT_LOG_RETENTION_DAYS;
+
     public void normalize() {
         defaultGrade = defaultGrade == null ? "" : defaultGrade.trim();
+        if (maskedCommands == null) maskedCommands = new ArrayList<>(DEFAULT_MASKED_COMMANDS);
+        LinkedHashSet<String> roots = new LinkedHashSet<>();
+        for (String root : maskedCommands) {
+            if (root == null) continue;
+            String clean = root.trim().toLowerCase(Locale.ROOT);
+            if (clean.startsWith("/")) clean = clean.substring(1);
+            if (!clean.isEmpty()) roots.add(clean);
+        }
+        maskedCommands = new ArrayList<>(roots);
+        if (logRetentionDays < 0) logRetentionDays = DEFAULT_LOG_RETENTION_DAYS;
         if (luckPermsFallbackMode == null) {
             luckPermsFallbackMode = LUCKPERMS_FALLBACK_DENY;
             return;

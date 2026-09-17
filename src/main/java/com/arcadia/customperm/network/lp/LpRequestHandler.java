@@ -9,6 +9,8 @@
 package com.arcadia.customperm.network.lp;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.log.ActivityLog;
+import com.arcadia.customperm.log.LogEntry;
 import com.arcadia.customperm.perm.AdminAccess;
 import com.arcadia.customperm.command.RateLimiter;
 import com.arcadia.customperm.network.gui.GuiAccess;
@@ -186,12 +188,17 @@ public final class LpRequestHandler {
         MinecraftServer server = player.getServer();
         if (server == null) return;
         String actor = player.getGameProfile().getName();
+        String actorId = player.getUUID().toString();
+        String action = op.name() + (payload.args().isEmpty() ? "" : " " + String.join(" ", payload.args()));
 
         LuckPermsAdminService.apply(op, payload.args()).whenComplete((summary, error) -> server.execute(() -> {
             if (error != null) {
-                send(player, LpEditResultPayload.fail(unwrap(error)));
+                String message = unwrap(error);
+                ActivityLog.admin(actor, actorId, LogEntry.SOURCE_LUCKPERMS_EDITOR, action, false, message);
+                send(player, LpEditResultPayload.fail(message));
                 return;
             }
+            ActivityLog.admin(actor, actorId, LogEntry.SOURCE_LUCKPERMS_EDITOR, action, true, summary);
             // Permission-store writes are worth an audit line: this is the one path where a
             // click in a GUI changes what every player on the server is allowed to do.
             CustomPerm.LOGGER.info("[CustomPerm] LuckPerms editor: {} performed {} — {}",

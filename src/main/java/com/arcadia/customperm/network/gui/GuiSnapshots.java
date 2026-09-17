@@ -12,6 +12,8 @@ import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.command.AliasManager;
 import com.arcadia.customperm.config.ConfigManager;
+import com.arcadia.customperm.log.ActivityLog;
+import com.arcadia.customperm.log.LogKind;
 import com.arcadia.customperm.notify.AdminNotifier;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -43,6 +45,7 @@ public final class GuiSnapshots {
             case RATE_LIMITS -> rateLimits();
             case GRADES -> grades(player.getServer());
             case LUCKPERMS -> new LuckPermsData(LuckPermsData.GROUPS);
+            case LOGS -> logs();
         };
     }
 
@@ -79,6 +82,18 @@ public final class GuiSnapshots {
         var settings = CustomPerm.configManager.getSettings();
         return new GradesData(grades, known, settings.luckPermsFallbackMode, settings.defaultGrade,
                 CustomPerm.gatesAllCommands());
+    }
+
+    static LogsData logs() {
+        var settings = CustomPerm.configManager.getSettings();
+        return new LogsData(entries(LogKind.ADMIN), entries(LogKind.PLAYERS), settings.playerCommandLog,
+                settings.maskPlayerCommandArguments, settings.logRetentionDays);
+    }
+
+    private static List<LogsData.Entry> entries(LogKind kind) {
+        return ActivityLog.recent(kind, LogsData.ENTRIES_MAX).stream()
+                .map(e -> new LogsData.Entry(e.time(), e.actor(), e.source(), e.action(), e.success(), e.result()))
+                .toList();
     }
 
     static RateLimitsData rateLimits() {

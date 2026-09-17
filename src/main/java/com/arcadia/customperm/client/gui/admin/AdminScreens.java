@@ -19,6 +19,7 @@ import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPageData;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
+import com.arcadia.customperm.network.gui.LogsData;
 import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.network.gui.RateLimitsData;
 import com.arcadia.customperm.network.lp.LpDto;
@@ -58,6 +59,7 @@ public final class AdminScreens {
         entries.add(new NavEntry(GuiPage.GRADES, "Grades", Icon.SHIELD));
         // The LuckPerms editor needs the LuckPerms mod; installed but not running, it opens on a banner.
         if (context.luckPermsInstalled()) entries.add(new NavEntry(GuiPage.LUCKPERMS, "LuckPerms", Icon.LOCK));
+        entries.add(new NavEntry(GuiPage.LOGS, "Logs", Icon.LOG));
         return entries;
     }
 
@@ -95,6 +97,7 @@ public final class AdminScreens {
             case RateLimitsData d -> new RateLimitsScreen(context, d);
             case GradesData d -> new GradesScreen(context, d);
             case LuckPermsData d -> new LuckPermsScreen(context, d);
+            case LogsData d -> new LogsScreen(context, d);
         };
     }
 }

@@ -43,10 +43,12 @@ public final class PermissionNodes {
     public static final String GUI_ALIASES_EDIT = "customperm.gui.aliases.edit";
     public static final String GUI_RATELIMITS_EDIT = "customperm.gui.ratelimits.edit";
     public static final String GUI_GRADES_EDIT = "customperm.gui.grades.edit";
+    /** Turning the player command log and argument masking on or off. Reading the logs needs admin access only. */
+    public static final String GUI_LOGS_EDIT = "customperm.gui.logs.edit";
 
     /** Every fixed node above, for command suggestions. */
     public static java.util.List<String> all() {
-        return java.util.List.of(ADMIN, GUI_COMMANDS_EDIT, GUI_ALIASES_EDIT, GUI_RATELIMITS_EDIT, GUI_GRADES_EDIT, LP_EDIT);
+        return java.util.List.of(ADMIN, GUI_COMMANDS_EDIT, GUI_ALIASES_EDIT, GUI_RATELIMITS_EDIT, GUI_GRADES_EDIT, GUI_LOGS_EDIT, LP_EDIT);
     }
 
     private PermissionNodes() {
