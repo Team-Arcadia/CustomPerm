@@ -8,6 +8,7 @@
  */
 package com.arcadia.customperm.config;
 
+import com.arcadia.customperm.util.AtomicFiles;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import net.neoforged.fml.loading.FMLPaths;
@@ -15,8 +16,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
-import java.nio.file.AccessDeniedException;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -34,8 +33,6 @@ public class ConfigManager {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final DateTimeFormatter BACKUP_TIMESTAMP =
             DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH-mm-ss");
-    private static final int MOVE_ATTEMPTS = 3;
-    private static final long MOVE_RETRY_DELAY_MS = 25L;
 
     private final Path dir;
     private final Path legacyDir;
@@ -240,58 +237,16 @@ public class ConfigManager {
         ConfigSnapshot snap = configRef.get();
         try {
             Files.createDirectories(dir);
-            writeAtomically(gradesFile,     GSON.toJson(snap.grades()));
-            writeAtomically(aliasesFile,    GSON.toJson(snap.aliases()));
-            writeAtomically(commandsFile,   GSON.toJson(snap.commands()));
-            writeAtomically(settingsFile,   GSON.toJson(snap.settings()));
-            writeAtomically(rateLimitsFile, GSON.toJson(snap.rateLimits()));
+            AtomicFiles.write(gradesFile,     GSON.toJson(snap.grades()));
+            AtomicFiles.write(aliasesFile,    GSON.toJson(snap.aliases()));
+            AtomicFiles.write(commandsFile,   GSON.toJson(snap.commands()));
+            AtomicFiles.write(settingsFile,   GSON.toJson(snap.settings()));
+            AtomicFiles.write(rateLimitsFile, GSON.toJson(snap.rateLimits()));
             return true;
         } catch (IOException e) {
             LOGGER.error("[CustomPerm] Failed to save config", e);
             return false;
         }
-    }
-
-    /**
-     * Écriture atomique : fichier temporaire puis move. Un Files.writeString direct
-     * tronque le fichier avant d'écrire — un crash du serveur au milieu laisserait une
-     * config vide ou tronquée (et load() appelle save(), donc chaque reload est exposé).
-     */
-    private static void writeAtomically(Path target, String content) throws IOException {
-        Path tmp = Files.createTempFile(
-                target.getParent(),
-                target.getFileName().toString() + ".",
-                ".tmp");
-        try {
-            Files.writeString(tmp, content);
-            moveReplacingWithRetry(tmp, target);
-        } finally {
-            Files.deleteIfExists(tmp);
-        }
-    }
-
-    private static void moveReplacingWithRetry(Path source, Path target) throws IOException {
-        AccessDeniedException lastAccessDenied = null;
-        for (int attempt = 1; attempt <= MOVE_ATTEMPTS; attempt++) {
-            try {
-                try {
-                    Files.move(source, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
-                } catch (AtomicMoveNotSupportedException e) {
-                    Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
-                }
-                return;
-            } catch (AccessDeniedException e) {
-                lastAccessDenied = e;
-                if (attempt == MOVE_ATTEMPTS) break;
-                try {
-                    Thread.sleep(MOVE_RETRY_DELAY_MS);
-                } catch (InterruptedException interrupted) {
-                    Thread.currentThread().interrupt();
-                    throw new IOException("Interrupted while retrying config file replacement", interrupted);
-                }
-            }
-        }
-        throw lastAccessDenied;
     }
 
     /**
