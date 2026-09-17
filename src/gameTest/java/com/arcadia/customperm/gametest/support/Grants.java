@@ -15,6 +15,7 @@ import com.arcadia.customperm.config.GradesConfig;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Grants permission nodes to a {@link TestPlayer} through whichever backend is active, so one test body
@@ -25,21 +26,28 @@ import java.util.List;
  */
 public final class Grants implements AutoCloseable {
 
-    private final TestPlayer player;
+    private final UUID player;
     private final List<String> nodes;
     private final String gradeName;
+    private final boolean deny;
 
-    private Grants(TestPlayer player, List<String> nodes) {
+    private Grants(UUID player, List<String> nodes, boolean deny) {
         this.player = player;
         this.nodes = nodes;
-        this.gradeName = "gt_" + player.uuid().toString().substring(0, 8);
+        this.deny = deny;
+        this.gradeName = "gt_" + player.toString().substring(0, 8);
     }
 
     /** ALLOW nodes. */
     public static Grants allow(TestPlayer player, String... nodes) {
-        Grants grants = new Grants(player, List.of(nodes));
+        return allow(player.uuid(), nodes);
+    }
+
+    /** ALLOW nodes for a player who has not joined yet, so they hold them from their first login. */
+    public static Grants allow(UUID player, String... nodes) {
+        Grants grants = new Grants(player, List.of(nodes), false);
         if (CustomPerm.isLuckPermsActive()) {
-            LuckPermsTestSupport.setNodes(player.uuid(), grants.nodes, true);
+            LuckPermsTestSupport.setNodes(player, grants.nodes, true);
         } else {
             grants.grade().permissions.addAll(grants.nodes);
             grants.assign();
@@ -49,7 +57,7 @@ public final class Grants implements AutoCloseable {
 
     /** DENY nodes: {@code deniedPermissions} internally, nodes set to false under LuckPerms. */
     public static Grants deny(TestPlayer player, String... nodes) {
-        Grants grants = new Grants(player, List.of(nodes));
+        Grants grants = new Grants(player.uuid(), List.of(nodes), true);
         if (CustomPerm.isLuckPermsActive()) {
             LuckPermsTestSupport.setNodes(player.uuid(), grants.nodes, false);
         } else {
@@ -71,22 +79,28 @@ public final class Grants implements AutoCloseable {
 
     private void assign() {
         List<String> assigned = CustomPerm.configManager.getGrades().userGrades
-                .computeIfAbsent(player.uuid().toString(), key -> new ArrayList<>());
+                .computeIfAbsent(player.toString(), key -> new ArrayList<>());
         if (!assigned.contains(gradeName)) assigned.add(gradeName);
     }
 
+    /** Takes back these nodes only: several Grants on one player share a grade, and each closes on its own. */
     @Override
     public void close() {
         if (CustomPerm.isLuckPermsActive()) {
-            LuckPermsTestSupport.clearNodes(player.uuid(), nodes);
+            LuckPermsTestSupport.clearNodes(player, nodes);
             return;
         }
         GradesConfig grades = CustomPerm.configManager.getGrades();
+        GradesConfig.Grade grade = grades.grades.get(gradeName);
+        if (grade != null) {
+            (deny ? grade.deniedPermissions : grade.permissions).removeAll(nodes);
+            if (!grade.permissions.isEmpty() || !grade.deniedPermissions.isEmpty()) return;
+        }
         grades.grades.remove(gradeName);
-        List<String> assigned = grades.userGrades.get(player.uuid().toString());
+        List<String> assigned = grades.userGrades.get(player.toString());
         if (assigned != null) {
             assigned.remove(gradeName);
-            if (assigned.isEmpty()) grades.userGrades.remove(player.uuid().toString());
+            if (assigned.isEmpty()) grades.userGrades.remove(player.toString());
         }
     }
 }

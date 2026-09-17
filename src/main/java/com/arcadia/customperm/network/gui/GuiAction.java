@@ -21,7 +21,7 @@ package com.arcadia.customperm.network.gui;
 public enum GuiAction {
 
     /** {@code []} Re-reads every config file from disk, like {@code /customperm reload}. */
-    RELOAD(0, null),
+    RELOAD(0, GuiArea.CONFIG),
 
     /** {@code [command]} Exposes a root command, like {@code /customperm command add}. */
     COMMAND_EXPOSE(1, GuiArea.COMMANDS),

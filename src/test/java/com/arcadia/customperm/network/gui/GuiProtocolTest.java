@@ -45,7 +45,7 @@ class GuiProtocolTest {
         for (GuiArea area : GuiArea.values()) {
             assertEquals(0, seen & area.bit(), area + " shares a bit");
             seen |= area.bit();
-            assertTrue(area.node().startsWith("customperm.gui."), area + " node outside the gui namespace");
+            assertTrue(area.node().startsWith("customperm.manage."), area + " node outside the manage namespace");
         }
     }
 }

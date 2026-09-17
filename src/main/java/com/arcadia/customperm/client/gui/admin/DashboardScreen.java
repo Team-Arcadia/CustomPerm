@@ -18,6 +18,7 @@ import com.arcadia.customperm.client.gui.kit.Rect;
 import com.arcadia.customperm.client.gui.kit.Skin;
 import com.arcadia.customperm.network.gui.DashboardData;
 import com.arcadia.customperm.network.gui.GuiAction;
+import com.arcadia.customperm.network.gui.GuiArea;
 import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPageData;
@@ -111,7 +112,9 @@ public final class DashboardScreen extends AdminScreen {
 
         Rect bar = actionBar();
         CpButton reload = CpButton.neutral(Component.literal("Reload config"), this::confirmReload)
-                .icon(Icon.REFRESH);
+                .icon(Icon.REFRESH)
+                .enabled(canEdit(GuiArea.CONFIG));
+        if (!canEdit(GuiArea.CONFIG)) reload.tooltip(Component.literal("Needs " + GuiArea.CONFIG.node() + "."));
         reloadWidth = reload.preferredWidth(font, 8);
         addRenderableWidget(reload.at(bar.right(reloadWidth)));
     }

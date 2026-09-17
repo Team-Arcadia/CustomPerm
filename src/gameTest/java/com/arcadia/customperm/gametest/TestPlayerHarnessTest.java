@@ -37,9 +37,11 @@ public class TestPlayerHarnessTest {
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void permissionLevelDrivesCommandAccess(GameTestHelper helper) {
         try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_h_player", 0);
-             TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_h_op", 2)) {
+             TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_h_op", 2);
+             TestPlayer admin = TestPlayer.reader(helper.getLevel(), "cp_h_admin", 2)) {
             if (player.canUse("customperm")) fail("A level-0 player must not see /customperm.");
-            if (!op.canUse("customperm")) fail("A level-2 player must see /customperm.");
+            if (op.canUse("customperm")) fail("A level-2 player without customperm.admin must not see /customperm.");
+            if (!admin.canUse("customperm")) fail("A level-2 player holding customperm.admin must see /customperm.");
             if (player.commandTreesReceived() < 1) fail("Joining must push a command tree to the player.");
         }
         helper.succeed();
@@ -47,7 +49,7 @@ public class TestPlayerHarnessTest {
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void chatAndCommandTreeAreCaptured(GameTestHelper helper) {
-        try (TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_h_chat", 2)) {
+        try (TestPlayer op = TestPlayer.reader(helper.getLevel(), "cp_h_chat", 2)) {
             op.clearReceived();
             op.type("customperm status");
             if (!op.chatContains("=== CustomPerm Status ==="))
@@ -66,7 +68,7 @@ public class TestPlayerHarnessTest {
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void adminPagesAreOnlyAnsweredForOperators(GameTestHelper helper) {
         try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_h_gui_player", 0);
-             TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_h_gui_op", 2)) {
+             TestPlayer op = TestPlayer.reader(helper.getLevel(), "cp_h_gui_op", 2)) {
             player.clearReceived();
             op.clearReceived();
             GuiRequestPayload request = new GuiRequestPayload(GuiPage.DASHBOARD.id());
@@ -90,7 +92,7 @@ public class TestPlayerHarnessTest {
         String marker = "cp-harness-" + System.nanoTime();
         boolean wasActive = AdminNotifier.isActive(AdminAlerts.Key.LUCKPERMS_UNAVAILABLE);
         TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_h_alert_pl", 0);
-        TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_h_alert_op", 2);
+        TestPlayer op = TestPlayer.reader(helper.getLevel(), "cp_h_alert_op", 2);
         player.clearReceived();
         op.clearReceived();
         CustomPerm.raiseLuckPermsUnavailable(marker);
@@ -100,7 +102,7 @@ public class TestPlayerHarnessTest {
             try {
                 if (!op.chatContains(marker)) fail("An online operator must receive the alert, got: " + op.chat());
                 if (player.chatContains(marker)) fail("A non-operator must not receive admin alerts.");
-                try (TestPlayer lateOp = TestPlayer.join(helper.getLevel(), "cp_h_alert_late", 2)) {
+                try (TestPlayer lateOp = TestPlayer.reader(helper.getLevel(), "cp_h_alert_late", 2)) {
                     if (!lateOp.chatContains(marker))
                         fail("An operator joining while the alert is active must receive it on login.");
                 }

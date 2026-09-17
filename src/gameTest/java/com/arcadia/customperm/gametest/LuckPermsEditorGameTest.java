@@ -217,10 +217,10 @@ public class LuckPermsEditorGameTest {
     @GameTest(template = TEMPLATE, timeoutTicks = 500)
     public static void editGatingThroughThePacketHandler(GameTestHelper helper) {
         if (!Modes.luckPermsOnly(helper)) return;
-        TestPlayer readOnly = TestPlayer.join(helper.getLevel(), "cp_e_readonly", 2);
-        TestPlayer delegated = TestPlayer.join(helper.getLevel(), "cp_e_delegate", 2);
-        TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_e_owner", 4);
-        Grants grant = Grants.allow(delegated, PermissionNodes.LP_EDIT);
+        TestPlayer readOnly = TestPlayer.reader(helper.getLevel(), "cp_e_readonly", 2);
+        TestPlayer delegated = TestPlayer.reader(helper.getLevel(), "cp_e_delegate", 2);
+        TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_e_owner", 4);
+        Grants grant = Grants.allow(delegated, PermissionNodes.MANAGE_LUCKPERMS);
         for (TestPlayer p : List.of(readOnly, delegated, owner)) p.clearReceived();
 
         edit(readOnly, LpEditOp.GROUP_CREATE, "cp_e_by_readonly");
@@ -238,7 +238,7 @@ public class LuckPermsEditorGameTest {
                 () -> {
             try {
                 String denied = results(readOnly);
-                if (!denied.contains("FAIL: You do not have " + PermissionNodes.LP_EDIT))
+                if (!denied.contains("FAIL: You do not have " + PermissionNodes.MANAGE_LUCKPERMS))
                     fail("Level 2 without the node must be refused, got: " + denied);
                 if (LuckPermsTestSupport.groupExists("cp_e_by_readonly")) fail("A refused edit created the group.");
                 if (!results(delegated).contains("OK: Created group cp_e_by_delegate"))
@@ -271,7 +271,7 @@ public class LuckPermsEditorGameTest {
     @GameTest(template = TEMPLATE, timeoutTicks = 600, batch = "customperm_lp_editor_budget")
     public static void editAndSyncBudgets(GameTestHelper helper) {
         if (!Modes.luckPermsOnly(helper)) return;
-        TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_e_spammer", 4);
+        TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_e_spammer", 4);
         owner.clearReceived();
         for (int i = 0; i < 31; i++) edit(owner, LpEditOp.GROUP_DELETE, "cp_e_missing_" + i);
         for (int i = 0; i < 45; i++) {

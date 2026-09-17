@@ -159,6 +159,8 @@ public class CustomPerm {
             LOGGER.info("[CustomPerm] Wrapped {} late-registered command(s) at server start.", lateWrapped);
         }
 
+        logAdminAccessModel(event.getServer());
+
         // Boot-time health summary so admins can see in one line if everything is in order.
         String backend = backendLabel();
         int wrapped = event.getServer().getCommands().getDispatcher().getRoot().getChildren().size();
@@ -167,6 +169,28 @@ public class CustomPerm {
         int grades = configManager.getGrades().grades.size();
         LOGGER.info("[CustomPerm] Ready — backend={} dispatcherCommands={} exposed={} aliases={} grades={}",
             backend, wrapped, exposed, aliases, grades);
+    }
+
+    /**
+     * Operators need explicitly granted nodes to administer CustomPerm. Said at every start, because after an
+     * upgrade from 1.0.x nobody holds them and /customperm vanishes from the game until they are granted.
+     */
+    private static void logAdminAccessModel(net.minecraft.server.MinecraftServer server) {
+        LOGGER.info("[CustomPerm] In-game administration needs op level 2 AND explicitly granted nodes: customperm.admin to "
+                + "use /customperm and the admin interface, customperm.manage.<area> to change an area (customperm.* for all). "
+                + "Being operator alone, level 4 included, gives no access. The console always has access.");
+        if (!server.isDedicatedServer()) {
+            LOGGER.info("[CustomPerm] This world has no console: its host administers CustomPerm without a node, and grants "
+                    + "the nodes to other players.");
+            return;
+        }
+        if (isLuckPermsActive()) {
+            LOGGER.info("[CustomPerm] With LuckPerms, grant them from the console, e.g.: lp user <name> permission set customperm.* true");
+        } else if (!com.arcadia.customperm.perm.AdminAccess.anyInternalAdmin()) {
+            LOGGER.warn("[CustomPerm] No player holds customperm.admin: nobody can administer CustomPerm in game. From the "
+                    + "console: customperm grade create admins, customperm grade addperm admins customperm.*, "
+                    + "customperm grade assign <name> admins");
+        }
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {

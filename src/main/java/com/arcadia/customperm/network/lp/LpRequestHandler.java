@@ -136,7 +136,7 @@ public final class LpRequestHandler {
             }
             if (!canEdit(player)) {
                 send(player, LpEditResultPayload.fail(
-                        "You do not have " + PermissionNodes.LP_EDIT + "."));
+                        "You do not have " + PermissionNodes.MANAGE_LUCKPERMS + "."));
                 return;
             }
 

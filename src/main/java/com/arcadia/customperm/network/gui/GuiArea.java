@@ -11,17 +11,19 @@ package com.arcadia.customperm.network.gui;
 import com.arcadia.customperm.perm.PermissionNodes;
 
 /**
- * An area of the admin interface with its own write permission. The client receives a bit per area
+ * An area of the admin interface with its own write permission, the same {@code customperm.manage.<area>} node
+ * as the matching {@code /customperm} subcommands. The client receives a bit per area
  * ({@link GuiContext#editMask()}) only to show a read-only screen instead of buttons that would be
  * refused; the server re-checks the node on every action.
  */
 public enum GuiArea {
-    COMMANDS(PermissionNodes.GUI_COMMANDS_EDIT),
-    ALIASES(PermissionNodes.GUI_ALIASES_EDIT),
-    RATE_LIMITS(PermissionNodes.GUI_RATELIMITS_EDIT),
-    GRADES(PermissionNodes.GUI_GRADES_EDIT),
-    LUCKPERMS(PermissionNodes.LP_EDIT),
-    LOGS(PermissionNodes.GUI_LOGS_EDIT);
+    COMMANDS(PermissionNodes.MANAGE_COMMANDS),
+    ALIASES(PermissionNodes.MANAGE_ALIASES),
+    RATE_LIMITS(PermissionNodes.MANAGE_RATELIMITS),
+    GRADES(PermissionNodes.MANAGE_GRADES),
+    LUCKPERMS(PermissionNodes.MANAGE_LUCKPERMS),
+    LOGS(PermissionNodes.MANAGE_LOGS),
+    CONFIG(PermissionNodes.MANAGE_CONFIG);
 
     private final String node;
 

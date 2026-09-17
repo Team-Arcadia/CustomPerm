@@ -62,24 +62,36 @@ public class OperatorRestrictionGameTest {
         helper.succeed();
     }
 
+    /** The accidental op: operator level 4 alone gives no access to CustomPerm, the console always has it. */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void deniedAdminNodeLocksAnOwnerOutButNotTheConsole(GameTestHelper helper) {
+    public static void operatorsWithoutNodesCannotAdministerButTheConsoleCan(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_o_admin", 4)) {
-            if (!owner.canUse("customperm") || !GuiAccess.canRead(owner.player()))
-                fail("Setup: a level-4 owner without any value must administer CustomPerm.");
-            try (Grants deny = Grants.deny(owner, PermissionNodes.ADMIN)) {
-                if (owner.canUse("customperm")) fail("An owner denied customperm.admin could still see /customperm.");
-                if (GuiAccess.canRead(owner.player())) fail("An owner denied customperm.admin could still read the interface.");
+            if (owner.canUse("customperm")) fail("A level-4 operator without customperm.admin could see /customperm.");
+            if (GuiAccess.canRead(owner.player())) fail("A level-4 operator without customperm.admin could read the interface.");
+            owner.clearReceived();
+            GuiRequestHandler.handleAction(new GuiActionPayload(GuiAction.RELOAD.name(), List.of(), "dashboard"),
+                    owner.payloadContext());
+            if (!owner.payloads(GuiActionResultPayload.class).isEmpty())
+                fail("A level-4 operator without customperm.admin still got an interface reply.");
+            if (!ServerCommands.contains(ServerCommands.run(server, "customperm status"), "CustomPerm Status"))
+                fail("The console must always be able to run /customperm.");
+
+            try (Grants entry = Grants.allow(owner, PermissionNodes.ADMIN)) {
+                if (!owner.canUse("customperm")) fail("customperm.admin must open /customperm to an operator.");
+                if (owner.exec("customperm status") != 1) fail("customperm.admin must allow /customperm status.");
                 owner.clearReceived();
-                GuiRequestHandler.open(owner.player(), GuiPage.DASHBOARD);
-                GuiRequestHandler.handleAction(new GuiActionPayload(GuiAction.RELOAD.name(), List.of(), "dashboard"),
-                        owner.payloadContext());
-                if (!owner.payloads(GuiActionResultPayload.class).isEmpty())
-                    fail("An owner denied customperm.admin still got an interface reply.");
-                if (!ServerCommands.contains(ServerCommands.run(server, "customperm status"), "CustomPerm Status"))
-                    fail("The console must always be able to run /customperm.");
+                owner.type("customperm alias add cp_o_noway say hi");
+                if (CustomPerm.configManager.getAliases().aliases.containsKey("cp_o_noway"))
+                    fail("customperm.admin alone must not change aliases.");
+                try (Grants deny = Grants.deny(owner, PermissionNodes.ADMIN)) {
+                    if (owner.canUse("customperm")) fail("An explicit DENY must beat the ALLOW at the same level.");
+                }
             }
+        } catch (com.mojang.brigadier.exceptions.CommandSyntaxException e) {
+            fail("customperm.admin did not allow /customperm status: " + e.getMessage());
+        } finally {
+            AliasAdmin.remove(server, "cp_o_noway");
         }
         helper.succeed();
     }
@@ -99,13 +111,38 @@ public class OperatorRestrictionGameTest {
         helper.succeed();
     }
 
-    /** A denied area node closes that interface area even to the owner, whose level 4 only opens unset nodes. */
+    /** Each area needs its own customperm.manage node, for the command and the interface alike, level 4 included. */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void deniedAreaNodeOverridesTheOwnerBypass(GameTestHelper helper) {
-        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_o_area", 4);
-             Grants deny = Grants.deny(owner, GuiArea.ALIASES.node())) {
-            if (GuiAccess.canEdit(owner.player(), GuiArea.ALIASES)) fail("A denied area node must close the area to level 4.");
-            if (!GuiAccess.canEdit(owner.player(), GuiArea.COMMANDS)) fail("Other areas must stay open to level 4.");
+    public static void eachAreaNeedsItsManageNode(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        try (TestPlayer owner = TestPlayer.reader(helper.getLevel(), "cp_o_area", 4);
+             Grants aliases = Grants.allow(owner, PermissionNodes.MANAGE_ALIASES)) {
+            if (!GuiAccess.canEdit(owner.player(), GuiArea.ALIASES)) fail("customperm.manage.aliases must open the aliases area.");
+            if (GuiAccess.canEdit(owner.player(), GuiArea.COMMANDS)) fail("Level 4 must not edit an area without its node.");
+            owner.type("customperm alias add cp_o_area_alias say hi");
+            if (!CustomPerm.configManager.getAliases().aliases.containsKey("cp_o_area_alias"))
+                fail("customperm.manage.aliases must allow /customperm alias add.");
+            owner.type("customperm command add weather");
+            if (CustomPerm.configManager.getCommands().grantedCommands.contains("weather"))
+                fail("Without customperm.manage.commands, /customperm command add must be refused.");
+        } finally {
+            AliasAdmin.remove(server, "cp_o_area_alias");
+            CommandAdmin.hide(server, "weather");
+        }
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_o_area2", 4);
+             Grants deny = Grants.deny(owner, PermissionNodes.MANAGE_ALIASES)) {
+            if (GuiAccess.canEdit(owner.player(), GuiArea.ALIASES)) fail("A denied area node must beat customperm.*.");
+            if (!GuiAccess.canEdit(owner.player(), GuiArea.COMMANDS)) fail("Other areas must stay open with customperm.*.");
+        }
+        helper.succeed();
+    }
+
+    /** Audit retest R02 still holds: the nodes alone, even customperm.*, never open /customperm to a non-operator. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void nodesWithoutOperatorLevelOpenNothing(GameTestHelper helper) {
+        try (TestPlayer player = TestPlayer.admin(helper.getLevel(), "cp_o_nonop", 0)) {
+            if (player.canUse("customperm") || GuiAccess.canRead(player.player()))
+                fail("customperm.* opened CustomPerm administration to a non-operator.");
         }
         helper.succeed();
     }
@@ -127,7 +164,7 @@ public class OperatorRestrictionGameTest {
                 if (op.canUse("time")) fail("A denied * must block /time for an operator.");
                 if (op.canUse("customperm")) fail("A denied * must also deny customperm.admin.");
             }
-            if (!op.canUse("time") || !op.canUse("customperm")) fail("Without the denial the operator must get everything back.");
+            if (!op.canUse("time")) fail("Without the denial the operator must get /time back.");
         } finally {
             if (internal) CommandAdmin.setGateAll(server, false);
         }
@@ -193,32 +230,38 @@ public class OperatorRestrictionGameTest {
         var grades = CustomPerm.configManager.getGrades();
         try (TestPlayer admin = TestPlayer.join(helper.getLevel(), "cp_o_self", 4)) {
             ServerCommands.run(server, "customperm grade create cp_o_mine");
+            ServerCommands.run(server, "customperm grade addperm cp_o_mine customperm.admin");
+            ServerCommands.run(server, "customperm grade addperm cp_o_mine customperm.manage.grades");
             ServerCommands.run(server, "customperm grade assign cp_o_self cp_o_mine");
-            ServerCommands.run(server, "customperm grade create cp_o_lock");
-            ServerCommands.run(server, "customperm grade adddeny cp_o_lock customperm.admin");
+            if (!admin.canUse("customperm")) fail("Setup: the grade must let the admin in.");
 
             admin.clearReceived();
-            admin.type("customperm grade adddeny cp_o_mine *");
-            if (!admin.chatContains("Refused")) fail("Denying * to one's own grade must be refused, chat: " + admin.chat());
-            if (grades.grades.get("cp_o_mine").deniedPermissions.contains("*")) fail("The refused change was not undone.");
-            if (!admin.canUse("customperm")) fail("The admin lost /customperm despite the refusal.");
+            admin.type("customperm grade adddeny cp_o_mine customperm.admin");
+            if (!admin.chatContains("Refused")) fail("Denying customperm.admin to one's own grade must be refused, chat: " + admin.chat());
+            if (grades.grades.get("cp_o_mine").deniedPermissions.contains("customperm.admin")) fail("The refused change was not undone.");
 
             admin.clearReceived();
-            GuiRequestHandler.handleAction(new GuiActionPayload(GuiAction.GRADE_DEFAULT.name(), List.of("cp_o_lock"),
-                    GuiPage.GRADES.id()), admin.payloadContext());
+            admin.type("customperm grade removeperm cp_o_mine customperm.manage.grades");
+            if (!admin.chatContains("Refused")) fail("Removing one's own customperm.manage.grades must be refused, chat: " + admin.chat());
+            if (!grades.grades.get("cp_o_mine").permissions.contains("customperm.manage.grades")) fail("The refused removal was kept.");
+
+            admin.clearReceived();
+            GuiRequestHandler.handleAction(new GuiActionPayload(GuiAction.GRADE_UNASSIGN.name(),
+                    List.of(admin.uuid().toString(), "cp_o_mine"), GuiPage.GRADES.id()), admin.payloadContext());
             List<GuiActionResultPayload> results = admin.payloads(GuiActionResultPayload.class);
             if (results.size() != 1 || results.get(0).success() || !results.get(0).message().contains("Refused"))
-                fail("A default grade denying customperm.admin to the admin must be refused, got " + results);
-            if (!CustomPerm.configManager.getSettings().defaultGrade.isEmpty()) fail("The refused default grade was kept.");
+                fail("Unassigning the admin's own access grade through the interface must be refused, got " + results);
+            if (!admin.canUse("customperm")) fail("The admin lost /customperm despite the refusals.");
 
+            ServerCommands.run(server, "customperm grade create cp_o_backup");
+            ServerCommands.run(server, "customperm grade addperm cp_o_backup customperm.*");
+            ServerCommands.run(server, "customperm grade assign cp_o_self cp_o_backup");
             admin.clearReceived();
-            admin.type("customperm grade addperm cp_o_mine customperm.admin");
-            admin.type("customperm grade adddeny cp_o_mine *");
-            if (admin.chatContains("Refused")) fail("With customperm.admin allowed, denying * must be accepted: " + admin.chat());
-            if (!admin.canUse("customperm")) fail("The explicit customperm.admin must keep the admin in.");
+            admin.type("customperm grade removeperm cp_o_mine customperm.manage.grades");
+            if (admin.chatContains("Refused")) fail("With another grade keeping access, the removal must be accepted: " + admin.chat());
         } finally {
             ServerCommands.run(server, "customperm grade delete cp_o_mine");
-            ServerCommands.run(server, "customperm grade delete cp_o_lock");
+            ServerCommands.run(server, "customperm grade delete cp_o_backup");
         }
         helper.succeed();
     }
@@ -227,7 +270,7 @@ public class OperatorRestrictionGameTest {
     @GameTest(template = TEMPLATE, timeoutTicks = 100, batch = "customperm_gate_interface")
     public static void interfaceSetsGateAllAndTheDefaultGrade(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
-        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_o_gui", 4)) {
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_o_gui", 4)) {
             owner.clearReceived();
             GuiRequestHandler.handleAction(new GuiActionPayload(GuiAction.COMMAND_GATE_ALL.name(), List.of("true"),
                     GuiPage.COMMANDS.id()), owner.payloadContext());

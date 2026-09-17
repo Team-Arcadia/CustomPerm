@@ -53,8 +53,8 @@ public class ActivityLogGameTest {
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void adminChangesAreRecordedFromCommandsAndTheInterface(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
-        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_lg_owner", 4);
-             TestPlayer moderator = TestPlayer.join(helper.getLevel(), "cp_lg_mod", 2)) {
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_lg_owner", 4);
+             TestPlayer moderator = TestPlayer.reader(helper.getLevel(), "cp_lg_mod", 2)) {
             ServerCommands.run(server, "customperm alias add cp_lg_alias say hi");
             LogEntry typed = find(LogKind.ADMIN, e -> e.action().equals("/customperm alias add cp_lg_alias say hi"));
             if (!typed.success() || !LogEntry.SOURCE_COMMAND.equals(typed.source()) || typed.result().isEmpty())
@@ -63,7 +63,7 @@ public class ActivityLogGameTest {
             GuiRequestHandler.handleAction(new GuiActionPayload(GuiAction.ALIAS_DELETE.name(), List.of("cp_lg_alias"),
                     GuiPage.ALIASES.id()), moderator.payloadContext());
             LogEntry refused = find(LogKind.ADMIN, e -> e.actor().equals("cp_lg_mod") && e.action().equals("ALIAS_DELETE cp_lg_alias"));
-            if (refused.success() || !refused.result().contains("customperm.gui.aliases.edit"))
+            if (refused.success() || !refused.result().contains("customperm.manage.aliases"))
                 fail("A refused interface action must be recorded as refused: " + refused);
 
             GuiRequestHandler.handleAction(new GuiActionPayload(GuiAction.ALIAS_DELETE.name(), List.of("cp_lg_alias"),
@@ -135,11 +135,12 @@ public class ActivityLogGameTest {
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100, batch = "customperm_log_page")
     public static void logsPageShowsEntriesAndItsSwitchesNeedTheLogsNode(GameTestHelper helper) {
-        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_lg_pageown", 4);
-             TestPlayer moderator = TestPlayer.join(helper.getLevel(), "cp_lg_pagemod", 2)) {
-            ServerCommands.run(helper.getLevel().getServer(), "customperm reload");
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_lg_pageown", 4);
+             TestPlayer moderator = TestPlayer.reader(helper.getLevel(), "cp_lg_pagemod", 2)) {
+            // Not a reload: that would re-read grades.json and drop the nodes this test player holds in memory.
+            ServerCommands.run(helper.getLevel().getServer(), "customperm ratelimit set cp_lg_rule 2 30");
             LogsData page = page(owner, () -> GuiRequestHandler.open(owner.player(), GuiPage.LOGS));
-            if (page.admin().stream().noneMatch(e -> e.action().equals("/customperm reload")))
+            if (page.admin().stream().noneMatch(e -> e.action().equals("/customperm ratelimit set cp_lg_rule 2 30")))
                 fail("The Logs page does not show the latest admin change.");
             if (page.playerLog()) fail("The player log must be off by default.");
 
@@ -147,7 +148,7 @@ public class ActivityLogGameTest {
             GuiRequestHandler.handleAction(new GuiActionPayload(GuiAction.LOG_PLAYERS.name(), List.of("true"),
                     GuiPage.LOGS.id()), moderator.payloadContext());
             if (CustomPerm.configManager.getSettings().playerCommandLog)
-                fail("A level-2 operator without customperm.gui.logs.edit turned the player log on.");
+                fail("A level-2 operator without customperm.manage.logs turned the player log on.");
 
             LogsData refreshed = page(owner, () -> GuiRequestHandler.handleAction(new GuiActionPayload(
                     GuiAction.LOG_PLAYERS.name(), List.of("true"), GuiPage.LOGS.id()), owner.payloadContext()));
@@ -155,6 +156,7 @@ public class ActivityLogGameTest {
                 fail("The owner could not turn the player log on from the page.");
         } finally {
             LogAdmin.setPlayerLog(false);
+            CustomPerm.configManager.getRateLimits().rules.remove("cp_lg_rule");
         }
         helper.succeed();
     }

@@ -91,7 +91,7 @@ public class ConfigAndNetworkGameTest {
     public static void changeAfterFailedReloadIsNotSaved(GameTestHelper helper) {
         MinecraftServer server = helper.getLevel().getServer();
         try (FileBackup ignored = FileBackup.of(server, "ratelimits.json", "aliases.json");
-             TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_c_saves", 2)) {
+             TestPlayer op = TestPlayer.admin(helper.getLevel(), "cp_c_saves", 2)) {
             Files.writeString(CONFIG.resolve("aliases.json"), "{ broken");
             ServerCommands.run(server, "customperm reload");
             String before = Files.readString(CONFIG.resolve("ratelimits.json"));
@@ -156,7 +156,7 @@ public class ConfigAndNetworkGameTest {
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void editorWithoutLuckPermsIsEmptyAndReadOnly(GameTestHelper helper) {
         if (!Modes.internalOnly(helper)) return;
-        try (TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_c_nolp", 4)) {
+        try (TestPlayer op = TestPlayer.reader(helper.getLevel(), "cp_c_nolp", 4)) {
             op.clearReceived();
             LpRequestHandler.handleSync(RequestLpSyncPayload.of(RequestLpSyncPayload.SCOPE_GROUPS), op.payloadContext());
             var snapshots = op.payloads(LpSyncPayload.class);

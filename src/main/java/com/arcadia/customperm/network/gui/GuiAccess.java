@@ -9,7 +9,6 @@
 package com.arcadia.customperm.network.gui;
 
 import com.arcadia.customperm.perm.AdminAccess;
-import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.level.ServerPlayer;
 
 /**
@@ -26,19 +25,9 @@ public final class GuiAccess {
         return AdminAccess.canAdminister(player);
     }
 
-    /**
-     * Writing to an area: read access, then the area's node. An explicit ALLOW opens it, an explicit DENY
-     * closes it even to the server owner, and a node that is not set opens it at permission level 4 only,
-     * so a fresh install's owner is not locked out by a node they would need the interface to grant.
-     */
+    /** Writing to an area: read access and the area's {@code customperm.manage.<area>} node, explicitly allowed. */
     public static boolean canEdit(ServerPlayer player, GuiArea area) {
-        if (!canRead(player)) return false;
-        CommandSourceStack source = player.createCommandSourceStack();
-        return switch (AdminAccess.explicit(source, area.node())) {
-            case ALLOW -> true;
-            case DENY -> false;
-            case UNSET -> source.hasPermission(4);
-        };
+        return AdminAccess.canManage(player, area.node());
     }
 
     /** One bit per area this player may write to. */

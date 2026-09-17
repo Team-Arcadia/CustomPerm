@@ -12,43 +12,41 @@ package com.arcadia.customperm.perm;
  * Permission nodes CustomPerm checks by name rather than deriving from a command name.
  * Resolved through whichever {@link PermissionService} is active, so the same node works
  * whether it was granted via {@code /lp} or via {@code grades.json}.
+ *
+ * <p>Administration needs op level 2 and explicitly granted nodes, whatever the op level: an operator
+ * without them, level 4 included, sees neither {@code /customperm} nor the admin interface, so a player
+ * made operator by mistake gets nothing. Only the console is never asked for a node. See
+ * {@link AdminAccess}.</p>
  */
 public final class PermissionNodes {
 
     /**
-     * Write access to the in-game LuckPerms editor. Reading the editor needs op level 2, like
-     * every other CustomPerm admin screen; changing the permission store needs this node on top.
-     * <p>
-     * The point of a separate node is delegation: a moderator can be handed the editor without
-     * being handed {@code /lp} itself. Server owners (permission level 4) are allowed to write
-     * without it, because the alternative is a fresh install where the owner opens the editor,
-     * finds it read-only, and has no in-game way to grant themselves the node that would unlock it.
-     */
-    public static final String LP_EDIT = "customperm.gui.luckperms.edit";
-
-    /**
-     * Access to {@code /customperm}, the admin interface and admin alerts. It only restricts: op level 2
-     * stays required, and an explicit DENY (or a denied {@code *} / {@code customperm.*}) takes access
-     * away from an operator. Granting it to a non-operator opens nothing.
+     * Entry to {@code /customperm} and the admin interface: status, lists, diagnostics, reading every
+     * page and the logs, receiving admin alerts. Changing anything needs a {@code customperm.manage.*}
+     * node on top.
      */
     public static final String ADMIN = "customperm.admin";
 
     /**
-     * Write access to one area of the admin interface. Same rule as {@link #LP_EDIT}: reading needs
-     * op level 2, writing needs the area's node, level 4 bypasses. One node per area rather than a
-     * single "edit everything" node, so a helper can be trusted with aliases without being able to
-     * expose commands or change grades.
+     * Changing one area, through its {@code /customperm} subcommands and its page of the interface alike.
+     * One node per area, so a helper can be trusted with aliases without being able to expose commands
+     * or change grades. {@code customperm.manage.*} or {@code customperm.*} grants them all.
      */
-    public static final String GUI_COMMANDS_EDIT = "customperm.gui.commands.edit";
-    public static final String GUI_ALIASES_EDIT = "customperm.gui.aliases.edit";
-    public static final String GUI_RATELIMITS_EDIT = "customperm.gui.ratelimits.edit";
-    public static final String GUI_GRADES_EDIT = "customperm.gui.grades.edit";
-    /** Turning the player command log and argument masking on or off. Reading the logs needs admin access only. */
-    public static final String GUI_LOGS_EDIT = "customperm.gui.logs.edit";
+    public static final String MANAGE_COMMANDS = "customperm.manage.commands";
+    public static final String MANAGE_ALIASES = "customperm.manage.aliases";
+    public static final String MANAGE_RATELIMITS = "customperm.manage.ratelimits";
+    public static final String MANAGE_GRADES = "customperm.manage.grades";
+    /** Turning the player command log and argument masking on or off. */
+    public static final String MANAGE_LOGS = "customperm.manage.logs";
+    /** Reloading the configuration from disk. */
+    public static final String MANAGE_CONFIG = "customperm.manage.config";
+    /** Writing to LuckPerms through the in-game editor. */
+    public static final String MANAGE_LUCKPERMS = "customperm.manage.luckperms";
 
     /** Every fixed node above, for command suggestions. */
     public static java.util.List<String> all() {
-        return java.util.List.of(ADMIN, GUI_COMMANDS_EDIT, GUI_ALIASES_EDIT, GUI_RATELIMITS_EDIT, GUI_GRADES_EDIT, GUI_LOGS_EDIT, LP_EDIT);
+        return java.util.List.of(ADMIN, MANAGE_COMMANDS, MANAGE_ALIASES, MANAGE_RATELIMITS, MANAGE_GRADES, MANAGE_LOGS,
+                MANAGE_CONFIG, MANAGE_LUCKPERMS);
     }
 
     private PermissionNodes() {

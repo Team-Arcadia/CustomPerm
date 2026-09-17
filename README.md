@@ -62,6 +62,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Multi-grade RBAC** — a player can hold multiple internal grades; permissions are resolved as a union of all assigned grades.
 - **Explicit DENY support** — internal grades support `deniedPermissions`. The most specific entry wins, like LuckPerms (exact node, then `a.b.*`, then `*`), and a DENY wins at the same level.
 - **Wildcard permission nodes** — `*`, `customperm.command.*`, and `customperm.alias.*` are supported, in both directions: a denied `*` refuses everything except explicit allows.
+- **Administration behind a permission** — `/customperm` and the admin interface need op level 2 **and** explicitly granted nodes (`customperm.admin` to enter, `customperm.manage.<area>` to change), so a player made operator by mistake, level 4 included, gets nothing. The console always has access, and the host of a singleplayer or LAN world stands in for it.
 - **Restrictable operators** — an explicit DENY applies to operators too, on both backends, so a player made op by mistake can be kept away from commands. A default grade applies to every player, and `gateAllCommands` extends CustomPerm's check to every command. See [Restricting operators](#restricting-operators).
 - **Aliases and macros** — create custom top-level commands such as `/fly`, `/heal`, `/starter`, backed by one or more configured command steps.
 - **Alias step editing** — append, remove and inspect individual alias steps with zero-based indices.
@@ -130,11 +131,11 @@ The interface is drawn natively (no UI library) and replaces the former TesseraU
 | Commands | Every root command of the server with search (Ctrl+F) and an exposed-only filter, badges for aliases, rate limits and commands missing from the server; expose, hide (with confirmation), and the keep-original switch (`preserveOriginalRequires`) |
 | Aliases | Every alias with search, badges for shadowed commands and rate limits; create an alias with its first step; per alias: add, replace, move up or down and remove steps, delete the alias (with confirmation) |
 | Rate limits | Every rule with its numbers and badges (disabled, target neither exposed nor an alias); add a limit, change uses and window, enable or disable, switch when usage history is written (world save or every use), remove (with confirmation); exposed commands and aliases without a limit are listed and fill the form in one click |
-| LuckPerms | Only when LuckPerms is installed: no navigation entry otherwise, and `/customperm gui luckperms` explains why. Installed but not running (singleplayer, failed start), the page shows a banner instead of the editor. **Groups**: create, delete, permission nodes with allow/deny, contexts and duration, parents, weight, display name, prefix, suffix, meta. **Players**: online players and any player found by exact name, their nodes, groups with duration, primary group, promote and demote on a track, prefix, suffix, meta. **Tracks**: create, delete, append, insert at a position, remove a group. Writes go through the LuckPerms API server-side, gated by `customperm.gui.luckperms.edit` |
+| LuckPerms | Only when LuckPerms is installed: no navigation entry otherwise, and `/customperm gui luckperms` explains why. Installed but not running (singleplayer, failed start), the page shows a banner instead of the editor. **Groups**: create, delete, permission nodes with allow/deny, contexts and duration, parents, weight, display name, prefix, suffix, meta. **Players**: online players and any player found by exact name, their nodes, groups with duration, primary group, promote and demote on a track, prefix, suffix, meta. **Tracks**: create, delete, append, insert at a position, remove a group. Writes go through the LuckPerms API server-side, gated by `customperm.manage.luckperms` |
 | Grades | Always reachable, so the fallback can be read while LuckPerms runs or fails. A banner says when grades do not decide permissions; while LuckPerms is active the page is read-only, like the grade commands: grades with search and creation; per grade, ALLOW and DENY nodes, and players with their online state, assigned by name with completion, including players who are offline but joined the server before; delete a grade (with confirmation) |
-| Logs | Two tabs, newest first, with search. **Admin**: every change made with `/customperm` commands, the interface and the LuckPerms editor, and the changes LuckPerms itself records (`/lp`, web editor): when, who, from where, what, and the result or refusal. **Players**: every command players type, only while recording is on (off by default); arguments of private-message and password commands masked unless masking is turned off. Switching recording and masking needs `customperm.gui.logs.edit` |
+| Logs | Two tabs, newest first, with search. **Admin**: every change made with `/customperm` commands, the interface and the LuckPerms editor, and the changes LuckPerms itself records (`/lp`, web editor): when, who, from where, what, and the result or refusal. **Players**: every command players type, only while recording is on (off by default); arguments of private-message and password commands masked unless masking is turned off. Switching recording and masking needs `customperm.manage.logs` |
 
-**Permissions.** Reading any page requires the same access as `/customperm`: op level 2, and `customperm.admin` not denied. Writing requires the node of the area on top of it: `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.logs.edit`, `customperm.gui.luckperms.edit`. A level-2 operator needs the node explicitly allowed, so one area can be delegated to a moderator without opening the others. Permission level 4 (server owner) can write where the node is not set; an explicit DENY closes the area to the owner too. Actions that change no configuration, such as reload, need op level 2 only, like their command. Every action, applied or refused, is recorded in the activity log with the admin's name.
+**Permissions.** Reading any page requires the same access as `/customperm`: op level 2 and `customperm.admin`. Writing requires the area's node on top of it, the same node as the matching commands: `customperm.manage.commands`, `customperm.manage.aliases`, `customperm.manage.ratelimits`, `customperm.manage.grades`, `customperm.manage.logs`, `customperm.manage.config` (reload), `customperm.manage.luckperms`. Nothing is granted by the op level alone, level 4 included, so one area can be delegated to a moderator without opening the others. Actions that change no configuration, such as reload, need op level 2 only, like their command. Every action, applied or refused, is recorded in the activity log with the admin's name.
 
 **Compatibility.** The interface uses network protocol 2. A client running an older CustomPerm still connects to a 1.1.0 server but has no interface there, and the other way round.
 
@@ -146,7 +147,7 @@ CustomPerm is designed for servers, but it works in a singleplayer world too —
 
 ### You must enable cheats
 
-`/customperm` is gated behind a real op-level-2 check. In a singleplayer world you only hold a permission level if **Allow Cheats** is on (`Create New World → More → Allow Cheats`, or open the world to LAN with cheats enabled). Without it the command is hidden from tab-completion and cannot be run — this is not a bug, it is the same gate that protects the command on a server.
+`/customperm` is gated behind a real op-level-2 check, plus the `customperm.admin` node, from which the host of the world is exempt: a singleplayer or LAN world has no console to grant the first node from. Guests of a LAN world need op level 2 and the nodes, granted by the host. In a singleplayer world you only hold a permission level if **Allow Cheats** is on (`Create New World → More → Allow Cheats`, or open the world to LAN with cheats enabled). Without it the command is hidden from tab-completion and cannot be run — this is not a bug, it is the same gate that protects the command on a server.
 
 The check deliberately inspects your *real* op level rather than the level of the current command source, so an alias can never be used to smuggle a `/customperm` subcommand past it.
 
@@ -200,7 +201,19 @@ Same outcome: `Steve` can use `/gamemode`.
 
 ## Commands
 
-All admin commands live under `/customperm` and **require op level 2**, and `customperm.admin` not denied (see [Restricting operators](#restricting-operators)). The console always has access.
+All admin commands live under `/customperm` and require **op level 2 and `customperm.admin`**, explicitly granted; subcommands that change something also require the `customperm.manage.<area>` node of their area, listed with each group below. The op level alone grants nothing, level 4 included (see [Restricting operators](#restricting-operators)). The console always has access, and so does the host of a singleplayer or LAN world, which has no console.
+
+On a fresh install, or right after upgrading from 1.0.x, nobody holds these nodes: grant them from the console.
+
+```
+# Without LuckPerms
+customperm grade create admins
+customperm grade addperm admins customperm.*
+customperm grade assign <name> admins
+
+# With LuckPerms
+lp user <name> permission set customperm.* true
+```
 
 ### Command exposure
 
@@ -277,8 +290,8 @@ Cap how many times one player may run a command or an alias within a sliding win
 | `/customperm log players [count]` | The latest commands typed by players, when recording is on. |
 | `/customperm log record <true\|false>` | Starts or stops recording player commands. Same as `playerCommandLog` in `settings.json`. |
 | `/customperm log mask <true\|false>` | Masks or keeps the arguments of the commands listed in `maskedCommands`. |
-| `/customperm gui [dashboard\|commands\|aliases\|ratelimits\|grades\|logs]` | Opens the in-game admin interface (needs CustomPerm on the client). Reading needs op level 2; writing needs the area's `customperm.gui.<area>.edit` node. |
-| `/customperm gui luckperms [groups\|players\|tracks]` | Opens the in-game LuckPerms editor. Only when LuckPerms is installed; if it is not running, the page says why. Writing needs `customperm.gui.luckperms.edit`. |
+| `/customperm gui [dashboard\|commands\|aliases\|ratelimits\|grades\|logs]` | Opens the in-game admin interface (needs CustomPerm on the client). Reading needs `customperm.admin`; writing needs the area's `customperm.manage.<area>` node. |
+| `/customperm gui luckperms [groups\|players\|tracks]` | Opens the in-game LuckPerms editor. Only when LuckPerms is installed; if it is not running, the page says why. Writing needs `customperm.manage.luckperms`. |
 
 ---
 
@@ -289,7 +302,15 @@ CustomPerm uses a hierarchical node scheme compatible with LuckPerms (and with t
 | Node | Effect |
 |---|---|
 | `*` | Global wildcard. Allowed, it grants every node; denied, it refuses every node except the ones allowed more specifically, operators included. Use sparingly. |
-| `customperm.admin` | Only restricts: denied, it takes `/customperm`, the admin interface and admin alerts away from an operator. Granting it to a non-operator opens nothing. |
+| `customperm.admin` | Entry: use `/customperm` and read every page of the interface, plus admin alerts. Required, op level alone is not enough. |
+| `customperm.manage.commands` | Expose, hide, `preserve`, `gateall`, and the Commands page. |
+| `customperm.manage.aliases` | Create, edit and delete aliases, and the Aliases page. |
+| `customperm.manage.ratelimits` | Create, change, enable, disable and delete rate limits, and the Rate limits page. |
+| `customperm.manage.grades` | Grades, their nodes, assignments and the default grade, and the Grades page. |
+| `customperm.manage.logs` | Turn the player command log and argument masking on or off. |
+| `customperm.manage.config` | `/customperm reload` and the reload button. |
+| `customperm.manage.luckperms` | Write through the in-game LuckPerms editor. |
+| `customperm.manage.*` | Every area above. `customperm.*` adds `customperm.admin` on top: the full administrator. |
 | `customperm.command.<name>` | Authorizes command `<name>`, once the command is exposed (or for every command with `gateAllCommands`). Denied, it refuses the command to operators too. Resolved by LuckPerms when installed, by the internal grades otherwise. |
 | `customperm.command.*` | Wildcard covering every exposed command (every command with `gateAllCommands`). With LuckPerms, LuckPerms' own wildcard engine resolves it. |
 | `customperm.alias.<name>` | Authorizes alias `<name>`. E.g. `customperm.alias.fly` |
@@ -553,7 +574,9 @@ Creating `/customperm alias add gamemode ...` **shadows** the vanilla command. T
 
 ### Restricting operators
 
-Being op only matters where nothing says otherwise. An explicit DENY applies to operators, owners included, on both backends: a denied `customperm.command.<name>` refuses the command, a denied `customperm.alias.<name>` the alias, a denied `customperm.admin` (or `*`, or `customperm.*`) takes away `/customperm` and the admin interface. The console and command blocks are never asked for a node.
+Administering CustomPerm needs a granted node, never the op level alone: `/customperm` and the interface are hidden from an operator who does not hold `customperm.admin`, level 4 included, and each change needs its `customperm.manage.<area>` node. Only the console, and the host of a world with no console, are exempt.
+
+For the commands CustomPerm gates for ordinary players, being op still matters where nothing says otherwise. An explicit DENY applies to operators, owners included, on both backends: a denied `customperm.command.<name>` refuses the command, a denied `customperm.alias.<name>` the alias, a denied `customperm.admin` (or `*`, or `customperm.*`) takes away `/customperm` and the admin interface. The console and command blocks are never asked for a node.
 
 With LuckPerms, deny nodes as usual (`/lp group default permission set * false`, then allow what staff needs): LuckPerms already checks every command, and CustomPerm now honours a `false` on the commands it exposes instead of letting operators through.
 
@@ -569,6 +592,8 @@ customperm grade assign <you> owner
 customperm grade setdefault everyone
 customperm command gateall true
 ```
+
+`owner` holds `*`, which includes `customperm.admin` and every `customperm.manage.*`: that is what keeps you able to administer the mod in game.
 
 Every player now follows `everyone` below their own grades, and every command reads its node: an op without a grade of their own can run `/list` and nothing else, `/customperm` included. Run these from the console, or assign yourself `owner` before `setdefault`: in game, a change that would lock you out of `/customperm` is refused.
 
@@ -716,7 +741,7 @@ Performance benchmarks can be run with:
 | Config manager | Atomic snapshot reads, serialized atomic saves, concurrent reload rejection, rollback after invalid JSON, backup creation, backup rotation. |
 | Backward compatibility | Missing files, `{}` files, explicit `null` collections, unknown future fields, partial config files. |
 | LuckPerms selection | Internal backend when LP is absent, version parsing, minimum version gate, stable backend selection. |
-| GameTests, both modes | Command exposure and removal with a non-op player, operator preservation, `/customperm` refused to non-ops, reconnection, aliases run with op-4 elevation by node holders only and unable to reach `/customperm`, step editing, recursion and shadowing guards, reload of hand-edited `aliases.json`, rate limits (refusal message, shared counter per root, per-player isolation, console exemption, window expiry, reconnection, repeated reloads, rule removal, aliases), all-or-nothing reload, concurrent reload refusal, unsaved changes after a failed reload, `null` entries, command-tree repush on reload, admin alerts in operators' chat, GUI and editor packets refused to non-operators, diagnostics output, tab-completion of every `/customperm` argument and no suggestions for non-operators, operators refused an exposed command, an alias, `/customperm` or an interface area by an explicit DENY while the console keeps access, a denied `*` blocking everything but explicit allows, admin changes from commands and the interface recorded with refusals, player commands recorded only when on and masked by default, files on disk, reload from disk skipping unreadable lines, retention, Logs page switches gated by their node, `/lp` changes recorded (LuckPerms mode). |
+| GameTests, both modes | Command exposure and removal with a non-op player, operator preservation, `/customperm` refused to non-ops, reconnection, aliases run with op-4 elevation by node holders only and unable to reach `/customperm`, step editing, recursion and shadowing guards, reload of hand-edited `aliases.json`, rate limits (refusal message, shared counter per root, per-player isolation, console exemption, window expiry, reconnection, repeated reloads, rule removal, aliases), all-or-nothing reload, concurrent reload refusal, unsaved changes after a failed reload, `null` entries, command-tree repush on reload, admin alerts in operators' chat, GUI and editor packets refused to non-operators, diagnostics output, tab-completion of every `/customperm` argument and no suggestions for non-operators, operators refused an exposed command, an alias, `/customperm` or an interface area by an explicit DENY while the console keeps access, a denied `*` blocking everything but explicit allows, admin changes from commands and the interface recorded with refusals, player commands recorded only when on and masked by default, files on disk, reload from disk skipping unreadable lines, retention, Logs page switches gated by their node, `/lp` changes recorded (LuckPerms mode), operators without the nodes refused `/customperm` and the interface while the console keeps access, each area needing its own `customperm.manage` node for the command and the page alike, the nodes alone opening nothing to a non-operator. |
 | GameTests, internal mode | Grade commands, union of grades, most specific entry wins, every wildcard form, editor without LuckPerms, `gateAllCommands` and an allowed `*`, a default grade restricting an accidental operator, refused self-lockout by command and interface. |
 | GameTests, LuckPerms mode | In-game editor against a real LuckPerms: groups, nodes with contexts and expiry, inheritance, meta, prefix and suffix, weight, display name, player groups and primary group, tracks, promote and demote, write gating by node and level, edit and sync rate limits; command tree resent after a LuckPerms change; `deny` and `internal` fallback when LuckPerms becomes unavailable. |
 | Performance | `PermissionResolver.resolve()` and concurrent config snapshot reads via JMH. |

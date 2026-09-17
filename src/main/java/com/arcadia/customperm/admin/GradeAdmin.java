@@ -183,28 +183,33 @@ public final class GradeAdmin {
     }
 
     /**
-     * Runs a grade change for {@code actor} and undoes it if it takes away the actor's own access to
-     * {@code /customperm}: a denied {@code *} in their grade, or in the default grade, would otherwise lock
-     * the admin out of the very command that can repair it. The console is never checked, it cannot be
+     * Runs a grade change for {@code actor} and undoes it if it takes away the actor's own access to the grade
+     * commands ({@code customperm.admin} and {@code customperm.manage.grades}): a denied {@code *} in their grade,
+     * or a removed allow, would otherwise lock the admin out of the very command that can repair it. The console is never checked, it cannot be
      * locked out.
      */
     public static AdminResult guarded(CommandSourceStack actor, MinecraftServer server, Supplier<AdminResult> change) {
-        if (!(actor.getEntity() instanceof ServerPlayer player) || !AdminAccess.canAdminister(player)) {
+        if (!(actor.getEntity() instanceof ServerPlayer player) || !canManageGrades(player)) {
             return change.get();
         }
         GradesConfig saved = copy(grades());
         String savedDefault = CustomPerm.configManager.getSettings().defaultGrade;
         AdminResult result = change.get();
-        if (!result.success() || AdminAccess.canAdminister(player)) return result;
+        if (!result.success() || canManageGrades(player)) return result;
 
         restore(grades(), saved);
         CustomPerm.configManager.getSettings().defaultGrade = savedDefault;
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
-        CustomPerm.LOGGER.warn("[CustomPerm] Refused a grade change by {}: it would have denied them customperm.admin.",
+        CustomPerm.LOGGER.warn("[CustomPerm] Refused a grade change by {}: it would have taken away their own access to grades.",
                 player.getGameProfile().getName());
-        return AdminResult.fail("Refused: you would lose /customperm yourself (customperm.admin denied). Allow "
-                + "customperm.admin in one of your grades first, or make this change from the console.").warn(warning);
+        return AdminResult.fail("Refused: you would lose customperm.admin or customperm.manage.grades yourself. Keep them "
+                + "allowed in one of your grades, or make this change from the console.").warn(warning);
+    }
+
+    /** What the guard protects: the admin can still run the grade commands that would undo the change. */
+    private static boolean canManageGrades(ServerPlayer player) {
+        return AdminAccess.canManage(player, com.arcadia.customperm.perm.PermissionNodes.MANAGE_GRADES);
     }
 
     private static GradesConfig copy(GradesConfig source) {

@@ -65,10 +65,39 @@ public final class TestPlayer implements AutoCloseable {
     private final EmbeddedChannel channel;
     private final List<Packet<?>> received = new ArrayList<>();
 
+    /** Nodes granted by {@link #admin} or {@link #reader}, taken back on close. */
+    private Grants access;
+
     private TestPlayer(MinecraftServer server, ServerPlayer player, EmbeddedChannel channel) {
         this.server = server;
         this.player = player;
         this.channel = channel;
+    }
+
+    /**
+     * An operator who administers CustomPerm: {@code customperm.*}, granted before login. Being operator alone
+     * gives no access; use {@link #join} for an operator without nodes.
+     */
+    public static TestPlayer admin(ServerLevel level, String name, int permissionLevel) {
+        return withAccess(level, new GameProfile(UUID.randomUUID(), name), permissionLevel, true, "customperm.*");
+    }
+
+    public static TestPlayer admin(ServerLevel level, GameProfile profile, int permissionLevel, boolean modInstalledClientSide) {
+        return withAccess(level, profile, permissionLevel, modInstalledClientSide, "customperm.*");
+    }
+
+    /** An operator who may enter /customperm and read every page, but change nothing: {@code customperm.admin}. */
+    public static TestPlayer reader(ServerLevel level, String name, int permissionLevel) {
+        return withAccess(level, new GameProfile(UUID.randomUUID(), name), permissionLevel, true, "customperm.admin");
+    }
+
+    private static TestPlayer withAccess(ServerLevel level, GameProfile profile, int permissionLevel,
+                                         boolean modInstalledClientSide, String node) {
+        if (CustomPerm.isLuckPermsActive()) LuckPermsTestSupport.loadUser(profile);
+        Grants grants = Grants.allow(profile.getId(), node);
+        TestPlayer player = join(level, profile, permissionLevel, modInstalledClientSide);
+        player.access = grants;
+        return player;
     }
 
     /** Joins a player with a random identity and CustomPerm installed client-side. */
@@ -219,5 +248,6 @@ public final class TestPlayer implements AutoCloseable {
             server.getPlayerList().remove(player);
         }
         channel.finishAndReleaseAll();
+        if (access != null) access.close();
     }
 }

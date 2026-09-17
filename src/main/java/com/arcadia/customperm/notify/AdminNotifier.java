@@ -86,7 +86,16 @@ public final class AdminNotifier {
     }
 
     public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
-        if (!(event.getEntity() instanceof ServerPlayer player) || !isAdmin(player)) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (AdminAccess.isOperatorWithoutAccess(player)) {
+            // Expected for a player made operator by mistake; after an upgrade it is how an owner finds out why
+            // /customperm disappeared.
+            CustomPerm.LOGGER.info("[CustomPerm] {} is an operator without customperm.admin: /customperm and the admin "
+                    + "interface are hidden for them. Grant it from the console if they administer CustomPerm.",
+                    player.getGameProfile().getName());
+            return;
+        }
+        if (!isAdmin(player)) return;
         ALERTS.snapshot().values().forEach(message -> player.sendSystemMessage(alertLine(message)));
     }
 }

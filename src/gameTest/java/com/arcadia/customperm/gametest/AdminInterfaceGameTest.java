@@ -52,7 +52,7 @@ public class AdminInterfaceGameTest {
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void guiCommandOpensTheDashboard(GameTestHelper helper) {
-        try (TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_i_open", 2)) {
+        try (TestPlayer op = TestPlayer.reader(helper.getLevel(), "cp_i_open", 2)) {
             op.clearReceived();
             op.type("customperm gui");
             var pages = op.payloads(GuiPagePayload.class);
@@ -80,7 +80,7 @@ public class AdminInterfaceGameTest {
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void guiCommandExplainsAMissingClientMod(GameTestHelper helper) {
         GameProfile profile = new GameProfile(UUID.randomUUID(), "cp_i_vanilla");
-        try (TestPlayer op = TestPlayer.join(helper.getLevel(), profile, 2, false)) {
+        try (TestPlayer op = TestPlayer.admin(helper.getLevel(), profile, 2, false)) {
             op.clearReceived();
             op.type("customperm gui");
             if (!op.chatContains("needs CustomPerm installed on your client"))
@@ -104,7 +104,7 @@ public class AdminInterfaceGameTest {
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void unknownAndMalformedActionsAreRejected(GameTestHelper helper) {
-        try (TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_i_malformed", 4)) {
+        try (TestPlayer op = TestPlayer.admin(helper.getLevel(), "cp_i_malformed", 4)) {
             op.clearReceived();
             GuiRequestHandler.handleAction(action("DROP_EVERYTHING"), op.payloadContext());
             GuiRequestHandler.handleAction(new GuiActionPayload(GuiAction.RELOAD.name(), List.of("extra"), "dashboard"),
@@ -120,7 +120,7 @@ public class AdminInterfaceGameTest {
 
     @GameTest(template = TEMPLATE, timeoutTicks = 200)
     public static void reloadActionReportsAndRefreshesInPlace(GameTestHelper helper) {
-        try (TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_i_reload", 2)) {
+        try (TestPlayer op = TestPlayer.admin(helper.getLevel(), "cp_i_reload", 2)) {
             op.clearReceived();
             GuiRequestHandler.handleAction(action(GuiAction.RELOAD.name()), op.payloadContext());
             List<String> results = results(op);
@@ -135,26 +135,26 @@ public class AdminInterfaceGameTest {
 
     @GameTest(template = TEMPLATE, timeoutTicks = 200)
     public static void editMaskFollowsAreaNodesAndOwnerBypass(GameTestHelper helper) {
-        try (TestPlayer reader = TestPlayer.join(helper.getLevel(), "cp_i_reader", 2);
-             TestPlayer helperPlayer = TestPlayer.join(helper.getLevel(), "cp_i_aliashelp", 2);
-             TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_owner", 4);
+        try (TestPlayer reader = TestPlayer.reader(helper.getLevel(), "cp_i_reader", 2);
+             TestPlayer helperPlayer = TestPlayer.reader(helper.getLevel(), "cp_i_aliashelp", 2);
+             TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_owner", 4);
              Grants ignored = Grants.allow(helperPlayer, GuiArea.ALIASES.node())) {
             int readerMask = open(reader).context().editMask();
             int helperMask = open(helperPlayer).context().editMask();
             int ownerMask = open(owner).context().editMask();
-            if (readerMask != 0) fail("Level 2 without nodes must be read-only everywhere, mask " + readerMask);
+            if (readerMask != 0) fail("customperm.admin alone must be read-only everywhere, mask " + readerMask);
             if (helperMask != GuiArea.ALIASES.bit())
                 fail("The aliases node must unlock the aliases area only, mask " + helperMask);
             int all = 0;
             for (GuiArea area : GuiArea.values()) all |= area.bit();
-            if (ownerMask != all) fail("Level 4 must be able to edit every area, mask " + ownerMask);
+            if (ownerMask != all) fail("customperm.* must be able to edit every area, mask " + ownerMask);
         }
         helper.succeed();
     }
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void pageRequestFloodsAreCapped(GameTestHelper helper) {
-        try (TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_i_flood", 2)) {
+        try (TestPlayer op = TestPlayer.reader(helper.getLevel(), "cp_i_flood", 2)) {
             op.clearReceived();
             GuiRequestPayload request = new GuiRequestPayload(GuiPage.DASHBOARD.id());
             for (int i = 0; i < 60; i++) GuiRequestHandler.handleRequest(request, op.payloadContext());
@@ -169,7 +169,7 @@ public class AdminInterfaceGameTest {
     @GameTest(template = TEMPLATE, timeoutTicks = 200)
     public static void commandsPageExposesTogglesAndHides(GameTestHelper helper) {
         String name = "weather";
-        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_cmds", 4);
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_cmds", 4);
              TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_i_cmds_pl", 0);
              Grants ignored = Grants.allow(player, "customperm.command." + name)) {
             CommandsData.Row row = commandRow(owner, name);
@@ -212,10 +212,10 @@ public class AdminInterfaceGameTest {
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void commandActionsNeedTheCommandsNode(GameTestHelper helper) {
-        try (TestPlayer reader = TestPlayer.join(helper.getLevel(), "cp_i_cmds_ro", 2)) {
+        try (TestPlayer reader = TestPlayer.reader(helper.getLevel(), "cp_i_cmds_ro", 2)) {
             reader.clearReceived();
             act(reader, GuiAction.COMMAND_EXPOSE, "difficulty");
-            expectResult(reader, "FAIL: You do not have customperm.gui.commands.edit.");
+            expectResult(reader, "FAIL: You do not have customperm.manage.commands.");
             if (CustomPerm.configManager.getCommands().grantedCommands.contains("difficulty"))
                 fail("A refused action exposed the command anyway.");
         } finally {
@@ -229,7 +229,7 @@ public class AdminInterfaceGameTest {
     public static void aliasesPageEditsStepsEndToEnd(GameTestHelper helper) {
         String name = "cp_i_macro";
         var aliases = CustomPerm.configManager.getAliases().aliases;
-        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_alias", 4)) {
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_alias", 4)) {
             owner.clearReceived();
             aliasAct(owner, GuiAction.ALIAS_CREATE, name, "say one");
             expectResult(owner, "OK: Alias /cp_i_macro set with 1 step(s).");
@@ -280,11 +280,11 @@ public class AdminInterfaceGameTest {
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void aliasActionsNeedTheAliasesNodeAndAValidName(GameTestHelper helper) {
-        try (TestPlayer reader = TestPlayer.join(helper.getLevel(), "cp_i_alias_ro", 2);
-             TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_alias_ow", 4)) {
+        try (TestPlayer reader = TestPlayer.reader(helper.getLevel(), "cp_i_alias_ro", 2);
+             TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_alias_ow", 4)) {
             reader.clearReceived();
             aliasAct(reader, GuiAction.ALIAS_CREATE, "cp_i_denied", "say no");
-            expectResult(reader, "FAIL: You do not have customperm.gui.aliases.edit.");
+            expectResult(reader, "FAIL: You do not have customperm.manage.aliases.");
             owner.clearReceived();
             aliasAct(owner, GuiAction.ALIAS_CREATE, "bad name", "say no");
             expectResult(owner, "FAIL: Invalid alias name 'bad name'");
@@ -305,7 +305,7 @@ public class AdminInterfaceGameTest {
         String alias = "cp_i_limited";
         var server = helper.getLevel().getServer();
         var rules = CustomPerm.configManager.getRateLimits().rules;
-        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_limits", 4)) {
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_limits", 4)) {
             AliasAdmin.define(server, alias, List.of("say limited"));
             RateLimitsData before = rateLimitsPage(owner);
             if (!before.unlimited().contains(alias)) fail("An alias without a rule must be offered as a target.");
@@ -351,10 +351,10 @@ public class AdminInterfaceGameTest {
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void rateLimitActionsNeedTheRateLimitsNode(GameTestHelper helper) {
-        try (TestPlayer reader = TestPlayer.join(helper.getLevel(), "cp_i_limits_ro", 2)) {
+        try (TestPlayer reader = TestPlayer.reader(helper.getLevel(), "cp_i_limits_ro", 2)) {
             reader.clearReceived();
             limitAct(reader, GuiAction.RATELIMIT_SET, "cp_i_denied_rule", "1", "60");
-            expectResult(reader, "FAIL: You do not have customperm.gui.ratelimits.edit.");
+            expectResult(reader, "FAIL: You do not have customperm.manage.ratelimits.");
             if (CustomPerm.configManager.getRateLimits().rules.containsKey("cp_i_denied_rule"))
                 fail("A refused action created the rule.");
         } finally {
@@ -374,7 +374,7 @@ public class AdminInterfaceGameTest {
         // reused with another UUID is rightly refused as ambiguous.
         String offlineName = "cp_o" + Long.toHexString(System.nanoTime() & 0xFFFFFFFFFFFL);
         GameProfile offline = new GameProfile(UUID.randomUUID(), offlineName);
-        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_grades", 4);
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_grades", 4);
              TestPlayer member = TestPlayer.join(helper.getLevel(), "cp_i_member", 0)) {
             // A player who joined once and left: known to the server, not online.
             TestPlayer.join(helper.getLevel(), offline, 0, true).close();
@@ -434,11 +434,11 @@ public class AdminInterfaceGameTest {
 
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void gradeActionsAreRefusedUnderLuckPermsOrWithoutTheNode(GameTestHelper helper) {
-        try (TestPlayer reader = TestPlayer.join(helper.getLevel(), "cp_i_grades_ro", 2);
-             TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_grades_ow", 4)) {
+        try (TestPlayer reader = TestPlayer.reader(helper.getLevel(), "cp_i_grades_ro", 2);
+             TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_grades_ow", 4)) {
             reader.clearReceived();
             gradeAct(reader, GuiAction.GRADE_CREATE, "cp_i_denied_grade");
-            expectResult(reader, "FAIL: You do not have customperm.gui.grades.edit.");
+            expectResult(reader, "FAIL: You do not have customperm.manage.grades.");
             if (CustomPerm.isLuckPermsActive()) {
                 owner.clearReceived();
                 gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_denied_grade");
@@ -455,7 +455,7 @@ public class AdminInterfaceGameTest {
     /** Area 7: the LuckPerms editor page exists only when LuckPerms is installed, whichever way it is asked for. */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void luckPermsEditorOpensOnlyWithLuckPerms(GameTestHelper helper) {
-        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_lpeditor", 4)) {
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_lpeditor", 4)) {
             owner.clearReceived();
             owner.type("customperm gui luckperms players");
             GuiRequestHandler.handleRequest(new GuiRequestPayload(GuiPage.LUCKPERMS.id()), owner.payloadContext());

@@ -88,7 +88,7 @@ class PermissionResolverTest {
         assignGradeWithAllow("staff", "customperm.*");
         assertTrue(PermissionResolver.resolve(grades, player, "customperm.command.gamemode"));
         assertTrue(PermissionResolver.resolve(grades, player, "customperm.alias.heal"));
-        assertTrue(PermissionResolver.resolve(grades, player, "customperm.gui.luckperms.edit"));
+        assertTrue(PermissionResolver.resolve(grades, player, "customperm.manage.luckperms"));
         assertFalse(PermissionResolver.resolve(grades, player, "customperm"),
             "prefix.* covers descendants only, not the prefix itself");
         assertFalse(PermissionResolver.resolve(grades, player, "custompermx.command.tp"));
