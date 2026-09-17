@@ -11,6 +11,7 @@ package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.command.CommandTreeRewriter;
+import com.arcadia.customperm.gametest.support.ServerCommands;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
@@ -23,11 +24,9 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
- * GameTests for command exposure and dispatcher integration (AC2 — story 6-2).
- *
- * Note: Tests that require a real non-OP player (ServerPlayer mock) are impossible
- * in MC 1.21.1 because {@code GameTestHelper.makeMockPlayer} returns an anonymous
- * {@code Player} subclass, not a {@code ServerPlayer}. Data-layer tests only.
+ * GameTests for command exposure and dispatcher integration (AC2 — story 6-2), at the data and
+ * dispatcher level. Behaviour seen by a connected player is covered by CommandExposureGameTest,
+ * which uses the TestPlayer harness.
  */
 @GameTestHolder(CustomPerm.MODID)
 @PrefixGameTestTemplate(false)
@@ -286,8 +285,11 @@ public class CommandInterceptionTest {
         } catch (CommandSyntaxException e) {
             fail("Command syntax error while checking LuckPerms direct-command policy: " + e.getMessage());
         } finally {
-            exposed.remove("gamemode");
-            if (had) exposed.add("gamemode");
+            // Remove through the real command: editing the set directly would leave the exposure gate
+            // re-asserted over LuckPerms on the /gamemode nodes.
+            if (!had && exposed.contains("gamemode")) {
+                ServerCommands.run(helper.getLevel().getServer(), "customperm command remove gamemode");
+            }
         }
 
         helper.succeed();
