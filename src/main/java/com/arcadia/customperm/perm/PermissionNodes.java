@@ -37,6 +37,11 @@ public final class PermissionNodes {
     public static final String GUI_RATELIMITS_EDIT = "customperm.gui.ratelimits.edit";
     public static final String GUI_GRADES_EDIT = "customperm.gui.grades.edit";
 
+    /** Every fixed node above, for command suggestions. */
+    public static java.util.List<String> all() {
+        return java.util.List.of(GUI_COMMANDS_EDIT, GUI_ALIASES_EDIT, GUI_RATELIMITS_EDIT, GUI_GRADES_EDIT, LP_EDIT);
+    }
+
     private PermissionNodes() {
     }
 }

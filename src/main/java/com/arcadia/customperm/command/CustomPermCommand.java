@@ -22,6 +22,7 @@ import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.notify.AdminNotifier;
 import com.arcadia.customperm.perm.LuckPermsService;
+import com.arcadia.customperm.perm.PermissionNodes;
 import com.arcadia.customperm.perm.PermissionService;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.BoolArgumentType;
@@ -143,10 +144,13 @@ public class CustomPermCommand {
         (ctx, builder) -> SharedSuggestionProvider.suggest(
             ctx.getSource().getOnlinePlayerNames(), builder);
 
-    /** Nodes de permission connus : customperm.command.*, customperm.alias.* et perms de grades. */
+    /**
+     * Known permission nodes: customperm.command.* and customperm.alias.* for what is configured, the
+     * admin interface write nodes, and every node (allowed or denied) already used by a grade.
+     */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_KNOWN_NODES =
         (ctx, builder) -> {
-            Set<String> nodes = new TreeSet<>();
+            Set<String> nodes = new TreeSet<>(PermissionNodes.all());
             for (String c : CustomPerm.configManager.getCommands().grantedCommands) {
                 nodes.add("customperm.command." + c);
             }
@@ -155,6 +159,7 @@ public class CustomPermCommand {
             }
             for (GradesConfig.Grade g : CustomPerm.configManager.getGrades().grades.values()) {
                 nodes.addAll(g.permissions);
+                nodes.addAll(g.deniedPermissions);
             }
             return SharedSuggestionProvider.suggest(nodes, builder);
         };

@@ -522,8 +522,10 @@ public final class LuckPermsScreen extends AdminScreen implements AdminScreens.L
                 addRenderableWidget(groupField.at(fieldRow));
                 groupField.setEditable(editable);
                 Rect buttons = new Rect(in.x(), fieldRow.bottom() + 4, in.w(), BUTTON);
-                CpButton add = CpButton.accent(Component.literal("Add parent"),
-                        () -> edit(LpEditOp.GROUP_PARENT_ADD, name, accepted(groupField, groupNames()), ""))
+                CpButton add = CpButton.accent(Component.literal("Add parent"), () -> {
+                            edit(LpEditOp.GROUP_PARENT_ADD, name, accepted(groupField, groupNames()), "");
+                            clear(groupField);
+                        })
                         .icon(Icon.PLUS).enabled(editable);
                 addRenderableWidget(add.at(buttons.left(add.preferredWidth(font, 6))));
                 String parent = parentList.getSelected();
@@ -572,8 +574,11 @@ public final class LuckPermsScreen extends AdminScreen implements AdminScreens.L
 
                 Rect buttons = new Rect(in.x(), row.bottom() + 4, in.w(), BUTTON);
                 String parent = parentList.getSelected();
-                CpButton add = CpButton.accent(Component.literal("Add"), () -> edit(LpEditOp.USER_PARENT_ADD, uuid,
-                        accepted(groupField, groupNames()), "", LpFormat.durationSeconds(groupDuration.getValue())))
+                CpButton add = CpButton.accent(Component.literal("Add"), () -> {
+                            edit(LpEditOp.USER_PARENT_ADD, uuid, accepted(groupField, groupNames()), "",
+                                    LpFormat.durationSeconds(groupDuration.getValue()));
+                            clear(groupField);
+                        })
                         .icon(Icon.PLUS).enabled(editable);
                 int addW = add.preferredWidth(font, 6);
                 addRenderableWidget(add.at(buttons.left(addW)));
@@ -741,6 +746,12 @@ public final class LuckPermsScreen extends AdminScreen implements AdminScreens.L
                 () -> {
                     if (!metaKey.getValue().trim().isEmpty()) editor.edit(metaUnset, metaKey.getValue().trim(), "");
                 });
+    }
+
+    /** Empties a field and its grey completion after the value was sent. */
+    private static void clear(CpEditBox box) {
+        box.setValue("");
+        box.setSuggestion(null);
     }
 
     private static String priority(CpEditBox box) {
