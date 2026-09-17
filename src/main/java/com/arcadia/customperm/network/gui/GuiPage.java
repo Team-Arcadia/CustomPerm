@@ -16,7 +16,8 @@ import java.util.Locale;
  */
 public enum GuiPage {
     DASHBOARD,
-    COMMANDS;
+    COMMANDS,
+    ALIASES;
 
     /** Name used on the wire and as the {@code /customperm gui <page>} argument. */
     public String id() {

@@ -10,6 +10,7 @@
 package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.network.gui.AliasesData;
 import com.arcadia.customperm.network.gui.CommandsData;
 import com.arcadia.customperm.network.gui.DashboardData;
 import com.arcadia.customperm.network.gui.GuiActionPayload;
@@ -55,6 +56,10 @@ public class GuiPayloadCodecGameTest {
                 new GuiContext(BackendKind.LUCKPERMS, 0, 0), new CommandsData(List.of(
                         new CommandsData.Row("gamemode", true, true, false, true, false),
                         new CommandsData.Row("oldmod", true, false, true, false, true)), true)));
+        expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
+                new GuiContext(BackendKind.INTERNAL, GuiArea.ALIASES.bit(), 0), new AliasesData(List.of(
+                        new AliasesData.Alias("heal", List.of("effect give @s instant_health", "say healed"), true, 3, 60, true),
+                        new AliasesData.Alias("kit", List.of("give @s bread 8"), false, 0, 0, false)))));
         expectRoundTrip(GuiRequestPayload.STREAM_CODEC, new GuiRequestPayload("dashboard"));
         expectRoundTrip(GuiActionPayload.STREAM_CODEC, new GuiActionPayload("RELOAD", List.of("a", "b c"), "dashboard"));
         expectRoundTrip(GuiActionResultPayload.STREAM_CODEC, GuiActionResultPayload.fail("You do not have x."));

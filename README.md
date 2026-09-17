@@ -126,8 +126,9 @@ The interface is drawn natively (no UI library) and is being rebuilt area by are
 |---|---|
 | Dashboard | Active backend and what it means, counts of exposed commands, aliases, rate limits and grades, every active admin alert, reload of the configuration (with confirmation) |
 | Commands | Every root command of the server with search (Ctrl+F) and an exposed-only filter, badges for aliases, rate limits and commands missing from the server; expose, hide (with confirmation), and the keep-original switch (`preserveOriginalRequires`) |
+| Aliases | Every alias with search, badges for shadowed commands and rate limits; create an alias with its first step; per alias: add, replace, move up or down and remove steps, delete the alias (with confirmation) |
 
-Aliases, rate limits, grades and the LuckPerms editor screens follow. Until then the text commands cover them, and the LuckPerms editor keeps its server side (`customperm.gui.luckperms.edit`) unchanged.
+Rate limits, grades and the LuckPerms editor screens follow. Until then the text commands cover them, and the LuckPerms editor keeps its server side (`customperm.gui.luckperms.edit`) unchanged.
 
 **Permissions.** Reading any page requires op level 2, the same check as `/customperm`. Writing requires the node of the area on top of it: `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.luckperms.edit`. These nodes are checked as granted to the player, without the usual operator short-circuit of the internal backend, so they can delegate one area to a level-2 moderator without opening the others. Permission level 4 (server owner) bypasses them. Actions that change no configuration, such as reload, need op level 2 only, like their command. Every applied action is logged server-side with the admin's name.
 
@@ -219,6 +220,8 @@ Create custom commands that run one or more inner commands. Steps execute with *
 | `/customperm alias add <name> <cmd1; cmd2; ...>` | Creates an alias. Inner commands separated by `;`. |
 | `/customperm alias addstep <name> <cmd>` | Appends a step (creates the alias if absent). |
 | `/customperm alias removestep <name> <index>` | Removes the step at the given 0-based index. |
+| `/customperm alias movestep <name> <from> <to>` | Moves a step to another 0-based position. |
+| `/customperm alias setstep <name> <index> <command>` | Replaces the step at the given 0-based index. |
 | `/customperm alias steps <name>` | Shows all steps with their indices. |
 | `/customperm alias remove <name>` | Deletes the alias entirely. |
 | `/customperm alias list` | Lists all defined aliases. |
@@ -259,7 +262,7 @@ Cap how many times one player may run a command or an alias within a sliding win
 | `/customperm status` | Global snapshot: backend, wrapped commands, exposed commands, aliases, grades, active admin alerts. |
 | `/customperm scan [pattern]` | Lists every command in the dispatcher with its state (exposed, alias, mod-internal). Optional substring filter. |
 | `/customperm reload` | Reloads config files from disk. |
-| `/customperm gui [dashboard\|commands]` | Opens the in-game admin interface (needs CustomPerm on the client). Reading needs op level 2; writing needs the area's `customperm.gui.<area>.edit` node. |
+| `/customperm gui [dashboard\|commands\|aliases]` | Opens the in-game admin interface (needs CustomPerm on the client). Reading needs op level 2; writing needs the area's `customperm.gui.<area>.edit` node. |
 
 ---
 

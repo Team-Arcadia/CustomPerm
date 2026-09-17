@@ -28,7 +28,20 @@ public enum GuiAction {
     /** {@code [command]} Stops exposing a root command, like {@code /customperm command remove}. */
     COMMAND_HIDE(1, GuiArea.COMMANDS),
     /** {@code [command, "true"|"false"]} Keeps or drops the command's original requirement. */
-    COMMAND_KEEP_ORIGINAL(2, GuiArea.COMMANDS);
+    COMMAND_KEEP_ORIGINAL(2, GuiArea.COMMANDS),
+
+    /** {@code [alias, firstStep]} Creates an alias; refused when the name is taken. */
+    ALIAS_CREATE(2, GuiArea.ALIASES),
+    /** {@code [alias]} Deletes an alias, restoring a command it shadowed. */
+    ALIAS_DELETE(1, GuiArea.ALIASES),
+    /** {@code [alias, command]} Appends a step. */
+    ALIAS_STEP_ADD(2, GuiArea.ALIASES),
+    /** {@code [alias, index, command]} Replaces one step (0-based index). */
+    ALIAS_STEP_SET(3, GuiArea.ALIASES),
+    /** {@code [alias, from, to]} Moves one step (0-based indexes). */
+    ALIAS_STEP_MOVE(3, GuiArea.ALIASES),
+    /** {@code [alias, index]} Removes one step; the alias is deleted with its last step. */
+    ALIAS_STEP_REMOVE(2, GuiArea.ALIASES);
 
     private final int arity;
     private final GuiArea area;

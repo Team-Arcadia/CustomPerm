@@ -24,8 +24,8 @@ import java.util.List;
  * receiving the world, and in singleplayer the world keeps running like it would behind chat.
  *
  * <p><strong>Confirmation.</strong> {@link #confirm} opens a modal dialog. While it is open, only its
- * two buttons receive input, Enter confirms and Escape cancels. Every destructive action goes
- * through it.
+ * two buttons receive input or focus. Cancel has the focus when it opens, so Enter alone never
+ * confirms a destructive action: Tab to the confirm button first. Escape cancels.
  *
  * <p><strong>Status line.</strong> {@link #status} shows the outcome of the last action in the
  * footer, coloured by success. Server replies can arrive after the click, so the line names what
@@ -149,6 +149,19 @@ public abstract class CpScreen extends Screen {
         dialog.ok().at(bar.right(bw));
     }
 
+    /**
+     * While a dialog is open, focus stays on its buttons. Screen.mouseClicked focuses the clicked
+     * widget after its action ran, which would otherwise hand focus back to the button that opened
+     * the dialog.
+     */
+    @Override
+    public void setFocused(GuiEventListener listener) {
+        if (dialog != null && listener != dialog.ok() && listener != dialog.cancel()) {
+            listener = dialog.cancel();
+        }
+        super.setFocused(listener);
+    }
+
     @Override
     public List<? extends GuiEventListener> children() {
         if (dialog != null) return List.of(dialog.cancel(), dialog.ok());
@@ -165,11 +178,10 @@ public abstract class CpScreen extends Screen {
                 return true;
             }
             if (keyCode == KEY_ENTER || keyCode == KEY_KP_ENTER) {
-                // Enter on a focused Cancel still cancels; otherwise Enter confirms.
-                if (getFocused() == dialog.cancel()) {
-                    closeDialog();
-                } else {
+                if (getFocused() == dialog.ok()) {
                     dialog.ok().onPress();
+                } else {
+                    closeDialog();
                 }
                 return true;
             }

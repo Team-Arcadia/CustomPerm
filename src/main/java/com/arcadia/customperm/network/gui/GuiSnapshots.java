@@ -9,6 +9,7 @@
 package com.arcadia.customperm.network.gui;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.command.AliasManager;
 import com.arcadia.customperm.config.ConfigManager;
 import com.arcadia.customperm.notify.AdminNotifier;
 import net.minecraft.server.MinecraftServer;
@@ -37,7 +38,25 @@ public final class GuiSnapshots {
         return switch (page) {
             case DASHBOARD -> dashboard(player.getServer());
             case COMMANDS -> commands(player.getServer());
+            case ALIASES -> aliases();
         };
+    }
+
+    static AliasesData aliases() {
+        ConfigManager config = CustomPerm.configManager;
+        var rules = config.getRateLimits().rules;
+        List<AliasesData.Alias> aliases = new ArrayList<>();
+        new TreeSet<>(config.getAliases().aliases.keySet()).forEach(name -> {
+            if (aliases.size() == GuiCodecs.SERVER_LIST_MAX) return;
+            List<String> steps = config.getAliases().aliases.get(name);
+            var rule = rules.get(name);
+            aliases.add(new AliasesData.Alias(name,
+                    List.copyOf(steps.subList(0, Math.min(steps.size(), AliasesData.STEPS_MAX))),
+                    AliasManager.shadowsCommand(name),
+                    rule == null ? 0 : rule.maxExecutions, rule == null ? 0 : rule.windowSeconds,
+                    rule != null && rule.enabled));
+        });
+        return new AliasesData(aliases);
     }
 
     static CommandsData commands(MinecraftServer server) {

@@ -99,6 +99,11 @@ public class AliasManager {
      * sinon REGISTERED_ALIASES/SHADOWED_ORIGINALS retiennent des nœuds de l'ancien arbre
      * (fuite mémoire) et une suppression d'alias restaurerait un nœud périmé.
      */
+    /** Whether the live alias of this name replaced a real command, which comes back when the alias is deleted. */
+    public static boolean shadowsCommand(String aliasName) {
+        return SHADOWED_ORIGINALS.containsKey(aliasName);
+    }
+
     public static void clearServerState() {
         SHADOWED_ORIGINALS.clear();
         REGISTERED_ALIASES.clear();

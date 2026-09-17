@@ -10,9 +10,11 @@
 package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.gametest.support.Grants;
 import com.arcadia.customperm.gametest.support.TestPlayer;
+import com.arcadia.customperm.network.gui.AliasesData;
 import com.arcadia.customperm.network.gui.CommandsData;
 import com.arcadia.customperm.network.gui.DashboardData;
 import com.arcadia.customperm.network.gui.GuiAction;
@@ -217,7 +219,87 @@ public class AdminInterfaceGameTest {
         helper.succeed();
     }
 
+    /** Area 4: the whole alias editing cycle through the interface, then the new text commands. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void aliasesPageEditsStepsEndToEnd(GameTestHelper helper) {
+        String name = "cp_i_macro";
+        var aliases = CustomPerm.configManager.getAliases().aliases;
+        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_alias", 4)) {
+            owner.clearReceived();
+            aliasAct(owner, GuiAction.ALIAS_CREATE, name, "say one");
+            expectResult(owner, "OK: Alias /cp_i_macro set with 1 step(s).");
+            if (!aliases.get(name).equals(List.of("say one"))) fail("Unexpected steps after creation: " + aliases.get(name));
+            if (!owner.canUse(name)) fail("A created alias must be registered live.");
+
+            owner.clearReceived();
+            aliasAct(owner, GuiAction.ALIAS_CREATE, name, "say again");
+            expectResult(owner, "FAIL: Alias /cp_i_macro already exists.");
+
+            owner.clearReceived();
+            aliasAct(owner, GuiAction.ALIAS_STEP_ADD, name, "say two");
+            aliasAct(owner, GuiAction.ALIAS_STEP_ADD, name, "say three");
+            aliasAct(owner, GuiAction.ALIAS_STEP_MOVE, name, "2", "0");
+            aliasAct(owner, GuiAction.ALIAS_STEP_SET, name, "1", "say uno");
+            aliasAct(owner, GuiAction.ALIAS_STEP_REMOVE, name, "2");
+            if (!aliases.get(name).equals(List.of("say three", "say uno")))
+                fail("Add, move, set and remove produced " + aliases.get(name));
+            var pages = owner.payloads(GuiPagePayload.class);
+            if (pages.isEmpty() || !(pages.get(pages.size() - 1).data() instanceof AliasesData data)
+                    || data.aliases().stream().noneMatch(a -> a.name().equals(name) && a.steps().equals(List.of("say three", "say uno"))))
+                fail("The refreshed aliases page must carry the edited steps.");
+
+            owner.clearReceived();
+            aliasAct(owner, GuiAction.ALIAS_STEP_MOVE, name, "-1", "0");
+            aliasAct(owner, GuiAction.ALIAS_STEP_SET, name, "x", "say bad");
+            aliasAct(owner, GuiAction.ALIAS_STEP_REMOVE, name, "9");
+            List<String> results = results(owner);
+            if (!results.equals(List.of("FAIL: Malformed request for ALIAS_STEP_MOVE.",
+                    "FAIL: Malformed request for ALIAS_STEP_SET.", "FAIL: Index out of range (0..1)")))
+                fail("Bad indexes must be refused, got " + results);
+
+            owner.clearReceived();
+            owner.type("customperm alias movestep cp_i_macro 1 0");
+            owner.type("customperm alias setstep cp_i_macro 1 say last");
+            if (!aliases.get(name).equals(List.of("say uno", "say last")))
+                fail("movestep and setstep text commands produced " + aliases.get(name) + " / " + owner.chat());
+
+            owner.clearReceived();
+            aliasAct(owner, GuiAction.ALIAS_DELETE, name);
+            expectResult(owner, "OK: Removed alias /cp_i_macro");
+            if (aliases.containsKey(name) || owner.canUse(name)) fail("A deleted alias must be gone from config and dispatcher.");
+        } finally {
+            AliasAdmin.remove(helper.getLevel().getServer(), name);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void aliasActionsNeedTheAliasesNodeAndAValidName(GameTestHelper helper) {
+        try (TestPlayer reader = TestPlayer.join(helper.getLevel(), "cp_i_alias_ro", 2);
+             TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_alias_ow", 4)) {
+            reader.clearReceived();
+            aliasAct(reader, GuiAction.ALIAS_CREATE, "cp_i_denied", "say no");
+            expectResult(reader, "FAIL: You do not have customperm.gui.aliases.edit.");
+            owner.clearReceived();
+            aliasAct(owner, GuiAction.ALIAS_CREATE, "bad name", "say no");
+            expectResult(owner, "FAIL: Invalid alias name 'bad name'");
+            owner.clearReceived();
+            aliasAct(owner, GuiAction.ALIAS_CREATE, "customperm", "say no");
+            expectResult(owner, "FAIL: Reserved name.");
+            if (CustomPerm.configManager.getAliases().aliases.containsKey("cp_i_denied"))
+                fail("A refused creation created the alias.");
+        } finally {
+            AliasAdmin.remove(helper.getLevel().getServer(), "cp_i_denied");
+        }
+        helper.succeed();
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    private static void aliasAct(TestPlayer player, GuiAction action, String... args) {
+        GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.ALIASES.id()),
+                player.payloadContext());
+    }
 
     private static void act(TestPlayer player, GuiAction action, String... args) {
         GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.COMMANDS.id()),

@@ -126,8 +126,9 @@ L'interface est dessinée nativement (sans bibliothèque d'interface) et reconst
 |---|---|
 | Tableau de bord | Backend actif et sa signification, nombre de commandes exposées, d'alias, de limites et de grades, toutes les alertes admin actives, rechargement de la configuration (avec confirmation) |
 | Commandes | Toutes les commandes racines du serveur avec recherche (Ctrl+F) et filtre « exposées », badges pour les alias, les limites et les commandes absentes du serveur ; exposer, masquer (avec confirmation), et l'interrupteur « garder l'exigence d'origine » (`preserveOriginalRequires`) |
+| Alias | Tous les alias avec recherche, badges pour les commandes masquées et les limites ; créer un alias avec sa première étape ; par alias : ajouter, remplacer, monter ou descendre et retirer des étapes, supprimer l'alias (avec confirmation) |
 
-Alias, limites d'exécution, grades et écrans de l'éditeur LuckPerms suivent. D'ici là, les commandes texte les couvrent, et l'éditeur LuckPerms garde son côté serveur (`customperm.gui.luckperms.edit`) inchangé.
+Limites d'exécution, grades et écrans de l'éditeur LuckPerms suivent. D'ici là, les commandes texte les couvrent, et l'éditeur LuckPerms garde son côté serveur (`customperm.gui.luckperms.edit`) inchangé.
 
 **Permissions.** Lire une page demande op level 2, le même contrôle que `/customperm`. Écrire demande en plus le nœud du domaine : `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.luckperms.edit`. Ces nœuds sont vérifiés comme accordés au joueur, sans le court-circuit opérateur habituel du backend interne, pour pouvoir déléguer un domaine à un modérateur de niveau 2 sans ouvrir les autres. Le niveau de permission 4 (propriétaire du serveur) les contourne. Les actions qui ne modifient pas la configuration, comme le rechargement, demandent seulement op level 2, comme leur commande. Chaque action appliquée est journalisée côté serveur avec le nom de l'admin.
 
@@ -219,6 +220,8 @@ Crée des commandes personnalisées qui exécutent une ou plusieurs commandes. L
 | `/customperm alias add <name> <cmd1; cmd2; ...>` | Crée un alias. Les commandes sont séparées par `;`. |
 | `/customperm alias addstep <name> <cmd>` | Ajoute un step à un alias existant (ou en crée un). |
 | `/customperm alias removestep <name> <index>` | Retire le step d'index donné (0-based). |
+| `/customperm alias movestep <name> <from> <to>` | Déplace un step à une autre position (0-based). |
+| `/customperm alias setstep <name> <index> <command>` | Remplace le step d'index donné (0-based). |
 | `/customperm alias steps <name>` | Affiche tous les steps d'un alias. |
 | `/customperm alias remove <name>` | Supprime entièrement un alias. |
 | `/customperm alias list` | Liste tous les aliases définis. |
@@ -259,7 +262,7 @@ Plafonne le nombre d'utilisations d'une commande ou d'un alias par joueur sur un
 | `/customperm status` | Snapshot global : backend, nb de commandes wrappées, exposées, aliases, grades, alertes admin actives. |
 | `/customperm scan [pattern]` | Liste toutes les commandes du dispatcher avec leur état (exposée, alias, mod-interne). Filtre optionnel. |
 | `/customperm reload` | Recharge les fichiers de config depuis le disque. |
-| `/customperm gui [dashboard\|commands]` | Ouvre l'interface d'administration en jeu (demande CustomPerm côté client). La lecture demande op level 2, l'écriture le nœud `customperm.gui.<domaine>.edit` du domaine. |
+| `/customperm gui [dashboard\|commands\|aliases]` | Ouvre l'interface d'administration en jeu (demande CustomPerm côté client). La lecture demande op level 2, l'écriture le nœud `customperm.gui.<domaine>.edit` du domaine. |
 
 ---
 

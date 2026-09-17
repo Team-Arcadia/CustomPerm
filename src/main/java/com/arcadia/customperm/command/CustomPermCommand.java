@@ -10,6 +10,7 @@ package com.arcadia.customperm.command;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.AdminResult;
+import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.config.GradesConfig;
@@ -54,6 +55,8 @@ import java.util.stream.Collectors;
  * /customperm alias   add <name> <cmd1[; cmd2; ...]>    # macro: split on ';'
  *                     addstep <name> <cmd>              # append a step to existing alias
  *                     removestep <name> <index>         # 0-based
+ *                     movestep <name> <from> <to>       # reorder, 0-based
+ *                     setstep <name> <index> <cmd>      # replace one step
  *                     steps <name>                      # show steps
  *                     remove <name>
  *                     list
@@ -252,6 +255,21 @@ public class CustomPermCommand {
                             .then(Commands.argument("index", IntegerArgumentType.integer(0))
                                 .suggests(SUGGEST_ALIAS_STEP_INDEX)
                                 .executes(CustomPermCommand::aliasRemoveStep))))
+                    .then(Commands.literal("movestep")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_ALIASES)
+                            .then(Commands.argument("from", IntegerArgumentType.integer(0))
+                                .suggests(SUGGEST_ALIAS_STEP_INDEX)
+                                .then(Commands.argument("to", IntegerArgumentType.integer(0))
+                                    .suggests(SUGGEST_ALIAS_STEP_INDEX)
+                                    .executes(CustomPermCommand::aliasMoveStep)))))
+                    .then(Commands.literal("setstep")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_ALIASES)
+                            .then(Commands.argument("index", IntegerArgumentType.integer(0))
+                                .suggests(SUGGEST_ALIAS_STEP_INDEX)
+                                .then(Commands.argument("command", StringArgumentType.greedyString())
+                                    .executes(CustomPermCommand::aliasSetStep)))))
                     .then(Commands.literal("steps")
                         .then(Commands.argument("name", StringArgumentType.word())
                             .suggests(SUGGEST_ALIASES)
@@ -638,103 +656,29 @@ public class CustomPermCommand {
     // ---------------- alias ----------------
 
     private static int aliasAdd(CommandContext<CommandSourceStack> ctx) {
-        String name = StringArgumentType.getString(ctx, "name");
         String raw = StringArgumentType.getString(ctx, "commands");
-        if (name.equals("customperm")) {
-            ctx.getSource().sendFailure(Component.literal("Reserved name."));
-            return 0;
-        }
-        List<String> steps = Arrays.stream(raw.split(";"))
-            .map(String::trim)
-            .filter(s -> !s.isEmpty())
-            .collect(Collectors.toCollection(ArrayList::new));
-        if (steps.isEmpty()) {
-            ctx.getSource().sendFailure(Component.literal("No commands provided."));
-            return 0;
-        }
-
-        // Collision warning: if an existing real (non-alias) command has this name,
-        // adding the alias will shadow it. The admin can still proceed.
-        var server = ctx.getSource().getServer();
-        boolean shadowsExisting = false;
-        if (server != null) {
-            shadowsExisting = server.getCommands().getDispatcher().getRoot().getChildren()
-                .stream().anyMatch(n -> n.getName().equals(name));
-        }
-
-        CustomPerm.configManager.getAliases().aliases.put(name, steps);
-        persist(ctx);
-        refreshAlias(ctx, name);
-        resyncCommands(ctx);
-
-        if (shadowsExisting) {
-            CustomPerm.LOGGER.warn("[CustomPerm] Alias '{}' shadows vanilla command '{}'", name, name);
-            ctx.getSource().sendSuccess(() -> Component.literal(
-                "WARNING: /" + name + " shadows an existing command. Players will need `customperm.alias." + name +
-                "` (not the command's own perm) to use it."
-            ).withStyle(ChatFormatting.YELLOW), true);
-        }
-        success(ctx, "Alias /" + name + " set with " + steps.size() + " step(s).");
-        ctx.getSource().sendSuccess(() -> Component.literal(
-            "  Permission node: customperm.alias." + name + "  |  Steps run with op-level 4 — only grant to trusted users."
-        ).withStyle(ChatFormatting.GRAY), false);
-        return 1;
+        return report(ctx, AliasAdmin.define(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "name"), Arrays.asList(raw.split(";"))));
     }
 
     private static int aliasAddStep(CommandContext<CommandSourceStack> ctx) {
-        String name = StringArgumentType.getString(ctx, "name");
-        String cmd = StringArgumentType.getString(ctx, "command").trim();
-        if (name.equals("customperm")) {
-            ctx.getSource().sendFailure(Component.literal("Reserved name."));
-            return 0;
-        }
-        if (cmd.isEmpty()) {
-            ctx.getSource().sendFailure(Component.literal("Empty command."));
-            return 0;
-        }
-        var aliases = CustomPerm.configManager.getAliases().aliases;
-        // Même avertissement de shadowing que aliasAdd quand addstep crée l'alias.
-        var server = ctx.getSource().getServer();
-        boolean shadowsExisting = !aliases.containsKey(name)
-            && server != null
-            && server.getCommands().getDispatcher().getRoot().getChildren()
-                .stream().anyMatch(n -> n.getName().equals(name));
-
-        aliases.computeIfAbsent(name, k -> new ArrayList<>()).add(cmd);
-        persist(ctx);
-        refreshAlias(ctx, name);
-        resyncCommands(ctx);
-
-        if (shadowsExisting) {
-            CustomPerm.LOGGER.warn("[CustomPerm] Alias '{}' shadows vanilla command '{}'", name, name);
-            ctx.getSource().sendSuccess(() -> Component.literal(
-                "WARNING: /" + name + " shadows an existing command. Players will need `customperm.alias." + name +
-                "` (not the command's own perm) to use it."
-            ).withStyle(ChatFormatting.YELLOW), true);
-        }
-        success(ctx, "Appended step #" + (aliases.get(name).size() - 1) + " to /" + name + ": " + cmd);
-        return 1;
+        return report(ctx, AliasAdmin.addStep(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "name"), StringArgumentType.getString(ctx, "command")));
     }
 
     private static int aliasRemoveStep(CommandContext<CommandSourceStack> ctx) {
-        String name = StringArgumentType.getString(ctx, "name");
-        int index = IntegerArgumentType.getInteger(ctx, "index");
-        var steps = CustomPerm.configManager.getAliases().aliases.get(name);
-        if (steps == null) {
-            ctx.getSource().sendFailure(Component.literal("No such alias: " + name));
-            return 0;
-        }
-        if (index < 0 || index >= steps.size()) {
-            ctx.getSource().sendFailure(Component.literal("Index out of range (0.." + (steps.size() - 1) + ")"));
-            return 0;
-        }
-        String removed = steps.remove(index);
-        if (steps.isEmpty()) CustomPerm.configManager.getAliases().aliases.remove(name);
-        persist(ctx);
-        refreshAlias(ctx, name);
-        resyncCommands(ctx);
-        success(ctx, "Removed step #" + index + " from /" + name + ": " + removed);
-        return 1;
+        return report(ctx, AliasAdmin.removeStep(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "name"), IntegerArgumentType.getInteger(ctx, "index")));
+    }
+
+    private static int aliasMoveStep(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, AliasAdmin.moveStep(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "name"),
+            IntegerArgumentType.getInteger(ctx, "from"), IntegerArgumentType.getInteger(ctx, "to")));
+    }
+
+    private static int aliasSetStep(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, AliasAdmin.setStep(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "name"),
+            IntegerArgumentType.getInteger(ctx, "index"), StringArgumentType.getString(ctx, "command")));
     }
 
     private static int aliasSteps(CommandContext<CommandSourceStack> ctx) {
@@ -753,27 +697,7 @@ public class CustomPermCommand {
     }
 
     private static int aliasRemove(CommandContext<CommandSourceStack> ctx) {
-        String name = StringArgumentType.getString(ctx, "name");
-        if (CustomPerm.configManager.getAliases().aliases.remove(name) == null) {
-            ctx.getSource().sendFailure(Component.literal("No such alias: " + name));
-            return 0;
-        }
-        persist(ctx);
-        refreshAlias(ctx, name);
-        resyncCommands(ctx);
-        success(ctx, "Removed alias /" + name);
-        return 1;
-    }
-
-    private static void refreshAlias(CommandContext<CommandSourceStack> ctx, String name) {
-        var server = ctx.getSource().getServer();
-        if (server != null) {
-            AliasManager.registerOrReplace(server.getCommands().getDispatcher(), name);
-            // Si la suppression d'un alias vient de restaurer une commande shadowée, elle
-            // doit être re-wrappée immédiatement — sinon ses nodes customperm.command.*
-            // restent inopérants jusqu'au prochain reload/redémarrage.
-            CommandTreeRewriter.repair(server);
-        }
+        return report(ctx, AliasAdmin.remove(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "name")));
     }
 
     private static int aliasList(CommandContext<CommandSourceStack> ctx) {
@@ -1030,6 +954,8 @@ public class CustomPermCommand {
             return 0;
         }
         success(ctx, result.message());
+        result.notes().forEach(note ->
+            ctx.getSource().sendSuccess(() -> Component.literal(note).withStyle(ChatFormatting.GRAY), false));
         return 1;
     }
 

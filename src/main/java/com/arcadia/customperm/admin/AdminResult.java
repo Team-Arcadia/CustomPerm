@@ -20,19 +20,22 @@ import java.util.List;
  * @param message  what happened, naming the object
  * @param warnings things the admin must know even though the change applied, such as a change that
  *                 could not be saved to disk; printed before the message
+ * @param notes    reminders printed after the message in chat only; the interface shows the same
+ *                 facts on the page itself
  */
-public record AdminResult(boolean success, String message, List<String> warnings) {
+public record AdminResult(boolean success, String message, List<String> warnings, List<String> notes) {
 
     public AdminResult {
         warnings = List.copyOf(warnings);
+        notes = List.copyOf(notes);
     }
 
     public static AdminResult ok(String message) {
-        return new AdminResult(true, message, List.of());
+        return new AdminResult(true, message, List.of(), List.of());
     }
 
     public static AdminResult fail(String message) {
-        return new AdminResult(false, message, List.of());
+        return new AdminResult(false, message, List.of(), List.of());
     }
 
     /** The same result with a warning appended; {@code null} leaves it unchanged. */
@@ -40,7 +43,14 @@ public record AdminResult(boolean success, String message, List<String> warnings
         if (warning == null) return this;
         List<String> all = new ArrayList<>(warnings);
         all.add(warning);
-        return new AdminResult(success, message, all);
+        return new AdminResult(success, message, all, notes);
+    }
+
+    /** The same result with a chat-only note appended. */
+    public AdminResult note(String note) {
+        List<String> all = new ArrayList<>(notes);
+        all.add(note);
+        return new AdminResult(success, message, warnings, all);
     }
 
     /** One line for a status bar: warnings first, then the message. */

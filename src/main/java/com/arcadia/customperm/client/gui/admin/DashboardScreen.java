@@ -93,7 +93,7 @@ public final class DashboardScreen extends AdminScreen {
         List<CpTile> tiles = List.of(
                 new CpTile(Icon.COMMAND, "Commands", String.valueOf(data.exposedCommands()),
                         "of " + data.dispatcherCommands() + " total", Palette.TEXT, () -> navigate(GuiPage.COMMANDS)),
-                new CpTile(Icon.ALIAS, "Aliases", String.valueOf(data.aliases()), "defined", Palette.TEXT, null),
+                new CpTile(Icon.ALIAS, "Aliases", String.valueOf(data.aliases()), "defined", Palette.TEXT, () -> navigate(GuiPage.ALIASES)),
                 new CpTile(Icon.CLOCK, "Limits", data.rateLimitsEnabled() + " / " + data.rateLimits(),
                         "enabled", Palette.TEXT, null),
                 gradesTile());

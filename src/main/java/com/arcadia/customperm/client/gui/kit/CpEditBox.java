@@ -31,6 +31,7 @@ public class CpEditBox extends EditBox {
 
     private Rect frame = new Rect(0, 0, 0, Atlas.INPUT_HEIGHT);
     private Runnable onSubmit;
+    private String hint = "";
 
     public CpEditBox(Component narration, int maxLength) {
         super(Minecraft.getInstance().font, 0, 0, 0, 8, narration);
@@ -45,12 +46,20 @@ public class CpEditBox extends EditBox {
     public CpEditBox at(Rect r) {
         this.frame = r;
         setRectangle(Math.max(0, r.w() - 2 * PAD_X), 8, r.x() + PAD_X, r.y() + (r.h() - 8) / 2);
+        applyHint();
         return this;
     }
 
+    /** Placeholder shown while empty and unfocused, cut to the field width (vanilla does not clip it). */
     public CpEditBox hint(Component hint) {
-        setHint(Component.empty().append(hint).withColor(Palette.TEXT_MUTE));
+        this.hint = hint.getString();
+        applyHint();
         return this;
+    }
+
+    private void applyHint() {
+        String text = getWidth() > 0 ? Skin.ellipsize(Minecraft.getInstance().font, hint, getWidth()) : hint;
+        setHint(Component.literal(text).withColor(Palette.TEXT_MUTE));
     }
 
     public CpEditBox onChange(Consumer<String> listener) {

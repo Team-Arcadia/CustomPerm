@@ -10,6 +10,7 @@ package com.arcadia.customperm.network.gui;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.AdminResult;
+import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.command.RateLimiter;
@@ -120,9 +121,28 @@ public final class GuiRequestHandler {
             case COMMAND_EXPOSE -> CommandAdmin.expose(player.getServer(), args.get(0));
             case COMMAND_HIDE -> CommandAdmin.hide(player.getServer(), args.get(0));
             case COMMAND_KEEP_ORIGINAL -> bool(args.get(1)) == null
-                    ? AdminResult.fail("Malformed request for " + action.name() + ".")
+                    ? malformed(action)
                     : CommandAdmin.setPreserveOriginal(player.getServer(), args.get(0), bool(args.get(1)));
+            case ALIAS_CREATE -> AliasAdmin.create(player.getServer(), args.get(0), args.get(1));
+            case ALIAS_DELETE -> AliasAdmin.remove(player.getServer(), args.get(0));
+            case ALIAS_STEP_ADD -> AliasAdmin.addStep(player.getServer(), args.get(0), args.get(1));
+            case ALIAS_STEP_SET -> index(args.get(1)) == null ? malformed(action)
+                    : AliasAdmin.setStep(player.getServer(), args.get(0), index(args.get(1)), args.get(2));
+            case ALIAS_STEP_MOVE -> index(args.get(1)) == null || index(args.get(2)) == null ? malformed(action)
+                    : AliasAdmin.moveStep(player.getServer(), args.get(0), index(args.get(1)), index(args.get(2)));
+            case ALIAS_STEP_REMOVE -> index(args.get(1)) == null ? malformed(action)
+                    : AliasAdmin.removeStep(player.getServer(), args.get(0), index(args.get(1)));
         };
+    }
+
+    private static AdminResult malformed(GuiAction action) {
+        return AdminResult.fail("Malformed request for " + action.name() + ".");
+    }
+
+    /** Strict non-negative index argument: plain decimal digits only, anything else is malformed. */
+    private static Integer index(String value) {
+        if (value.isEmpty() || value.length() > 6 || !value.chars().allMatch(Character::isDigit)) return null;
+        return Integer.parseInt(value);
     }
 
     /** Strict boolean argument: only "true" and "false", anything else is malformed. */
