@@ -16,6 +16,8 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 /**
  * Builds page data from the live server state. Server thread only: the config maps are mutated by
@@ -34,7 +36,33 @@ public final class GuiSnapshots {
     public static GuiPageData page(GuiPage page, ServerPlayer player) {
         return switch (page) {
             case DASHBOARD -> dashboard(player.getServer());
+            case COMMANDS -> commands(player.getServer());
         };
+    }
+
+    static CommandsData commands(MinecraftServer server) {
+        ConfigManager config = CustomPerm.configManager;
+        Set<String> exposed = config.getCommands().grantedCommands;
+        Set<String> aliases = config.getAliases().aliases.keySet();
+        var rules = config.getRateLimits().rules;
+
+        Set<String> dispatcher = new TreeSet<>();
+        if (server != null) {
+            server.getCommands().getDispatcher().getRoot().getChildren().forEach(node -> dispatcher.add(node.getName()));
+        }
+        dispatcher.remove("customperm");
+        Set<String> names = new TreeSet<>(dispatcher);
+        names.addAll(exposed);
+
+        List<CommandsData.Row> rows = new ArrayList<>();
+        for (String name : names) {
+            if (rows.size() == GuiCodecs.SERVER_LIST_MAX) break;
+            var rule = rules.get(name);
+            rows.add(new CommandsData.Row(name, exposed.contains(name),
+                    config.getCommands().shouldPreserveOriginalRequires(name), aliases.contains(name),
+                    rule != null && rule.enabled, !dispatcher.contains(name)));
+        }
+        return new CommandsData(rows, names.size() > rows.size());
     }
 
     static DashboardData dashboard(MinecraftServer server) {

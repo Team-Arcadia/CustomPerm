@@ -10,6 +10,7 @@ package com.arcadia.customperm.client.gui.admin;
 
 import com.arcadia.customperm.client.gui.kit.CpScreen;
 import com.arcadia.customperm.client.gui.kit.Icon;
+import com.arcadia.customperm.network.gui.CommandsData;
 import com.arcadia.customperm.network.gui.DashboardData;
 import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPage;
@@ -44,6 +45,7 @@ public final class AdminScreens {
     public static List<NavEntry> navigation(GuiContext context) {
         List<NavEntry> entries = new ArrayList<>();
         entries.add(new NavEntry(GuiPage.DASHBOARD, "Dashboard", Icon.HOME));
+        entries.add(new NavEntry(GuiPage.COMMANDS, "Commands", Icon.COMMAND));
         return entries;
     }
 
@@ -76,6 +78,7 @@ public final class AdminScreens {
     private static Screen create(GuiContext context, GuiPageData data) {
         return switch (data) {
             case DashboardData d -> new DashboardScreen(context, d);
+            case CommandsData d -> new CommandsScreen(context, d);
         };
     }
 }

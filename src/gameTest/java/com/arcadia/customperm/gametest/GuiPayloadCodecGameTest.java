@@ -10,6 +10,7 @@
 package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.network.gui.CommandsData;
 import com.arcadia.customperm.network.gui.DashboardData;
 import com.arcadia.customperm.network.gui.GuiActionPayload;
 import com.arcadia.customperm.network.gui.GuiActionResultPayload;
@@ -50,6 +51,10 @@ public class GuiPayloadCodecGameTest {
                 List.of(new DashboardData.Alert("CONFIG_LOAD_FAILED", "grades.json is invalid")));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.INTERNAL_FALLBACK, GuiArea.ALIASES.bit() | GuiArea.GRADES.bit(), 1), data));
+        expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
+                new GuiContext(BackendKind.LUCKPERMS, 0, 0), new CommandsData(List.of(
+                        new CommandsData.Row("gamemode", true, true, false, true, false),
+                        new CommandsData.Row("oldmod", true, false, true, false, true)), true)));
         expectRoundTrip(GuiRequestPayload.STREAM_CODEC, new GuiRequestPayload("dashboard"));
         expectRoundTrip(GuiActionPayload.STREAM_CODEC, new GuiActionPayload("RELOAD", List.of("a", "b c"), "dashboard"));
         expectRoundTrip(GuiActionResultPayload.STREAM_CODEC, GuiActionResultPayload.fail("You do not have x."));

@@ -22,6 +22,7 @@ import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPageData;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.network.PacketDistributor;
 
@@ -61,7 +62,18 @@ public abstract class AdminScreen extends CpScreen {
     public final void refresh(GuiContext newContext, GuiPageData data) {
         this.context = newContext;
         apply(data);
+        rebuild();
+    }
+
+    /**
+     * Rebuilds the widgets and gives keyboard focus back to the widget that had it, when that widget
+     * instance survives the rebuild (screens keep their list and search box across rebuilds). Without
+     * this, moving the selection with the arrow keys would drop focus at the first redraw.
+     */
+    protected final void rebuild() {
+        GuiEventListener focused = getFocused();
         rebuildWidgets();
+        if (focused != null && children().contains(focused)) setFocused(focused);
     }
 
     /** Whether this admin may write to {@code area}; screens render read-only otherwise. */
@@ -146,6 +158,20 @@ public abstract class AdminScreen extends CpScreen {
     }
 
     // ------------------------------------------------------------------ drawing helpers
+
+    /**
+     * Draws wrapped text from {@code y} inside {@code area}, stopping at its bottom.
+     *
+     * @return the y below the last drawn line
+     */
+    protected final int paragraph(GuiGraphics g, String text, Rect area, int y, int color) {
+        for (var line : font.split(Component.literal(text), area.w())) {
+            if (y + 9 > area.bottom()) break;
+            g.drawString(font, line, area.x(), y, color, false);
+            y += 10;
+        }
+        return y;
+    }
 
     /** Section title with a divider, as used above lists and forms. */
     protected final void sectionTitle(GuiGraphics g, String text, Rect area) {

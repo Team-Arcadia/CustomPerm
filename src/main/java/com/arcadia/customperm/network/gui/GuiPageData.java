@@ -16,7 +16,7 @@ import net.minecraft.network.codec.StreamCodec;
  * The data of one admin page. Each page has its own record and codec; this interface tags the
  * record with its page on the wire so {@link GuiPagePayload} needs a single channel for all pages.
  */
-public sealed interface GuiPageData permits DashboardData {
+public sealed interface GuiPageData permits DashboardData, CommandsData {
 
     GuiPage page();
 
@@ -25,6 +25,7 @@ public sealed interface GuiPageData permits DashboardData {
                 GuiCodecs.CLIENT_NAME.encode(buf, data.page().id());
                 switch (data) {
                     case DashboardData d -> DashboardData.CODEC.encode(buf, d);
+                    case CommandsData d -> CommandsData.CODEC.encode(buf, d);
                 }
             },
             buf -> {
@@ -33,6 +34,7 @@ public sealed interface GuiPageData permits DashboardData {
                 if (page == null) throw new DecoderException("Unknown admin page '" + id + "'");
                 return switch (page) {
                     case DASHBOARD -> DashboardData.CODEC.decode(buf);
+                    case COMMANDS -> CommandsData.CODEC.decode(buf);
                 };
             });
 }

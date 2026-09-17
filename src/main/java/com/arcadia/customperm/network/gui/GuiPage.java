@@ -15,7 +15,8 @@ import java.util.Locale;
  * outdated request is a rejected string rather than an index into the wrong page.
  */
 public enum GuiPage {
-    DASHBOARD;
+    DASHBOARD,
+    COMMANDS;
 
     /** Name used on the wire and as the {@code /customperm gui <page>} argument. */
     public String id() {

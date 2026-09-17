@@ -10,8 +10,10 @@
 package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.gametest.support.Grants;
 import com.arcadia.customperm.gametest.support.TestPlayer;
+import com.arcadia.customperm.network.gui.CommandsData;
 import com.arcadia.customperm.network.gui.DashboardData;
 import com.arcadia.customperm.network.gui.GuiAction;
 import com.arcadia.customperm.network.gui.GuiActionPayload;
@@ -156,7 +158,88 @@ public class AdminInterfaceGameTest {
         helper.succeed();
     }
 
+    /** Area 3: expose, keep-original toggle and hide through the interface, mirrored by the text command. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void commandsPageExposesTogglesAndHides(GameTestHelper helper) {
+        String name = "weather";
+        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_cmds", 4);
+             TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_i_cmds_pl", 0);
+             Grants ignored = Grants.allow(player, "customperm.command." + name)) {
+            CommandsData.Row row = commandRow(owner, name);
+            if (row == null || row.exposed() || row.missing()) fail("/weather must be listed, not exposed: " + row);
+
+            owner.clearReceived();
+            act(owner, GuiAction.COMMAND_EXPOSE, name);
+            expectResult(owner, "OK: Exposed /weather");
+            CommandsData refreshed = (CommandsData) owner.payloads(GuiPagePayload.class).get(0).data();
+            if (refreshed.rows().stream().noneMatch(r -> r.name().equals(name) && r.exposed()))
+                fail("The refreshed page must show /weather exposed.");
+            if (!player.canUse(name)) fail("Exposing through the interface must open /weather to a node holder.");
+
+            owner.clearReceived();
+            act(owner, GuiAction.COMMAND_KEEP_ORIGINAL, name, "true");
+            expectResult(owner, "OK: /weather now requires both");
+            if (!CustomPerm.configManager.getCommands().shouldPreserveOriginalRequires(name))
+                fail("keep-original was not stored.");
+            if (player.canUse(name)) fail("With keep-original, a non-op must also pass /weather's own requirement.");
+
+            owner.clearReceived();
+            act(owner, GuiAction.COMMAND_KEEP_ORIGINAL, name, "yes");
+            expectResult(owner, "FAIL: Malformed request for COMMAND_KEEP_ORIGINAL.");
+            owner.type("customperm command preserve weather false");
+            if (!owner.chatContains("authorised by customperm.command.weather alone"))
+                fail("The text command must toggle keep-original with the same message, got " + owner.chat());
+            if (!player.canUse(name)) fail("Dropping keep-original must reopen /weather to the node holder.");
+
+            owner.clearReceived();
+            act(owner, GuiAction.COMMAND_HIDE, name);
+            expectResult(owner, "OK: /weather is no longer exposed.");
+            if (player.canUse(name)) fail("Hiding must close /weather again.");
+            if (CustomPerm.configManager.getCommands().preserveOriginalRequires.containsKey(name))
+                fail("Hiding must drop the keep-original entry.");
+        } finally {
+            CommandAdmin.hide(helper.getLevel().getServer(), name);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void commandActionsNeedTheCommandsNode(GameTestHelper helper) {
+        try (TestPlayer reader = TestPlayer.join(helper.getLevel(), "cp_i_cmds_ro", 2)) {
+            reader.clearReceived();
+            act(reader, GuiAction.COMMAND_EXPOSE, "difficulty");
+            expectResult(reader, "FAIL: You do not have customperm.gui.commands.edit.");
+            if (CustomPerm.configManager.getCommands().grantedCommands.contains("difficulty"))
+                fail("A refused action exposed the command anyway.");
+        } finally {
+            CommandAdmin.hide(helper.getLevel().getServer(), "difficulty");
+        }
+        helper.succeed();
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    private static void act(TestPlayer player, GuiAction action, String... args) {
+        GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.COMMANDS.id()),
+                player.payloadContext());
+    }
+
+    private static void expectResult(TestPlayer player, String prefix) {
+        List<String> results = results(player);
+        if (results.size() != 1 || !results.get(0).startsWith(prefix))
+            fail("Expected one result starting with '" + prefix + "', got " + results);
+    }
+
+    private static CommandsData.Row commandRow(TestPlayer player, String name) {
+        player.clearReceived();
+        GuiRequestHandler.open(player.player(), GuiPage.COMMANDS);
+        var pages = player.payloads(GuiPagePayload.class);
+        if (pages.size() != 1 || !(pages.get(0).data() instanceof CommandsData data)) {
+            fail("Expected the commands page, got " + pages);
+            return null;
+        }
+        return data.rows().stream().filter(r -> r.name().equals(name)).findFirst().orElse(null);
+    }
 
     private static GuiActionPayload action(String name) {
         return new GuiActionPayload(name, List.of(), GuiPage.DASHBOARD.id());

@@ -21,7 +21,14 @@ package com.arcadia.customperm.network.gui;
 public enum GuiAction {
 
     /** {@code []} Re-reads every config file from disk, like {@code /customperm reload}. */
-    RELOAD(0, null);
+    RELOAD(0, null),
+
+    /** {@code [command]} Exposes a root command, like {@code /customperm command add}. */
+    COMMAND_EXPOSE(1, GuiArea.COMMANDS),
+    /** {@code [command]} Stops exposing a root command, like {@code /customperm command remove}. */
+    COMMAND_HIDE(1, GuiArea.COMMANDS),
+    /** {@code [command, "true"|"false"]} Keeps or drops the command's original requirement. */
+    COMMAND_KEEP_ORIGINAL(2, GuiArea.COMMANDS);
 
     private final int arity;
     private final GuiArea area;

@@ -10,6 +10,7 @@ package com.arcadia.customperm.command;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.AdminResult;
+import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
@@ -19,6 +20,7 @@ import com.arcadia.customperm.notify.AdminNotifier;
 import com.arcadia.customperm.perm.LuckPermsService;
 import com.arcadia.customperm.perm.PermissionService;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.context.CommandContext;
@@ -43,6 +45,7 @@ import java.util.stream.Collectors;
 
 /**
  * /customperm command add|remove <name>             # expose / hide a vanilla or modded command
+ *             command preserve <name> <true|false>  # also keep the command's original requirement
  *             command list                          # show currently exposed commands
  * /customperm grade   create|delete <name>
  *                     addperm|removeperm <grade> <node>
@@ -268,6 +271,11 @@ public class CustomPermCommand {
                         .then(Commands.argument("name", StringArgumentType.word())
                             .suggests(SUGGEST_EXPOSED_COMMANDS)
                             .executes(CustomPermCommand::commandRemove)))
+                    .then(Commands.literal("preserve")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_EXPOSED_COMMANDS)
+                            .then(Commands.argument("keepOriginal", BoolArgumentType.bool())
+                                .executes(CustomPermCommand::commandPreserve))))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::commandList)))
                 .then(Commands.literal("ratelimit")
@@ -351,50 +359,16 @@ public class CustomPermCommand {
     // ---------------- command exposure ----------------
 
     private static int commandAdd(CommandContext<CommandSourceStack> ctx) {
-        String name = StringArgumentType.getString(ctx, "name");
-        if (name.equals("customperm")) {
-            ctx.getSource().sendFailure(Component.literal("Cannot expose /customperm itself."));
-            return 0;
-        }
-        var server = ctx.getSource().getServer();
-        boolean exists = server != null && server.getCommands().getDispatcher().getRoot().getChildren()
-            .stream().anyMatch(n -> n.getName().equals(name));
-        if (!exists) {
-            ctx.getSource().sendFailure(Component.literal(
-                "Command /" + name + " does not exist on this server. Check the spelling and that the providing mod is loaded."));
-            return 0;
-        }
-        boolean added = CustomPerm.configManager.getCommands().grantedCommands.add(name);
-        if (!added) {
-            ctx.getSource().sendFailure(Component.literal("Command /" + name + " is already exposed."));
-            return 0;
-        }
-        persist(ctx);
-        CommandTreeRewriter.repair(server);
-        // Re-pose la vérification CustomPerm (racine + sous-arbre) par-dessus une éventuelle
-        // injection LuckPerms (LuckPerms a déjà injecté au boot ; sans ceci le node serait ignoré).
-        int reasserted = CommandTreeRewriter.reassertExposedCommands(server);
-        CustomPerm.LOGGER.info("[CustomPerm] Re-asserted exposure over other permission handlers on {} node(s) for /{}.", reasserted, name);
-        resyncCommands(ctx);
-        success(ctx, "Exposed /" + name + " to the permission system. Grant `customperm.command." + name + "` to authorize.");
-        return 1;
+        return report(ctx, CommandAdmin.expose(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "name")));
     }
 
     private static int commandRemove(CommandContext<CommandSourceStack> ctx) {
-        String name = StringArgumentType.getString(ctx, "name");
-        boolean removed = CustomPerm.configManager.getCommands().removeCommand(name);
-        if (!removed) {
-            ctx.getSource().sendFailure(Component.literal("Command /" + name + " is not currently exposed."));
-            return 0;
-        }
-        persist(ctx);
-        var server = ctx.getSource().getServer();
-        CommandTreeRewriter.repair(server);
-        // Restaure le requires d'origine (LuckPerms/vanilla) sur la commande dé-exposée.
-        CommandTreeRewriter.reassertExposedCommands(server);
-        resyncCommands(ctx);
-        success(ctx, "/" + name + " is no longer exposed. Reverts to its original (vanilla) authorisation.");
-        return 1;
+        return report(ctx, CommandAdmin.hide(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "name")));
+    }
+
+    private static int commandPreserve(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, CommandAdmin.setPreserveOriginal(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "name"), BoolArgumentType.getBool(ctx, "keepOriginal")));
     }
 
     private static int commandList(CommandContext<CommandSourceStack> ctx) {
@@ -1008,13 +982,7 @@ public class CustomPermCommand {
     // ---------------- reload ----------------
 
     private static int reload(CommandContext<CommandSourceStack> ctx) {
-        AdminResult result = ConfigAdmin.reload(ctx.getSource().getServer());
-        if (!result.success()) {
-            ctx.getSource().sendFailure(Component.literal(result.message()));
-            return 0;
-        }
-        success(ctx, result.message());
-        return 1;
+        return report(ctx, ConfigAdmin.reload(ctx.getSource().getServer()));
     }
 
     // ---------------- helpers ----------------
@@ -1050,12 +1018,19 @@ public class CustomPermCommand {
      * restart, and that a reload will discard it.
      */
     private static void persist(CommandContext<CommandSourceStack> ctx) {
-        if (CustomPerm.configManager.save()) return;
-        String reason = CustomPerm.configManager.isDiskWritable()
-            ? "disk error, see the server log"
-            : "a config file on disk is invalid; fix it, then run /customperm reload";
-        ctx.getSource().sendFailure(Component.literal(
-            "[CustomPerm] Change applied in memory but NOT saved (" + reason + ")."));
+        String warning = ConfigAdmin.persist();
+        if (warning != null) ctx.getSource().sendFailure(Component.literal(warning));
+    }
+
+    /** Prints a shared admin result: warnings in red, then the message as success or failure. */
+    private static int report(CommandContext<CommandSourceStack> ctx, AdminResult result) {
+        result.warnings().forEach(warning -> ctx.getSource().sendFailure(Component.literal(warning)));
+        if (!result.success()) {
+            ctx.getSource().sendFailure(Component.literal(result.message()));
+            return 0;
+        }
+        success(ctx, result.message());
+        return 1;
     }
 
     private static void success(CommandContext<CommandSourceStack> ctx, String msg) {

@@ -125,8 +125,9 @@ L'interface est dessinée nativement (sans bibliothèque d'interface) et reconst
 | Page | Contenu |
 |---|---|
 | Tableau de bord | Backend actif et sa signification, nombre de commandes exposées, d'alias, de limites et de grades, toutes les alertes admin actives, rechargement de la configuration (avec confirmation) |
+| Commandes | Toutes les commandes racines du serveur avec recherche (Ctrl+F) et filtre « exposées », badges pour les alias, les limites et les commandes absentes du serveur ; exposer, masquer (avec confirmation), et l'interrupteur « garder l'exigence d'origine » (`preserveOriginalRequires`) |
 
-Commandes exposées, alias, limites d'exécution, grades et écrans de l'éditeur LuckPerms suivent. D'ici là, les commandes texte les couvrent, et l'éditeur LuckPerms garde son côté serveur (`customperm.gui.luckperms.edit`) inchangé.
+Alias, limites d'exécution, grades et écrans de l'éditeur LuckPerms suivent. D'ici là, les commandes texte les couvrent, et l'éditeur LuckPerms garde son côté serveur (`customperm.gui.luckperms.edit`) inchangé.
 
 **Permissions.** Lire une page demande op level 2, le même contrôle que `/customperm`. Écrire demande en plus le nœud du domaine : `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.luckperms.edit`. Ces nœuds sont vérifiés comme accordés au joueur, sans le court-circuit opérateur habituel du backend interne, pour pouvoir déléguer un domaine à un modérateur de niveau 2 sans ouvrir les autres. Le niveau de permission 4 (propriétaire du serveur) les contourne. Les actions qui ne modifient pas la configuration, comme le rechargement, demandent seulement op level 2, comme leur commande. Chaque action appliquée est journalisée côté serveur avec le nom de l'admin.
 
@@ -206,6 +207,7 @@ Définit quelles commandes sont éligibles au système de permissions. Une comma
 |---|---|
 | `/customperm command add <name>` | Expose la commande `<name>` au système. |
 | `/customperm command remove <name>` | Retire la commande, retour au comportement vanilla. |
+| `/customperm command preserve <name> <true\|false>` | Pour une commande exposée : `true` exige le nœud ET l'exigence d'origine de la commande, `false` (défaut) le nœud seul. Équivaut à `preserveOriginalRequires` dans `commands.json`. |
 | `/customperm command list` | Liste les commandes exposées. |
 
 ### Aliases (macros)
@@ -257,7 +259,7 @@ Plafonne le nombre d'utilisations d'une commande ou d'un alias par joueur sur un
 | `/customperm status` | Snapshot global : backend, nb de commandes wrappées, exposées, aliases, grades, alertes admin actives. |
 | `/customperm scan [pattern]` | Liste toutes les commandes du dispatcher avec leur état (exposée, alias, mod-interne). Filtre optionnel. |
 | `/customperm reload` | Recharge les fichiers de config depuis le disque. |
-| `/customperm gui [dashboard]` | Ouvre l'interface d'administration en jeu (demande CustomPerm côté client). La lecture demande op level 2, l'écriture le nœud `customperm.gui.<domaine>.edit` du domaine. |
+| `/customperm gui [dashboard\|commands]` | Ouvre l'interface d'administration en jeu (demande CustomPerm côté client). La lecture demande op level 2, l'écriture le nœud `customperm.gui.<domaine>.edit` du domaine. |
 
 ---
 

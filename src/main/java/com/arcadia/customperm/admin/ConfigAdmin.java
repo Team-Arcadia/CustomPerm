@@ -22,6 +22,25 @@ public final class ConfigAdmin {
     private ConfigAdmin() {
     }
 
+    /**
+     * Saves the config after a change. The change stays live in memory either way; what the admin
+     * must know is that it will not survive a restart, and that a reload will discard it.
+     *
+     * @return {@code null} when saved, otherwise the warning to show
+     */
+    public static String persist() {
+        if (CustomPerm.configManager.save()) return null;
+        String reason = CustomPerm.configManager.isDiskWritable()
+                ? "disk error, see the server log"
+                : "a config file on disk is invalid; fix it, then run /customperm reload";
+        return "[CustomPerm] Change applied in memory but NOT saved (" + reason + ").";
+    }
+
+    /** Pushes the command tree again to every player, after a change of what they may run. */
+    public static void resyncCommands(MinecraftServer server) {
+        if (server != null) server.getPlayerList().getPlayers().forEach(p -> server.getCommands().sendCommands(p));
+    }
+
     public static AdminResult reload(MinecraftServer server) {
         boolean reloaded = CustomPerm.configManager.load();
         CustomPerm.syncConfigAlert();

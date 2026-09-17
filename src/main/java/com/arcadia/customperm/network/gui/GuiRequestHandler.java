@@ -10,6 +10,7 @@ package com.arcadia.customperm.network.gui;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.AdminResult;
+import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.command.RateLimiter;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -107,7 +108,7 @@ public final class GuiRequestHandler {
                 CustomPerm.LOGGER.info("[CustomPerm] Admin interface: {} performed {} {} ({})",
                         player.getGameProfile().getName(), action.name(), payload.args(), result.message());
             }
-            send(player, new GuiActionResultPayload(result.success(), result.message()));
+            send(player, new GuiActionResultPayload(result.success() && result.warnings().isEmpty(), result.summary()));
             GuiPage page = GuiPage.fromId(payload.page());
             if (result.success() && page != null) sendPage(player, page, false);
         });
@@ -116,6 +117,20 @@ public final class GuiRequestHandler {
     private static AdminResult apply(ServerPlayer player, GuiAction action, List<String> args) {
         return switch (action) {
             case RELOAD -> ConfigAdmin.reload(player.getServer());
+            case COMMAND_EXPOSE -> CommandAdmin.expose(player.getServer(), args.get(0));
+            case COMMAND_HIDE -> CommandAdmin.hide(player.getServer(), args.get(0));
+            case COMMAND_KEEP_ORIGINAL -> bool(args.get(1)) == null
+                    ? AdminResult.fail("Malformed request for " + action.name() + ".")
+                    : CommandAdmin.setPreserveOriginal(player.getServer(), args.get(0), bool(args.get(1)));
+        };
+    }
+
+    /** Strict boolean argument: only "true" and "false", anything else is malformed. */
+    private static Boolean bool(String value) {
+        return switch (value) {
+            case "true" -> Boolean.TRUE;
+            case "false" -> Boolean.FALSE;
+            default -> null;
         };
     }
 
