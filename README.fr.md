@@ -128,8 +128,9 @@ L'interface est dessinée nativement (sans bibliothèque d'interface) et reconst
 | Commandes | Toutes les commandes racines du serveur avec recherche (Ctrl+F) et filtre « exposées », badges pour les alias, les limites et les commandes absentes du serveur ; exposer, masquer (avec confirmation), et l'interrupteur « garder l'exigence d'origine » (`preserveOriginalRequires`) |
 | Alias | Tous les alias avec recherche, badges pour les commandes masquées et les limites ; créer un alias avec sa première étape ; par alias : ajouter, remplacer, monter ou descendre et retirer des étapes, supprimer l'alias (avec confirmation) |
 | Limites d'exécution | Toutes les règles avec leurs valeurs et badges (désactivée, cible ni exposée ni alias) ; ajouter une limite, changer usages et fenêtre, activer ou désactiver, choisir quand l'historique est écrit (sauvegarde du monde ou à chaque usage), supprimer (avec confirmation) ; les commandes exposées et alias sans limite sont listés et remplissent le formulaire en un clic |
+| Grades | Backend interne uniquement (absent de la navigation quand LuckPerms est actif, et expliqué si la page est ouverte directement) : grades avec recherche et création ; par grade, nœuds ALLOW et DENY, et joueurs avec leur état en ligne, attribués par pseudo avec complétion, y compris hors ligne s'ils sont déjà venus sur le serveur ; suppression d'un grade (avec confirmation) |
 
-Grades et écrans de l'éditeur LuckPerms suivent. D'ici là, les commandes texte les couvrent, et l'éditeur LuckPerms garde son côté serveur (`customperm.gui.luckperms.edit`) inchangé.
+Les écrans de l'éditeur LuckPerms suivent. D'ici là, les commandes texte les couvrent, et l'éditeur LuckPerms garde son côté serveur (`customperm.gui.luckperms.edit`) inchangé.
 
 **Permissions.** Lire une page demande op level 2, le même contrôle que `/customperm`. Écrire demande en plus le nœud du domaine : `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.luckperms.edit`. Ces nœuds sont vérifiés comme accordés au joueur, sans le court-circuit opérateur habituel du backend interne, pour pouvoir déléguer un domaine à un modérateur de niveau 2 sans ouvrir les autres. Le niveau de permission 4 (propriétaire du serveur) les contourne. Les actions qui ne modifient pas la configuration, comme le rechargement, demandent seulement op level 2, comme leur commande. Chaque action appliquée est journalisée côté serveur avec le nom de l'admin.
 
@@ -238,8 +239,10 @@ Elles gèrent les nodes ALLOW. Les nodes DENY internes sont stockés dans `grade
 | `/customperm grade delete <name>` | Supprime un grade et le désassigne de tous les joueurs. |
 | `/customperm grade addperm <grade> <node>` | Ajoute une perm au grade. |
 | `/customperm grade removeperm <grade> <node>` | Retire une perm du grade. |
-| `/customperm grade assign <player> <grade>` | Assigne le grade à un joueur. |
-| `/customperm grade unassign <player> <grade>` | Désassigne. |
+| `/customperm grade adddeny <grade> <node>` | Ajoute un nœud DENY : refusé même si un autre grade du joueur l'autorise. |
+| `/customperm grade removedeny <grade> <node>` | Retire un nœud DENY. |
+| `/customperm grade assign <player> <grade>` | Assigne le grade à un joueur, en ligne ou hors ligne s'il est déjà venu sur le serveur. |
+| `/customperm grade unassign <player> <grade>` | Désassigne, en ligne ou hors ligne. |
 | `/customperm grade list` | Liste les grades définis. |
 
 ### Limites d'exécution
@@ -263,7 +266,7 @@ Plafonne le nombre d'utilisations d'une commande ou d'un alias par joueur sur un
 | `/customperm status` | Snapshot global : backend, nb de commandes wrappées, exposées, aliases, grades, alertes admin actives. |
 | `/customperm scan [pattern]` | Liste toutes les commandes du dispatcher avec leur état (exposée, alias, mod-interne). Filtre optionnel. |
 | `/customperm reload` | Recharge les fichiers de config depuis le disque. |
-| `/customperm gui [dashboard\|commands\|aliases\|ratelimits]` | Ouvre l'interface d'administration en jeu (demande CustomPerm côté client). La lecture demande op level 2, l'écriture le nœud `customperm.gui.<domaine>.edit` du domaine. |
+| `/customperm gui [dashboard\|commands\|aliases\|ratelimits\|grades]` | Ouvre l'interface d'administration en jeu (demande CustomPerm côté client). La lecture demande op level 2, l'écriture le nœud `customperm.gui.<domaine>.edit` du domaine. |
 
 ---
 
@@ -771,7 +774,7 @@ LuckPerms stocke et résout à la fois les nodes `customperm.command.*` et `cust
 - **L'interface d'administration demande CustomPerm côté client** : sans lui, l'administration reste entièrement en commandes.
 - **L'éditeur LuckPerms en jeu n'est pas le web editor** : il couvre groupes, joueurs, tracks, nœuds, meta et chat meta, mais pas les opérations en masse, la recherche de nœud sur tous les détenteurs, ni l'historique d'annulation du web editor. Pour cela, `/lp editor` reste l'outil.
 - **Les commandes raccourcis ont leurs propres règles** : certaines commandes sont des raccourcis qui redirigent vers une autre (`/tp` vers `/teleport`, `/msg` et `/w` vers `/tell`, `/xp` vers `/experience`). Chaque écriture est exposée et limitée sous le nom tapé par le joueur : `tp` gouverne `/tp`, `teleport` gouverne `/teleport`. Exposer l'une n'ouvre pas l'autre ; configurez les deux si les deux doivent être disponibles.
-- **L'assignation de grade exige le joueur en ligne** : `/customperm grade assign|unassign` résout le joueur comme entité. Pour un joueur hors ligne, éditez `userGrades` dans `grades.json` (UUID en clé) puis `/customperm reload`.
+- **L'assignation de grade exige un joueur connu du serveur** : `/customperm grade assign|unassign` et l'interface acceptent les joueurs en ligne ou déjà venus sur le serveur ; ils n'interrogent jamais le service de session, donc un pseudo jamais venu ne peut pas être assigné à l'avance. Dans ce cas, éditez `userGrades` dans `grades.json` (UUID en clé) puis `/customperm reload`.
 - **Les nœuds DENY se gèrent uniquement dans le fichier** : `deniedPermissions` est pris en compte par le résolveur mais n'a pas encore de sous-commande `/customperm grade` ; éditez `grades.json` puis rechargez.
 
 ---

@@ -13,6 +13,7 @@ import com.arcadia.customperm.client.gui.kit.Icon;
 import com.arcadia.customperm.network.gui.AliasesData;
 import com.arcadia.customperm.network.gui.CommandsData;
 import com.arcadia.customperm.network.gui.DashboardData;
+import com.arcadia.customperm.network.gui.GradesData;
 import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPageData;
@@ -50,6 +51,8 @@ public final class AdminScreens {
         entries.add(new NavEntry(GuiPage.COMMANDS, "Commands", Icon.COMMAND));
         entries.add(new NavEntry(GuiPage.ALIASES, "Aliases", Icon.ALIAS));
         entries.add(new NavEntry(GuiPage.RATE_LIMITS, "Rate limits", Icon.CLOCK));
+        // Grades decide nothing while LuckPerms is active: no entry rather than a page that only says so.
+        if (context.backend().usesInternalGrades()) entries.add(new NavEntry(GuiPage.GRADES, "Grades", Icon.SHIELD));
         return entries;
     }
 
@@ -85,6 +88,7 @@ public final class AdminScreens {
             case CommandsData d -> new CommandsScreen(context, d);
             case AliasesData d -> new AliasesScreen(context, d);
             case RateLimitsData d -> new RateLimitsScreen(context, d);
+            case GradesData d -> new GradesScreen(context, d);
         };
     }
 }

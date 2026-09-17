@@ -13,6 +13,7 @@ import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.network.gui.AliasesData;
 import com.arcadia.customperm.network.gui.CommandsData;
 import com.arcadia.customperm.network.gui.DashboardData;
+import com.arcadia.customperm.network.gui.GradesData;
 import com.arcadia.customperm.network.gui.GuiActionPayload;
 import com.arcadia.customperm.network.gui.GuiActionResultPayload;
 import com.arcadia.customperm.network.gui.GuiArea;
@@ -66,6 +67,11 @@ public class GuiPayloadCodecGameTest {
                         new RateLimitsData.Rule("gamemode", 3, 3600, true, false, RateLimitsData.Target.EXPOSED_COMMAND),
                         new RateLimitsData.Rule("ghost", 1, 5, false, true, RateLimitsData.Target.NONE)),
                         List.of("heal", "tp"))));
+        expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
+                new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0), new GradesData(List.of(
+                        new GradesData.Grade("vip", List.of("customperm.command.fly"), List.of("customperm.command.op"),
+                                List.of(new GradesData.Member("00000000-0000-0000-0000-000000000001", "Alex", true)))),
+                        List.of("Alex", "Steve"))));
         expectRoundTrip(GuiRequestPayload.STREAM_CODEC, new GuiRequestPayload("dashboard"));
         expectRoundTrip(GuiActionPayload.STREAM_CODEC, new GuiActionPayload("RELOAD", List.of("a", "b c"), "dashboard"));
         expectRoundTrip(GuiActionResultPayload.STREAM_CODEC, GuiActionResultPayload.fail("You do not have x."));

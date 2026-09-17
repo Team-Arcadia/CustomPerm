@@ -52,7 +52,20 @@ public enum GuiAction {
     /** {@code [name]} Deletes a rule. */
     RATELIMIT_REMOVE(1, GuiArea.RATE_LIMITS),
     /** {@code [name, "world_save"|"immediate"]} When the rule's usage history is written. */
-    RATELIMIT_PERSISTENCE(2, GuiArea.RATE_LIMITS);
+    RATELIMIT_PERSISTENCE(2, GuiArea.RATE_LIMITS),
+
+    /** {@code [grade]} Creates an internal grade. */
+    GRADE_CREATE(1, GuiArea.GRADES),
+    /** {@code [grade]} Deletes a grade and unassigns it from every player. */
+    GRADE_DELETE(1, GuiArea.GRADES),
+    /** {@code [grade, node, "allow"|"deny"]} Adds an ALLOW or a DENY node. */
+    GRADE_NODE_ADD(3, GuiArea.GRADES),
+    /** {@code [grade, node, "allow"|"deny"]} Removes an ALLOW or a DENY node. */
+    GRADE_NODE_REMOVE(3, GuiArea.GRADES),
+    /** {@code [playerName, grade]} Assigns a grade to a player online or known to the server. */
+    GRADE_ASSIGN(2, GuiArea.GRADES),
+    /** {@code [playerUuid, grade]} Unassigns a grade, by UUID so unnamed entries can be cleaned up. */
+    GRADE_UNASSIGN(2, GuiArea.GRADES);
 
     private final int arity;
     private final GuiArea area;

@@ -12,11 +12,14 @@ package com.arcadia.customperm.gametest;
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
+import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.gametest.support.Grants;
+import com.arcadia.customperm.gametest.support.Modes;
 import com.arcadia.customperm.gametest.support.TestPlayer;
 import com.arcadia.customperm.network.gui.AliasesData;
 import com.arcadia.customperm.network.gui.CommandsData;
 import com.arcadia.customperm.network.gui.DashboardData;
+import com.arcadia.customperm.network.gui.GradesData;
 import com.arcadia.customperm.network.gui.GuiAction;
 import com.arcadia.customperm.network.gui.GuiActionPayload;
 import com.arcadia.customperm.network.gui.GuiActionResultPayload;
@@ -359,7 +362,98 @@ public class AdminInterfaceGameTest {
         helper.succeed();
     }
 
+    /** Area 6: grades, ALLOW and DENY nodes, online and offline assignment, deletion. Internal backend only. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void gradesPageEditsNodesAndPlayers(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        String grade = "cp_i_grade";
+        var server = helper.getLevel().getServer();
+        var config = CustomPerm.configManager.getGrades();
+        GameProfile offline = new GameProfile(UUID.randomUUID(), "cp_i_offline");
+        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_grades", 4);
+             TestPlayer member = TestPlayer.join(helper.getLevel(), "cp_i_member", 0)) {
+            // A player who joined once and left: known to the server, not online.
+            TestPlayer.join(helper.getLevel(), offline, 0, true).close();
+
+            owner.clearReceived();
+            gradeAct(owner, GuiAction.GRADE_CREATE, grade);
+            gradeAct(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.weather", "allow");
+            gradeAct(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.time", "deny");
+            gradeAct(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.time", "maybe");
+            gradeAct(owner, GuiAction.GRADE_ASSIGN, "CP_I_MEMBER", grade);
+            gradeAct(owner, GuiAction.GRADE_ASSIGN, "cp_i_offline", grade);
+            gradeAct(owner, GuiAction.GRADE_ASSIGN, "cp_i_nobody_here", grade);
+            List<String> results = results(owner);
+            if (!results.equals(List.of("OK: Created grade cp_i_grade",
+                    "OK: Added customperm.command.weather -> cp_i_grade",
+                    "OK: Denied customperm.command.time -> cp_i_grade",
+                    "FAIL: Malformed request for GRADE_NODE_ADD.",
+                    "OK: Assigned cp_i_grade -> cp_i_member",
+                    "OK: Assigned cp_i_grade -> cp_i_offline",
+                    "FAIL: Unknown player 'cp_i_nobody_here': grades can be assigned to players online or who joined this server before.")))
+                fail("Unexpected results: " + results);
+            if (!config.grades.get(grade).deniedPermissions.contains("customperm.command.time"))
+                fail("The DENY node was not stored as a denial.");
+            if (!config.userGrades.getOrDefault(offline.getId().toString(), List.of()).contains(grade))
+                fail("The offline player was not assigned by UUID.");
+
+            var pages = owner.payloads(GuiPagePayload.class);
+            GradesData.Grade row = pages.isEmpty() || !(pages.get(pages.size() - 1).data() instanceof GradesData data) ? null
+                    : data.grades().stream().filter(g -> g.name().equals(grade)).findFirst().orElse(null);
+            if (row == null || row.members().size() != 2
+                    || row.members().stream().noneMatch(m -> m.name().equals("cp_i_offline") && !m.online())
+                    || row.members().stream().noneMatch(m -> m.name().equals("cp_i_member") && m.online()))
+                fail("The refreshed page must list both players with their state: " + row);
+
+            owner.clearReceived();
+            gradeAct(owner, GuiAction.GRADE_UNASSIGN, offline.getId().toString(), grade);
+            gradeAct(owner, GuiAction.GRADE_UNASSIGN, "not-a-uuid", grade);
+            owner.type("customperm grade adddeny cp_i_grade customperm.command.seed");
+            owner.type("customperm grade assign cp_i_offline cp_i_grade");
+            results = results(owner);
+            if (!results.equals(List.of("OK: Unassigned cp_i_grade from cp_i_offline", "FAIL: Malformed request for GRADE_UNASSIGN.")))
+                fail("Unexpected unassign results: " + results);
+            if (!config.grades.get(grade).deniedPermissions.contains("customperm.command.seed")
+                    || !config.userGrades.getOrDefault(offline.getId().toString(), List.of()).contains(grade))
+                fail("adddeny and offline assign text commands did not apply: " + owner.chat());
+
+            owner.clearReceived();
+            gradeAct(owner, GuiAction.GRADE_DELETE, grade);
+            expectResult(owner, "OK: Deleted grade cp_i_grade");
+            if (config.userGrades.values().stream().anyMatch(list -> list.contains(grade)))
+                fail("Deleting a grade must unassign it from every player.");
+        } finally {
+            GradeAdmin.delete(server, grade);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void gradeActionsAreRefusedUnderLuckPermsOrWithoutTheNode(GameTestHelper helper) {
+        try (TestPlayer reader = TestPlayer.join(helper.getLevel(), "cp_i_grades_ro", 2);
+             TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_grades_ow", 4)) {
+            reader.clearReceived();
+            gradeAct(reader, GuiAction.GRADE_CREATE, "cp_i_denied_grade");
+            expectResult(reader, "FAIL: You do not have customperm.gui.grades.edit.");
+            if (CustomPerm.isLuckPermsActive()) {
+                owner.clearReceived();
+                gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_denied_grade");
+                expectResult(owner, "FAIL: [CustomPerm] Grade commands are disabled");
+            }
+            if (CustomPerm.configManager.getGrades().grades.containsKey("cp_i_denied_grade"))
+                fail("A refused action created the grade.");
+        } finally {
+            CustomPerm.configManager.getGrades().grades.remove("cp_i_denied_grade");
+        }
+        helper.succeed();
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    private static void gradeAct(TestPlayer player, GuiAction action, String... args) {
+        GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.GRADES.id()),
+                player.payloadContext());
+    }
 
     private static void limitAct(TestPlayer player, GuiAction action, String... args) {
         GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.RATE_LIMITS.id()),

@@ -13,6 +13,7 @@ import com.arcadia.customperm.admin.AdminResult;
 import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
+import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
@@ -38,7 +39,6 @@ import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
@@ -51,7 +51,8 @@ import java.util.stream.Collectors;
  *             command list                          # show currently exposed commands
  * /customperm grade   create|delete <name>
  *                     addperm|removeperm <grade> <node>
- *                     assign|unassign <player> <grade>
+ *                     adddeny|removedeny <grade> <node>   # DENY nodes win over any ALLOW
+ *                     assign|unassign <player> <grade>    # online, or joined the server before
  *                     list
  * /customperm alias   add <name> <cmd1[; cmd2; ...]>    # macro: split on ';'
  *                     addstep <name> <cmd>              # append a step to existing alias
@@ -165,18 +166,31 @@ public class CustomPermCommand {
             return SharedSuggestionProvider.suggest(grade.permissions, builder);
         };
 
-    /** Grades déjà assignés au joueur nommé par l'argument "player" (pour unassign). */
+    /** Grades assigned to the player named by the "player" argument (for unassign). */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_PLAYER_GRADES =
         (ctx, builder) -> {
-            try {
-                ServerPlayer player = EntityArgument.getPlayer(ctx, "player");
-                List<String> list = CustomPerm.configManager.getGrades()
-                    .userGrades.get(player.getUUID().toString());
-                if (list == null) return builder.buildFuture();
-                return SharedSuggestionProvider.suggest(list, builder);
-            } catch (CommandSyntaxException e) {
-                return builder.buildFuture();
-            }
+            var server = ctx.getSource().getServer();
+            if (server == null) return builder.buildFuture();
+            return GradeAdmin.findKnownProfile(server, StringArgumentType.getString(ctx, "player"))
+                .map(profile -> CustomPerm.configManager.getGrades().userGrades.get(profile.getId().toString()))
+                .map(list -> SharedSuggestionProvider.suggest(list, builder))
+                .orElseGet(builder::buildFuture);
+        };
+
+    /** Nodes denied by the grade named by the "grade" argument (for removedeny). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRADE_DENIES =
+        (ctx, builder) -> {
+            GradesConfig.Grade grade = CustomPerm.configManager.getGrades().grades.get(StringArgumentType.getString(ctx, "grade"));
+            if (grade == null) return builder.buildFuture();
+            return SharedSuggestionProvider.suggest(grade.deniedPermissions, builder);
+        };
+
+    /** Players online or who joined before: grades can be assigned to offline players. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_KNOWN_PLAYERS =
+        (ctx, builder) -> {
+            var server = ctx.getSource().getServer();
+            if (server == null) return builder.buildFuture();
+            return SharedSuggestionProvider.suggest(GradeAdmin.knownPlayerNames(server), builder);
         };
 
     /** Indices de steps valides (0..n-1) pour l'alias nommé par l'argument "name". */
@@ -228,13 +242,27 @@ public class CustomPermCommand {
                             .then(Commands.argument("node", StringArgumentType.greedyString())
                                 .suggests(SUGGEST_GRADE_PERMS)
                                 .executes(CustomPermCommand::gradeRemovePerm))))
+                    .then(Commands.literal("adddeny")
+                        .then(Commands.argument("grade", StringArgumentType.word())
+                            .suggests(SUGGEST_GRADES)
+                            .then(Commands.argument("node", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_KNOWN_NODES)
+                                .executes(CustomPermCommand::gradeAddDeny))))
+                    .then(Commands.literal("removedeny")
+                        .then(Commands.argument("grade", StringArgumentType.word())
+                            .suggests(SUGGEST_GRADES)
+                            .then(Commands.argument("node", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_GRADE_DENIES)
+                                .executes(CustomPermCommand::gradeRemoveDeny))))
                     .then(Commands.literal("assign")
-                        .then(Commands.argument("player", EntityArgument.player())
+                        .then(Commands.argument("player", StringArgumentType.word())
+                            .suggests(SUGGEST_KNOWN_PLAYERS)
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
                                 .executes(CustomPermCommand::gradeAssign))))
                     .then(Commands.literal("unassign")
-                        .then(Commands.argument("player", EntityArgument.player())
+                        .then(Commands.argument("player", StringArgumentType.word())
+                            .suggests(SUGGEST_KNOWN_PLAYERS)
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_PLAYER_GRADES)
                                 .executes(CustomPermCommand::gradeUnassign))))
@@ -447,125 +475,63 @@ public class CustomPermCommand {
     // ---------------- grade ----------------
 
     private static int gradeCreate(CommandContext<CommandSourceStack> ctx) {
-        if (warnIfLuckPerms(ctx)) return 0;
-        String name = StringArgumentType.getString(ctx, "name");
-        GradesConfig g = CustomPerm.configManager.getGrades();
-        if (g.grades.containsKey(name)) {
-            ctx.getSource().sendFailure(Component.literal("Grade already exists: " + name));
-            return 0;
-        }
-        GradesConfig.Grade grade = new GradesConfig.Grade();
-        grade.name = name;
-        g.grades.put(name, grade);
-        persist(ctx);
-        success(ctx, "Created grade " + name);
-        return 1;
+        return report(ctx, GradeAdmin.create(StringArgumentType.getString(ctx, "name")));
     }
 
     private static int gradeDelete(CommandContext<CommandSourceStack> ctx) {
-        if (warnIfLuckPerms(ctx)) return 0;
-        String name = StringArgumentType.getString(ctx, "name");
-        GradesConfig g = CustomPerm.configManager.getGrades();
-        if (g.grades.remove(name) == null) {
-            ctx.getSource().sendFailure(Component.literal("No such grade: " + name));
-            return 0;
-        }
-        removeGradeFromUsers(g, name);
-        persist(ctx);
-        resyncCommands(ctx);
-        success(ctx, "Deleted grade " + name);
-        return 1;
+        return report(ctx, GradeAdmin.delete(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "name")));
     }
 
     private static int gradeAddPerm(CommandContext<CommandSourceStack> ctx) {
-        if (warnIfLuckPerms(ctx)) return 0;
-        String gradeName = StringArgumentType.getString(ctx, "grade");
-        // trim : greedyString peut embarquer des espaces résiduels — un node " x.y" ne matcherait jamais.
-        String node = StringArgumentType.getString(ctx, "node").trim();
-        GradesConfig.Grade grade = CustomPerm.configManager.getGrades().grades.get(gradeName);
-        if (grade == null) {
-            ctx.getSource().sendFailure(Component.literal("No such grade: " + gradeName));
-            return 0;
-        }
-        boolean added = grade.permissions.add(node);
-        if (!added) {
-            ctx.getSource().sendSuccess(
-                () -> Component.literal(node + " is already granted to " + gradeName + " — no change."), false);
-            return 1;
-        }
-        persist(ctx);
-        resyncCommands(ctx);
-        success(ctx, "Added " + node + " -> " + gradeName);
-        return 1;
+        return report(ctx, GradeAdmin.addNode(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"),
+            StringArgumentType.getString(ctx, "node"), false));
     }
 
     private static int gradeRemovePerm(CommandContext<CommandSourceStack> ctx) {
-        if (warnIfLuckPerms(ctx)) return 0;
-        String gradeName = StringArgumentType.getString(ctx, "grade");
-        String node = StringArgumentType.getString(ctx, "node").trim();
-        GradesConfig.Grade grade = CustomPerm.configManager.getGrades().grades.get(gradeName);
-        if (grade == null) {
-            ctx.getSource().sendFailure(Component.literal("No such grade: " + gradeName));
-            return 0;
-        }
-        boolean removed = grade.permissions.remove(node);
-        if (!removed) {
-            ctx.getSource().sendSuccess(
-                () -> Component.literal(node + " is not granted to " + gradeName + " — no change."), false);
-            return 1;
-        }
-        persist(ctx);
-        resyncCommands(ctx);
-        success(ctx, "Removed " + node + " from " + gradeName);
-        return 1;
+        return report(ctx, GradeAdmin.removeNode(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"),
+            StringArgumentType.getString(ctx, "node"), false));
     }
 
-    private static int gradeAssign(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
-        if (warnIfLuckPerms(ctx)) return 0;
-        ServerPlayer player = EntityArgument.getPlayer(ctx, "player");
-        String gradeName = StringArgumentType.getString(ctx, "grade");
-        if (!CustomPerm.configManager.getGrades().grades.containsKey(gradeName)) {
-            ctx.getSource().sendFailure(Component.literal("No such grade: " + gradeName));
-            return 0;
-        }
-        List<String> list = CustomPerm.configManager.getGrades()
-            .userGrades.computeIfAbsent(player.getUUID().toString(), k -> new ArrayList<>());
-        if (list.contains(gradeName)) {
-            final String gn = gradeName, pn = player.getGameProfile().getName();
-            ctx.getSource().sendSuccess(
-                () -> Component.literal(pn + " is already assigned to " + gn + " — no change."), false);
-            return 1;
-        }
-        list.add(gradeName);
-        persist(ctx);
-        resyncPlayer(ctx, player);
-        success(ctx, "Assigned " + gradeName + " -> " + player.getGameProfile().getName());
-        return 1;
+    private static int gradeAddDeny(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, GradeAdmin.addNode(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"),
+            StringArgumentType.getString(ctx, "node"), true));
     }
 
-    private static int gradeUnassign(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
-        if (warnIfLuckPerms(ctx)) return 0;
-        ServerPlayer player = EntityArgument.getPlayer(ctx, "player");
-        String gradeName = StringArgumentType.getString(ctx, "grade");
-        var list = CustomPerm.configManager.getGrades().userGrades.get(player.getUUID().toString());
-        boolean removed = list != null && list.remove(gradeName);
-        if (!removed) {
-            final String gn = gradeName, pn = player.getGameProfile().getName();
-            ctx.getSource().sendSuccess(
-                () -> Component.literal(pn + " is not assigned to " + gn + " — no change."), false);
-            return 1;
-        }
-        if (list.isEmpty()) {
-            CustomPerm.configManager.getGrades().userGrades.remove(player.getUUID().toString());
-        }
-        persist(ctx);
-        resyncPlayer(ctx, player);
-        success(ctx, "Unassigned " + gradeName + " from " + player.getGameProfile().getName());
-        return 1;
+    private static int gradeRemoveDeny(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, GradeAdmin.removeNode(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"),
+            StringArgumentType.getString(ctx, "node"), true));
+    }
+
+    private static int gradeAssign(CommandContext<CommandSourceStack> ctx) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        var server = ctx.getSource().getServer();
+        String name = StringArgumentType.getString(ctx, "player");
+        var profile = server == null ? java.util.Optional.<com.mojang.authlib.GameProfile>empty()
+            : GradeAdmin.findKnownProfile(server, name);
+        if (profile.isEmpty()) return report(ctx, unknownPlayer(name));
+        return report(ctx, GradeAdmin.assign(server, profile.get(), StringArgumentType.getString(ctx, "grade")));
+    }
+
+    private static int gradeUnassign(CommandContext<CommandSourceStack> ctx) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        var server = ctx.getSource().getServer();
+        String name = StringArgumentType.getString(ctx, "player");
+        var profile = server == null ? java.util.Optional.<com.mojang.authlib.GameProfile>empty()
+            : GradeAdmin.findKnownProfile(server, name);
+        if (profile.isEmpty()) return report(ctx, unknownPlayer(name));
+        return report(ctx, GradeAdmin.unassign(server, profile.get().getId(), profile.get().getName(),
+            StringArgumentType.getString(ctx, "grade")));
+    }
+
+    private static AdminResult unknownPlayer(String name) {
+        return AdminResult.fail("Unknown player '" + name + "': grades can be assigned to players online or who joined this server before.");
     }
 
     private static int gradeList(CommandContext<CommandSourceStack> ctx) {
-        if (warnIfLuckPerms(ctx)) return 0;
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
         Set<String> names = CustomPerm.configManager.getGrades().grades.keySet();
         if (names.isEmpty()) {
             ctx.getSource().sendSuccess(() -> Component.literal("No grades defined."), false);
@@ -833,31 +799,6 @@ public class CustomPermCommand {
 
     // ---------------- helpers ----------------
 
-    private static boolean warnIfLuckPerms(CommandContext<CommandSourceStack> ctx) {
-        if (CustomPerm.isLuckPermsActive()) {
-            ctx.getSource().sendFailure(Component.literal(
-                "[CustomPerm] Grade commands are disabled — use /lp instead."));
-            return true;
-        }
-        return false;
-    }
-
-    private static void removeGradeFromUsers(GradesConfig grades, String gradeName) {
-        Iterator<java.util.Map.Entry<String, List<String>>> iterator = grades.userGrades.entrySet().iterator();
-        while (iterator.hasNext()) {
-            var entry = iterator.next();
-            List<String> assigned = entry.getValue();
-            if (assigned == null) {
-                iterator.remove();
-                continue;
-            }
-            assigned.removeIf(gradeName::equals);
-            if (assigned.isEmpty()) {
-                iterator.remove();
-            }
-        }
-    }
-
     /**
      * Saves the config and tells the admin when the change could not be written. The change
      * stays live in memory either way; what the admin must know is that it will not survive a
@@ -888,11 +829,6 @@ public class CustomPermCommand {
     private static void resyncCommands(CommandContext<CommandSourceStack> ctx) {
         var server = ctx.getSource().getServer();
         if (server != null) server.getPlayerList().getPlayers().forEach(p -> server.getCommands().sendCommands(p));
-    }
-
-    private static void resyncPlayer(CommandContext<CommandSourceStack> ctx, ServerPlayer p) {
-        var server = ctx.getSource().getServer();
-        if (server != null) server.getCommands().sendCommands(p);
     }
 
     private static String sanitizePlain(String input) {

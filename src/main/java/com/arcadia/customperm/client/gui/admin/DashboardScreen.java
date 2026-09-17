@@ -91,7 +91,7 @@ public final class DashboardScreen extends AdminScreen {
         Rect row = tiles();
         int w = (row.w() - 3 * GAP) / 4;
         List<CpTile> tiles = List.of(
-                new CpTile(Icon.COMMAND, "Commands", String.valueOf(data.exposedCommands()),
+                new CpTile(Icon.COMMAND, "Exposed", String.valueOf(data.exposedCommands()),
                         "of " + data.dispatcherCommands() + " total", Palette.TEXT, () -> navigate(GuiPage.COMMANDS)),
                 new CpTile(Icon.ALIAS, "Aliases", String.valueOf(data.aliases()), "defined", Palette.TEXT, () -> navigate(GuiPage.ALIASES)),
                 new CpTile(Icon.CLOCK, "Limits", data.rateLimitsEnabled() + " / " + data.rateLimits(),
@@ -120,7 +120,7 @@ public final class DashboardScreen extends AdminScreen {
         if (context.backend().usesInternalGrades()) {
             return new CpTile(Icon.SHIELD, "Grades", String.valueOf(data.grades()),
                     data.playersWithGrades() + (data.playersWithGrades() == 1 ? " player" : " players"),
-                    Palette.TEXT, null);
+                    Palette.TEXT, () -> navigate(GuiPage.GRADES));
         }
         return new CpTile(Icon.SHIELD, "Grades", "LuckPerms", "uses groups", Palette.TEXT_DIM, null);
     }

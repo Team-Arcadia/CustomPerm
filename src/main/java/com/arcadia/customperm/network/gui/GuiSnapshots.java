@@ -9,6 +9,7 @@
 package com.arcadia.customperm.network.gui;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.command.AliasManager;
 import com.arcadia.customperm.config.ConfigManager;
 import com.arcadia.customperm.notify.AdminNotifier;
@@ -40,7 +41,41 @@ public final class GuiSnapshots {
             case COMMANDS -> commands(player.getServer());
             case ALIASES -> aliases();
             case RATE_LIMITS -> rateLimits();
+            case GRADES -> grades(player.getServer());
         };
+    }
+
+    static GradesData grades(MinecraftServer server) {
+        var config = CustomPerm.configManager.getGrades();
+        java.util.Map<String, List<GradesData.Member>> members = new java.util.HashMap<>();
+        config.userGrades.forEach((rawUuid, assigned) -> {
+            java.util.UUID uuid;
+            try {
+                uuid = java.util.UUID.fromString(rawUuid);
+            } catch (IllegalArgumentException e) {
+                return;
+            }
+            boolean online = server != null && server.getPlayerList().getPlayer(uuid) != null;
+            String name = server == null ? rawUuid : GradeAdmin.displayName(server, uuid);
+            for (String grade : assigned) {
+                members.computeIfAbsent(grade, k -> new ArrayList<>()).add(new GradesData.Member(rawUuid, name, online));
+            }
+        });
+
+        List<GradesData.Grade> grades = new ArrayList<>();
+        for (String name : new TreeSet<>(config.grades.keySet())) {
+            if (grades.size() == GuiCodecs.SERVER_LIST_MAX) break;
+            var grade = config.grades.get(name);
+            List<GradesData.Member> assigned = members.getOrDefault(name, new ArrayList<>());
+            assigned.sort(java.util.Comparator.comparing(GradesData.Member::name, String.CASE_INSENSITIVE_ORDER));
+            grades.add(new GradesData.Grade(name,
+                    new TreeSet<>(grade.permissions).stream().limit(GradesData.NODES_MAX).toList(),
+                    new TreeSet<>(grade.deniedPermissions).stream().limit(GradesData.NODES_MAX).toList(),
+                    assigned.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList()));
+        }
+        List<String> known = server == null ? List.of()
+                : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
+        return new GradesData(grades, known);
     }
 
     static RateLimitsData rateLimits() {

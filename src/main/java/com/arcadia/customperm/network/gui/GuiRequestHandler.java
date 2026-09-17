@@ -13,6 +13,7 @@ import com.arcadia.customperm.admin.AdminResult;
 import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
+import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
 import com.arcadia.customperm.command.RateLimiter;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
@@ -139,6 +140,42 @@ public final class GuiRequestHandler {
             case RATELIMIT_DISABLE -> RateLimitAdmin.disable(args.get(0));
             case RATELIMIT_REMOVE -> RateLimitAdmin.remove(args.get(0));
             case RATELIMIT_PERSISTENCE -> RateLimitAdmin.setPersistence(args.get(0), args.get(1));
+            case GRADE_CREATE -> GradeAdmin.create(args.get(0));
+            case GRADE_DELETE -> GradeAdmin.delete(player.getServer(), args.get(0));
+            case GRADE_NODE_ADD -> kind(args.get(2)) == null ? malformed(action)
+                    : GradeAdmin.addNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2)));
+            case GRADE_NODE_REMOVE -> kind(args.get(2)) == null ? malformed(action)
+                    : GradeAdmin.removeNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2)));
+            case GRADE_ASSIGN -> assignByName(player, args.get(0), args.get(1));
+            case GRADE_UNASSIGN -> unassignByUuid(player, args.get(0), args.get(1));
+        };
+    }
+
+    private static AdminResult assignByName(ServerPlayer admin, String name, String grade) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        return GradeAdmin.findKnownProfile(admin.getServer(), name)
+                .map(profile -> GradeAdmin.assign(admin.getServer(), profile, grade))
+                .orElseGet(() -> AdminResult.fail("Unknown player '" + name
+                        + "': grades can be assigned to players online or who joined this server before."));
+    }
+
+    private static AdminResult unassignByUuid(ServerPlayer admin, String rawUuid, String grade) {
+        java.util.UUID uuid;
+        try {
+            uuid = java.util.UUID.fromString(rawUuid);
+        } catch (IllegalArgumentException e) {
+            return malformed(GuiAction.GRADE_UNASSIGN);
+        }
+        return GradeAdmin.unassign(admin.getServer(), uuid, GradeAdmin.displayName(admin.getServer(), uuid), grade);
+    }
+
+    /** {@code "deny"} is true, {@code "allow"} false, anything else malformed. */
+    private static Boolean kind(String value) {
+        return switch (value) {
+            case "deny" -> Boolean.TRUE;
+            case "allow" -> Boolean.FALSE;
+            default -> null;
         };
     }
 

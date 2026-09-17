@@ -18,7 +18,8 @@ public enum GuiPage {
     DASHBOARD,
     COMMANDS,
     ALIASES,
-    RATE_LIMITS;
+    RATE_LIMITS,
+    GRADES;
 
     /** Name used on the wire and as the {@code /customperm gui <page>} argument. */
     public String id() {

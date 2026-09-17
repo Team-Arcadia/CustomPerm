@@ -128,8 +128,9 @@ The interface is drawn natively (no UI library) and is being rebuilt area by are
 | Commands | Every root command of the server with search (Ctrl+F) and an exposed-only filter, badges for aliases, rate limits and commands missing from the server; expose, hide (with confirmation), and the keep-original switch (`preserveOriginalRequires`) |
 | Aliases | Every alias with search, badges for shadowed commands and rate limits; create an alias with its first step; per alias: add, replace, move up or down and remove steps, delete the alias (with confirmation) |
 | Rate limits | Every rule with its numbers and badges (disabled, target neither exposed nor an alias); add a limit, change uses and window, enable or disable, switch when usage history is written (world save or every use), remove (with confirmation); exposed commands and aliases without a limit are listed and fill the form in one click |
+| Grades | Internal backend only (hidden from the navigation while LuckPerms is active, and explained if opened directly): grades with search and creation; per grade, ALLOW and DENY nodes, and players with their online state, assigned by name with completion, including players who are offline but joined the server before; delete a grade (with confirmation) |
 
-Grades and the LuckPerms editor screens follow. Until then the text commands cover them, and the LuckPerms editor keeps its server side (`customperm.gui.luckperms.edit`) unchanged.
+The LuckPerms editor screens follow. Until then the text commands cover them, and the LuckPerms editor keeps its server side (`customperm.gui.luckperms.edit`) unchanged.
 
 **Permissions.** Reading any page requires op level 2, the same check as `/customperm`. Writing requires the node of the area on top of it: `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.luckperms.edit`. These nodes are checked as granted to the player, without the usual operator short-circuit of the internal backend, so they can delegate one area to a level-2 moderator without opening the others. Permission level 4 (server owner) bypasses them. Actions that change no configuration, such as reload, need op level 2 only, like their command. Every applied action is logged server-side with the admin's name.
 
@@ -238,8 +239,10 @@ They manage ALLOW nodes. Internal DENY nodes are stored in `grades.json` under `
 | `/customperm grade delete <name>` | Deletes a grade and unassigns it from every user. |
 | `/customperm grade addperm <grade> <node>` | Adds a permission node to the grade. |
 | `/customperm grade removeperm <grade> <node>` | Removes a node. |
-| `/customperm grade assign <player> <grade>` | Assigns the grade to a player. |
-| `/customperm grade unassign <player> <grade>` | Unassigns. |
+| `/customperm grade adddeny <grade> <node>` | Adds a DENY node: refused even if another grade of the player allows it. |
+| `/customperm grade removedeny <grade> <node>` | Removes a DENY node. |
+| `/customperm grade assign <player> <grade>` | Assigns the grade to a player, online or offline if they joined the server before. |
+| `/customperm grade unassign <player> <grade>` | Unassigns, online or offline. |
 | `/customperm grade list` | Lists defined grades. |
 
 ### Rate limits
@@ -263,7 +266,7 @@ Cap how many times one player may run a command or an alias within a sliding win
 | `/customperm status` | Global snapshot: backend, wrapped commands, exposed commands, aliases, grades, active admin alerts. |
 | `/customperm scan [pattern]` | Lists every command in the dispatcher with its state (exposed, alias, mod-internal). Optional substring filter. |
 | `/customperm reload` | Reloads config files from disk. |
-| `/customperm gui [dashboard\|commands\|aliases\|ratelimits]` | Opens the in-game admin interface (needs CustomPerm on the client). Reading needs op level 2; writing needs the area's `customperm.gui.<area>.edit` node. |
+| `/customperm gui [dashboard\|commands\|aliases\|ratelimits\|grades]` | Opens the in-game admin interface (needs CustomPerm on the client). Reading needs op level 2; writing needs the area's `customperm.gui.<area>.edit` node. |
 
 ---
 
@@ -771,7 +774,7 @@ LuckPerms stores and resolves both `customperm.command.*` and `customperm.alias.
 - **The admin interface needs CustomPerm client-side**: without it, administration stays fully command-driven.
 - **The in-game LuckPerms editor is not the web editor**: it covers groups, users, tracks, nodes, meta and chat meta, but not bulk operations, node search across all holders, or the web editor's undo history. For those, `/lp editor` remains the tool.
 - **Shortcut commands have their own rules**: some commands are shortcuts that redirect to another one (`/tp` to `/teleport`, `/msg` and `/w` to `/tell`, `/xp` to `/experience`). Each spelling is exposed and rate limited under the name the player types: `tp` governs `/tp`, `teleport` governs `/teleport`. Exposing one does not open the other; configure both if both should be available.
-- **Grade assignment needs the player online**: `/customperm grade assign|unassign` resolves the player as an entity. For an offline player, edit `userGrades` in `grades.json` (UUID as key) and run `/customperm reload`.
+- **Grade assignment needs a player known to the server**: `/customperm grade assign|unassign` and the interface accept players online or who joined the server before; they never query the session service, so a name that never joined cannot be assigned in advance. For that case, edit `userGrades` in `grades.json` (UUID as key) and run `/customperm reload`.
 - **DENY nodes are file-only**: `deniedPermissions` is honoured by the resolver but has no `/customperm grade` subcommand yet; edit `grades.json` and reload.
 
 ---
