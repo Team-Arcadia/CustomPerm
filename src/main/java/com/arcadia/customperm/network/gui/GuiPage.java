@@ -17,11 +17,12 @@ import java.util.Locale;
 public enum GuiPage {
     DASHBOARD,
     COMMANDS,
-    ALIASES;
+    ALIASES,
+    RATE_LIMITS;
 
     /** Name used on the wire and as the {@code /customperm gui <page>} argument. */
     public String id() {
-        return name().toLowerCase(Locale.ROOT);
+        return name().toLowerCase(Locale.ROOT).replace("_", "");
     }
 
     /** Resolves a page id; {@code null} for anything unknown. */

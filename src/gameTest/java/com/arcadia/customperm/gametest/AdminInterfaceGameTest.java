@@ -25,6 +25,7 @@ import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
+import com.arcadia.customperm.network.gui.RateLimitsData;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
@@ -294,7 +295,87 @@ public class AdminInterfaceGameTest {
         helper.succeed();
     }
 
+    /** Area 5: the rate limit cycle through the interface, mirrored in config and in the page. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void rateLimitsPageEditsRules(GameTestHelper helper) {
+        String alias = "cp_i_limited";
+        var server = helper.getLevel().getServer();
+        var rules = CustomPerm.configManager.getRateLimits().rules;
+        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_limits", 4)) {
+            AliasAdmin.define(server, alias, List.of("say limited"));
+            RateLimitsData before = rateLimitsPage(owner);
+            if (!before.unlimited().contains(alias)) fail("An alias without a rule must be offered as a target.");
+
+            owner.clearReceived();
+            limitAct(owner, GuiAction.RATELIMIT_SET, alias, "3", "60");
+            expectResult(owner, "OK: Rate limit for /cp_i_limited set to 3 per 60s (enabled).");
+            limitAct(owner, GuiAction.RATELIMIT_PERSISTENCE, alias, "immediate");
+            limitAct(owner, GuiAction.RATELIMIT_SET, alias, "5", "120");
+            if (!rules.get(alias).persistsImmediately() || rules.get(alias).maxExecutions != 5)
+                fail("Redefining a rule must keep its persistence mode and apply the new numbers.");
+            limitAct(owner, GuiAction.RATELIMIT_DISABLE, alias);
+            if (rules.get(alias).enabled) fail("Disable did not apply.");
+            limitAct(owner, GuiAction.RATELIMIT_ENABLE, alias);
+            if (!rules.get(alias).enabled) fail("Enable did not apply.");
+
+            RateLimitsData after = rateLimitsPage(owner);
+            RateLimitsData.Rule row = after.rules().stream().filter(r -> r.name().equals(alias)).findFirst().orElse(null);
+            if (row == null || row.max() != 5 || row.windowSeconds() != 120 || !row.enabled() || !row.immediate()
+                    || row.target() != RateLimitsData.Target.ALIAS || after.unlimited().contains(alias))
+                fail("The page does not reflect the rule: " + row);
+
+            owner.clearReceived();
+            limitAct(owner, GuiAction.RATELIMIT_SET, alias, "0", "60");
+            limitAct(owner, GuiAction.RATELIMIT_SET, alias, "2", "-5");
+            limitAct(owner, GuiAction.RATELIMIT_PERSISTENCE, alias, "sometimes");
+            List<String> results = results(owner);
+            if (!results.equals(List.of("FAIL: A rate limit needs at least 1 use per window of at least 1 second.",
+                    "FAIL: Malformed request for RATELIMIT_SET.",
+                    "FAIL: Unknown persistence mode 'sometimes'. Use world_save or immediate.")))
+                fail("Invalid numbers and modes must be refused, got " + results);
+
+            owner.clearReceived();
+            limitAct(owner, GuiAction.RATELIMIT_REMOVE, alias);
+            expectResult(owner, "OK: Rate limit for /cp_i_limited removed.");
+            if (rules.containsKey(alias)) fail("Remove did not apply.");
+        } finally {
+            rules.remove(alias);
+            AliasAdmin.remove(server, alias);
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void rateLimitActionsNeedTheRateLimitsNode(GameTestHelper helper) {
+        try (TestPlayer reader = TestPlayer.join(helper.getLevel(), "cp_i_limits_ro", 2)) {
+            reader.clearReceived();
+            limitAct(reader, GuiAction.RATELIMIT_SET, "cp_i_denied_rule", "1", "60");
+            expectResult(reader, "FAIL: You do not have customperm.gui.ratelimits.edit.");
+            if (CustomPerm.configManager.getRateLimits().rules.containsKey("cp_i_denied_rule"))
+                fail("A refused action created the rule.");
+        } finally {
+            CustomPerm.configManager.getRateLimits().rules.remove("cp_i_denied_rule");
+        }
+        helper.succeed();
+    }
+
     // ------------------------------------------------------------------ helpers
+
+    private static void limitAct(TestPlayer player, GuiAction action, String... args) {
+        GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.RATE_LIMITS.id()),
+                player.payloadContext());
+    }
+
+    private static RateLimitsData rateLimitsPage(TestPlayer player) {
+        player.clearReceived();
+        GuiRequestHandler.open(player.player(), GuiPage.RATE_LIMITS);
+        var pages = player.payloads(GuiPagePayload.class);
+        if (pages.size() != 1 || !(pages.get(0).data() instanceof RateLimitsData data)) {
+            fail("Expected the rate limits page, got " + pages);
+            return null;
+        }
+        return data;
+    }
 
     private static void aliasAct(TestPlayer player, GuiAction action, String... args) {
         GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.ALIASES.id()),

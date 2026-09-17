@@ -13,6 +13,7 @@ import com.arcadia.customperm.admin.AdminResult;
 import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
+import com.arcadia.customperm.admin.RateLimitAdmin;
 import com.arcadia.customperm.command.RateLimiter;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.level.ServerPlayer;
@@ -132,6 +133,12 @@ public final class GuiRequestHandler {
                     : AliasAdmin.moveStep(player.getServer(), args.get(0), index(args.get(1)), index(args.get(2)));
             case ALIAS_STEP_REMOVE -> index(args.get(1)) == null ? malformed(action)
                     : AliasAdmin.removeStep(player.getServer(), args.get(0), index(args.get(1)));
+            case RATELIMIT_SET -> index(args.get(1)) == null || index(args.get(2)) == null ? malformed(action)
+                    : RateLimitAdmin.set(args.get(0), index(args.get(1)), index(args.get(2)));
+            case RATELIMIT_ENABLE -> RateLimitAdmin.enable(args.get(0));
+            case RATELIMIT_DISABLE -> RateLimitAdmin.disable(args.get(0));
+            case RATELIMIT_REMOVE -> RateLimitAdmin.remove(args.get(0));
+            case RATELIMIT_PERSISTENCE -> RateLimitAdmin.setPersistence(args.get(0), args.get(1));
         };
     }
 
@@ -141,7 +148,7 @@ public final class GuiRequestHandler {
 
     /** Strict non-negative index argument: plain decimal digits only, anything else is malformed. */
     private static Integer index(String value) {
-        if (value.isEmpty() || value.length() > 6 || !value.chars().allMatch(Character::isDigit)) return null;
+        if (value.isEmpty() || value.length() > 9 || !value.chars().allMatch(Character::isDigit)) return null;
         return Integer.parseInt(value);
     }
 

@@ -39,7 +39,30 @@ public final class GuiSnapshots {
             case DASHBOARD -> dashboard(player.getServer());
             case COMMANDS -> commands(player.getServer());
             case ALIASES -> aliases();
+            case RATE_LIMITS -> rateLimits();
         };
+    }
+
+    static RateLimitsData rateLimits() {
+        ConfigManager config = CustomPerm.configManager;
+        Set<String> exposed = config.getCommands().grantedCommands;
+        Set<String> aliases = config.getAliases().aliases.keySet();
+        var rules = config.getRateLimits().rules;
+
+        List<RateLimitsData.Rule> rows = new ArrayList<>();
+        for (String name : new TreeSet<>(rules.keySet())) {
+            if (rows.size() == GuiCodecs.SERVER_LIST_MAX) break;
+            var rule = rules.get(name);
+            RateLimitsData.Target target = aliases.contains(name) ? RateLimitsData.Target.ALIAS
+                    : exposed.contains(name) ? RateLimitsData.Target.EXPOSED_COMMAND : RateLimitsData.Target.NONE;
+            rows.add(new RateLimitsData.Rule(name, rule.maxExecutions, rule.windowSeconds, rule.enabled,
+                    rule.persistsImmediately(), target));
+        }
+        Set<String> candidates = new TreeSet<>(exposed);
+        candidates.addAll(aliases);
+        candidates.removeAll(rules.keySet());
+        List<String> unlimited = candidates.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
+        return new RateLimitsData(rows, unlimited);
     }
 
     static AliasesData aliases() {

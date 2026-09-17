@@ -41,7 +41,18 @@ public enum GuiAction {
     /** {@code [alias, from, to]} Moves one step (0-based indexes). */
     ALIAS_STEP_MOVE(3, GuiArea.ALIASES),
     /** {@code [alias, index]} Removes one step; the alias is deleted with its last step. */
-    ALIAS_STEP_REMOVE(2, GuiArea.ALIASES);
+    ALIAS_STEP_REMOVE(2, GuiArea.ALIASES),
+
+    /** {@code [name, max, windowSeconds]} Creates or redefines a rule, enabled, keeping its persistence mode. */
+    RATELIMIT_SET(3, GuiArea.RATE_LIMITS),
+    /** {@code [name]} Enforces a rule again. */
+    RATELIMIT_ENABLE(1, GuiArea.RATE_LIMITS),
+    /** {@code [name]} Stops enforcing a rule, keeping its numbers. */
+    RATELIMIT_DISABLE(1, GuiArea.RATE_LIMITS),
+    /** {@code [name]} Deletes a rule. */
+    RATELIMIT_REMOVE(1, GuiArea.RATE_LIMITS),
+    /** {@code [name, "world_save"|"immediate"]} When the rule's usage history is written. */
+    RATELIMIT_PERSISTENCE(2, GuiArea.RATE_LIMITS);
 
     private final int arity;
     private final GuiArea area;

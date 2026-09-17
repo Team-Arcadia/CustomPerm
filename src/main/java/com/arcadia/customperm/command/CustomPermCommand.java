@@ -13,6 +13,7 @@ import com.arcadia.customperm.admin.AdminResult;
 import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
+import com.arcadia.customperm.admin.RateLimitAdmin;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.network.gui.GuiPage;
@@ -404,94 +405,25 @@ public class CustomPermCommand {
     // ---------------- rate limits ----------------
 
     private static int rateLimitSet(CommandContext<CommandSourceStack> ctx) {
-        String name = StringArgumentType.getString(ctx, "name");
-        int max = IntegerArgumentType.getInteger(ctx, "max");
-        int windowSeconds = IntegerArgumentType.getInteger(ctx, "windowSeconds");
-
-        RateLimitsConfig.Rule rule = new RateLimitsConfig.Rule();
-        rule.enabled = true;
-        rule.maxExecutions = max;
-        rule.windowSeconds = windowSeconds;
-        // Redefining the numbers must not silently reset a persistence mode the admin chose.
-        RateLimitsConfig.Rule previous = CustomPerm.configManager.getRateLimits().rules.get(name);
-        if (previous != null) rule.persistence = previous.persistence;
-        rule.normalize();
-
-        CustomPerm.configManager.getRateLimits().rules.put(name, rule);
-        persist(ctx);
-        warnIfNeitherExposedNorAlias(ctx, name);
-        success(ctx, "Rate limit for /" + name + " set to " + rule.maxExecutions + " per " + rule.windowSeconds + "s (enabled).");
-        return 1;
+        return report(ctx, RateLimitAdmin.set(StringArgumentType.getString(ctx, "name"),
+            IntegerArgumentType.getInteger(ctx, "max"), IntegerArgumentType.getInteger(ctx, "windowSeconds")));
     }
 
     private static int rateLimitPersistence(CommandContext<CommandSourceStack> ctx) {
-        String name = StringArgumentType.getString(ctx, "name");
-        String mode = StringArgumentType.getString(ctx, "mode").toLowerCase(Locale.ROOT);
-        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().rules.get(name);
-        if (rule == null) {
-            ctx.getSource().sendFailure(Component.literal(
-                "No rate limit configured for /" + name + ". Use /customperm ratelimit set first."));
-            return 0;
-        }
-        if (!mode.equals(RateLimitsConfig.PERSISTENCE_WORLD_SAVE) && !mode.equals(RateLimitsConfig.PERSISTENCE_IMMEDIATE)) {
-            ctx.getSource().sendFailure(Component.literal(
-                "Unknown persistence mode '" + mode + "'. Use world_save or immediate."));
-            return 0;
-        }
-        rule.persistence = mode;
-        persist(ctx);
-        success(ctx, "Usage history of /" + name + " is now written "
-            + (rule.persistsImmediately() ? "after every accepted use (immediate)." : "with the world save (world_save)."));
-        return 1;
+        return report(ctx, RateLimitAdmin.setPersistence(StringArgumentType.getString(ctx, "name"),
+            StringArgumentType.getString(ctx, "mode")));
     }
 
     private static int rateLimitEnable(CommandContext<CommandSourceStack> ctx) {
-        String name = StringArgumentType.getString(ctx, "name");
-        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().rules.get(name);
-        if (rule == null) {
-            ctx.getSource().sendFailure(Component.literal(
-                "No rate limit configured for /" + name + ". Use /customperm ratelimit set first."));
-            return 0;
-        }
-        if (rule.enabled) {
-            ctx.getSource().sendSuccess(() -> Component.literal(
-                "Rate limit for /" + name + " is already enabled — no change."), false);
-            return 1;
-        }
-        rule.enabled = true;
-        persist(ctx);
-        success(ctx, "Rate limit for /" + name + " enabled (" + rule.maxExecutions + " per " + rule.windowSeconds + "s).");
-        return 1;
+        return report(ctx, RateLimitAdmin.enable(StringArgumentType.getString(ctx, "name")));
     }
 
     private static int rateLimitDisable(CommandContext<CommandSourceStack> ctx) {
-        String name = StringArgumentType.getString(ctx, "name");
-        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().rules.get(name);
-        if (rule == null) {
-            ctx.getSource().sendFailure(Component.literal("No rate limit configured for /" + name + "."));
-            return 0;
-        }
-        if (!rule.enabled) {
-            ctx.getSource().sendSuccess(() -> Component.literal(
-                "Rate limit for /" + name + " is already disabled — no change."), false);
-            return 1;
-        }
-        rule.enabled = false;
-        persist(ctx);
-        success(ctx, "Rate limit for /" + name + " disabled. Settings kept — use /customperm ratelimit enable to restore.");
-        return 1;
+        return report(ctx, RateLimitAdmin.disable(StringArgumentType.getString(ctx, "name")));
     }
 
     private static int rateLimitRemove(CommandContext<CommandSourceStack> ctx) {
-        String name = StringArgumentType.getString(ctx, "name");
-        boolean removed = CustomPerm.configManager.getRateLimits().rules.remove(name) != null;
-        if (!removed) {
-            ctx.getSource().sendFailure(Component.literal("No rate limit configured for /" + name + "."));
-            return 0;
-        }
-        persist(ctx);
-        success(ctx, "Rate limit for /" + name + " removed.");
-        return 1;
+        return report(ctx, RateLimitAdmin.remove(StringArgumentType.getString(ctx, "name")));
     }
 
     private static int rateLimitList(CommandContext<CommandSourceStack> ctx) {
@@ -510,16 +442,6 @@ public class CustomPermCommand {
             ).withStyle(color), false);
         });
         return 1;
-    }
-
-    private static void warnIfNeitherExposedNorAlias(CommandContext<CommandSourceStack> ctx, String name) {
-        boolean exposed = CustomPerm.configManager.getCommands().grantedCommands.contains(name);
-        boolean alias = CustomPerm.configManager.getAliases().aliases.containsKey(name);
-        if (!exposed && !alias) {
-            ctx.getSource().sendSuccess(() -> Component.literal(
-                "Note: /" + name + " is not currently exposed or an alias — the limit will take effect once it is."
-            ).withStyle(ChatFormatting.YELLOW), false);
-        }
     }
 
     // ---------------- grade ----------------

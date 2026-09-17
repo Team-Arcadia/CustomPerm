@@ -95,7 +95,7 @@ public final class DashboardScreen extends AdminScreen {
                         "of " + data.dispatcherCommands() + " total", Palette.TEXT, () -> navigate(GuiPage.COMMANDS)),
                 new CpTile(Icon.ALIAS, "Aliases", String.valueOf(data.aliases()), "defined", Palette.TEXT, () -> navigate(GuiPage.ALIASES)),
                 new CpTile(Icon.CLOCK, "Limits", data.rateLimitsEnabled() + " / " + data.rateLimits(),
-                        "enabled", Palette.TEXT, null),
+                        "enabled", Palette.TEXT, () -> navigate(GuiPage.RATE_LIMITS)),
                 gradesTile());
         for (int i = 0; i < tiles.size(); i++) {
             addRenderableWidget(tiles.get(i).at(new Rect(row.x() + i * (w + GAP), row.y(), w, row.h())));

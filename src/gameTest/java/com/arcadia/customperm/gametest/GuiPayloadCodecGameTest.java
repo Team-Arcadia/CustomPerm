@@ -20,6 +20,7 @@ import com.arcadia.customperm.network.gui.GuiCodecs;
 import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
+import com.arcadia.customperm.network.gui.RateLimitsData;
 import com.arcadia.customperm.perm.BackendKind;
 import io.netty.buffer.ByteBuf;
 import io.netty.buffer.Unpooled;
@@ -60,6 +61,11 @@ public class GuiPayloadCodecGameTest {
                 new GuiContext(BackendKind.INTERNAL, GuiArea.ALIASES.bit(), 0), new AliasesData(List.of(
                         new AliasesData.Alias("heal", List.of("effect give @s instant_health", "say healed"), true, 3, 60, true),
                         new AliasesData.Alias("kit", List.of("give @s bread 8"), false, 0, 0, false)))));
+        expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
+                new GuiContext(BackendKind.DENY, 0, 2), new RateLimitsData(List.of(
+                        new RateLimitsData.Rule("gamemode", 3, 3600, true, false, RateLimitsData.Target.EXPOSED_COMMAND),
+                        new RateLimitsData.Rule("ghost", 1, 5, false, true, RateLimitsData.Target.NONE)),
+                        List.of("heal", "tp"))));
         expectRoundTrip(GuiRequestPayload.STREAM_CODEC, new GuiRequestPayload("dashboard"));
         expectRoundTrip(GuiActionPayload.STREAM_CODEC, new GuiActionPayload("RELOAD", List.of("a", "b c"), "dashboard"));
         expectRoundTrip(GuiActionResultPayload.STREAM_CODEC, GuiActionResultPayload.fail("You do not have x."));

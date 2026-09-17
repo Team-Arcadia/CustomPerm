@@ -17,6 +17,7 @@ import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPageData;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
+import com.arcadia.customperm.network.gui.RateLimitsData;
 import com.arcadia.customperm.network.lp.LpDto;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -48,6 +49,7 @@ public final class AdminScreens {
         entries.add(new NavEntry(GuiPage.DASHBOARD, "Dashboard", Icon.HOME));
         entries.add(new NavEntry(GuiPage.COMMANDS, "Commands", Icon.COMMAND));
         entries.add(new NavEntry(GuiPage.ALIASES, "Aliases", Icon.ALIAS));
+        entries.add(new NavEntry(GuiPage.RATE_LIMITS, "Rate limits", Icon.CLOCK));
         return entries;
     }
 
@@ -82,6 +84,7 @@ public final class AdminScreens {
             case DashboardData d -> new DashboardScreen(context, d);
             case CommandsData d -> new CommandsScreen(context, d);
             case AliasesData d -> new AliasesScreen(context, d);
+            case RateLimitsData d -> new RateLimitsScreen(context, d);
         };
     }
 }
