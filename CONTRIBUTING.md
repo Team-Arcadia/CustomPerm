@@ -106,8 +106,9 @@ issue describing the problem instead. That is just as useful.
    ```bash
    ./gradlew build
    ./gradlew runGameTestServer
+   ./gradlew runGameTestServerLuckPerms
    ```
-   Both must pass. A PR that does not build will not be reviewed.
+   All three must pass. A PR that does not build will not be reviewed.
 6. **Commit** with a conventional message: `fix: prevent NPE when grade is null`.
 7. **Open the pull request against `dev`**, describing what it fixes and how you
    verified it.
@@ -260,8 +261,9 @@ ouvrez plutôt une issue décrivant le problème. C'est tout aussi utile.
    ```bash
    ./gradlew build
    ./gradlew runGameTestServer
+   ./gradlew runGameTestServerLuckPerms
    ```
-   Les deux doivent passer. Une PR qui ne compile pas ne sera pas relue.
+   Les trois doivent passer. Une PR qui ne compile pas ne sera pas relue.
 6. **Committez** avec un message conventionnel : `fix: prevent NPE when grade is null`.
 7. **Ouvrez la pull request vers `dev`**, en décrivant ce qu'elle corrige et
    comment vous l'avez vérifié.

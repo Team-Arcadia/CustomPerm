@@ -602,10 +602,13 @@ The mod ships with three validation layers: pure JUnit tests, NeoForge GameTests
 ### Run the suite locally
 
 ```bash
-./gradlew runGameTestServer
+./gradlew runGameTestServer             # internal backend, no LuckPerms
+./gradlew runGameTestServerLuckPerms    # LuckPerms backend
 ```
 
-This launches a dedicated Minecraft test server, executes the registered GameTests, and exits with a code equal to the number of failed tests (zero = all pass). Suitable for CI pipelines.
+Each task launches a dedicated Minecraft test server in its own folder (`run/gametest/`, `run/gametest-luckperms/`), executes the registered GameTests, and exits with a code equal to the number of failed tests (zero = all pass). The internal mode always runs without LuckPerms, whatever `run/mods/` contains; the LuckPerms mode fetches LuckPerms NeoForge 5.4.150 through CurseMaven. Tests that only apply to one backend skip themselves in the other, and a guard test fails if a mode does not run with the backend it claims.
+
+GameTests use real connected players (`TestPlayer`): a server-side player with a chosen permission level whose received chat, command trees and CustomPerm packets are recorded, so permission, alias, rate-limit and GUI-packet behaviour is checked end to end without a client.
 
 Pure Java tests can be run with:
 
@@ -631,16 +634,18 @@ Performance benchmarks can be run with:
 | Config manager | Atomic snapshot reads, serialized atomic saves, concurrent reload rejection, rollback after invalid JSON, backup creation, backup rotation. |
 | Backward compatibility | Missing files, `{}` files, explicit `null` collections, unknown future fields, partial config files. |
 | LuckPerms selection | Internal backend when LP is absent, version parsing, minimum version gate, stable backend selection. |
-| GameTests | Live dispatcher registration, command exposure gates, alias live add/remove, alias file refresh, recursion guard, hot reload, rollback on corrupt JSON, command-tree repush. |
+| GameTests, both modes | Command exposure and removal with a non-op player, operator preservation, `/customperm` refused to non-ops, reconnection, aliases run with op-4 elevation by node holders only and unable to reach `/customperm`, step editing, recursion and shadowing guards, reload of hand-edited `aliases.json`, rate limits (refusal message, shared counter per root, per-player isolation, console exemption, window expiry, reconnection, repeated reloads, rule removal, aliases), all-or-nothing reload, concurrent reload refusal, unsaved changes after a failed reload, `null` entries, command-tree repush on reload, admin alerts in operators' chat, GUI and editor packets refused to non-operators, diagnostics output. |
+| GameTests, internal mode | Grade commands, union of grades, ancestor DENY over ALLOW, every wildcard form, editor without LuckPerms. |
+| GameTests, LuckPerms mode | In-game editor against a real LuckPerms: groups, nodes with contexts and expiry, inheritance, meta, prefix and suffix, weight, display name, player groups and primary group, tracks, promote and demote, write gating by node and level, edit and sync rate limits; command tree resent after a LuckPerms change; `deny` and `internal` fallback when LuckPerms becomes unavailable. |
 | Performance | `PermissionResolver.resolve()` and concurrent config snapshot reads via JMH. |
 
 ### Continuous integration
 
-Every push to `main` and every pull request triggers `.github/workflows/gametest.yml`, which:
+Every push to `main` or `dev` and every pull request targeting them triggers `.github/workflows/gametest.yml`, which:
 
 1. Sets up JDK 21 on Ubuntu.
 2. Caches Gradle dependencies for fast subsequent runs.
-3. Runs `gradlew runGameTestServer`.
+3. Runs `gradlew runGameTestServer`, then `gradlew runGameTestServerLuckPerms`.
 4. Builds the distributable jar with `gradlew build`.
 5. Verifies that the jar contains `META-INF/neoforge.mods.toml` and `META-INF/MANIFEST.MF`.
 6. Fails the build if any required test or jar check fails.
@@ -648,7 +653,7 @@ Every push to `main` and every pull request triggers `.github/workflows/gametest
 
 ### Manual validation in dev
 
-GameTests cover component logic; for a full LP + Internal end-to-end check, run a dev server and client in two terminals:
+GameTests cover server-side behaviour; for what still needs a real client (GUI rendering, a vanilla client joining, a real modpack), run a dev server and client in two terminals:
 
 ```bash
 ./gradlew runServer    # terminal 1

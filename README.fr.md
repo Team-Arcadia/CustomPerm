@@ -602,10 +602,13 @@ Le mod est livré avec trois niveaux de validation : tests JUnit purs, GameTests
 ### Lancer la suite en local
 
 ```bash
-./gradlew runGameTestServer
+./gradlew runGameTestServer             # backend interne, sans LuckPerms
+./gradlew runGameTestServerLuckPerms    # backend LuckPerms
 ```
 
-Cette tâche démarre un serveur Minecraft de test dédié, exécute les GameTests enregistrés, et sort avec un code égal au nombre de tests échoués (zéro = tout passe). Adapté aux pipelines CI.
+Chaque tâche démarre un serveur Minecraft de test dans son propre dossier (`run/gametest/`, `run/gametest-luckperms/`), exécute les GameTests enregistrés, et sort avec un code égal au nombre de tests échoués (zéro = tout passe). Le mode interne tourne toujours sans LuckPerms, quel que soit le contenu de `run/mods/` ; le mode LuckPerms récupère LuckPerms NeoForge 5.4.150 via CurseMaven. Les tests propres à un backend s'ignorent dans l'autre mode, et un test de garde échoue si un mode ne tourne pas avec le backend annoncé.
+
+Les GameTests utilisent de vrais joueurs connectés (`TestPlayer`) : un joueur côté serveur avec un niveau de permission choisi, dont le chat reçu, les arbres de commandes et les paquets CustomPerm sont enregistrés. Permissions, aliases, limites de débit et paquets du GUI sont ainsi vérifiés de bout en bout, sans client.
 
 Les tests Java purs se lancent avec :
 
@@ -631,16 +634,18 @@ Les benchmarks de performance se lancent avec :
 | Config manager | Lectures atomiques du snapshot, sauvegardes atomiques sérialisées, rejet de reload concurrent, rollback après JSON invalide, création et rotation des backups. |
 | Compatibilité config | Fichiers manquants, fichiers `{}`, collections explicitement `null`, champs futurs inconnus, configs partielles. |
 | Sélection LuckPerms | Backend interne sans LP, parsing de versions, version minimale, sélection stable du backend. |
-| GameTests | Dispatcher live, gates d'exposition, ajout/retrait live d'alias, refresh depuis le fichier, garde récursive, hot reload, rollback JSON corrompu, repush du command tree. |
+| GameTests, deux modes | Exposition et retrait de commande avec un joueur non-op, préservation des ops, `/customperm` refusé aux non-ops, reconnexion, aliases exécutés en op 4 par les seuls détenteurs du node et incapables d'atteindre `/customperm`, édition des steps, gardes de récursion et de shadowing, reload d'un `aliases.json` modifié à la main, limites de débit (message de refus, compteur partagé par racine, isolation par joueur, console exemptée, expiration de fenêtre, reconnexion, reloads répétés, suppression de règle, aliases), reload tout-ou-rien, refus du reload concurrent, changements non sauvegardés après un reload en échec, entrées `null`, repush du command tree au reload, alertes admin dans le chat des ops, paquets du GUI et de l'éditeur refusés aux non-ops, sorties de diagnostic. |
+| GameTests, mode interne | Commandes de grade, union des grades, DENY sur un ancêtre prioritaire sur ALLOW, toutes les formes de wildcard, éditeur sans LuckPerms. |
+| GameTests, mode LuckPerms | Éditeur en jeu face à un vrai LuckPerms : groupes, nodes avec contextes et expiration, héritage, meta, prefix et suffix, poids, nom d'affichage, groupes et groupe principal d'un joueur, tracks, promote et demote, verrouillage des écritures par node et niveau, limites d'édition et de sync ; command tree renvoyé après un changement LuckPerms ; repli `deny` et `internal` quand LuckPerms devient indisponible. |
 | Performance | `PermissionResolver.resolve()` et lecture concurrente du snapshot config via JMH. |
 
 ### Intégration continue
 
-Chaque push sur `main` et chaque pull request déclenche `.github/workflows/gametest.yml`, qui :
+Chaque push sur `main` ou `dev` et chaque pull request qui les cible déclenche `.github/workflows/gametest.yml`, qui :
 
 1. Configure JDK 21 sur Ubuntu.
 2. Cache les dépendances Gradle pour accélérer les runs suivants.
-3. Lance `gradlew runGameTestServer`.
+3. Lance `gradlew runGameTestServer`, puis `gradlew runGameTestServerLuckPerms`.
 4. Construit le jar distribuable avec `gradlew build`.
 5. Vérifie que le jar contient `META-INF/neoforge.mods.toml` et `META-INF/MANIFEST.MF`.
 6. Fait échouer le build si un test ou contrôle jar échoue.
@@ -648,7 +653,7 @@ Chaque push sur `main` et chaque pull request déclenche `.github/workflows/game
 
 ### Validation manuelle en dev
 
-Les GameTests couvrent la logique des composants ; pour un test end-to-end complet LP + Internal, lancez un serveur et un client de dev dans deux terminaux :
+Les GameTests couvrent le comportement côté serveur ; pour ce qui demande encore un vrai client (rendu du GUI, connexion d'un client vanilla, modpack réel), lancez un serveur et un client de dev dans deux terminaux :
 
 ```bash
 ./gradlew runServer    # terminal 1
