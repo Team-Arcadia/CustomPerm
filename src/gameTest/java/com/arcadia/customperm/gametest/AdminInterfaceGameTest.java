@@ -572,6 +572,50 @@ public class AdminInterfaceGameTest {
         helper.succeed();
     }
 
+    /** The Parents tab of the Grades page: inherit, refuse a cycle, stop inheriting, refreshed in place. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void gradesPageEditsParents(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        var server = helper.getLevel().getServer();
+        var config = CustomPerm.configManager.getGrades();
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_parents", 4)) {
+            owner.clearReceived();
+            gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_p_base");
+            gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_p_leaf");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_leaf", "cp_i_p_base");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_base", "cp_i_p_leaf");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_leaf", "cp_i_p_missing");
+            List<String> results = results(owner);
+            if (!results.equals(List.of("OK: Created grade cp_i_p_base",
+                    "OK: Created grade cp_i_p_leaf",
+                    "OK: cp_i_p_leaf now inherits cp_i_p_base",
+                    "FAIL: Refused: cp_i_p_leaf inherits cp_i_p_base, so cp_i_p_base cannot inherit cp_i_p_leaf.",
+                    "FAIL: No such grade: cp_i_p_missing")))
+                fail("Unexpected results: " + results);
+            if (!config.grades.get("cp_i_p_base").parents.isEmpty())
+                fail("The refused cycle must leave the parent list alone.");
+
+            var pages = owner.payloads(GuiPagePayload.class);
+            GradesData.Grade row = pages.isEmpty() || !(pages.get(pages.size() - 1).data() instanceof GradesData data)
+                    ? null
+                    : data.grades().stream().filter(g -> g.name().equals("cp_i_p_leaf")).findFirst().orElse(null);
+            if (row == null || !row.parents().equals(List.of("cp_i_p_base")))
+                fail("The refreshed page must carry the parents: " + row);
+
+            owner.clearReceived();
+            gradeAct(owner, GuiAction.GRADE_PARENT_REMOVE, "cp_i_p_leaf", "cp_i_p_base");
+            gradeAct(owner, GuiAction.GRADE_PARENT_REMOVE, "cp_i_p_leaf", "cp_i_p_base");
+            results = results(owner);
+            if (!results.equals(List.of("OK: cp_i_p_leaf no longer inherits cp_i_p_base",
+                    "OK: cp_i_p_leaf does not inherit cp_i_p_base — no change.")))
+                fail("Unexpected removal results: " + results);
+        } finally {
+            GradeAdmin.delete(server, "cp_i_p_base");
+            GradeAdmin.delete(server, "cp_i_p_leaf");
+        }
+        helper.succeed();
+    }
+
     private static void gradeAct(TestPlayer player, GuiAction action, String... args) {
         GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.GRADES.id()),
                 player.payloadContext());

@@ -117,7 +117,7 @@ public final class GuiSnapshots {
             var grade = config.grades.get(name);
             List<GradesData.Member> assigned = members.getOrDefault(name, new ArrayList<>());
             assigned.sort(java.util.Comparator.comparing(GradesData.Member::name, String.CASE_INSENSITIVE_ORDER));
-            grades.add(new GradesData.Grade(name, grade.weight,
+            grades.add(new GradesData.Grade(name, grade.weight, List.copyOf(grade.parents),
                     new TreeSet<>(grade.permissions).stream().limit(GradesData.NODES_MAX).toList(),
                     new TreeSet<>(grade.deniedPermissions).stream().limit(GradesData.NODES_MAX).toList(),
                     assigned.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList()));

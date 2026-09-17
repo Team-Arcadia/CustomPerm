@@ -66,6 +66,10 @@ public enum GuiAction {
     GRADE_NODE_REMOVE(3, GuiArea.GRADES),
     /** {@code [grade, weight]} Sets the tie-break weight, which decides between grades at the same specificity. */
     GRADE_WEIGHT_SET(2, GuiArea.GRADES),
+    /** {@code [grade, parent]} Makes the grade inherit another; a cycle is refused. */
+    GRADE_PARENT_ADD(2, GuiArea.GRADES),
+    /** {@code [grade, parent]} Stops inheriting it. */
+    GRADE_PARENT_REMOVE(2, GuiArea.GRADES),
     /** {@code [playerName, grade]} Assigns a grade to a player online or known to the server. */
     GRADE_ASSIGN(2, GuiArea.GRADES),
     /** {@code [playerUuid, grade]} Unassigns a grade, by UUID so unnamed entries can be cleaned up. */

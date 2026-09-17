@@ -33,11 +33,12 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Internal grade editor. Left: grades and creation. Right: the selected grade, on two tabs: its
- * permission nodes (ALLOW or DENY, the most specific entry winning) and its players, who can be assigned
- * while offline as long as they joined the server before. One grade can be the default grade, applied to
- * every player below their own grades. The header carries the weight, which breaks a tie between two
- * grades covering a node just as specifically; the list is ordered by it.
+ * Internal grade editor. Left: grades and creation. Right: the selected grade, on three tabs: its
+ * permission nodes (ALLOW or DENY, the most specific entry winning), the grades it inherits, and its
+ * players, who can be assigned while offline as long as they joined the server before. One grade can be
+ * the default grade, applied to every player below their own grades, and it can inherit other grades,
+ * whose entries apply where it says nothing as precise. The header carries the weight, which breaks a tie between two grades covering a node
+ * just as specifically; the list is ordered by it.
  *
  * <p>The page is always reachable, so the fallback grades can be read while LuckPerms runs or fails.
  * A banner says whether grades currently decide permissions; while LuckPerms is the active backend the
@@ -56,14 +57,19 @@ public final class GradesScreen extends AdminScreen {
     private record NodeRow(String node, boolean deny) {
     }
 
+    /** Right-hand side of the page: what the selected grade is looked at through. */
+    private enum Tab { NODES, PARENTS, PLAYERS }
+
     private GradesData data;
-    private boolean playersTab;
+    private Tab tab = Tab.NODES;
 
     private final CpEditBox search;
     private final CpList<GradesData.Grade> gradeList;
     private final CpEditBox newGrade;
     private final CpList<NodeRow> nodeList;
     private final CpEditBox nodeField;
+    private final CpList<String> parentList;
+    private final CpEditBox parentField;
     private final CpList<GradesData.Member> memberList;
     private final CpEditBox playerField;
     private final CpEditBox weightField;
@@ -106,6 +112,19 @@ public final class GradesScreen extends AdminScreen {
                 .emptyText("No node: this grade grants nothing yet.")
                 .onSelect(n -> {
                     nodeField.setValue(n.node());
+                    rebuild();
+                });
+        this.parentField = new CpEditBox(Component.literal("Parent grade"), 64)
+                .hint(Component.literal("grade to inherit"))
+                .onSubmit(this::addParent);
+        parentField.onChange(this::suggestParent);
+        this.parentList = new CpList<String>(Component.literal("Parents"), 14)
+                .renderer(this::renderParent)
+                .label(name -> "inherits " + name)
+                .identity(name -> name)
+                .emptyText("No parent: this grade inherits nothing.")
+                .onSelect(name -> {
+                    parentField.setValue(name);
                     rebuild();
                 });
         this.memberList = new CpList<GradesData.Member>(Component.literal("Players"), 14)
@@ -188,6 +207,7 @@ public final class GradesScreen extends AdminScreen {
             grade.allow().forEach(n -> nodes.add(new NodeRow(n, false)));
         }
         nodeList.setItems(nodes);
+        parentList.setItems(grade == null ? List.of() : grade.parents());
         memberList.setItems(grade == null ? List.of() : grade.members());
         // The box shows the weight in force, so submitting it unchanged is a no-op rather than a reset.
         weightField.setValue(grade == null ? "" : String.valueOf(grade.weight()));
@@ -264,18 +284,23 @@ public final class GradesScreen extends AdminScreen {
         weightField.setEditable(editable);
 
         Rect tabs = new Rect(in.x(), in.y() + 24, in.w(), FIELD);
-        CpButton nodesTab = CpButton.ghost(Component.literal("Nodes (" + (grade.allow().size() + grade.deny().size()) + ")"),
-                () -> setTab(false)).icon(Icon.LOCK).selected(!playersTab);
-        int nodesW = nodesTab.preferredWidth(font, 8);
-        addRenderableWidget(nodesTab.at(tabs.left(nodesW)));
-        CpButton playersButton = CpButton.ghost(Component.literal("Players (" + grade.members().size() + ")"),
-                () -> setTab(true)).icon(Icon.USER).selected(playersTab);
-        addRenderableWidget(playersButton.at(new Rect(tabs.x() + nodesW + 4, tabs.y(), playersButton.preferredWidth(font, 8), FIELD)));
+        int tabX = tabs.x();
+        for (CpButton button : List.of(
+                CpButton.ghost(Component.literal("Nodes (" + (grade.allow().size() + grade.deny().size()) + ")"),
+                        () -> setTab(Tab.NODES)).icon(Icon.LOCK).selected(tab == Tab.NODES),
+                CpButton.ghost(Component.literal("Parents (" + grade.parents().size() + ")"),
+                        () -> setTab(Tab.PARENTS)).icon(Icon.SHIELD).selected(tab == Tab.PARENTS),
+                CpButton.ghost(Component.literal("Players (" + grade.members().size() + ")"),
+                        () -> setTab(Tab.PLAYERS)).icon(Icon.USER).selected(tab == Tab.PLAYERS))) {
+            int width = button.preferredWidth(font, 8);
+            addRenderableWidget(button.at(new Rect(tabX, tabs.y(), width, FIELD)));
+            tabX += width + 4;
+        }
 
         Rect list = listArea();
         Rect fieldRow = new Rect(in.x(), list.bottom() + 4, in.w(), FIELD);
         Rect buttonRow = new Rect(in.x(), fieldRow.bottom() + 4, in.w(), BUTTON);
-        if (!playersTab) {
+        if (tab == Tab.NODES) {
             addRenderableWidget(nodeList.at(list));
             addRenderableWidget(nodeField.at(fieldRow));
             nodeField.setEditable(editable);
@@ -290,6 +315,19 @@ public final class GradesScreen extends AdminScreen {
             CpButton remove = CpButton.neutral(Component.literal("Remove"), () -> removeNode(selected)).icon(Icon.MINUS)
                     .enabled(editable && selected != null);
             addRenderableWidget(remove.at(buttonRow.right(remove.preferredWidth(font, 6))));
+        } else if (tab == Tab.PARENTS) {
+            addRenderableWidget(parentList.at(list));
+            addRenderableWidget(parentField.at(fieldRow));
+            parentField.setEditable(editable);
+            String selected = parentList.getSelected();
+            CpButton inherit = CpButton.accent(Component.literal("Inherit"), this::addParent).icon(Icon.PLUS)
+                    .enabled(editable)
+                    .tooltip(Component.literal("What a parent says applies where this grade says nothing as precise "
+                            + "about a node. A node set here still wins over the same node inherited."));
+            addRenderableWidget(inherit.at(buttonRow.left(inherit.preferredWidth(font, 6))));
+            CpButton stop = CpButton.neutral(Component.literal("Remove"), () -> removeParent(selected)).icon(Icon.MINUS)
+                    .enabled(editable && selected != null);
+            addRenderableWidget(stop.at(buttonRow.right(stop.preferredWidth(font, 6))));
         } else {
             addRenderableWidget(memberList.at(list));
             addRenderableWidget(playerField.at(fieldRow));
@@ -303,8 +341,8 @@ public final class GradesScreen extends AdminScreen {
         }
     }
 
-    private void setTab(boolean players) {
-        this.playersTab = players;
+    private void setTab(Tab wanted) {
+        this.tab = wanted;
         rebuild();
     }
 
@@ -350,6 +388,44 @@ public final class GradesScreen extends AdminScreen {
             return;
         }
         act(GuiAction.GRADE_WEIGHT_SET, grade.name(), typed);
+    }
+
+    private void addParent(String name) {
+        GradesData.Grade grade = gradeList.getSelected();
+        if (grade == null || name.isEmpty()) return;
+        act(GuiAction.GRADE_PARENT_ADD, grade.name(), name);
+        parentField.setValue("");
+        parentField.setSuggestion(null);
+    }
+
+    private void addParent() {
+        String typed = parentField.getValue().trim();
+        addParent(Objects.requireNonNullElse(parentCompletion(typed), typed));
+    }
+
+    private void removeParent(String name) {
+        GradesData.Grade grade = gradeList.getSelected();
+        if (grade == null || name == null) return;
+        act(GuiAction.GRADE_PARENT_REMOVE, grade.name(), name);
+        parentField.setValue("");
+    }
+
+    /** Shows the rest of the first grade name that starts with what was typed, itself excluded. */
+    private void suggestParent(String typed) {
+        String completion = parentCompletion(typed);
+        parentField.setSuggestion(completion == null ? null : completion.substring(typed.length()));
+    }
+
+    private String parentCompletion(String typed) {
+        if (typed.isEmpty()) return null;
+        GradesData.Grade selected = gradeList.getSelected();
+        String lower = typed.toLowerCase(Locale.ROOT);
+        return data.grades().stream()
+                .map(GradesData.Grade::name)
+                .filter(name -> selected == null || !name.equals(selected.name()))
+                .filter(name -> name.toLowerCase(Locale.ROOT).startsWith(lower) && name.length() > typed.length())
+                .findFirst()
+                .orElse(null);
     }
 
     private void addNode(boolean deny) {
@@ -401,6 +477,12 @@ public final class GradesScreen extends AdminScreen {
         Skin.text(g, font, grade.name(), r.x() + 6, r.y() + (r.h() - 8) / 2, r.w() - cw - 26 - ww, Palette.TEXT);
     }
 
+    private void renderParent(GuiGraphics g, Font font, String name, Rect r, boolean hovered, boolean selected) {
+        Skin.icon(g, Icon.SHIELD, r.x() + 6, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
+        int x = r.x() + 6 + 12;
+        Skin.text(g, font, name, x, r.y() + (r.h() - 8) / 2, r.right() - x - 4, Palette.TEXT);
+    }
+
     private void renderNode(GuiGraphics g, Font font, NodeRow row, Rect r, boolean hovered, boolean selected) {
         String label = row.deny() ? "DENY" : "ALLOW";
         int w = Skin.badge(g, font, label, r.x() + 4, r.centerY(), row.deny() ? Palette.DANGER : Palette.GOOD);
@@ -438,6 +520,7 @@ public final class GradesScreen extends AdminScreen {
         // Player and node totals are on the tabs: keep this line short enough for the Default button beside it.
         String sub = grade.allow().size() + " allow, " + grade.deny().size() + " deny"
                 + ", weight " + grade.weight()
+                + (grade.parents().isEmpty() ? "" : ", inherits " + String.join(" ", grade.parents()))
                 + (isDefault ? ", every player" : "")
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, headerW, Palette.TEXT_MUTE);

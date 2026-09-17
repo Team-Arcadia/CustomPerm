@@ -177,6 +177,8 @@ public final class GuiRequestHandler {
                     : guarded(player, () -> GradeAdmin.removeNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2))));
             case GRADE_WEIGHT_SET -> signed(args.get(1)) == null ? malformed(action)
                     : guarded(player, () -> GradeAdmin.setWeight(player.getServer(), args.get(0), signed(args.get(1))));
+            case GRADE_PARENT_ADD -> guarded(player, () -> GradeAdmin.addParent(player.getServer(), args.get(0), args.get(1)));
+            case GRADE_PARENT_REMOVE -> guarded(player, () -> GradeAdmin.removeParent(player.getServer(), args.get(0), args.get(1)));
             case GRADE_ASSIGN -> guarded(player, () -> assignByName(player, args.get(0), args.get(1)));
             case GRADE_UNASSIGN -> guarded(player, () -> unassignByUuid(player, args.get(0), args.get(1)));
             case GRADE_DEFAULT -> guarded(player, () -> GradeAdmin.setDefault(player.getServer(), args.get(0)));
