@@ -161,6 +161,8 @@ public class ConfigManager {
                     invalidFiles.add("settings.json");
                 }
             } else {
+                // No settings.json: a fresh install, not an upgrade. Stamp it so no migration notice is given.
+                settings.configVersion = SettingsConfig.CURRENT_CONFIG_VERSION;
                 settings.normalize();
             }
             if (Files.exists(rateLimitsFile)) {

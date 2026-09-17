@@ -14,6 +14,13 @@ import java.util.List;
 import java.util.Locale;
 
 public class SettingsConfig {
+
+    /**
+     * Version of the settings format, stamped on a fresh install and after an upgrade notice. A file written
+     * before 1.1.0 has no such field and reads as 0, which is how an upgrade is detected ({@link UpgradeNotice}).
+     */
+    public static final int CURRENT_CONFIG_VERSION = 1;
+
     public static final String LUCKPERMS_FALLBACK_DENY = "deny";
     public static final String LUCKPERMS_FALLBACK_INTERNAL = "internal";
 
@@ -53,6 +60,9 @@ public class SettingsConfig {
      * Records every command players type in the activity log (player tab). Off by default: a command
      * history is personal data. Admin changes are always recorded.
      */
+    /** See {@link #CURRENT_CONFIG_VERSION}. 0 means a configuration written before 1.1.0. */
+    public int configVersion = 0;
+
     public boolean playerCommandLog = false;
 
     /** Replaces the arguments of {@link #maskedCommands} with {@code [masked]} in the player log. */
@@ -76,6 +86,7 @@ public class SettingsConfig {
         }
         maskedCommands = new ArrayList<>(roots);
         if (logRetentionDays < 0) logRetentionDays = DEFAULT_LOG_RETENTION_DAYS;
+        if (configVersion < 0) configVersion = 0;
         if (luckPermsFallbackMode == null) {
             luckPermsFallbackMode = LUCKPERMS_FALLBACK_DENY;
             return;

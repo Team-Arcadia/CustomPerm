@@ -159,6 +159,7 @@ public class CustomPerm {
             LOGGER.info("[CustomPerm] Wrapped {} late-registered command(s) at server start.", lateWrapped);
         }
 
+        com.arcadia.customperm.config.UpgradeNotice.onServerStarted();
         logAdminAccessModel(event.getServer());
 
         // Boot-time health summary so admins can see in one line if everything is in order.

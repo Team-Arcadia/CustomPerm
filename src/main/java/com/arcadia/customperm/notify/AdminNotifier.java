@@ -69,6 +69,19 @@ public final class AdminNotifier {
         return AdminAccess.canAdminister(player);
     }
 
+    /**
+     * Sends a line to every operator online, whatever CustomPerm nodes they hold. Only for what an operator must
+     * read even when they hold nothing, which after an upgrade is their actual state.
+     */
+    public static void tellOperators(String message) {
+        MinecraftServer current = server;
+        if (current == null) return;
+        Component line = alertLine(message);
+        current.execute(() -> current.getPlayerList().getPlayers().stream()
+                .filter(player -> player.createCommandSourceStack().hasPermission(2))
+                .forEach(player -> player.sendSystemMessage(line)));
+    }
+
     private static void broadcast(Component line) {
         MinecraftServer current = server;
         if (current == null) return;
@@ -87,6 +100,12 @@ public final class AdminNotifier {
 
     public static void onPlayerLoggedIn(PlayerEvent.PlayerLoggedInEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        String upgrade = com.arcadia.customperm.config.UpgradeNotice.pending();
+        // The upgrade notice goes to operators even without the nodes: after an upgrade nobody holds them, and
+        // this message is what says so.
+        if (upgrade != null && player.createCommandSourceStack().hasPermission(2)) {
+            player.sendSystemMessage(alertLine(upgrade));
+        }
         if (AdminAccess.isOperatorWithoutAccess(player)) {
             // Expected for a player made operator by mistake; after an upgrade it is how an owner finds out why
             // /customperm disappeared.

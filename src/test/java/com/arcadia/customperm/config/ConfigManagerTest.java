@@ -26,6 +26,23 @@ class ConfigManagerTest {
     Path tempDir;
 
     @Test
+    void freshInstallIsStampedWithTheCurrentConfigVersion() {
+        ConfigManager mgr = new ConfigManager(tempDir);
+        assertTrue(mgr.load(), "a fresh install must load");
+        assertEquals(SettingsConfig.CURRENT_CONFIG_VERSION, mgr.getSettings().configVersion,
+            "no settings.json means a fresh install, not an upgrade");
+    }
+
+    @Test
+    void settingsWrittenBeforeTheVersionFieldReadAsVersionZero() throws Exception {
+        java.nio.file.Files.writeString(tempDir.resolve("settings.json"), "{\"luckPermsFallbackMode\":\"internal\"}");
+        ConfigManager mgr = new ConfigManager(tempDir);
+        assertTrue(mgr.load(), "a 1.0.x settings.json must still load");
+        assertEquals(0, mgr.getSettings().configVersion, "a file without the field is an upgrade to announce");
+        assertEquals("internal", mgr.getSettings().luckPermsFallbackMode);
+    }
+
+    @Test
     void shouldServeConsistentSnapshot_underConcurrentReads() throws Exception {
         // Arrange
         ConfigManager mgr = new ConfigManager(tempDir);

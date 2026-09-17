@@ -85,6 +85,10 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 
 ## Installation
 
+> **Vous venez de la 1.0.x ?** Lisez d'abord [MIGRATION.md](MIGRATION.md) : administrer CustomPerm demande
+> désormais des permissions accordées, et les grades internes résolvent les wildcards différemment. Le serveur le
+> signale dans son log au premier démarrage.
+
 ### Prérequis
 
 - **Minecraft 1.21.1**
@@ -203,7 +207,8 @@ Même résultat : `Steve` peut utiliser `/gamemode`.
 
 Toutes les commandes admin sont sous `/customperm` et demandent **op level 2 et `customperm.admin`**, explicitement accordé ; les sous-commandes qui modifient quelque chose demandent en plus le nœud `customperm.manage.<domaine>` de leur domaine, indiqué avec chaque groupe ci-dessous. Le niveau op seul n'accorde rien, niveau 4 compris (voir [Restreindre les opérateurs](#restreindre-les-opérateurs)). La console y a toujours accès, ainsi que l'hôte d'un monde solo ou LAN, qui n'a pas de console.
 
-Sur une installation neuve, ou juste après une mise à jour depuis 1.0.x, personne ne détient ces nœuds : accordez-les depuis la console.
+Sur une installation neuve, ou juste après une mise à jour depuis 1.0.x, personne ne détient ces nœuds : accordez-les
+depuis la console (voir [MIGRATION.md](MIGRATION.md)).
 
 ```
 # Sans LuckPerms
@@ -364,6 +369,7 @@ Réglages de sécurité runtime.
 - `playerCommandLog` (`false` par défaut) : enregistre chaque commande tapée par les joueurs dans le journal d'activité. Les modifications d'administration sont toujours enregistrées.
 - `maskPlayerCommandArguments` (`true` par défaut) et `maskedCommands` : les arguments de ces commandes racines sont stockés sous la forme `[masked]` (`/msg Alex salut` devient `/msg [masked]`). Un préfixe de namespace est ignoré.
 - `logRetentionDays` (`30` par défaut) : les fichiers quotidiens plus anciens sont supprimés au démarrage et à chaque changement de jour ; `0` les garde indéfiniment. Fichiers : `<monde>/customperm/logs/admin-AAAA-MM-JJ.jsonl` et `players-AAAA-MM-JJ.jsonl`, un objet JSON par ligne.
+- `configVersion` : la version du format de réglages avec laquelle ce fichier a été écrit. Une installation neuve est estampillée avec la version actuelle ; un fichier d'une version plus ancienne n'en a pas, ce qui fait écrire les changements dans le log et prévenir chaque opérateur une fois (voir [MIGRATION.md](MIGRATION.md)). N'y touchez pas.
 
 `luckPermsFallbackMode` accepte :
 
@@ -741,7 +747,7 @@ Les benchmarks de performance se lancent avec :
 | Config manager | Lectures atomiques du snapshot, sauvegardes atomiques sérialisées, rejet de reload concurrent, rollback après JSON invalide, création et rotation des backups. |
 | Compatibilité config | Fichiers manquants, fichiers `{}`, collections explicitement `null`, champs futurs inconnus, configs partielles. |
 | Sélection LuckPerms | Backend interne sans LP, parsing de versions, version minimale, sélection stable du backend. |
-| GameTests, deux modes | Exposition et retrait de commande avec un joueur non-op, préservation des ops, `/customperm` refusé aux non-ops, reconnexion, aliases exécutés en op 4 par les seuls détenteurs du node et incapables d'atteindre `/customperm`, édition des steps, gardes de récursion et de shadowing, reload d'un `aliases.json` modifié à la main, limites de débit (message de refus, compteur partagé par racine, isolation par joueur, console exemptée, expiration de fenêtre, reconnexion, reloads répétés, suppression de règle, aliases), reload tout-ou-rien, refus du reload concurrent, changements non sauvegardés après un reload en échec, entrées `null`, repush du command tree au reload, alertes admin dans le chat des ops, paquets du GUI et de l'éditeur refusés aux non-ops, sorties de diagnostic, autocomplétion de chaque argument de `/customperm` et aucune suggestion pour un non-op, opérateurs refusés sur une commande exposée, un alias, `/customperm` ou un domaine de l'interface par un DENY explicite pendant que la console garde l'accès, `*` refusé bloquant tout sauf les autorisations explicites, modifications d'administration par commande et par l'interface enregistrées avec les refus, commandes des joueurs enregistrées seulement si actif et masquées par défaut, fichiers sur disque, rechargement depuis le disque ignorant les lignes illisibles, rétention, boutons de la page Journaux soumis à leur nœud, modifications `/lp` enregistrées (mode LuckPerms), opérateurs sans les nœuds refusés sur `/customperm` et l'interface pendant que la console garde l'accès, chaque domaine exigeant son propre nœud `customperm.manage` pour la commande comme pour la page, les nœuds seuls n'ouvrant rien à un non-op. |
+| GameTests, deux modes | Exposition et retrait de commande avec un joueur non-op, préservation des ops, `/customperm` refusé aux non-ops, reconnexion, aliases exécutés en op 4 par les seuls détenteurs du node et incapables d'atteindre `/customperm`, édition des steps, gardes de récursion et de shadowing, reload d'un `aliases.json` modifié à la main, limites de débit (message de refus, compteur partagé par racine, isolation par joueur, console exemptée, expiration de fenêtre, reconnexion, reloads répétés, suppression de règle, aliases), reload tout-ou-rien, refus du reload concurrent, changements non sauvegardés après un reload en échec, entrées `null`, repush du command tree au reload, alertes admin dans le chat des ops, paquets du GUI et de l'éditeur refusés aux non-ops, sorties de diagnostic, autocomplétion de chaque argument de `/customperm` et aucune suggestion pour un non-op, opérateurs refusés sur une commande exposée, un alias, `/customperm` ou un domaine de l'interface par un DENY explicite pendant que la console garde l'accès, `*` refusé bloquant tout sauf les autorisations explicites, modifications d'administration par commande et par l'interface enregistrées avec les refus, commandes des joueurs enregistrées seulement si actif et masquées par défaut, fichiers sur disque, rechargement depuis le disque ignorant les lignes illisibles, rétention, boutons de la page Journaux soumis à leur nœud, modifications `/lp` enregistrées (mode LuckPerms), opérateurs sans les nœuds refusés sur `/customperm` et l'interface pendant que la console garde l'accès, chaque domaine exigeant son propre nœud `customperm.manage` pour la commande comme pour la page, les nœuds seuls n'ouvrant rien à un non-op, avertissement de mise à jour donné une fois pour une configuration écrite avant la 1.1.0 puis configuration estampillée. |
 | GameTests, mode interne | Commandes de grade, union des grades, entrée la plus spécifique gagnante, toutes les formes de wildcard, éditeur sans LuckPerms, `gateAllCommands` et `*` autorisé, grade par défaut restreignant un op accidentel, auto-verrouillage refusé par commande et par l'interface. |
 | GameTests, mode LuckPerms | Éditeur en jeu face à un vrai LuckPerms : groupes, nodes avec contextes et expiration, héritage, meta, prefix et suffix, poids, nom d'affichage, groupes et groupe principal d'un joueur, tracks, promote et demote, verrouillage des écritures par node et niveau, limites d'édition et de sync ; command tree renvoyé après un changement LuckPerms ; repli `deny` et `internal` quand LuckPerms devient indisponible. |
 | Performance | `PermissionResolver.resolve()` et lecture concurrente du snapshot config via JMH. |

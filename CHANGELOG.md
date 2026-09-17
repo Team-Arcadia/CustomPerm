@@ -43,6 +43,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- **Migration guide and upgrade notice** — upgrading from 1.0.x changes who may administer the mod and how wildcards resolve, and nothing said so. `MIGRATION.md` (English and French) lists what breaks on the first start, what changes quietly, what is already automatic, and how to go back. The server detects it too: `settings.json` now carries a `configVersion`, a file written before 1.1.0 reads as version 0, and the first start then logs every change, tells the operators online, and tells each operator who joins, whatever nodes they hold, since after an upgrade they hold none. The configuration is stamped afterwards, so it is said once. A fresh install is stamped on creation and is never told about a migration it did not live through.
 - **Activity log** — a record of who changed what, and optionally of what players run.
   - **Admin tab**, always on: every change made through `/customperm` commands, the admin interface and the LuckPerms editor, refusals included, and the changes LuckPerms records itself (`/lp`, web editor). Each entry has the time, the admin, where it came from, what was done and the result.
   - **Player tab**, off by default (`playerCommandLog`, `/customperm log record <true|false>`, **Record** on the Logs page): every command players type. The arguments of private-message and login commands are masked by default (`maskPlayerCommandArguments`, `maskedCommands`, `/customperm log mask <true|false>`).
