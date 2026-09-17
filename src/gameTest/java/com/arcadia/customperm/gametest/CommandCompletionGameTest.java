@@ -56,19 +56,22 @@ public class CommandCompletionGameTest {
             grade.deniedPermissions.add("cp.s.denied");
             config.getGrades().grades.put(GRADE, grade);
             config.getGrades().userGrades.computeIfAbsent(op.uuid().toString(), k -> new ArrayList<>()).add(GRADE);
+            config.getGrades().userPermissions.put(op.uuid().toString(), new java.util.LinkedHashSet<>(List.of("cp.s.own.allowed")));
+            config.getGrades().userDeniedPermissions.put(op.uuid().toString(), new java.util.LinkedHashSet<>(List.of("cp.s.own.denied")));
 
             List<String> problems = new ArrayList<>();
             // Literals, including the ones added by the interface rework.
-            expect(problems, op, "customperm ", "gui", "log", "grade", "alias", "command", "ratelimit", "status", "reload", "scan", "test", "debug");
+            expect(problems, op, "customperm ", "gui", "log", "grade", "user", "alias", "command", "ratelimit", "status", "reload", "scan", "test", "debug");
             expect(problems, op, "customperm log ", "admin", "players", "record", "mask");
             expect(problems, op, "customperm log record ", "true", "false");
-            expect(problems, op, "customperm gui ", "dashboard", "commands", "aliases", "ratelimits", "grades", "logs", "luckperms");
+            expect(problems, op, "customperm gui ", "dashboard", "commands", "aliases", "ratelimits", "grades", "players", "logs", "luckperms");
             expect(problems, op, "customperm gui luckperms ", "groups", "players", "tracks");
             expect(problems, op, "customperm command ", "add", "remove", "preserve", "gateall", "list");
             expect(problems, op, "customperm command gateall ", "true", "false");
             expect(problems, op, "customperm alias ", "add", "addstep", "removestep", "movestep", "setstep", "steps", "remove", "list");
             expect(problems, op, "customperm grade ", "create", "delete", "addperm", "removeperm", "adddeny", "removedeny", "assign", "unassign",
-                    "setdefault", "cleardefault", "list");
+                    "setdefault", "cleardefault", "weight", "list");
+            expect(problems, op, "customperm user ", "addperm", "removeperm", "adddeny", "removedeny", "list");
             expect(problems, op, "customperm grade setdefault ", GRADE);
             expect(problems, op, "customperm ratelimit ", "set", "persistence", "enable", "disable", "remove", "list");
 
@@ -111,6 +114,18 @@ public class CommandCompletionGameTest {
             expect(problems, op, "customperm grade assign ", "cp_s_owner");
             expect(problems, op, "customperm grade assign cp_s_owner ", GRADE);
             expect(problems, op, "customperm grade unassign cp_s_owner ", GRADE);
+            expect(problems, op, "customperm grade weight ", GRADE);
+
+            // Nodes carried by a player themselves.
+            for (String sub : List.of("addperm", "removeperm", "adddeny", "removedeny", "list")) {
+                expect(problems, op, "customperm user " + sub + " ", "cp_s_owner");
+            }
+            expect(problems, op, "customperm user addperm cp_s_owner ", "customperm.command." + COMMAND,
+                    PermissionNodes.ADMIN);
+            expect(problems, op, "customperm user removeperm cp_s_owner ", "cp.s.own.allowed");
+            expectAbsent(problems, op, "customperm user removeperm cp_s_owner ", "cp.s.own.denied");
+            expect(problems, op, "customperm user removedeny cp_s_owner ", "cp.s.own.denied");
+            expectAbsent(problems, op, "customperm user removedeny cp_s_owner ", "cp.s.own.allowed");
             expect(problems, op, "customperm debug ", "cp_s_owner");
             expect(problems, op, "customperm debug cp_s_owner ", COMMAND);
 
@@ -125,6 +140,10 @@ public class CommandCompletionGameTest {
             config.getGrades().grades.remove(GRADE);
             config.getGrades().userGrades.values().forEach(list -> list.remove(GRADE));
             config.getGrades().userGrades.values().removeIf(List::isEmpty);
+            config.getGrades().userPermissions.values().forEach(nodes -> nodes.remove("cp.s.own.allowed"));
+            config.getGrades().userPermissions.values().removeIf(java.util.Set::isEmpty);
+            config.getGrades().userDeniedPermissions.values().forEach(nodes -> nodes.remove("cp.s.own.denied"));
+            config.getGrades().userDeniedPermissions.values().removeIf(java.util.Set::isEmpty);
         }
         helper.succeed();
     }

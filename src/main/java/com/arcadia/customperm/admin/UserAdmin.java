@@ -1,0 +1,96 @@
+/*
+ * CustomPerm - Copyright (C) 2026 THEFricadelle. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-CustomPerm-ARR
+ *
+ * Proprietary, source-available software. Public visibility of this source
+ * grants no right to copy, reuse, redistribute, or create derivative works.
+ * See LICENSE and CONTRIBUTING.md at the repository root.
+ */
+package com.arcadia.customperm.admin;
+
+import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.config.GradesConfig;
+import net.minecraft.server.MinecraftServer;
+
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
+import java.util.UUID;
+
+/**
+ * Nodes carried by one player rather than by a grade: the exception a single player gets without
+ * inventing a grade for them, like a node set on a LuckPerms user rather than on one of their groups.
+ * Shared by {@code /customperm user} and the Players page of the interface, server thread only.
+ *
+ * <p>A node here ranks above every grade the player holds at the same specificity, whatever the grade
+ * weighs, but it does not beat a more specific grade node: the most specific entry still wins. Like
+ * grades, these operations refuse while LuckPerms is the active backend, where they decide nothing.
+ *
+ * <p>Changes made by a player go through {@link GradeAdmin#guarded} like grade changes: denying yourself
+ * a node here locks you out of the commands that would repair it just as surely.
+ */
+public final class UserAdmin {
+
+    private UserAdmin() {
+    }
+
+    private static GradesConfig grades() {
+        return CustomPerm.configManager.getGrades();
+    }
+
+    private static Map<String, Set<String>> holder(boolean deny) {
+        return deny ? grades().userDeniedPermissions : grades().userPermissions;
+    }
+
+    /** Adds an ALLOW or a DENY node to one player. */
+    public static AdminResult addNode(MinecraftServer server, UUID uuid, String displayName, String rawNode,
+                                      boolean deny) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        String node = GradeAdmin.normalizeNode(rawNode);
+        if (node == null) return AdminResult.fail("Invalid permission node '" + rawNode.trim() + "'.");
+        Set<String> nodes = holder(deny).computeIfAbsent(uuid.toString(), key -> new LinkedHashSet<>());
+        if (!nodes.add(node)) {
+            return AdminResult.ok(node + " is already " + (deny ? "denied to " : "granted to ") + displayName
+                    + " — no change.");
+        }
+        String warning = ConfigAdmin.persist();
+        GradeAdmin.resyncPlayer(server, uuid);
+        return AdminResult.ok((deny ? "Denied " : "Added ") + node + " -> " + displayName).warn(warning);
+    }
+
+    /** Removes an ALLOW or a DENY node from one player; the entry goes with its last node. */
+    public static AdminResult removeNode(MinecraftServer server, UUID uuid, String displayName, String rawNode,
+                                         boolean deny) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        String node = rawNode.trim();
+        Map<String, Set<String>> target = holder(deny);
+        Set<String> nodes = target.get(uuid.toString());
+        if (nodes == null || !nodes.remove(node)) {
+            return AdminResult.ok(node + " is not " + (deny ? "denied to " : "granted to ") + displayName
+                    + " — no change.");
+        }
+        if (nodes.isEmpty()) target.remove(uuid.toString());
+        String warning = ConfigAdmin.persist();
+        GradeAdmin.resyncPlayer(server, uuid);
+        return AdminResult.ok((deny ? "Removed the denial of " : "Removed ") + node + " from " + displayName)
+                .warn(warning);
+    }
+
+    /** The player's own nodes of one kind, sorted, empty when they carry none. */
+    public static List<String> nodes(UUID uuid, boolean deny) {
+        Set<String> nodes = holder(deny).get(uuid.toString());
+        return nodes == null ? List.of() : List.copyOf(new TreeSet<>(nodes));
+    }
+
+    /** Every player who carries a node of their own or a grade, as UUID strings. */
+    public static Set<String> knownHolders() {
+        Set<String> holders = new LinkedHashSet<>(grades().userGrades.keySet());
+        holders.addAll(grades().userPermissions.keySet());
+        holders.addAll(grades().userDeniedPermissions.keySet());
+        return holders;
+    }
+}

@@ -325,10 +325,77 @@ class PermissionResolverTest {
         assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.tp", "everyone"));
     }
 
+    // ─── Nœuds portés par le joueur ───────────────────────────────────────────
+
+    @Test
+    void ownNodeWinsOverAGradeAtTheSameLevel() {
+        createGrade("restricted", Set.of(), Set.of("customperm.command.tp")).weight = 1000;
+        grades.userGrades.put(player.toString(), java.util.List.of("restricted"));
+        allowOwn("customperm.command.tp");
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"),
+            "a node on the player outranks any grade, whatever it weighs");
+    }
+
+    @Test
+    void ownDenyWinsOverAGradeAllow() {
+        createGrade("staff", Set.of("customperm.command.tp"), Set.of()).weight = 50;
+        grades.userGrades.put(player.toString(), java.util.List.of("staff"));
+        denyOwn("customperm.command.tp");
+        assertEquals(Tristate.DENY, check("customperm.command.tp"));
+    }
+
+    @Test
+    void ownNodeNeverBeatsAMoreSpecificGradeNode() {
+        // The rank of the holder only breaks a tie: the most specific entry still decides first.
+        createGrade("staff", Set.of("customperm.command.tp"), Set.of());
+        grades.userGrades.put(player.toString(), java.util.List.of("staff"));
+        denyOwn("*");
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"));
+        assertEquals(Tristate.DENY, check("customperm.command.op"), "the own wildcard still closes the rest");
+    }
+
+    @Test
+    void ownDenyWinsOverAnOwnAllowAtTheSameLevel() {
+        allowOwn("customperm.command.tp");
+        denyOwn("customperm.command.tp");
+        assertEquals(Tristate.DENY, check("customperm.command.tp"));
+    }
+
+    @Test
+    void ownNodeAloneGrantsWithoutAnyGrade() {
+        allowOwn("customperm.command.tp");
+        assertTrue(PermissionResolver.resolve(grades, player, "customperm.command.tp"),
+            "a player needs no grade to carry a node");
+        assertFalse(PermissionResolver.resolve(grades, player, "customperm.command.ban"));
+    }
+
+    @Test
+    void ownNodeIsReadBeforeTheDefaultGrade() {
+        createGrade("everyone", Set.of(), Set.of("*"));
+        allowOwn("customperm.command.tp");
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.tp", "everyone"));
+        assertEquals(Tristate.DENY, PermissionResolver.check(grades, player, "customperm.admin", "everyone"),
+            "what the player carries says nothing about this node, so the default grade decides");
+    }
+
+    @Test
+    void anotherPlayersNodesDoNotLeak() {
+        allowOwn("customperm.command.tp");
+        assertEquals(Tristate.UNSET, PermissionResolver.check(grades, UUID.randomUUID(), "customperm.command.tp", null));
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private Tristate check(String node) {
         return PermissionResolver.check(grades, player, node, null);
+    }
+
+    private void allowOwn(String node) {
+        grades.userPermissions.computeIfAbsent(player.toString(), k -> new java.util.HashSet<>()).add(node);
+    }
+
+    private void denyOwn(String node) {
+        grades.userDeniedPermissions.computeIfAbsent(player.toString(), k -> new java.util.HashSet<>()).add(node);
     }
 
     private void assignGradeWithAllow(String gradeName, String allowNode) {

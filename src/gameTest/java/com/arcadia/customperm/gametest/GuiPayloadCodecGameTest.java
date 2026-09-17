@@ -23,6 +23,7 @@ import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
 import com.arcadia.customperm.network.gui.LogsData;
 import com.arcadia.customperm.network.gui.LuckPermsData;
+import com.arcadia.customperm.network.gui.PlayersData;
 import com.arcadia.customperm.network.gui.RateLimitsData;
 import com.arcadia.customperm.perm.BackendKind;
 import io.netty.buffer.ByteBuf;
@@ -74,6 +75,12 @@ public class GuiPayloadCodecGameTest {
                         new GradesData.Grade("vip", -5, List.of("customperm.command.fly"), List.of("customperm.command.op"),
                                 List.of(new GradesData.Member("00000000-0000-0000-0000-000000000001", "Alex", true)))),
                         List.of("Alex", "Steve"), "internal", "vip", true)));
+        expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
+                new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0, false), new PlayersData(List.of(
+                        new PlayersData.Player("00000000-0000-0000-0000-000000000002", "Steve", false,
+                                List.of("staff"), List.of("customperm.command.weather"),
+                                List.of("customperm.command.time"))),
+                        List.of("Alex", "Steve"), "deny")));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.LUCKPERMS, GuiArea.LUCKPERMS.bit(), 0, true), new LuckPermsData(LuckPermsData.TRACKS)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,

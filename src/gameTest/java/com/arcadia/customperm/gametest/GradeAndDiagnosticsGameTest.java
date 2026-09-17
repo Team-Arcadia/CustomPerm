@@ -232,6 +232,54 @@ public class GradeAndDiagnosticsGameTest {
         helper.succeed();
     }
 
+    /**
+     * Nodes carried by the player themselves: they outrank their grades at the same level, a more specific
+     * grade node still wins, and the text commands apply live.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void ownNodesOutrankGradesButNotSpecificity(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        String uuid = null;
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_g_own", 0);
+             Exposure gamemode = Exposure.of(server, "gamemode");
+             Exposure time = Exposure.of(server, "time")) {
+            uuid = player.uuid().toString();
+            try (Grants denied = Grants.deny(player, "customperm.command.gamemode")) {
+                if (player.canUse("gamemode")) fail("The grade DENY must apply before the player carries anything.");
+
+                expect(ServerCommands.run(server, "customperm user addperm cp_g_own customperm.command.gamemode"),
+                        "Added customperm.command.gamemode -> cp_g_own");
+                if (!player.canUse("gamemode")) fail("A node on the player must outrank their grade at the same level.");
+
+                expect(ServerCommands.run(server, "customperm user addperm cp_g_own customperm.command.gamemode"),
+                        "is already granted to cp_g_own");
+                expect(ServerCommands.run(server, "customperm user list cp_g_own"), "own allow: customperm.command.gamemode");
+
+                expect(ServerCommands.run(server, "customperm user removeperm cp_g_own customperm.command.gamemode"),
+                        "Removed customperm.command.gamemode from cp_g_own");
+                if (player.canUse("gamemode")) fail("Removing the node must hand the decision back to the grade.");
+                if (grades.userPermissions.containsKey("cp_g_own")) fail("Entries are keyed by UUID, never by name.");
+            }
+
+            // A wildcard the player denies themselves does not beat a more specific node from a grade.
+            try (Grants allowed = Grants.allow(player, "customperm.command.time")) {
+                expect(ServerCommands.run(server, "customperm user adddeny cp_g_own *"), "Denied * -> cp_g_own");
+                if (!player.canUse("time")) fail("An exact ALLOW in a grade must beat a * denied on the player.");
+                if (player.canUse("gamemode")) fail("The * denied on the player must still close the rest.");
+                expect(ServerCommands.run(server, "customperm user removedeny cp_g_own *"), "Removed the denial of *");
+            }
+            expect(ServerCommands.run(server, "customperm user addperm cp_g_nobody customperm.admin"), "Unknown player");
+        } finally {
+            if (uuid != null) {
+                grades.userPermissions.remove(uuid);
+                grades.userDeniedPermissions.remove(uuid);
+            }
+        }
+        helper.succeed();
+    }
+
     private static void expect(List<String> lines, String fragment) {
         if (!ServerCommands.contains(lines, fragment)) fail("Expected output containing '" + fragment + "', got: " + lines);
     }

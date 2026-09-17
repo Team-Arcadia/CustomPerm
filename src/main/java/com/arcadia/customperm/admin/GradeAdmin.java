@@ -97,10 +97,8 @@ public final class GradeAdmin {
     public static AdminResult addNode(MinecraftServer server, String gradeName, String rawNode, boolean deny) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
-        String node = rawNode.trim();
-        if (node.isEmpty() || node.length() > NODE_MAX || node.chars().anyMatch(Character::isWhitespace)) {
-            return AdminResult.fail("Invalid permission node '" + node + "'.");
-        }
+        String node = normalizeNode(rawNode);
+        if (node == null) return AdminResult.fail("Invalid permission node '" + rawNode.trim() + "'.");
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
         Set<String> nodes = deny ? grade.deniedPermissions : grade.permissions;
@@ -203,8 +201,8 @@ public final class GradeAdmin {
     }
 
     /**
-     * Runs a grade change for {@code actor} and undoes it if it takes away the actor's own access to the grade
-     * commands ({@code customperm.admin} and {@code customperm.manage.grades}): a denied {@code *} in their grade,
+     * Runs a grade or per-player node change for {@code actor} and undoes it if it takes away the actor's own
+     * access to the grade commands ({@code customperm.admin} and {@code customperm.manage.grades}): a denied {@code *} in their grade,
      * or a removed allow, would otherwise lock the admin out of the very command that can repair it. The console is never checked, it cannot be
      * locked out.
      */
@@ -243,6 +241,8 @@ public final class GradeAdmin {
             copy.grades.put(name, g);
         });
         source.userGrades.forEach((uuid, list) -> copy.userGrades.put(uuid, new ArrayList<>(list)));
+        source.userPermissions.forEach((uuid, nodes) -> copy.userPermissions.put(uuid, new HashSet<>(nodes)));
+        source.userDeniedPermissions.forEach((uuid, nodes) -> copy.userDeniedPermissions.put(uuid, new HashSet<>(nodes)));
         return copy;
     }
 
@@ -251,6 +251,10 @@ public final class GradeAdmin {
         target.grades.putAll(saved.grades);
         target.userGrades.clear();
         target.userGrades.putAll(saved.userGrades);
+        target.userPermissions.clear();
+        target.userPermissions.putAll(saved.userPermissions);
+        target.userDeniedPermissions.clear();
+        target.userDeniedPermissions.putAll(saved.userDeniedPermissions);
     }
 
     /** Outcome of resolving a player name: the profile, or why there is none. */
@@ -298,7 +302,14 @@ public final class GradeAdmin {
         return known != null ? known : uuid.toString();
     }
 
-    private static void resyncPlayer(MinecraftServer server, UUID uuid) {
+    /** The node as it is stored, or {@code null} when it cannot be one. Shared with {@link UserAdmin}. */
+    static String normalizeNode(String rawNode) {
+        String node = rawNode.trim();
+        if (node.isEmpty() || node.length() > NODE_MAX || node.chars().anyMatch(Character::isWhitespace)) return null;
+        return node;
+    }
+
+    static void resyncPlayer(MinecraftServer server, UUID uuid) {
         if (server == null) return;
         ServerPlayer player = server.getPlayerList().getPlayer(uuid);
         if (player != null) server.getCommands().sendCommands(player);

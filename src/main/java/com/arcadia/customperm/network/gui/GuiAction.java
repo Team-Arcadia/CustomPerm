@@ -73,6 +73,11 @@ public enum GuiAction {
     /** {@code [grade]} Makes a grade apply to every player; an empty name clears the default grade. */
     GRADE_DEFAULT(1, GuiArea.GRADES),
 
+    /** {@code [playerName, node, "allow"|"deny"]} Adds a node the player carries themselves, above their grades. */
+    USER_NODE_ADD(3, GuiArea.GRADES),
+    /** {@code [playerUuid, node, "allow"|"deny"]} Removes one, by UUID so an unnamed entry can be cleaned up. */
+    USER_NODE_REMOVE(3, GuiArea.GRADES),
+
     /** {@code ["true"|"false"]} Records player commands, like {@code /customperm log record}. */
     LOG_PLAYERS(1, GuiArea.LOGS),
     /** {@code ["true"|"false"]} Masks the arguments of sensitive commands, like {@code /customperm log mask}. */

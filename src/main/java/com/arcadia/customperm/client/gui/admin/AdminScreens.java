@@ -20,6 +20,7 @@ import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPageData;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.LogsData;
+import com.arcadia.customperm.network.gui.PlayersData;
 import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.network.gui.RateLimitsData;
 import com.arcadia.customperm.network.lp.LpDto;
@@ -57,6 +58,8 @@ public final class AdminScreens {
         // Grades are always reachable, even when they decide nothing: an admin must be able to read the
         // fallback while LuckPerms is down. The page says whether it is active.
         entries.add(new NavEntry(GuiPage.GRADES, "Grades", Icon.SHIELD));
+        // Nodes carried by a player themselves live next to the grades that hold the rest.
+        entries.add(new NavEntry(GuiPage.PLAYERS, "Players", Icon.USER));
         // The LuckPerms editor needs the LuckPerms mod; installed but not running, it opens on a banner.
         if (context.luckPermsInstalled()) entries.add(new NavEntry(GuiPage.LUCKPERMS, "LuckPerms", Icon.LOCK));
         entries.add(new NavEntry(GuiPage.LOGS, "Logs", Icon.LOG));
@@ -96,6 +99,7 @@ public final class AdminScreens {
             case AliasesData d -> new AliasesScreen(context, d);
             case RateLimitsData d -> new RateLimitsScreen(context, d);
             case GradesData d -> new GradesScreen(context, d);
+            case PlayersData d -> new PlayersScreen(context, d);
             case LuckPermsData d -> new LuckPermsScreen(context, d);
             case LogsData d -> new LogsScreen(context, d);
         };

@@ -29,6 +29,7 @@ import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
 import com.arcadia.customperm.network.gui.LuckPermsData;
+import com.arcadia.customperm.network.gui.PlayersData;
 import com.arcadia.customperm.network.gui.RateLimitsData;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.gametest.framework.GameTest;
@@ -38,6 +39,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -478,8 +480,105 @@ public class AdminInterfaceGameTest {
 
     // ------------------------------------------------------------------ helpers
 
+    /**
+     * The Players page: nodes carried by one player, added by name and removed by UUID, refreshed in place,
+     * and refused for a player the server has never seen.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void playersPageEditsTheNodesOnePlayerCarries(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        var config = CustomPerm.configManager.getGrades();
+        String member = null;
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_players", 4);
+             TestPlayer target = TestPlayer.join(helper.getLevel(), "cp_i_target", 0)) {
+            member = target.uuid().toString();
+
+            owner.clearReceived();
+            userAct(owner, GuiAction.USER_NODE_ADD, "CP_I_TARGET", "customperm.command.weather", "allow");
+            userAct(owner, GuiAction.USER_NODE_ADD, "cp_i_target", "customperm.command.time", "deny");
+            userAct(owner, GuiAction.USER_NODE_ADD, "cp_i_target", "customperm.command.time", "maybe");
+            userAct(owner, GuiAction.USER_NODE_ADD, "cp_i_nobody_here", "customperm.command.time", "allow");
+            List<String> results = results(owner);
+            if (!results.equals(List.of("OK: Added customperm.command.weather -> cp_i_target",
+                    "OK: Denied customperm.command.time -> cp_i_target",
+                    "FAIL: Malformed request for USER_NODE_ADD.",
+                    "FAIL: Unknown player 'cp_i_nobody_here': grades can be assigned to players online or who joined this server before.")))
+                fail("Unexpected results: " + results);
+            if (!config.userPermissions.getOrDefault(member, Set.of()).contains("customperm.command.weather")
+                    || !config.userDeniedPermissions.getOrDefault(member, Set.of()).contains("customperm.command.time"))
+                fail("The nodes were not stored on the player.");
+
+            var pages = owner.payloads(GuiPagePayload.class);
+            PlayersData.Player row = pages.isEmpty() || !(pages.get(pages.size() - 1).data() instanceof PlayersData data)
+                    ? null
+                    : data.players().stream().filter(p -> p.name().equals("cp_i_target")).findFirst().orElse(null);
+            if (row == null || !row.online() || !row.allow().contains("customperm.command.weather")
+                    || !row.deny().contains("customperm.command.time"))
+                fail("The refreshed page must list the player with their own nodes: " + row);
+
+            owner.clearReceived();
+            userAct(owner, GuiAction.USER_NODE_REMOVE, member, "customperm.command.weather", "allow");
+            userAct(owner, GuiAction.USER_NODE_REMOVE, "not-a-uuid", "customperm.command.time", "deny");
+            results = results(owner);
+            if (!results.equals(List.of("OK: Removed customperm.command.weather from cp_i_target",
+                    "FAIL: Malformed request for USER_NODE_REMOVE.")))
+                fail("Unexpected removal results: " + results);
+            if (config.userPermissions.containsKey(member))
+                fail("An entry left without a node must be dropped, not kept empty.");
+
+            // Same node through the text command, on the same store.
+            owner.clearReceived();
+            owner.type("customperm user removedeny cp_i_target customperm.command.time");
+            owner.type("customperm user list cp_i_target");
+            if (config.userDeniedPermissions.containsKey(member))
+                fail("The text command did not remove the denial: " + owner.chat());
+            if (owner.chat().stream().noneMatch(line -> line.contains("own allow: none")))
+                fail("user list must report what the player carries: " + owner.chat());
+        } finally {
+            if (member != null) {
+                config.userPermissions.remove(member);
+                config.userDeniedPermissions.remove(member);
+            }
+        }
+        helper.succeed();
+    }
+
+    /** The Players page writes through the grades node, and the lockout guard covers it. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void userNodeActionsNeedTheGradesNodeAndCannotLockTheAdminOut(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        var config = CustomPerm.configManager.getGrades();
+        String owner = null;
+        try (TestPlayer reader = TestPlayer.reader(helper.getLevel(), "cp_i_users_ro", 2);
+             TestPlayer admin = TestPlayer.admin(helper.getLevel(), "cp_i_users_ow", 4)) {
+            owner = admin.uuid().toString();
+            reader.clearReceived();
+            userAct(reader, GuiAction.USER_NODE_ADD, "cp_i_users_ro", "customperm.command.weather", "allow");
+            expectResult(reader, "FAIL: You do not have customperm.manage.grades.");
+            if (config.userPermissions.containsKey(reader.uuid().toString()))
+                fail("A refused action stored the node.");
+
+            // Exactly the node that gates this page: the admin's own grade allows customperm.*, which a
+            // denied * would not even beat, being less specific.
+            admin.clearReceived();
+            userAct(admin, GuiAction.USER_NODE_ADD, "cp_i_users_ow", "customperm.manage.grades", "deny");
+            expectResult(admin, "FAIL: Refused: you would lose customperm.admin or customperm.manage.grades yourself.");
+            if (config.userDeniedPermissions.containsKey(owner))
+                fail("The refused change must be undone, not left in place.");
+        } finally {
+            config.userPermissions.remove(owner);
+            config.userDeniedPermissions.remove(owner);
+        }
+        helper.succeed();
+    }
+
     private static void gradeAct(TestPlayer player, GuiAction action, String... args) {
         GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.GRADES.id()),
+                player.payloadContext());
+    }
+
+    private static void userAct(TestPlayer player, GuiAction action, String... args) {
+        GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.PLAYERS.id()),
                 player.payloadContext());
     }
 

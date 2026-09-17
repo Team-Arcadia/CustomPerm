@@ -15,6 +15,7 @@ import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
+import com.arcadia.customperm.admin.UserAdmin;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.admin.LogAdmin;
@@ -69,6 +70,9 @@ import java.util.stream.Collectors;
  *                     assign|unassign <player> <grade>    # online, or joined the server before
  *                     setdefault <grade> | cleardefault   # grade applied to every player
  *                     list
+ * /customperm user    addperm|removeperm <player> <node>  # nodes carried by one player, above their grades
+ *                     adddeny|removedeny <player> <node>
+ *                     list <player>                       # grades held and own nodes
  * /customperm alias   add <name> <cmd1[; cmd2; ...]>    # macro: split on ';'
  *                     addstep <name> <cmd>              # append a step to existing alias
  *                     removestep <name> <index>         # 0-based
@@ -213,6 +217,20 @@ public class CustomPermCommand {
             return SharedSuggestionProvider.suggest(grade.deniedPermissions, builder);
         };
 
+    /** Nodes the player named by the "player" argument carries themselves (for the remove subcommands). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_USER_PERMS = userNodes(false);
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_USER_DENIES = userNodes(true);
+
+    private static SuggestionProvider<CommandSourceStack> userNodes(boolean deny) {
+        return (ctx, builder) -> {
+            var server = ctx.getSource().getServer();
+            if (server == null) return builder.buildFuture();
+            return GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player")).profile()
+                .map(profile -> SharedSuggestionProvider.suggest(UserAdmin.nodes(profile.getId(), deny), builder))
+                .orElseGet(builder::buildFuture);
+        };
+    }
+
     /** Players online or who joined before: grades can be assigned to offline players. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_KNOWN_PLAYERS =
         (ctx, builder) -> {
@@ -298,6 +316,35 @@ public class CustomPermCommand {
                         .executes(CustomPermCommand::gradeClearDefault))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::gradeList)))
+                .then(Commands.literal("user")
+                    .then(Commands.literal("addperm").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("player", StringArgumentType.word())
+                            .suggests(SUGGEST_KNOWN_PLAYERS)
+                            .then(Commands.argument("node", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_KNOWN_NODES)
+                                .executes(ctx -> userNode(ctx, false, true)))))
+                    .then(Commands.literal("removeperm").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("player", StringArgumentType.word())
+                            .suggests(SUGGEST_KNOWN_PLAYERS)
+                            .then(Commands.argument("node", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_USER_PERMS)
+                                .executes(ctx -> userNode(ctx, false, false)))))
+                    .then(Commands.literal("adddeny").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("player", StringArgumentType.word())
+                            .suggests(SUGGEST_KNOWN_PLAYERS)
+                            .then(Commands.argument("node", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_KNOWN_NODES)
+                                .executes(ctx -> userNode(ctx, true, true)))))
+                    .then(Commands.literal("removedeny").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("player", StringArgumentType.word())
+                            .suggests(SUGGEST_KNOWN_PLAYERS)
+                            .then(Commands.argument("node", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_USER_DENIES)
+                                .executes(ctx -> userNode(ctx, true, false)))))
+                    .then(Commands.literal("list")
+                        .then(Commands.argument("player", StringArgumentType.word())
+                            .suggests(SUGGEST_KNOWN_PLAYERS)
+                            .executes(CustomPermCommand::userList))))
                 .then(Commands.literal("alias")
                     .then(Commands.literal("add").requires(AdminAccess.manage(PermissionNodes.MANAGE_ALIASES))
                         .then(Commands.argument("name", StringArgumentType.word())
@@ -670,6 +717,46 @@ public class CustomPermCommand {
             ctx.getSource().sendSuccess(() -> Component.literal("Grades: " + list), false);
         }
         return 1;
+    }
+
+    // ---------------- user ----------------
+
+    /** Adds or removes one node carried by a player themselves, above their grades. */
+    private static int userNode(CommandContext<CommandSourceStack> ctx, boolean deny, boolean add) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        var server = ctx.getSource().getServer();
+        if (server == null) return 0;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
+        var profile = resolution.profile();
+        if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
+        String node = StringArgumentType.getString(ctx, "node");
+        return report(ctx, guarded(ctx, () -> add
+            ? UserAdmin.addNode(server, profile.get().getId(), profile.get().getName(), node, deny)
+            : UserAdmin.removeNode(server, profile.get().getId(), profile.get().getName(), node, deny)));
+    }
+
+    /** What one player holds: their grades, then the nodes they carry themselves. */
+    private static int userList(CommandContext<CommandSourceStack> ctx) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        var server = ctx.getSource().getServer();
+        if (server == null) return 0;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
+        var profile = resolution.profile();
+        if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
+        String name = profile.get().getName();
+        java.util.UUID uuid = profile.get().getId();
+        List<String> assigned = CustomPerm.configManager.getGrades().userGrades
+            .getOrDefault(uuid.toString(), List.of());
+        ctx.getSource().sendSuccess(() -> Component.literal(name + " — grades: " + join(assigned)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  own allow: " + join(UserAdmin.nodes(uuid, false))), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  own deny : " + join(UserAdmin.nodes(uuid, true))), false);
+        return 1;
+    }
+
+    private static String join(List<String> values) {
+        return values.isEmpty() ? "none" : String.join(", ", values);
     }
 
     // ---------------- alias ----------------

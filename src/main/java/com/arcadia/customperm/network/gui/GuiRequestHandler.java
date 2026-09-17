@@ -16,6 +16,7 @@ import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.admin.LogAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
+import com.arcadia.customperm.admin.UserAdmin;
 import com.arcadia.customperm.command.RateLimiter;
 import com.arcadia.customperm.log.ActivityLog;
 import com.arcadia.customperm.log.LogEntry;
@@ -179,6 +180,10 @@ public final class GuiRequestHandler {
             case GRADE_ASSIGN -> guarded(player, () -> assignByName(player, args.get(0), args.get(1)));
             case GRADE_UNASSIGN -> guarded(player, () -> unassignByUuid(player, args.get(0), args.get(1)));
             case GRADE_DEFAULT -> guarded(player, () -> GradeAdmin.setDefault(player.getServer(), args.get(0)));
+            case USER_NODE_ADD -> kind(args.get(2)) == null ? malformed(action)
+                    : guarded(player, () -> userNodeByName(player, args.get(0), args.get(1), kind(args.get(2))));
+            case USER_NODE_REMOVE -> kind(args.get(2)) == null ? malformed(action)
+                    : guarded(player, () -> userNodeByUuid(player, args.get(0), args.get(1), kind(args.get(2))));
             case LOG_PLAYERS -> bool(args.get(0)) == null ? malformed(action) : LogAdmin.setPlayerLog(bool(args.get(0)));
             case LOG_MASK -> bool(args.get(0)) == null ? malformed(action) : LogAdmin.setMasking(bool(args.get(0)));
         };
@@ -198,14 +203,37 @@ public final class GuiRequestHandler {
                 .orElseGet(() -> AdminResult.fail(resolution.problem()));
     }
 
+    /** Adding addresses the player by name: the screen offers a field for someone who holds nothing yet. */
+    private static AdminResult userNodeByName(ServerPlayer admin, String name, String node, boolean deny) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
+        return resolution.profile()
+                .map(profile -> UserAdmin.addNode(admin.getServer(), profile.getId(), profile.getName(), node, deny))
+                .orElseGet(() -> AdminResult.fail(resolution.problem()));
+    }
+
+    /** Removing addresses the player by UUID: the row always carries one, a resolvable name it may not. */
+    private static AdminResult userNodeByUuid(ServerPlayer admin, String rawUuid, String node, boolean deny) {
+        java.util.UUID uuid = uuid(rawUuid);
+        if (uuid == null) return malformed(GuiAction.USER_NODE_REMOVE);
+        return UserAdmin.removeNode(admin.getServer(), uuid, GradeAdmin.displayName(admin.getServer(), uuid),
+                node, deny);
+    }
+
     private static AdminResult unassignByUuid(ServerPlayer admin, String rawUuid, String grade) {
-        java.util.UUID uuid;
-        try {
-            uuid = java.util.UUID.fromString(rawUuid);
-        } catch (IllegalArgumentException e) {
-            return malformed(GuiAction.GRADE_UNASSIGN);
-        }
+        java.util.UUID uuid = uuid(rawUuid);
+        if (uuid == null) return malformed(GuiAction.GRADE_UNASSIGN);
         return GradeAdmin.unassign(admin.getServer(), uuid, GradeAdmin.displayName(admin.getServer(), uuid), grade);
+    }
+
+    /** The UUID a row carries, or {@code null} when the packet did not carry one. */
+    private static java.util.UUID uuid(String raw) {
+        try {
+            return java.util.UUID.fromString(raw);
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /** {@code "deny"} is true, {@code "allow"} false, anything else malformed. */

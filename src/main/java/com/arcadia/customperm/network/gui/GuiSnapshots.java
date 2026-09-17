@@ -10,6 +10,7 @@ package com.arcadia.customperm.network.gui;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.GradeAdmin;
+import com.arcadia.customperm.admin.UserAdmin;
 import com.arcadia.customperm.command.AliasManager;
 import com.arcadia.customperm.config.ConfigManager;
 import com.arcadia.customperm.log.ActivityLog;
@@ -44,9 +45,47 @@ public final class GuiSnapshots {
             case ALIASES -> aliases();
             case RATE_LIMITS -> rateLimits();
             case GRADES -> grades(player.getServer());
+            case PLAYERS -> players(player.getServer());
             case LUCKPERMS -> new LuckPermsData(LuckPermsData.GROUPS);
             case LOGS -> logs();
         };
+    }
+
+    /**
+     * Everyone who holds something of their own, plus everyone online: a player with nothing yet is
+     * reached by typing their name, not by scrolling a list of every account the server has ever seen.
+     */
+    static PlayersData players(MinecraftServer server) {
+        var config = CustomPerm.configManager.getGrades();
+        java.util.Set<String> uuids = new java.util.LinkedHashSet<>(UserAdmin.knownHolders());
+        if (server != null) {
+            for (ServerPlayer online : server.getPlayerList().getPlayers()) {
+                uuids.add(online.getUUID().toString());
+            }
+        }
+
+        List<PlayersData.Player> players = new ArrayList<>();
+        for (String rawUuid : uuids) {
+            if (players.size() == GuiCodecs.SERVER_LIST_MAX) break;
+            java.util.UUID uuid;
+            try {
+                uuid = java.util.UUID.fromString(rawUuid);
+            } catch (IllegalArgumentException e) {
+                continue;
+            }
+            boolean online = server != null && server.getPlayerList().getPlayer(uuid) != null;
+            String name = server == null ? rawUuid : GradeAdmin.displayName(server, uuid);
+            players.add(new PlayersData.Player(rawUuid, name, online,
+                    List.copyOf(config.userGrades.getOrDefault(rawUuid, List.of())),
+                    UserAdmin.nodes(uuid, false).stream().limit(PlayersData.NODES_MAX).toList(),
+                    UserAdmin.nodes(uuid, true).stream().limit(PlayersData.NODES_MAX).toList()));
+        }
+        players.sort(java.util.Comparator.comparing((PlayersData.Player p) -> !p.online())
+                .thenComparing(PlayersData.Player::name, String.CASE_INSENSITIVE_ORDER));
+
+        List<String> known = server == null ? List.of()
+                : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
+        return new PlayersData(players, known, CustomPerm.configManager.getSettings().luckPermsFallbackMode);
     }
 
     static GradesData grades(MinecraftServer server) {

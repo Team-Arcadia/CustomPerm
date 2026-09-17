@@ -19,6 +19,14 @@ public class GradesConfig {
     public Map<String, Grade> grades = new HashMap<>();
     /** UUID string -> list of grade names (ordered, but order is informational only). */
     public Map<String, List<String>> userGrades = new HashMap<>();
+    /**
+     * UUID string -> ALLOW nodes carried by that player alone, above every grade they hold. This is the
+     * exception a single player gets without inventing a grade for them, like a node set on a LuckPerms
+     * user rather than on one of their groups.
+     */
+    public Map<String, Set<String>> userPermissions = new HashMap<>();
+    /** UUID string -> DENY nodes carried by that player alone. */
+    public Map<String, Set<String>> userDeniedPermissions = new HashMap<>();
 
     public static class Grade {
         public String name;
@@ -49,6 +57,17 @@ public class GradesConfig {
         userGrades.values().removeIf(java.util.Objects::isNull);
         userGrades.values().forEach(list -> list.removeIf(java.util.Objects::isNull));
         userGrades.values().removeIf(List::isEmpty);
+        if (userPermissions == null) userPermissions = new HashMap<>();
+        if (userDeniedPermissions == null) userDeniedPermissions = new HashMap<>();
+        normalizeUserNodes(userPermissions);
+        normalizeUserNodes(userDeniedPermissions);
+    }
+
+    /** An empty entry is dropped rather than kept: it would show a player as carrying nodes they do not have. */
+    private static void normalizeUserNodes(Map<String, Set<String>> nodes) {
+        nodes.values().removeIf(java.util.Objects::isNull);
+        nodes.values().forEach(set -> set.remove(null));
+        nodes.values().removeIf(Set::isEmpty);
     }
 
     public boolean userHasPermission(UUID uuid, String node) {

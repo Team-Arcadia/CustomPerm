@@ -20,6 +20,7 @@ public enum GuiPage {
     ALIASES,
     RATE_LIMITS,
     GRADES,
+    PLAYERS,
     LUCKPERMS,
     LOGS;
 

@@ -25,11 +25,15 @@ import java.util.UUID;
  *   <li>At the same specificity, the heaviest grade decides ({@link GradesConfig.Grade#weight}), like a
  *       LuckPerms group weight. Weight never beats specificity: it only breaks a tie between grades that
  *       cover the node just as precisely.</li>
- *   <li>Between equal weights, a DENY wins over an ALLOW, whichever grades they come from
+ *   <li>Nodes carried by the player themselves ({@link GradesConfig#userPermissions},
+ *       {@link GradesConfig#userDeniedPermissions}) rank above every grade at the same specificity,
+ *       whatever its weight, like a node set on a LuckPerms user rather than on one of their groups.
+ *       They do not beat a more specific grade node either: the rule above comes first.</li>
+ *   <li>Between equal ranks, a DENY wins over an ALLOW, whichever grades they come from
  *       (INVARIANT-101). Every weight left at 0, which is what a file written before the field
  *       deserializes to, makes this the only tie-break, as it was.</li>
- *   <li>The grades assigned to the player decide first. Only when none of them mentions the node does
- *       the default grade, which applies to every player, decide.</li>
+ *   <li>What the player carries, own nodes and assigned grades, decides first. Only when none of it
+ *       mentions the node does the default grade, which applies to every player, decide.</li>
  *   <li>Nothing matching at all is {@link Tristate#UNSET}: the caller decides, usually from the
  *       operator level.</li>
  * </ol>
@@ -39,6 +43,9 @@ public final class PermissionResolver {
     /** Specificity of an exact match, above any wildcard depth. */
     private static final int EXACT = Integer.MAX_VALUE;
     private static final int NONE = -1;
+
+    /** Rank of the nodes a player carries themselves: above any grade weight, including {@code Integer.MAX_VALUE}. */
+    private static final long PLAYER_RANK = Long.MAX_VALUE;
 
     private PermissionResolver() {}
 
@@ -50,12 +57,21 @@ public final class PermissionResolver {
     public static Tristate check(GradesConfig grades, UUID uuid, String node, String defaultGrade) {
         if (node == null || uuid == null) return Tristate.UNSET;
         boolean hasDefault = defaultGrade != null && !defaultGrade.isEmpty();
-        List<String> assigned = grades.userGrades.get(uuid.toString());
+        String user = uuid.toString();
+
+        Ranked own = new Ranked();
+        own.offer(specificity(grades.userPermissions.get(user), node),
+                specificity(grades.userDeniedPermissions.get(user), node), PLAYER_RANK);
+        List<String> assigned = grades.userGrades.get(user);
         if (assigned != null) {
-            Tristate own = layer(grades, assigned, node, hasDefault ? defaultGrade : null);
-            if (own != Tristate.UNSET) return own;
+            offerGrades(own, grades, assigned, node, hasDefault ? defaultGrade : null);
         }
-        return hasDefault ? layer(grades, List.of(defaultGrade), node, null) : Tristate.UNSET;
+        if (own.verdict != Tristate.UNSET) return own.verdict;
+
+        if (!hasDefault) return Tristate.UNSET;
+        Ranked fallback = new Ranked();
+        offerGrades(fallback, grades, List.of(defaultGrade), node, null);
+        return fallback.verdict;
     }
 
     /** True only for an explicit ALLOW from the assigned grades, ignoring any default grade. */
@@ -63,40 +79,47 @@ public final class PermissionResolver {
         return check(grades, uuid, node, null) == Tristate.ALLOW;
     }
 
-    /**
-     * Verdict of one layer of grades: the most specific entry wins, the heaviest grade breaks a tie on
-     * specificity, and a DENY breaks a tie on weight. Written so the outcome does not depend on the order
-     * the grades are iterated in, which is the order they were assigned in and carries no meaning.
-     */
-    private static Tristate layer(GradesConfig grades, List<String> gradeNames, String node, String skip) {
-        int bestSpecificity = NONE;
-        int bestWeight = 0;
-        Tristate best = Tristate.UNSET;
+    private static void offerGrades(Ranked best, GradesConfig grades, List<String> gradeNames, String node,
+                                    String skip) {
         for (String gradeName : gradeNames) {
             if (gradeName == null || gradeName.equals(skip)) continue;
             GradesConfig.Grade grade = grades.grades.get(gradeName);
             if (grade == null) continue;
-            int allow = specificity(grade.permissions, node);
-            int deny = specificity(grade.deniedPermissions, node);
-            if (allow == NONE && deny == NONE) continue;
-            // Inside one grade the same rule applies, DENY included: a grade that both allows and denies
+            best.offer(specificity(grade.permissions, node), specificity(grade.deniedPermissions, node),
+                    grade.weight);
+        }
+    }
+
+    /**
+     * The best entry seen so far in one layer: the most specific wins, the highest rank breaks a tie on
+     * specificity, and a DENY breaks a tie on rank. A rank is a grade weight, or {@link #PLAYER_RANK} for
+     * the nodes the player carries themselves. Written so the outcome does not depend on the order things
+     * are offered in, which is the order grades were assigned in and carries no meaning.
+     */
+    private static final class Ranked {
+        private int specificity = NONE;
+        private long rank;
+        private Tristate verdict = Tristate.UNSET;
+
+        void offer(int allow, int deny, long rank) {
+            if (allow == NONE && deny == NONE) return;
+            // Inside one holder the same rule applies, DENY included: a grade that both allows and denies
             // a node at the same level refuses it.
-            Tristate verdict = deny >= allow ? Tristate.DENY : Tristate.ALLOW;
-            int specificity = Math.max(allow, deny);
-            if (specificity > bestSpecificity) {
-                bestSpecificity = specificity;
-                bestWeight = grade.weight;
-                best = verdict;
-            } else if (specificity == bestSpecificity) {
-                if (grade.weight > bestWeight) {
-                    bestWeight = grade.weight;
-                    best = verdict;
-                } else if (grade.weight == bestWeight && verdict == Tristate.DENY) {
-                    best = Tristate.DENY;
+            Tristate candidate = deny >= allow ? Tristate.DENY : Tristate.ALLOW;
+            int reach = Math.max(allow, deny);
+            if (reach > specificity) {
+                specificity = reach;
+                this.rank = rank;
+                verdict = candidate;
+            } else if (reach == specificity) {
+                if (rank > this.rank) {
+                    this.rank = rank;
+                    verdict = candidate;
+                } else if (rank == this.rank && candidate == Tristate.DENY) {
+                    verdict = Tristate.DENY;
                 }
             }
         }
-        return best;
     }
 
     /**
