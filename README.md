@@ -76,7 +76,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Diagnostics** — `/customperm status`, `/customperm scan`, `/customperm debug`, and `/customperm test` cover runtime inspection and troubleshooting.
 - **CI release checks** — GitHub Actions runs GameTests, builds the distributable jar, and verifies required jar metadata.
 - **Server-side only** — no client mod is required for core functionality. Vanilla clients (and clients without CustomPerm installed) connect to a CustomPerm server without issue: the network channels backing the admin interface are registered as `optional()`, so it never gates the connection handshake.
-- **In-game admin interface** — `/customperm gui` opens a native admin interface on clients that have CustomPerm installed: no other client mod is needed. The server stays the authority: every action is re-checked, rate limited and logged. The interface is being rebuilt screen by screen for 1.1.0 (see [In-game admin interface](#in-game-admin-interface)).
+- **In-game admin interface** — `/customperm gui` opens a native admin interface on clients that have CustomPerm installed: no other client mod is needed. The server stays the authority: every action is re-checked, rate limited and logged. It includes an editor for the LuckPerms store when LuckPerms runs (see [In-game admin interface](#in-game-admin-interface)).
 
 ---
 
@@ -120,7 +120,7 @@ If you see neither line, the mod failed to load — check your logs for stack tr
 
 `/customperm gui [page]` opens the admin interface. It needs CustomPerm on the admin's client, nothing else; without it the command explains that every setting is also available through the text commands, and players without the mod connect normally.
 
-The interface is drawn natively (no UI library) and is being rebuilt area by area for 1.1.0, replacing the former TesseraUI panel. Available on this branch:
+The interface is drawn natively (no UI library) and replaces the former TesseraUI panel. Pages:
 
 | Page | Content |
 |---|---|
@@ -128,9 +128,8 @@ The interface is drawn natively (no UI library) and is being rebuilt area by are
 | Commands | Every root command of the server with search (Ctrl+F) and an exposed-only filter, badges for aliases, rate limits and commands missing from the server; expose, hide (with confirmation), and the keep-original switch (`preserveOriginalRequires`) |
 | Aliases | Every alias with search, badges for shadowed commands and rate limits; create an alias with its first step; per alias: add, replace, move up or down and remove steps, delete the alias (with confirmation) |
 | Rate limits | Every rule with its numbers and badges (disabled, target neither exposed nor an alias); add a limit, change uses and window, enable or disable, switch when usage history is written (world save or every use), remove (with confirmation); exposed commands and aliases without a limit are listed and fill the form in one click |
+| LuckPerms | Only while LuckPerms is installed and running: no navigation entry otherwise, and `/customperm gui luckperms` explains why. **Groups**: create, delete, permission nodes with allow/deny, contexts and duration, parents, weight, display name, prefix, suffix, meta. **Players**: online players and any player found by exact name, their nodes, groups with duration, primary group, promote and demote on a track, prefix, suffix, meta. **Tracks**: create, delete, append, insert at a position, remove a group. Writes go through the LuckPerms API server-side, gated by `customperm.gui.luckperms.edit` |
 | Grades | Internal backend only (hidden from the navigation while LuckPerms is active, and explained if opened directly): grades with search and creation; per grade, ALLOW and DENY nodes, and players with their online state, assigned by name with completion, including players who are offline but joined the server before; delete a grade (with confirmation) |
-
-The LuckPerms editor screens follow. Until then the text commands cover them, and the LuckPerms editor keeps its server side (`customperm.gui.luckperms.edit`) unchanged.
 
 **Permissions.** Reading any page requires op level 2, the same check as `/customperm`. Writing requires the node of the area on top of it: `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.luckperms.edit`. These nodes are checked as granted to the player, without the usual operator short-circuit of the internal backend, so they can delegate one area to a level-2 moderator without opening the others. Permission level 4 (server owner) bypasses them. Actions that change no configuration, such as reload, need op level 2 only, like their command. Every applied action is logged server-side with the admin's name.
 
@@ -267,6 +266,7 @@ Cap how many times one player may run a command or an alias within a sliding win
 | `/customperm scan [pattern]` | Lists every command in the dispatcher with its state (exposed, alias, mod-internal). Optional substring filter. |
 | `/customperm reload` | Reloads config files from disk. |
 | `/customperm gui [dashboard\|commands\|aliases\|ratelimits\|grades]` | Opens the in-game admin interface (needs CustomPerm on the client). Reading needs op level 2; writing needs the area's `customperm.gui.<area>.edit` node. |
+| `/customperm gui luckperms [groups\|players\|tracks]` | Opens the in-game LuckPerms editor. Only while LuckPerms is installed and running; otherwise explains why. Writing needs `customperm.gui.luckperms.edit`. |
 
 ---
 

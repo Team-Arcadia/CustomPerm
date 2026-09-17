@@ -64,6 +64,18 @@ public final class GuiRequestHandler {
         sendPage(player, page, true);
     }
 
+    /** Opens the LuckPerms editor on a section; does nothing unless LuckPerms is the active backend. */
+    public static void openLuckPerms(ServerPlayer player, String section) {
+        if (!CustomPerm.isLuckPermsActive() || player.hasDisconnected() || !clientSupportsInterface(player)) return;
+        PacketDistributor.sendToPlayer(player,
+                new GuiPagePayload(true, GuiSnapshots.context(player), new LuckPermsData(section)));
+    }
+
+    /** Whether a page can be shown at all: the LuckPerms editor only exists while LuckPerms is active. */
+    public static boolean available(GuiPage page) {
+        return page != GuiPage.LUCKPERMS || CustomPerm.isLuckPermsActive();
+    }
+
     // ------------------------------------------------------------------ packets
 
     public static void handleRequest(GuiRequestPayload payload, IPayloadContext context) {
@@ -154,10 +166,10 @@ public final class GuiRequestHandler {
     private static AdminResult assignByName(ServerPlayer admin, String name, String grade) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
-        return GradeAdmin.findKnownProfile(admin.getServer(), name)
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
+        return resolution.profile()
                 .map(profile -> GradeAdmin.assign(admin.getServer(), profile, grade))
-                .orElseGet(() -> AdminResult.fail("Unknown player '" + name
-                        + "': grades can be assigned to players online or who joined this server before."));
+                .orElseGet(() -> AdminResult.fail(resolution.problem()));
     }
 
     private static AdminResult unassignByUuid(ServerPlayer admin, String rawUuid, String grade) {
@@ -201,7 +213,7 @@ public final class GuiRequestHandler {
     // ------------------------------------------------------------------ sending
 
     private static void sendPage(ServerPlayer player, GuiPage page, boolean open) {
-        if (player.hasDisconnected() || !clientSupportsInterface(player)) return;
+        if (player.hasDisconnected() || !clientSupportsInterface(player) || !available(page)) return;
         PacketDistributor.sendToPlayer(player,
                 new GuiPagePayload(open, GuiSnapshots.context(player), GuiSnapshots.page(page, player)));
     }

@@ -19,6 +19,7 @@ import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiRequestHandler;
+import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.notify.AdminNotifier;
 import com.arcadia.customperm.perm.LuckPermsService;
 import com.arcadia.customperm.perm.PermissionService;
@@ -71,6 +72,7 @@ import java.util.stream.Collectors;
  * /customperm test    <player> <node>                   # debug: report grant/deny + backend
  * /customperm reload
  * /customperm gui [page]                            # open the admin interface (CustomPerm needed client-side)
+ * /customperm gui luckperms [groups|players|tracks]  # LuckPerms editor, only while LuckPerms is active
  *
  * The mod ships with NO commands pre-exposed. Each admin chooses what to expose via
  * /customperm command add. Until exposed, every command keeps its vanilla op-only behaviour.
@@ -171,7 +173,7 @@ public class CustomPermCommand {
         (ctx, builder) -> {
             var server = ctx.getSource().getServer();
             if (server == null) return builder.buildFuture();
-            return GradeAdmin.findKnownProfile(server, StringArgumentType.getString(ctx, "player"))
+            return GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player")).profile()
                 .map(profile -> CustomPerm.configManager.getGrades().userGrades.get(profile.getId().toString()))
                 .map(list -> SharedSuggestionProvider.suggest(list, builder))
                 .orElseGet(builder::buildFuture);
@@ -383,24 +385,50 @@ public class CustomPermCommand {
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> guiCommand() {
         var gui = Commands.literal("gui").executes(ctx -> openGui(ctx, GuiPage.DASHBOARD));
         for (GuiPage page : GuiPage.values()) {
+            if (page == GuiPage.LUCKPERMS) continue;
             gui.then(Commands.literal(page.id()).executes(ctx -> openGui(ctx, page)));
         }
-        return gui;
+        var luckperms = Commands.literal(GuiPage.LUCKPERMS.id())
+            .executes(ctx -> openLuckPermsEditor(ctx, LuckPermsData.GROUPS));
+        for (String section : List.of(LuckPermsData.GROUPS, LuckPermsData.PLAYERS, LuckPermsData.TRACKS)) {
+            luckperms.then(Commands.literal(section).executes(ctx -> openLuckPermsEditor(ctx, section)));
+        }
+        return gui.then(luckperms);
+    }
+
+    private static int openLuckPermsEditor(CommandContext<CommandSourceStack> ctx, String section) {
+        if (!CustomPerm.isLuckPermsActive()) {
+            ctx.getSource().sendFailure(Component.literal(CustomPerm.isLuckPermsPresent()
+                ? "The LuckPerms editor is unavailable: LuckPerms is installed but not active on this server (see /customperm status)."
+                : "The LuckPerms editor is only available when LuckPerms is installed. Permissions here come from CustomPerm grades: /customperm gui grades."));
+            return 0;
+        }
+        ServerPlayer player = guiPlayer(ctx);
+        if (player == null) return 0;
+        GuiRequestHandler.openLuckPerms(player, section);
+        return 1;
     }
 
     private static int openGui(CommandContext<CommandSourceStack> ctx, GuiPage page) {
+        ServerPlayer player = guiPlayer(ctx);
+        if (player == null) return 0;
+        GuiRequestHandler.open(player, page);
+        return 1;
+    }
+
+    /** The player an interface command opens on, or {@code null} after telling the source why not. */
+    private static ServerPlayer guiPlayer(CommandContext<CommandSourceStack> ctx) {
         if (!(ctx.getSource().getEntity() instanceof ServerPlayer player)) {
             ctx.getSource().sendFailure(Component.literal(
                 "The admin interface opens on a player's screen. From the console, use the text commands."));
-            return 0;
+            return null;
         }
         if (!GuiRequestHandler.clientSupportsInterface(player)) {
             ctx.getSource().sendFailure(Component.literal(
                 "The admin interface needs CustomPerm installed on your client. Every setting is also available through the /customperm text commands."));
-            return 0;
+            return null;
         }
-        GuiRequestHandler.open(player, page);
-        return 1;
+        return player;
     }
 
     // ---------------- command exposure ----------------
@@ -507,9 +535,10 @@ public class CustomPermCommand {
         if (refusal != null) return report(ctx, refusal);
         var server = ctx.getSource().getServer();
         String name = StringArgumentType.getString(ctx, "player");
-        var profile = server == null ? java.util.Optional.<com.mojang.authlib.GameProfile>empty()
-            : GradeAdmin.findKnownProfile(server, name);
-        if (profile.isEmpty()) return report(ctx, unknownPlayer(name));
+        if (server == null) return 0;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, name);
+        var profile = resolution.profile();
+        if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
         return report(ctx, GradeAdmin.assign(server, profile.get(), StringArgumentType.getString(ctx, "grade")));
     }
 
@@ -518,15 +547,12 @@ public class CustomPermCommand {
         if (refusal != null) return report(ctx, refusal);
         var server = ctx.getSource().getServer();
         String name = StringArgumentType.getString(ctx, "player");
-        var profile = server == null ? java.util.Optional.<com.mojang.authlib.GameProfile>empty()
-            : GradeAdmin.findKnownProfile(server, name);
-        if (profile.isEmpty()) return report(ctx, unknownPlayer(name));
+        if (server == null) return 0;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, name);
+        var profile = resolution.profile();
+        if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
         return report(ctx, GradeAdmin.unassign(server, profile.get().getId(), profile.get().getName(),
             StringArgumentType.getString(ctx, "grade")));
-    }
-
-    private static AdminResult unknownPlayer(String name) {
-        return AdminResult.fail("Unknown player '" + name + "': grades can be assigned to players online or who joined this server before.");
     }
 
     private static int gradeList(CommandContext<CommandSourceStack> ctx) {

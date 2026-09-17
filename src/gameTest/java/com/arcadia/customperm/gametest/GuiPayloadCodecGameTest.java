@@ -21,6 +21,7 @@ import com.arcadia.customperm.network.gui.GuiCodecs;
 import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
+import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.network.gui.RateLimitsData;
 import com.arcadia.customperm.perm.BackendKind;
 import io.netty.buffer.ByteBuf;
@@ -72,6 +73,8 @@ public class GuiPayloadCodecGameTest {
                         new GradesData.Grade("vip", List.of("customperm.command.fly"), List.of("customperm.command.op"),
                                 List.of(new GradesData.Member("00000000-0000-0000-0000-000000000001", "Alex", true)))),
                         List.of("Alex", "Steve"))));
+        expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
+                new GuiContext(BackendKind.LUCKPERMS, GuiArea.LUCKPERMS.bit(), 0), new LuckPermsData(LuckPermsData.TRACKS)));
         expectRoundTrip(GuiRequestPayload.STREAM_CODEC, new GuiRequestPayload("dashboard"));
         expectRoundTrip(GuiActionPayload.STREAM_CODEC, new GuiActionPayload("RELOAD", List.of("a", "b c"), "dashboard"));
         expectRoundTrip(GuiActionResultPayload.STREAM_CODEC, GuiActionResultPayload.fail("You do not have x."));

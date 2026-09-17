@@ -19,7 +19,8 @@ public enum GuiPage {
     COMMANDS,
     ALIASES,
     RATE_LIMITS,
-    GRADES;
+    GRADES,
+    LUCKPERMS;
 
     /** Name used on the wire and as the {@code /customperm gui <page>} argument. */
     public String id() {

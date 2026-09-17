@@ -42,6 +42,7 @@ public final class GuiSnapshots {
             case ALIASES -> aliases();
             case RATE_LIMITS -> rateLimits();
             case GRADES -> grades(player.getServer());
+            case LUCKPERMS -> new LuckPermsData(LuckPermsData.GROUPS);
         };
     }
 

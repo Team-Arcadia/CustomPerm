@@ -122,7 +122,12 @@ public final class DashboardScreen extends AdminScreen {
                     data.playersWithGrades() + (data.playersWithGrades() == 1 ? " player" : " players"),
                     Palette.TEXT, () -> navigate(GuiPage.GRADES));
         }
-        return new CpTile(Icon.SHIELD, "Grades", "LuckPerms", "uses groups", Palette.TEXT_DIM, null);
+        if (context.luckPermsActive()) {
+            return new CpTile(Icon.SHIELD, "Grades", "LuckPerms", "edit groups", Palette.TEXT,
+                    () -> navigate(GuiPage.LUCKPERMS));
+        }
+        // Deny backend: neither grades nor LuckPerms decide anything until restart.
+        return new CpTile(Icon.SHIELD, "Grades", "Unused", "all denied", Palette.DANGER, null);
     }
 
     private void confirmReload() {

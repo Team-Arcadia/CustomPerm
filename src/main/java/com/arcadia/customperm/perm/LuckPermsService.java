@@ -81,20 +81,26 @@ public class LuckPermsService implements PermissionService {
             // D1 : ne pas absorber les erreurs JVM fatales (OOM, SOE…) — LP n'en est pas responsable.
             if (t instanceof Error e) throw e;
             // AC1/D2 : bascule permanente sur toute exception LP (IllegalStateException incluse).
-            // compareAndSet garantit que WARN + bascule n'ont lieu qu'une seule fois (AC2, P1).
-            if (degraded.compareAndSet(false, true)) {
-                // P3 : throwable attaché pour que la cause LP soit visible dans les logs.
-                String mode = CustomPerm.configManager.getSettings().luckPermsFallbackMode;
-                if (CustomPerm.configManager.getSettings().useInternalLuckPermsFallback()) {
-                    CustomPerm.LOGGER.warn("[CustomPerm] LuckPerms unavailable — switching permanently to internal backend (luckPermsFallbackMode=internal).", t);
-                } else {
-                    CustomPerm.LOGGER.warn("[CustomPerm] LuckPerms unavailable — failing closed (luckPermsFallbackMode={}).", mode, t);
-                }
-                CustomPerm.raiseLuckPermsUnavailable("API error: " + t.getClass().getSimpleName());
-            }
+            markUnavailable("API error: " + t.getClass().getSimpleName(), t);
             // AC4/AC5 : politique de fallback appliquée immédiatement à cette requête aussi.
             return handleUnavailable(source, node, grantedOnly);
         }
+    }
+
+    /**
+     * Switches permanently to the fallback policy. compareAndSet makes the log line and the admin
+     * alert happen once, whichever path noticed first (AC2, P1).
+     */
+    private void markUnavailable(String reason, Throwable cause) {
+        if (!degraded.compareAndSet(false, true)) return;
+        // P3 : throwable attaché pour que la cause LP soit visible dans les logs.
+        String mode = CustomPerm.configManager.getSettings().luckPermsFallbackMode;
+        if (CustomPerm.configManager.getSettings().useInternalLuckPermsFallback()) {
+            CustomPerm.LOGGER.warn("[CustomPerm] LuckPerms unavailable ({}) — switching permanently to internal backend (luckPermsFallbackMode=internal).", reason, cause);
+        } else {
+            CustomPerm.LOGGER.warn("[CustomPerm] LuckPerms unavailable ({}) — failing closed (luckPermsFallbackMode={}).", reason, mode, cause);
+        }
+        CustomPerm.raiseLuckPermsUnavailable(reason);
     }
 
     private boolean handleUnavailable(CommandSourceStack source, String node, boolean grantedOnly) {
@@ -127,8 +133,21 @@ public class LuckPermsService implements PermissionService {
     public void initServerHooks(MinecraftServer server) {
         synchronized (hooksLock) {
             if (serverHooks != null) return;
+            LuckPerms api;
             try {
-                LuckPerms api = LuckPermsProvider.get();
+                api = LuckPermsProvider.get();
+            } catch (Throwable t) {
+                if (t instanceof Error e) throw e;
+                // The mod is loaded but its API never came up by server start. LuckPerms does this on
+                // purpose in singleplayer ("not supported on the client"); it also covers a failed
+                // enable. Degrade now rather than at the first permission check, so the backend
+                // label, the admin alert and the admin interface stop presenting LuckPerms as active.
+                markUnavailable(net.neoforged.fml.loading.FMLEnvironment.dist.isClient()
+                        ? "LuckPerms does not run in singleplayer"
+                        : "LuckPerms API not loaded at server start", t);
+                return;
+            }
+            try {
                 ResyncCoordinator coordinator = new ResyncCoordinator();
                 EventSubscription<UserDataRecalculateEvent> subscription =
                     api.getEventBus().subscribe(UserDataRecalculateEvent.class, event -> {

@@ -28,6 +28,7 @@ import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
+import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.network.gui.RateLimitsData;
 import com.mojang.authlib.GameProfile;
 import net.minecraft.gametest.framework.GameTest;
@@ -369,7 +370,10 @@ public class AdminInterfaceGameTest {
         String grade = "cp_i_grade";
         var server = helper.getLevel().getServer();
         var config = CustomPerm.configManager.getGrades();
-        GameProfile offline = new GameProfile(UUID.randomUUID(), "cp_i_offline");
+        // Unique name per run: the username cache outlives GameTest runs and has no removal, and a name
+        // reused with another UUID is rightly refused as ambiguous.
+        String offlineName = "cp_o" + Long.toHexString(System.nanoTime() & 0xFFFFFFFFFFFL);
+        GameProfile offline = new GameProfile(UUID.randomUUID(), offlineName);
         try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_grades", 4);
              TestPlayer member = TestPlayer.join(helper.getLevel(), "cp_i_member", 0)) {
             // A player who joined once and left: known to the server, not online.
@@ -381,7 +385,7 @@ public class AdminInterfaceGameTest {
             gradeAct(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.time", "deny");
             gradeAct(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.time", "maybe");
             gradeAct(owner, GuiAction.GRADE_ASSIGN, "CP_I_MEMBER", grade);
-            gradeAct(owner, GuiAction.GRADE_ASSIGN, "cp_i_offline", grade);
+            gradeAct(owner, GuiAction.GRADE_ASSIGN, offlineName, grade);
             gradeAct(owner, GuiAction.GRADE_ASSIGN, "cp_i_nobody_here", grade);
             List<String> results = results(owner);
             if (!results.equals(List.of("OK: Created grade cp_i_grade",
@@ -389,7 +393,7 @@ public class AdminInterfaceGameTest {
                     "OK: Denied customperm.command.time -> cp_i_grade",
                     "FAIL: Malformed request for GRADE_NODE_ADD.",
                     "OK: Assigned cp_i_grade -> cp_i_member",
-                    "OK: Assigned cp_i_grade -> cp_i_offline",
+                    "OK: Assigned cp_i_grade -> " + offlineName,
                     "FAIL: Unknown player 'cp_i_nobody_here': grades can be assigned to players online or who joined this server before.")))
                 fail("Unexpected results: " + results);
             if (!config.grades.get(grade).deniedPermissions.contains("customperm.command.time"))
@@ -401,7 +405,7 @@ public class AdminInterfaceGameTest {
             GradesData.Grade row = pages.isEmpty() || !(pages.get(pages.size() - 1).data() instanceof GradesData data) ? null
                     : data.grades().stream().filter(g -> g.name().equals(grade)).findFirst().orElse(null);
             if (row == null || row.members().size() != 2
-                    || row.members().stream().noneMatch(m -> m.name().equals("cp_i_offline") && !m.online())
+                    || row.members().stream().noneMatch(m -> m.name().equals(offlineName) && !m.online())
                     || row.members().stream().noneMatch(m -> m.name().equals("cp_i_member") && m.online()))
                 fail("The refreshed page must list both players with their state: " + row);
 
@@ -409,9 +413,9 @@ public class AdminInterfaceGameTest {
             gradeAct(owner, GuiAction.GRADE_UNASSIGN, offline.getId().toString(), grade);
             gradeAct(owner, GuiAction.GRADE_UNASSIGN, "not-a-uuid", grade);
             owner.type("customperm grade adddeny cp_i_grade customperm.command.seed");
-            owner.type("customperm grade assign cp_i_offline cp_i_grade");
+            owner.type("customperm grade assign " + offlineName + " cp_i_grade");
             results = results(owner);
-            if (!results.equals(List.of("OK: Unassigned cp_i_grade from cp_i_offline", "FAIL: Malformed request for GRADE_UNASSIGN.")))
+            if (!results.equals(List.of("OK: Unassigned cp_i_grade from " + offlineName, "FAIL: Malformed request for GRADE_UNASSIGN.")))
                 fail("Unexpected unassign results: " + results);
             if (!config.grades.get(grade).deniedPermissions.contains("customperm.command.seed")
                     || !config.userGrades.getOrDefault(offline.getId().toString(), List.of()).contains(grade))
@@ -444,6 +448,28 @@ public class AdminInterfaceGameTest {
                 fail("A refused action created the grade.");
         } finally {
             CustomPerm.configManager.getGrades().grades.remove("cp_i_denied_grade");
+        }
+        helper.succeed();
+    }
+
+    /** Area 7: the LuckPerms editor page exists only while LuckPerms is active, whichever way it is asked for. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void luckPermsEditorOpensOnlyWithLuckPerms(GameTestHelper helper) {
+        try (TestPlayer owner = TestPlayer.join(helper.getLevel(), "cp_i_lpeditor", 4)) {
+            owner.clearReceived();
+            owner.type("customperm gui luckperms players");
+            GuiRequestHandler.handleRequest(new GuiRequestPayload(GuiPage.LUCKPERMS.id()), owner.payloadContext());
+            var pages = owner.payloads(GuiPagePayload.class);
+            if (CustomPerm.isLuckPermsActive()) {
+                if (pages.size() != 2 || !(pages.get(0).data() instanceof LuckPermsData first)
+                        || !first.section().equals(LuckPermsData.PLAYERS) || !pages.get(0).open())
+                    fail("With LuckPerms active the command must open the editor on the players section, got " + pages);
+                if (!(pages.get(1).data() instanceof LuckPermsData)) fail("The page request must answer with the editor.");
+            } else {
+                if (!pages.isEmpty()) fail("Without LuckPerms no editor page may be sent, got " + pages);
+                if (!owner.chatContains("only available when LuckPerms is installed"))
+                    fail("Without LuckPerms the command must explain why nothing opens, got " + owner.chat());
+            }
         }
         helper.succeed();
     }

@@ -10,6 +10,7 @@ package com.arcadia.customperm.client.gui.admin;
 
 import com.arcadia.customperm.client.gui.kit.CpScreen;
 import com.arcadia.customperm.client.gui.kit.Icon;
+import com.arcadia.customperm.client.gui.lp.LuckPermsScreen;
 import com.arcadia.customperm.network.gui.AliasesData;
 import com.arcadia.customperm.network.gui.CommandsData;
 import com.arcadia.customperm.network.gui.DashboardData;
@@ -18,6 +19,7 @@ import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPageData;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
+import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.network.gui.RateLimitsData;
 import com.arcadia.customperm.network.lp.LpDto;
 import net.minecraft.client.Minecraft;
@@ -53,6 +55,8 @@ public final class AdminScreens {
         entries.add(new NavEntry(GuiPage.RATE_LIMITS, "Rate limits", Icon.CLOCK));
         // Grades decide nothing while LuckPerms is active: no entry rather than a page that only says so.
         if (context.backend().usesInternalGrades()) entries.add(new NavEntry(GuiPage.GRADES, "Grades", Icon.SHIELD));
+        // The LuckPerms editor only exists while LuckPerms is active: without it the entry would open nothing.
+        if (context.luckPermsActive()) entries.add(new NavEntry(GuiPage.LUCKPERMS, "LuckPerms", Icon.SHIELD));
         return entries;
     }
 
@@ -89,6 +93,7 @@ public final class AdminScreens {
             case AliasesData d -> new AliasesScreen(context, d);
             case RateLimitsData d -> new RateLimitsScreen(context, d);
             case GradesData d -> new GradesScreen(context, d);
+            case LuckPermsData d -> new LuckPermsScreen(context, d);
         };
     }
 }

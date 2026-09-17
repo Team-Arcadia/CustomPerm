@@ -145,18 +145,33 @@ public final class GradeAdmin {
         return AdminResult.ok("Unassigned " + gradeName + " from " + displayName).warn(warning);
     }
 
+    /** Outcome of resolving a player name: the profile, or why there is none. */
+    public record Resolution(Optional<GameProfile> profile, String problem) {
+    }
+
     /**
      * Resolves a player known to this server by name: online players, then any player who has joined
      * before (NeoForge's username cache). Never asks the session service: on an offline-mode server
      * that lookup invents a profile for any name, so a typo would silently grant a grade to nobody.
+     * An offline name carried by several known accounts (a name taken over after a rename) is refused
+     * rather than guessed.
      */
-    public static Optional<GameProfile> findKnownProfile(MinecraftServer server, String name) {
+    public static Resolution resolvePlayer(MinecraftServer server, String name) {
         ServerPlayer online = server.getPlayerList().getPlayerByName(name);
-        if (online != null) return Optional.of(online.getGameProfile());
-        return UsernameCache.getMap().entrySet().stream()
+        if (online != null) return new Resolution(Optional.of(online.getGameProfile()), null);
+        List<Map.Entry<UUID, String>> matches = UsernameCache.getMap().entrySet().stream()
                 .filter(entry -> entry.getValue().equalsIgnoreCase(name))
-                .findFirst()
-                .map(entry -> new GameProfile(entry.getKey(), entry.getValue()));
+                .toList();
+        if (matches.isEmpty()) {
+            return new Resolution(Optional.empty(), "Unknown player '" + name
+                    + "': grades can be assigned to players online or who joined this server before.");
+        }
+        if (matches.size() > 1) {
+            return new Resolution(Optional.empty(), "Several accounts have used the name '" + name
+                    + "': assign the grade while the player is online.");
+        }
+        Map.Entry<UUID, String> match = matches.get(0);
+        return new Resolution(Optional.of(new GameProfile(match.getKey(), match.getValue())), null);
     }
 
     /** Names of every player known to this server, for suggestions. */
