@@ -145,6 +145,80 @@ public final class GradeAdmin {
                 .note("Only breaks ties at the same specificity: an exact node in a lighter grade still wins.");
     }
 
+    /**
+     * Makes {@code gradeName} inherit {@code parentName}: where the grade says nothing as precise about a
+     * node, what its parents say applies, nearest first. A cycle is refused here rather than left to the
+     * resolver, which stops one silently: an admin who asks for a cycle has made a mistake worth naming.
+     */
+    public static AdminResult addParent(MinecraftServer server, String gradeName, String parentName) {
+        AdminResult refusal = unavailable();
+        if (refusal != null) return refusal;
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        if (!grades().grades.containsKey(parentName)) return AdminResult.fail("No such grade: " + parentName);
+        if (gradeName.equals(parentName)) return AdminResult.fail("A grade cannot inherit from itself.");
+        if (grade.parents.contains(parentName)) {
+            return AdminResult.ok(gradeName + " already inherits " + parentName + " — no change.");
+        }
+        List<String> loop = inheritancePath(parentName, gradeName);
+        if (loop != null) {
+            return AdminResult.fail("Refused: " + String.join(" inherits ", loop) + ", so " + gradeName
+                    + " cannot inherit " + parentName + ".");
+        }
+        grade.parents.add(parentName);
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
+        return AdminResult.ok(gradeName + " now inherits " + parentName).warn(warning)
+                .note("A node set on " + gradeName + " itself still wins over the same node inherited.");
+    }
+
+    public static AdminResult removeParent(MinecraftServer server, String gradeName, String parentName) {
+        AdminResult refusal = unavailable();
+        if (refusal != null) return refusal;
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        if (!grade.parents.remove(parentName)) {
+            return AdminResult.ok(gradeName + " does not inherit " + parentName + " — no change.");
+        }
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
+        return AdminResult.ok(gradeName + " no longer inherits " + parentName).warn(warning);
+    }
+
+    /** The grades {@code gradeName} inherits directly, nearest first; empty for an unknown grade. */
+    public static List<String> parents(String gradeName) {
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        return grade == null ? List.of() : List.copyOf(grade.parents);
+    }
+
+    /**
+     * The inheritance path from {@code from} up to {@code target}, or {@code null} when it does not lead
+     * there. Breadth-first, so the path named in a refusal is the shortest one.
+     */
+    private static List<String> inheritancePath(String from, String target) {
+        Map<String, String> reachedFrom = new java.util.LinkedHashMap<>();
+        java.util.Deque<String> queue = new java.util.ArrayDeque<>();
+        reachedFrom.put(from, null);
+        queue.add(from);
+        while (!queue.isEmpty()) {
+            String name = queue.poll();
+            if (name.equals(target)) {
+                List<String> path = new ArrayList<>();
+                for (String step = name; step != null; step = reachedFrom.get(step)) path.add(step);
+                java.util.Collections.reverse(path);
+                return path;
+            }
+            GradesConfig.Grade grade = grades().grades.get(name);
+            if (grade == null) continue;
+            for (String parent : grade.parents) {
+                if (parent == null || reachedFrom.containsKey(parent)) continue;
+                reachedFrom.put(parent, name);
+                queue.add(parent);
+            }
+        }
+        return null;
+    }
+
     public static AdminResult assign(MinecraftServer server, GameProfile profile, String gradeName) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;

@@ -67,6 +67,8 @@ import java.util.stream.Collectors;
  *                     addperm|removeperm <grade> <node>
  *                     adddeny|removedeny <grade> <node>   # most specific entry wins, DENY on a tie
  *                     weight <grade> <weight>             # breaks ties at the same specificity
+ *                     parent add|remove <grade> <parent>  # inherit another grade, nearest entry wins
+ *                     parent list <grade>
  *                     assign|unassign <player> <grade>    # online, or joined the server before
  *                     setdefault <grade> | cleardefault   # grade applied to every player
  *                     list
@@ -217,6 +219,21 @@ public class CustomPermCommand {
             return SharedSuggestionProvider.suggest(grade.deniedPermissions, builder);
         };
 
+    /** Grades the grade named by the "grade" argument already inherits (for parent remove). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRADE_PARENTS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(
+            GradeAdmin.parents(StringArgumentType.getString(ctx, "grade")), builder);
+
+    /** Grades that could become a parent: every other grade it does not already inherit. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_PARENT_CANDIDATES =
+        (ctx, builder) -> {
+            String gradeName = StringArgumentType.getString(ctx, "grade");
+            List<String> parents = GradeAdmin.parents(gradeName);
+            return SharedSuggestionProvider.suggest(CustomPerm.configManager.getGrades().grades.keySet().stream()
+                .filter(name -> !name.equals(gradeName) && !parents.contains(name))
+                .toList(), builder);
+        };
+
     /** Nodes the player named by the "player" argument carries themselves (for the remove subcommands). */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_USER_PERMS = userNodes(false);
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_USER_DENIES = userNodes(true);
@@ -296,6 +313,23 @@ public class CustomPermCommand {
                             .suggests(SUGGEST_GRADES)
                             .then(Commands.argument("weight", IntegerArgumentType.integer())
                                 .executes(CustomPermCommand::gradeWeight))))
+                    .then(Commands.literal("parent")
+                        .then(Commands.literal("add").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_GRADES)
+                                .then(Commands.argument("parent", StringArgumentType.word())
+                                    .suggests(SUGGEST_PARENT_CANDIDATES)
+                                    .executes(CustomPermCommand::gradeParentAdd))))
+                        .then(Commands.literal("remove").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_GRADES)
+                                .then(Commands.argument("parent", StringArgumentType.word())
+                                    .suggests(SUGGEST_GRADE_PARENTS)
+                                    .executes(CustomPermCommand::gradeParentRemove))))
+                        .then(Commands.literal("list")
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_GRADES)
+                                .executes(CustomPermCommand::gradeParentList))))
                     .then(Commands.literal("assign").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
@@ -660,6 +694,30 @@ public class CustomPermCommand {
     private static int gradeWeight(CommandContext<CommandSourceStack> ctx) {
         return report(ctx, guarded(ctx, () -> GradeAdmin.setWeight(ctx.getSource().getServer(),
             StringArgumentType.getString(ctx, "grade"), IntegerArgumentType.getInteger(ctx, "weight"))));
+    }
+
+    private static int gradeParentAdd(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, guarded(ctx, () -> GradeAdmin.addParent(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"))));
+    }
+
+    private static int gradeParentRemove(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, guarded(ctx, () -> GradeAdmin.removeParent(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"))));
+    }
+
+    private static int gradeParentList(CommandContext<CommandSourceStack> ctx) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        String gradeName = StringArgumentType.getString(ctx, "grade");
+        if (!CustomPerm.configManager.getGrades().grades.containsKey(gradeName)) {
+            return report(ctx, AdminResult.fail("No such grade: " + gradeName));
+        }
+        List<String> parents = GradeAdmin.parents(gradeName);
+        ctx.getSource().sendSuccess(() -> Component.literal(parents.isEmpty()
+            ? gradeName + " inherits nothing."
+            : gradeName + " inherits: " + String.join(", ", parents)), false);
+        return 1;
     }
 
     private static int gradeSetDefault(CommandContext<CommandSourceStack> ctx) {

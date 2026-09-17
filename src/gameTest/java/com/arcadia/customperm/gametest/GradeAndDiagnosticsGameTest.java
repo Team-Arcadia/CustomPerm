@@ -280,6 +280,58 @@ public class GradeAndDiagnosticsGameTest {
         helper.succeed();
     }
 
+    /**
+     * Grade inheritance through the commands: a child gets what its parent allows, its own entry beats what
+     * it inherits, and a cycle is refused rather than silently absorbed by the resolver.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void gradeParentsInheritAndRefuseCycles(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        String uuid = null;
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_g_heir", 0);
+             Exposure gamemode = Exposure.of(server, "gamemode")) {
+            uuid = player.uuid().toString();
+            expect(ServerCommands.run(server, "customperm grade create cp_gt_p_base"), "Created grade");
+            expect(ServerCommands.run(server, "customperm grade create cp_gt_p_leaf"), "Created grade");
+            expect(ServerCommands.run(server, "customperm grade addperm cp_gt_p_base customperm.command.gamemode"),
+                    "Added customperm.command.gamemode");
+            grades.userGrades.put(uuid, new java.util.ArrayList<>(List.of("cp_gt_p_leaf")));
+            if (player.canUse("gamemode")) fail("A leaf grade with no parent must grant nothing.");
+
+            expect(ServerCommands.run(server, "customperm grade parent add cp_gt_p_leaf cp_gt_p_base"),
+                    "cp_gt_p_leaf now inherits cp_gt_p_base");
+            if (!player.canUse("gamemode")) fail("The ALLOW of the parent must reach the player.");
+            expect(ServerCommands.run(server, "customperm grade parent list cp_gt_p_leaf"),
+                    "cp_gt_p_leaf inherits: cp_gt_p_base");
+            expect(ServerCommands.run(server, "customperm grade parent list cp_gt_p_base"), "inherits nothing");
+
+            expect(ServerCommands.run(server, "customperm grade parent add cp_gt_p_leaf cp_gt_p_base"),
+                    "already inherits");
+            expect(ServerCommands.run(server, "customperm grade parent add cp_gt_p_base cp_gt_p_leaf"),
+                    "cp_gt_p_base cannot inherit cp_gt_p_leaf");
+            expect(ServerCommands.run(server, "customperm grade parent add cp_gt_p_leaf cp_gt_p_leaf"),
+                    "cannot inherit from itself");
+            expect(ServerCommands.run(server, "customperm grade parent add cp_gt_p_leaf cp_gt_p_missing"),
+                    "No such grade: cp_gt_p_missing");
+
+            expect(ServerCommands.run(server, "customperm grade adddeny cp_gt_p_leaf customperm.command.gamemode"),
+                    "Denied customperm.command.gamemode");
+            if (player.canUse("gamemode")) fail("A DENY on the child must beat the ALLOW it inherits.");
+
+            expect(ServerCommands.run(server, "customperm grade parent remove cp_gt_p_leaf cp_gt_p_base"),
+                    "no longer inherits");
+            expect(ServerCommands.run(server, "customperm grade parent remove cp_gt_p_leaf cp_gt_p_base"),
+                    "does not inherit");
+        } finally {
+            grades.grades.remove("cp_gt_p_base");
+            grades.grades.remove("cp_gt_p_leaf");
+            if (uuid != null) grades.userGrades.remove(uuid);
+        }
+        helper.succeed();
+    }
+
     private static void expect(List<String> lines, String fragment) {
         if (!ServerCommands.contains(lines, fragment)) fail("Expected output containing '" + fragment + "', got: " + lines);
     }

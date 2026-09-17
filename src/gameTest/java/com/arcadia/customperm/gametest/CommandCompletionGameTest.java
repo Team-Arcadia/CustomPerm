@@ -54,6 +54,10 @@ public class CommandCompletionGameTest {
             grade.name = GRADE;
             grade.permissions.add("cp.s.allowed");
             grade.deniedPermissions.add("cp.s.denied");
+            GradesConfig.Grade parent = new GradesConfig.Grade();
+            parent.name = "cp_s_parent";
+            config.getGrades().grades.put("cp_s_parent", parent);
+            grade.parents.add("cp_s_parent");
             config.getGrades().grades.put(GRADE, grade);
             config.getGrades().userGrades.computeIfAbsent(op.uuid().toString(), k -> new ArrayList<>()).add(GRADE);
             config.getGrades().userPermissions.put(op.uuid().toString(), new java.util.LinkedHashSet<>(List.of("cp.s.own.allowed")));
@@ -70,7 +74,8 @@ public class CommandCompletionGameTest {
             expect(problems, op, "customperm command gateall ", "true", "false");
             expect(problems, op, "customperm alias ", "add", "addstep", "removestep", "movestep", "setstep", "steps", "remove", "list");
             expect(problems, op, "customperm grade ", "create", "delete", "addperm", "removeperm", "adddeny", "removedeny", "assign", "unassign",
-                    "setdefault", "cleardefault", "weight", "list");
+                    "setdefault", "cleardefault", "weight", "parent", "list");
+            expect(problems, op, "customperm grade parent ", "add", "remove", "list");
             expect(problems, op, "customperm user ", "addperm", "removeperm", "adddeny", "removedeny", "list");
             expect(problems, op, "customperm grade setdefault ", GRADE);
             expect(problems, op, "customperm ratelimit ", "set", "persistence", "enable", "disable", "remove", "list");
@@ -115,6 +120,14 @@ public class CommandCompletionGameTest {
             expect(problems, op, "customperm grade assign cp_s_owner ", GRADE);
             expect(problems, op, "customperm grade unassign cp_s_owner ", GRADE);
             expect(problems, op, "customperm grade weight ", GRADE);
+            for (String sub : List.of("add", "remove", "list")) {
+                expect(problems, op, "customperm grade parent " + sub + " ", GRADE);
+            }
+            // A candidate parent is any other grade not inherited already, so the one already inherited
+            // and the grade itself are both out.
+            expect(problems, op, "customperm grade parent add cp_s_parent ", GRADE);
+            expectAbsent(problems, op, "customperm grade parent add " + GRADE + " ", "cp_s_parent", GRADE);
+            expect(problems, op, "customperm grade parent remove " + GRADE + " ", "cp_s_parent");
 
             // Nodes carried by a player themselves.
             for (String sub : List.of("addperm", "removeperm", "adddeny", "removedeny", "list")) {
@@ -138,6 +151,7 @@ public class CommandCompletionGameTest {
             AliasAdmin.remove(server, ALIAS);
             config.getRateLimits().rules.remove(ALIAS);
             config.getGrades().grades.remove(GRADE);
+            config.getGrades().grades.remove("cp_s_parent");
             config.getGrades().userGrades.values().forEach(list -> list.remove(GRADE));
             config.getGrades().userGrades.values().removeIf(List::isEmpty);
             config.getGrades().userPermissions.values().forEach(nodes -> nodes.remove("cp.s.own.allowed"));
