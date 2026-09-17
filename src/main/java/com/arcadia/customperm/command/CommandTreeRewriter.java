@@ -257,6 +257,12 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             implements Predicate<CommandSourceStack> {
         @Override
         public boolean test(CommandSourceStack source) {
+            // A gate left on a node after its command stopped being exposed must not keep granting it.
+            // reassertExposedCommands restores the delegate on remove and reload, but access control
+            // should not depend on every removal path remembering to do so.
+            if (!CustomPerm.configManager.getCommands().grantedCommands.contains(rootName)) {
+                return delegate == null || delegate.test(source);
+            }
             boolean op2 = source.hasPermission(2);
             boolean customPermAllows = op2
                 || PermissionService.get().hasPermission(source, "customperm.command." + rootName);
