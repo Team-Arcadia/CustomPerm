@@ -21,6 +21,12 @@ public class GradesConfig {
     /** UUID string -> list of grade names (ordered, but order is informational only). */
     public Map<String, List<String>> userGrades = new HashMap<>();
     /**
+     * UUID string -> grades this player refuses, even when one of their grades inherits it. The way to say
+     * "everything that grade gives, except what it takes from this one", like a LuckPerms inheritance node
+     * set to false on a user.
+     */
+    public Map<String, List<String>> userDeniedGrades = new HashMap<>();
+    /**
      * UUID string -> ALLOW nodes carried by that player alone, above every grade they hold. This is the
      * exception a single player gets without inventing a grade for them, like a node set on a LuckPerms
      * user rather than on one of their groups.
@@ -40,6 +46,12 @@ public class GradesConfig {
          * grade it comes back to rather than looping.
          */
         public List<String> parents = new ArrayList<>();
+        /**
+         * Grades this one refuses to inherit, even when one of its parents inherits them. Like a parent
+         * entry, it is read where it is declared: a grade nearer to the holder decides before a farther
+         * one, so a grade refuses only for its own chain, never for another grade the player holds.
+         */
+        public List<String> deniedParents = new ArrayList<>();
         /**
          * Tie-break between two grades held by the same player, like a LuckPerms group weight. It is read
          * only when they cover a node at the same specificity: the heaviest grade decides, and a DENY still
@@ -68,14 +80,25 @@ public class GradesConfig {
             g.parents.removeIf(parent -> parent.equals(g.name));
             java.util.Set<String> seen = new java.util.LinkedHashSet<>(g.parents);
             if (seen.size() != g.parents.size()) g.parents = new ArrayList<>(seen);
+            if (g.deniedParents == null) g.deniedParents = new ArrayList<>();
+            g.deniedParents.removeIf(java.util.Objects::isNull);
+            g.deniedParents.removeIf(parent -> parent.equals(g.name));
+            java.util.Set<String> denied = new java.util.LinkedHashSet<>(g.deniedParents);
+            if (denied.size() != g.deniedParents.size()) g.deniedParents = new ArrayList<>(denied);
         }
-        userGrades.values().removeIf(java.util.Objects::isNull);
-        userGrades.values().forEach(list -> list.removeIf(java.util.Objects::isNull));
-        userGrades.values().removeIf(List::isEmpty);
+        normalizeUserGrades(userGrades);
+        if (userDeniedGrades == null) userDeniedGrades = new HashMap<>();
+        normalizeUserGrades(userDeniedGrades);
         if (userPermissions == null) userPermissions = new HashMap<>();
         if (userDeniedPermissions == null) userDeniedPermissions = new HashMap<>();
         normalizeUserNodes(userPermissions);
         normalizeUserNodes(userDeniedPermissions);
+    }
+
+    private static void normalizeUserGrades(Map<String, List<String>> assignments) {
+        assignments.values().removeIf(java.util.Objects::isNull);
+        assignments.values().forEach(list -> list.removeIf(java.util.Objects::isNull));
+        assignments.values().removeIf(List::isEmpty);
     }
 
     /** An empty entry is dropped rather than kept: it would show a player as carrying nodes they do not have. */

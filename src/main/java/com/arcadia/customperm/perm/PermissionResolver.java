@@ -31,6 +31,11 @@ import java.util.UUID;
  *       precise about the node, what its parents say applies, nearest first, so a grade overrides what
  *       it inherits. A chain answers with one verdict, which then competes with the player's other
  *       grades at the weight of the grade they actually hold.</li>
+ *   <li>A grade is not reached at all when the holder refuses it: {@link GradesConfig#userDeniedGrades}
+ *       takes it out of everything that player resolves, the default grade included, and
+ *       {@link GradesConfig.Grade#deniedParents} takes it out of that grade's own chain, from the point
+ *       where the refusal is declared. A refusal removes a grade from the resolution; it never turns
+ *       what that grade allows into a denial.</li>
  *   <li>Nodes carried by the player themselves ({@link GradesConfig#userPermissions},
  *       {@link GradesConfig#userDeniedPermissions}) rank above every grade at the same specificity,
  *       whatever its weight, like a node set on a LuckPerms user rather than on one of their groups.
@@ -71,18 +76,20 @@ public final class PermissionResolver {
         boolean hasDefault = defaultGrade != null && !defaultGrade.isEmpty();
         String user = uuid.toString();
 
+        List<String> refused = grades.userDeniedGrades.get(user);
+
         Ranked own = new Ranked();
         own.offer(specificity(grades.userPermissions.get(user), node),
                 specificity(grades.userDeniedPermissions.get(user), node), PLAYER_RANK);
         List<String> assigned = grades.userGrades.get(user);
         if (assigned != null) {
-            offerGrades(own, grades, assigned, node, hasDefault ? defaultGrade : null);
+            offerGrades(own, grades, assigned, node, hasDefault ? defaultGrade : null, refused);
         }
         if (own.verdict != Tristate.UNSET) return own.verdict;
 
         if (!hasDefault) return Tristate.UNSET;
         Ranked fallback = new Ranked();
-        offerGrades(fallback, grades, List.of(defaultGrade), node, null);
+        offerGrades(fallback, grades, List.of(defaultGrade), node, null, refused);
         return fallback.verdict;
     }
 
@@ -92,9 +99,10 @@ public final class PermissionResolver {
     }
 
     private static void offerGrades(Ranked best, GradesConfig grades, List<String> gradeNames, String node,
-                                    String skip) {
+                                    String skip, List<String> refused) {
         for (String gradeName : gradeNames) {
             if (gradeName == null || gradeName.equals(skip)) continue;
+            if (refused != null && refused.contains(gradeName)) continue;
             GradesConfig.Grade grade = grades.grades.get(gradeName);
             if (grade == null) continue;
             if (grade.parents.isEmpty()) {
@@ -106,7 +114,7 @@ public final class PermissionResolver {
             // A chain answers with one verdict, which then competes with the other grades at the weight of
             // the grade the player actually holds: what a parent says arrives through its child.
             Ranked chain = new Ranked();
-            walkChain(chain, grades, gradeName, grade, node);
+            walkChain(chain, grades, gradeName, grade, node, refused);
             best.merge(chain, grade.weight);
         }
     }
@@ -118,10 +126,12 @@ public final class PermissionResolver {
      * grade it comes back to instead of recursing, and {@link #MAX_INHERITANCE_DEPTH} bounds the rest.
      */
     private static void walkChain(Ranked chain, GradesConfig grades, String rootName, GradesConfig.Grade root,
-                                  String node) {
+                                  String node, List<String> refused) {
         // Grades are followed by the key they are stored under, never by their name field: a hand-edited
         // file can disagree on the two, and the key is what a parent entry names.
         Set<String> seen = new HashSet<>();
+        // A refused grade is marked as already seen: nothing reaches it, whichever path would have.
+        if (refused != null) seen.addAll(refused);
         List<GradesConfig.Grade> level = new ArrayList<>();
         seen.add(rootName);
         level.add(root);
@@ -129,6 +139,9 @@ public final class PermissionResolver {
             List<GradesConfig.Grade> next = new ArrayList<>();
             for (GradesConfig.Grade grade : level) {
                 chain.offer(specificity(grade.permissions, node), specificity(grade.deniedPermissions, node), -depth);
+                // Read where it is declared: a grade nearer to the holder has already been walked, so its
+                // refusal closes a farther one, never the other way round.
+                seen.addAll(grade.deniedParents);
                 for (String parent : grade.parents) {
                     if (parent == null || !seen.add(parent)) continue;
                     GradesConfig.Grade inherited = grades.grades.get(parent);

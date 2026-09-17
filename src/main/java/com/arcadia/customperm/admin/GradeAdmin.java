@@ -313,9 +313,11 @@ public final class GradeAdmin {
             g.deniedPermissions = new HashSet<>(grade.deniedPermissions);
             g.weight = grade.weight;
             g.parents = new ArrayList<>(grade.parents);
+            g.deniedParents = new ArrayList<>(grade.deniedParents);
             copy.grades.put(name, g);
         });
         source.userGrades.forEach((uuid, list) -> copy.userGrades.put(uuid, new ArrayList<>(list)));
+        source.userDeniedGrades.forEach((uuid, list) -> copy.userDeniedGrades.put(uuid, new ArrayList<>(list)));
         source.userPermissions.forEach((uuid, nodes) -> copy.userPermissions.put(uuid, new HashSet<>(nodes)));
         source.userDeniedPermissions.forEach((uuid, nodes) -> copy.userDeniedPermissions.put(uuid, new HashSet<>(nodes)));
         return copy;
@@ -326,6 +328,8 @@ public final class GradeAdmin {
         target.grades.putAll(saved.grades);
         target.userGrades.clear();
         target.userGrades.putAll(saved.userGrades);
+        target.userDeniedGrades.clear();
+        target.userDeniedGrades.putAll(saved.userDeniedGrades);
         target.userPermissions.clear();
         target.userPermissions.putAll(saved.userPermissions);
         target.userDeniedPermissions.clear();

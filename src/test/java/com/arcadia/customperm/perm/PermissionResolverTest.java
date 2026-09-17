@@ -475,10 +475,92 @@ class PermissionResolverTest {
         assertEquals(java.util.List.of("base"), vip.parents);
     }
 
+    // ─── Héritage refusé ──────────────────────────────────────────────────────
+
+    @Test
+    void aGradeThePlayerRefusesGrantsNothing() {
+        createGrade("vip", Set.of("customperm.command.tp"), Set.of());
+        grades.userGrades.put(player.toString(), java.util.List.of("vip"));
+        refuse("vip");
+        assertEquals(Tristate.UNSET, check("customperm.command.tp"),
+            "a refusal takes the grade out, it does not turn its ALLOW into a DENY");
+    }
+
+    @Test
+    void aRefusedGradeIsNotReachedThroughAChainEither() {
+        createGrade("base", Set.of("customperm.command.tp"), Set.of());
+        createGrade("mid", Set.of("customperm.command.fly"), Set.of()).parents.add("base");
+        inherit("vip", "mid");
+        grades.userGrades.put(player.toString(), java.util.List.of("vip"));
+        refuse("base");
+        assertEquals(Tristate.UNSET, check("customperm.command.tp"), "the refused ancestor is not walked");
+        assertEquals(Tristate.ALLOW, check("customperm.command.fly"), "the rest of the chain still applies");
+    }
+
+    @Test
+    void aPlayerCanRefuseTheDefaultGrade() {
+        createGrade("everyone", Set.of(), Set.of("*"));
+        assertEquals(Tristate.DENY, PermissionResolver.check(grades, player, "customperm.command.tp", "everyone"));
+        refuse("everyone");
+        assertEquals(Tristate.UNSET, PermissionResolver.check(grades, player, "customperm.command.tp", "everyone"),
+            "the default grade applies to every player except the ones who refuse it");
+    }
+
+    @Test
+    void aGradeCanRefuseWhatItsParentInherits() {
+        createGrade("root", Set.of("customperm.command.tp"), Set.of());
+        createGrade("middle", Set.of("customperm.command.fly"), Set.of()).parents.add("root");
+        GradesConfig.Grade vip = createGrade("vip", Set.of(), Set.of());
+        vip.parents.add("middle");
+        vip.deniedParents.add("root");
+        grades.userGrades.put(player.toString(), java.util.List.of("vip"));
+        assertEquals(Tristate.UNSET, check("customperm.command.tp"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.fly"));
+    }
+
+    @Test
+    void aRefusalDeclaredFartherDoesNotCloseANearerInheritance() {
+        // vip inherits both middle and root; middle refuses root. The refusal is read where it is
+        // declared, so it cannot undo what vip itself asked for.
+        createGrade("root", Set.of("customperm.command.tp"), Set.of());
+        createGrade("middle", Set.of(), Set.of()).deniedParents.add("root");
+        GradesConfig.Grade vip = createGrade("vip", Set.of(), Set.of());
+        vip.parents.addAll(java.util.List.of("middle", "root"));
+        grades.userGrades.put(player.toString(), java.util.List.of("vip"));
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"));
+    }
+
+    @Test
+    void refusingOneGradeLeavesTheOthersAlone() {
+        createGrade("vip", Set.of("customperm.command.tp"), Set.of());
+        createGrade("staff", Set.of("customperm.command.tp", "customperm.command.fly"), Set.of());
+        grades.userGrades.put(player.toString(), java.util.List.of("vip", "staff"));
+        refuse("vip");
+        assertEquals(Tristate.ALLOW, check("customperm.command.tp"), "staff still answers");
+        assertEquals(Tristate.ALLOW, check("customperm.command.fly"));
+    }
+
+    @Test
+    void normalizeCleansRefusals() {
+        GradesConfig.Grade vip = createGrade("vip", Set.of(), Set.of());
+        vip.deniedParents.addAll(java.util.Arrays.asList("vip", "base", "base", null));
+        grades.userDeniedGrades.put(player.toString(), new java.util.ArrayList<>(java.util.Arrays.asList("a", (String) null)));
+        grades.userDeniedGrades.put("other", new java.util.ArrayList<>());
+        grades.normalize();
+        assertEquals(java.util.List.of("base"), vip.deniedParents);
+        assertEquals(java.util.List.of("a"), grades.userDeniedGrades.get(player.toString()));
+        assertNull(grades.userDeniedGrades.get("other"), "an empty refusal list is dropped");
+    }
+
     // ─── Helpers ──────────────────────────────────────────────────────────────
 
     private Tristate check(String node) {
         return PermissionResolver.check(grades, player, node, null);
+    }
+
+    /** The player refuses {@code gradeName}, wherever it would otherwise be reached. */
+    private void refuse(String gradeName) {
+        grades.userDeniedGrades.computeIfAbsent(player.toString(), k -> new java.util.ArrayList<>()).add(gradeName);
     }
 
     /** An empty grade inheriting from {@code parent}, so a test reads as what it is about. */
