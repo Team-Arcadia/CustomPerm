@@ -58,8 +58,18 @@ public class LuckPermsService implements PermissionService {
 
     @Override
     public boolean hasPermission(CommandSourceStack source, String node) {
+        return resolve(source, node, false);
+    }
+
+    /** LuckPerms has no operator short-circuit; only the internal fallback path differs. */
+    @Override
+    public boolean hasGrantedNode(CommandSourceStack source, String node) {
+        return resolve(source, node, true);
+    }
+
+    private boolean resolve(CommandSourceStack source, String node, boolean grantedOnly) {
         // AC3 : une fois dégradé, LP n'est plus consulté.
-        if (degraded.get()) return handleUnavailable(source, node);
+        if (degraded.get()) return handleUnavailable(source, node, grantedOnly);
 
         if (!(source.getEntity() instanceof ServerPlayer player)) return false;
         try {
@@ -83,13 +93,13 @@ public class LuckPermsService implements PermissionService {
                 CustomPerm.raiseLuckPermsUnavailable("API error: " + t.getClass().getSimpleName());
             }
             // AC4/AC5 : politique de fallback appliquée immédiatement à cette requête aussi.
-            return handleUnavailable(source, node);
+            return handleUnavailable(source, node, grantedOnly);
         }
     }
 
-    private boolean handleUnavailable(CommandSourceStack source, String node) {
+    private boolean handleUnavailable(CommandSourceStack source, String node, boolean grantedOnly) {
         if (CustomPerm.configManager.getSettings().useInternalLuckPermsFallback()) {
-            return safeCallFallback(source, node);
+            return safeCallFallback(source, node, grantedOnly);
         }
         return false;
     }
@@ -99,9 +109,9 @@ public class LuckPermsService implements PermissionService {
      * InternalPermService est très stable, mais un guard explicite évite une remontée brute
      * vers le dispatcher de commandes en cas de corruption config.
      */
-    private boolean safeCallFallback(CommandSourceStack source, String node) {
+    private boolean safeCallFallback(CommandSourceStack source, String node, boolean grantedOnly) {
         try {
-            return fallback.hasPermission(source, node);
+            return grantedOnly ? fallback.hasGrantedNode(source, node) : fallback.hasPermission(source, node);
         } catch (Throwable t) {
             CustomPerm.LOGGER.warn("[CustomPerm] Fallback InternalPermService.hasPermission() failed for node {}", node, t);
             return false;

@@ -75,9 +75,8 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Concurrent-safe config access** — the active snapshot uses an `AtomicReference`; saves are serialized and each file is replaced through a unique temporary file.
 - **Diagnostics** — `/customperm status`, `/customperm scan`, `/customperm debug`, and `/customperm test` cover runtime inspection and troubleshooting.
 - **CI release checks** — GitHub Actions runs GameTests, builds the distributable jar, and verifies required jar metadata.
-- **Server-side only** — no client mod is required for core functionality. Vanilla clients (and clients without CustomPerm installed) connect to a CustomPerm server without issue: the network channel backing the optional GUI is registered as `optional()`, so it never gates the connection handshake.
-- **Optional TesseraUI admin panel** — `/customperm gui` opens a graphical landing menu when [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) is installed client-side. The menu follows the active backend: with LuckPerms it leads to the in-game **LuckPerms editor** (groups, players, tracks), without it to the internal Grades screen.
-- **In-game LuckPerms editor** — `/customperm gui luckperms` edits the LuckPerms permission store from inside the game: groups, inheritance, permission nodes with contexts and expiry, meta, prefix/suffix, weight, players, primary group, and promotion tracks. Writes go through the LuckPerms API server-side and are gated by `customperm.gui.luckperms.edit`.
+- **Server-side only** — no client mod is required for core functionality. Vanilla clients (and clients without CustomPerm installed) connect to a CustomPerm server without issue: the network channels backing the admin interface are registered as `optional()`, so it never gates the connection handshake.
+- **In-game admin interface** — `/customperm gui` opens a native admin interface on clients that have CustomPerm installed: no other client mod is needed. The server stays the authority: every action is re-checked, rate limited and logged. The interface is being rebuilt screen by screen for 1.1.0 (see [In-game admin interface](#in-game-admin-interface)).
 
 ---
 
@@ -89,14 +88,13 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **NeoForge 21.1.221** or newer
 - **Java 21**
 - (Optional but recommended) **LuckPerms 5.4.x or 5.5.x** for NeoForge
-- (Optional) **[TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) 1.0+** for NeoForge, installed client-side, for the graphical admin panel
 
 ### Steps
 
 1. Download CustomPerm from [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) or [Modrinth](https://modrinth.com/mod/customperm).
 2. Drop the jar into your server's `mods/` folder.
 3. (Optional) Drop the [LuckPerms](https://luckperms.net/download) jar (NeoForge 1.21.1 build) alongside.
-4. (Optional) Have admin players install [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) client-side for `/customperm gui`.
+4. (Optional) Admin players who want the in-game interface install CustomPerm on their client too.
 5. Start the server.
 
 > **Where the builds are.** Published builds are distributed on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) and [Modrinth](https://modrinth.com/mod/customperm). The current version there is **1.0.5 (beta)**; the next release will be **1.1.0**.
@@ -118,26 +116,21 @@ Followed by the readiness summary:
 
 If you see neither line, the mod failed to load — check your logs for stack traces.
 
-### Optional: TesseraUI graphical panel
+### In-game admin interface
 
-If a player has [TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui) installed client-side, `/customperm gui` opens a graphical landing menu instead of relying purely on chat commands. TesseraUI is a soft dependency:
+`/customperm gui [page]` opens the admin interface. It needs CustomPerm on the admin's client, nothing else; without it the command explains that every setting is also available through the text commands, and players without the mod connect normally.
 
-- Without it: `/customperm gui ...` replies "TesseraUI is not installed — this GUI is unavailable. Use the text commands instead." Nothing else changes.
-- With it: the landing menu adapts to the active backend. It is not a fixed list of screens — offering both permission editors at once would mean half the menu opens a screen that can only say it does not apply here.
+The interface is drawn natively (no UI library) and is being rebuilt area by area for 1.1.0, replacing the former TesseraUI panel. Available on this branch:
 
-**Without LuckPerms** (internal backend), the menu leads to Grades, Aliases and Status. `/customperm gui grades|aliases|status` jumps straight to one. These screens dispatch the same `/customperm` commands shown in this README, through a prefilled chat input — they hold no permission or CRUD logic of their own.
-
-**With LuckPerms active**, the menu leads to the in-game LuckPerms editor, plus Aliases and Status; the Grades screen is hidden, because grades are read-only while LuckPerms owns permissions. `/customperm gui luckperms [groups|players|tracks]` jumps straight to a section:
-
-| Screen | What it edits |
+| Page | Content |
 |---|---|
-| Groups | Create/delete a group; per group: permission nodes (allow/deny, contexts, expiry), parents, meta, prefix, suffix, weight, display name |
-| Players | Online players and any player found by exact username; per player: groups, primary group, own nodes, meta, prefix/suffix, promote/demote on a track |
-| Tracks | Create/delete a track; append, insert at a position, remove a group |
+| Dashboard | Active backend and what it means, counts of exposed commands, aliases, rate limits and grades, every active admin alert, reload of the configuration (with confirmation) |
 
-Unlike the internal screens, the LuckPerms editor really writes: each action sends one operation to the server, which applies it through the LuckPerms API and sends back the updated screen plus a status line. It is the in-game counterpart of `/lp editor`, not a wrapper around `/lp` commands.
+Exposed commands, aliases, rate limits, grades and the LuckPerms editor screens follow. Until then the text commands cover them, and the LuckPerms editor keeps its server side (`customperm.gui.luckperms.edit`) unchanged.
 
-**Permissions.** `/customperm gui` itself is a client-only command (it never leaves the client if TesseraUI isn't installed). Reading any screen requires op level 2, the same check as every other `/customperm` subcommand. Writing to LuckPerms additionally requires the `customperm.gui.luckperms.edit` node, resolved by whichever backend is active — so it can be granted with `/lp user <player> permission set customperm.gui.luckperms.edit true`. Without it the editor opens read-only. Permission level 4 (server owner) bypasses the node, otherwise a fresh install would leave the owner unable to grant themselves the node that unlocks the editor. Every applied edit is logged server-side with the admin's name.
+**Permissions.** Reading any page requires op level 2, the same check as `/customperm`. Writing requires the node of the area on top of it: `customperm.gui.commands.edit`, `customperm.gui.aliases.edit`, `customperm.gui.ratelimits.edit`, `customperm.gui.grades.edit`, `customperm.gui.luckperms.edit`. These nodes are checked as granted to the player, without the usual operator short-circuit of the internal backend, so they can delegate one area to a level-2 moderator without opening the others. Permission level 4 (server owner) bypasses them. Actions that change no configuration, such as reload, need op level 2 only, like their command. Every applied action is logged server-side with the admin's name.
+
+**Compatibility.** The interface uses network protocol 2. A client running an older CustomPerm still connects to a 1.1.0 server but has no interface there, and the other way round.
 
 ---
 
@@ -166,7 +159,7 @@ On a dedicated server this is invisible — one installation, one world. In sing
 ### What is actually useful offline
 
 - **Aliases and macros** — the main reason to run CustomPerm solo. Chain several commands behind one, executed at op level 4.
-- **The TesseraUI panel** — `/customperm gui` works in singleplayer like anywhere else, if TesseraUI is installed.
+- **The admin interface** — `/customperm gui` works in singleplayer like anywhere else.
 - **Grades and permission nodes** — of little use while you are alone and already an operator. They become meaningful the moment you **open the world to LAN**: guests join as non-ops, and grades let you hand out exactly the commands you want them to have.
 - **Rate limits** — note these apply to you as well. A rule set in one world applies in all of them, per the point above; the usage counters, however, are stored in each world's save.
 
@@ -264,8 +257,7 @@ Cap how many times one player may run a command or an alias within a sliding win
 | `/customperm status` | Global snapshot: backend, wrapped commands, exposed commands, aliases, grades, active admin alerts. |
 | `/customperm scan [pattern]` | Lists every command in the dispatcher with its state (exposed, alias, mod-internal). Optional substring filter. |
 | `/customperm reload` | Reloads config files from disk. |
-| `/customperm gui [grades\|aliases\|status]` | Opens the graphical TesseraUI panel — no argument opens the landing menu, an argument jumps to that screen (client-only command; requires TesseraUI installed client-side). |
-| `/customperm gui luckperms [groups\|players\|tracks]` | Opens the in-game LuckPerms editor. Reading needs op level 2; writing needs `customperm.gui.luckperms.edit`. Reports an inactive backend rather than failing when LuckPerms is absent. |
+| `/customperm gui [dashboard]` | Opens the in-game admin interface (needs CustomPerm on the client). Reading needs op level 2; writing needs the area's `customperm.gui.<area>.edit` node. |
 
 ---
 
@@ -622,7 +614,6 @@ In `gradle.properties`:
 minecraft_version=1.21.1
 neo_version=21.1.221
 luckperms_api_version=5.4
-tesseraui_version=1.1
 ```
 
 ---
@@ -771,7 +762,7 @@ LuckPerms stores and resolves both `customperm.command.*` and `customperm.alias.
 - **No sub-command granularity**: `customperm.command.gamemode` covers every sub-mode (creative, spectator, etc.). To split, use aliases.
 - **No alias parameters**: an alias is a no-arg command. To build `/heal <player>`, write `/heal_target` using `effect give @p` etc., or create multiple aliases.
 - **LP contexts partially tested**: per-world, per-server contexts go through `getCachedData()` and are theoretically supported but not extensively tested.
-- **GUI requires TesseraUI**: without it, administration stays fully command-driven.
+- **The admin interface needs CustomPerm client-side**: without it, administration stays fully command-driven.
 - **The in-game LuckPerms editor is not the web editor**: it covers groups, users, tracks, nodes, meta and chat meta, but not bulk operations, node search across all holders, or the web editor's undo history. For those, `/lp editor` remains the tool.
 - **Shortcut commands have their own rules**: some commands are shortcuts that redirect to another one (`/tp` to `/teleport`, `/msg` and `/w` to `/tell`, `/xp` to `/experience`). Each spelling is exposed and rate limited under the name the player types: `tp` governs `/tp`, `teleport` governs `/teleport`. Exposing one does not open the other; configure both if both should be available.
 - **Grade assignment needs the player online**: `/customperm grade assign|unassign` resolves the player as an entity. For an offline player, edit `userGrades` in `grades.json` (UUID as key) and run `/customperm reload`.

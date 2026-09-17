@@ -76,7 +76,6 @@ CustomPerm builds against, but does not include or redistribute, the following:
 |-----------|------|-----------|
 | [NeoForge](https://neoforged.net/) | Mod loader / framework | Provided by the end user's installation, under its own license |
 | [LuckPerms API](https://luckperms.net/) | Optional integration (`compileOnly`) | Provided by the end user's installation, under its own license |
-| TesseraUI | Optional client GUI (`compileOnly`) | Provided by the end user's installation, under its own license |
 | Brigadier (Mojang) | Command system | Part of Minecraft, under Mojang's terms |
 
 These are compile-time or runtime dependencies resolved on the user's side. No
@@ -255,7 +254,6 @@ redistribuer :
 |-----------|------|---------|
 | [NeoForge](https://neoforged.net/) | Mod loader / framework | Fourni par l'installation de l'utilisateur final, sous sa propre licence |
 | [LuckPerms API](https://luckperms.net/) | Intégration optionnelle (`compileOnly`) | Fourni par l'installation de l'utilisateur final, sous sa propre licence |
-| TesseraUI | GUI client optionnelle (`compileOnly`) | Fourni par l'installation de l'utilisateur final, sous sa propre licence |
 | Brigadier (Mojang) | Système de commandes | Partie de Minecraft, sous les conditions de Mojang |
 
 Ce sont des dépendances de compilation ou d'exécution résolues côté utilisateur.

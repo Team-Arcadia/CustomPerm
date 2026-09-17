@@ -69,6 +69,10 @@ public abstract class CpScreen extends Screen {
     protected void renderPage(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
     }
 
+    /** Draws over the widgets, e.g. badges on buttons. */
+    protected void renderForeground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+    }
+
     /** The field Ctrl+F focuses, or null when the screen has no search. */
     protected CpEditBox searchBox() {
         return null;
@@ -197,6 +201,7 @@ public abstract class CpScreen extends Screen {
         // With a dialog open, widgets behind it must not show hover states.
         boolean modal = dialog != null;
         super.render(g, modal ? -1 : mouseX, modal ? -1 : mouseY, partialTick);
+        renderForeground(g, mouseX, mouseY, partialTick);
         if (modal) renderDialog(g, mouseX, mouseY, partialTick);
     }
 

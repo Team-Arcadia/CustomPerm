@@ -11,9 +11,11 @@ package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.gametest.support.TestPlayer;
-import com.arcadia.customperm.network.GuiSyncPayload;
-import com.arcadia.customperm.network.NetworkHandler;
-import com.arcadia.customperm.network.RequestGuiSyncPayload;
+import com.arcadia.customperm.network.gui.DashboardData;
+import com.arcadia.customperm.network.gui.GuiPage;
+import com.arcadia.customperm.network.gui.GuiPagePayload;
+import com.arcadia.customperm.network.gui.GuiRequestHandler;
+import com.arcadia.customperm.network.gui.GuiRequestPayload;
 import com.arcadia.customperm.notify.AdminAlerts;
 import com.arcadia.customperm.notify.AdminNotifier;
 import net.minecraft.gametest.framework.GameTest;
@@ -21,13 +23,10 @@ import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
-import net.neoforged.neoforge.network.handling.IPayloadContext;
-
-import java.lang.reflect.Method;
 
 /**
  * Checks that {@link TestPlayer} really provides what the other GameTests rely on, then uses it for
- * the two behaviours that needed a connected player: GUI sync gating and admin alert delivery.
+ * the two behaviours that needed a connected player: admin page gating and admin alert delivery.
  */
 @GameTestHolder(CustomPerm.MODID)
 @PrefixGameTestTemplate(false)
@@ -61,23 +60,25 @@ public class TestPlayerHarnessTest {
     }
 
     /**
-     * RequestGuiSyncPayload handling is the only thing keeping grades and aliases on the server for
-     * non-operators (the client command gate is UX only). Run with a real player, not a stub.
+     * The page request handler is the only thing keeping configuration data on the server for
+     * non-operators. Run with a real player, not a stub.
      */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
-    public static void guiSyncIsOnlyAnsweredForOperators(GameTestHelper helper) {
+    public static void adminPagesAreOnlyAnsweredForOperators(GameTestHelper helper) {
         try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_h_gui_player", 0);
              TestPlayer op = TestPlayer.join(helper.getLevel(), "cp_h_gui_op", 2)) {
             player.clearReceived();
             op.clearReceived();
-            requestGuiSync(player.payloadContext());
-            requestGuiSync(op.payloadContext());
-            if (!player.payloads(GuiSyncPayload.class).isEmpty())
-                fail("A non-operator must receive no GUI snapshot.");
-            var snapshots = op.payloads(GuiSyncPayload.class);
-            if (snapshots.size() != 1) fail("An operator must receive exactly one GUI snapshot, got " + snapshots.size());
-            if (!snapshots.get(0).backendLabel().equals(CustomPerm.backendLabel()))
-                fail("The snapshot must describe the active backend.");
+            GuiRequestPayload request = new GuiRequestPayload(GuiPage.DASHBOARD.id());
+            GuiRequestHandler.handleRequest(request, player.payloadContext());
+            GuiRequestHandler.handleRequest(request, op.payloadContext());
+            if (!player.payloads(GuiPagePayload.class).isEmpty())
+                fail("A non-operator must receive no admin page.");
+            var pages = op.payloads(GuiPagePayload.class);
+            if (pages.size() != 1) fail("An operator must receive exactly one admin page, got " + pages.size());
+            if (pages.get(0).context().backend() != CustomPerm.backendKind())
+                fail("The page must describe the active backend.");
+            if (!(pages.get(0).data() instanceof DashboardData)) fail("The dashboard request returned another page.");
         }
         helper.succeed();
     }
@@ -124,17 +125,6 @@ public class TestPlayerHarnessTest {
         player.close();
         op.close();
         if (!wasActive) AdminNotifier.clear(AdminAlerts.Key.LUCKPERMS_UNAVAILABLE, "harness test cleanup");
-    }
-
-    private static void requestGuiSync(IPayloadContext context) {
-        try {
-            Method handler = NetworkHandler.class.getDeclaredMethod(
-                    "handleRequestSync", RequestGuiSyncPayload.class, IPayloadContext.class);
-            handler.setAccessible(true);
-            handler.invoke(null, new RequestGuiSyncPayload(), context);
-        } catch (ReflectiveOperationException e) {
-            fail("Could not invoke the GUI sync handler: " + e);
-        }
     }
 
     private static void fail(String msg) {

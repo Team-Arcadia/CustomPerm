@@ -10,9 +10,10 @@ package com.arcadia.customperm.network.lp;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.command.RateLimiter;
+import com.arcadia.customperm.network.gui.GuiAccess;
+import com.arcadia.customperm.network.gui.GuiArea;
 import com.arcadia.customperm.perm.PermissionNodes;
 import com.arcadia.customperm.perm.lp.LuckPermsAdminService;
-import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -229,16 +230,7 @@ public final class LpRequestHandler {
      * editor by a node they would need the editor to grant themselves.
      */
     private static boolean canEdit(ServerPlayer player) {
-        CommandSourceStack source = player.createCommandSourceStack();
-        if (source.hasPermission(4)) return true;
-        try {
-            return CustomPerm.permissions.hasPermission(source, PermissionNodes.LP_EDIT);
-        } catch (Throwable t) {
-            if (t instanceof Error e) throw e;
-            CustomPerm.LOGGER.warn("[CustomPerm] Permission check for {} failed; denying editor writes.",
-                    PermissionNodes.LP_EDIT, t);
-            return false;
-        }
+        return GuiAccess.canEdit(player, GuiArea.LUCKPERMS);
     }
 
     private static void send(ServerPlayer player, CustomPacketPayload payload) {

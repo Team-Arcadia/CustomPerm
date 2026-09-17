@@ -10,7 +10,8 @@
 package com.arcadia.customperm.gametest.support;
 
 import com.arcadia.customperm.CustomPerm;
-import com.arcadia.customperm.network.GuiSyncPayload;
+import com.arcadia.customperm.network.gui.GuiActionResultPayload;
+import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.lp.LpEditResultPayload;
 import com.arcadia.customperm.network.lp.LpSyncPayload;
 import com.mojang.authlib.GameProfile;
@@ -102,7 +103,8 @@ public final class TestPlayer implements AutoCloseable {
         EmbeddedChannel channel = new EmbeddedChannel(connection);
         if (modInstalledClientSide) {
             ChannelAttributes.getOrCreateAdHocChannels(connection).addAll(List.of(
-                    GuiSyncPayload.TYPE.id(), LpSyncPayload.TYPE.id(), LpEditResultPayload.TYPE.id()));
+                    GuiPagePayload.TYPE.id(), GuiActionResultPayload.TYPE.id(),
+                    LpSyncPayload.TYPE.id(), LpEditResultPayload.TYPE.id()));
         }
         if (CustomPerm.isLuckPermsActive()) {
             LuckPermsTestSupport.loadUser(profile);

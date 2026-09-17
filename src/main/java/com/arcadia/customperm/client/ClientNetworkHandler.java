@@ -8,47 +8,36 @@
  */
 package com.arcadia.customperm.client;
 
-import com.arcadia.customperm.CustomPerm;
-import com.arcadia.customperm.client.gui.TesseraGuiBridge;
-import com.arcadia.customperm.network.GuiSyncPayload;
+import com.arcadia.customperm.client.gui.admin.AdminScreens;
+import com.arcadia.customperm.network.gui.GuiActionResultPayload;
+import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.lp.LpEditResultPayload;
 import com.arcadia.customperm.network.lp.LpSyncPayload;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 
 /**
- * Client-side handler for {@link GuiSyncPayload}. Reached via {@code NetworkHandler.dispatchGuiSync}
- * from inside an {@code FMLEnvironment.dist.isClient()} branch, so it is never loaded on a dedicated
- * server.
- *
- * <p>This class must NOT reference any TesseraUI type in its own bytecode: it may be loaded on a
- * client that has CustomPerm but not TesseraUI, and verification of a screen reference would fail
- * to resolve {@code com.tesseraui.TesseraScreen}. All screen interaction is therefore delegated to
- * {@link TesseraGuiBridge} (a lazily-loaded class) behind the {@link CustomPerm#isTesseraUiPresent()}
- * guard, via a plain static call the verifier does not follow.</p>
+ * Client-side handlers of the server-to-client payloads. Reached only from inside an
+ * {@code FMLEnvironment.dist.isClient()} branch in {@code NetworkHandler}, so it is never loaded on a
+ * dedicated server. Work is always moved to the client thread before touching screens.
  */
 public final class ClientNetworkHandler {
 
     private ClientNetworkHandler() {
     }
 
-    public static void handleGuiSync(GuiSyncPayload payload, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            if (!CustomPerm.isTesseraUiPresent()) return;
-            TesseraGuiBridge.deliverSync(payload);
-        });
+    public static void handlePage(GuiPagePayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> AdminScreens.deliver(payload));
+    }
+
+    public static void handleActionResult(GuiActionResultPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> AdminScreens.deliverResult(payload.success(), payload.message()));
     }
 
     public static void handleLpSync(LpSyncPayload payload, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            if (!CustomPerm.isTesseraUiPresent()) return;
-            TesseraGuiBridge.deliverLpSync(payload.snapshot());
-        });
+        context.enqueueWork(() -> AdminScreens.deliverLpSync(payload.snapshot()));
     }
 
     public static void handleLpEditResult(LpEditResultPayload payload, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            if (!CustomPerm.isTesseraUiPresent()) return;
-            TesseraGuiBridge.deliverLpEditResult(payload.success(), payload.message());
-        });
+        context.enqueueWork(() -> AdminScreens.deliverResult(payload.success(), payload.message()));
     }
 }

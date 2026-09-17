@@ -25,4 +25,10 @@ public class InternalPermService implements PermissionService {
         if (source.hasPermission(2)) return true;  // INVARIANT-201 : court-circuit OP
         return config.getGrades().userHasPermission(player.getUUID(), node);
     }
+
+    @Override
+    public boolean hasGrantedNode(CommandSourceStack source, String node) {
+        if (!(source.getEntity() instanceof ServerPlayer player)) return false;
+        return config.getGrades().userHasPermission(player.getUUID(), node);
+    }
 }

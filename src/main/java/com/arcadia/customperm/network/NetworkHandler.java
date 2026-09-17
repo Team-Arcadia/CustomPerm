@@ -8,67 +8,65 @@
  */
 package com.arcadia.customperm.network;
 
-import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.client.ClientNetworkHandler;
-import com.arcadia.customperm.config.ConfigManager;
-import com.arcadia.customperm.config.GradesConfig;
+import com.arcadia.customperm.network.gui.GuiActionPayload;
+import com.arcadia.customperm.network.gui.GuiActionResultPayload;
+import com.arcadia.customperm.network.gui.GuiPagePayload;
+import com.arcadia.customperm.network.gui.GuiRequestHandler;
+import com.arcadia.customperm.network.gui.GuiRequestPayload;
 import com.arcadia.customperm.network.lp.LpEditPayload;
 import com.arcadia.customperm.network.lp.LpEditResultPayload;
 import com.arcadia.customperm.network.lp.LpRequestHandler;
 import com.arcadia.customperm.network.lp.LpSyncPayload;
 import com.arcadia.customperm.network.lp.RequestLpSyncPayload;
-import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.fml.loading.FMLEnvironment;
-import net.neoforged.neoforge.network.PacketDistributor;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Set;
-
 /**
- * Registers the two payloads that back the optional TesseraUI GUI (H2.1). This class is loaded
- * on BOTH sides (RegisterPayloadHandlersEvent fires on client and dedicated server), and the
- * server needs {@code GuiSyncPayload}'s codec registered too — it's the one sending it.
+ * Registers the payloads of the admin interface and of the LuckPerms editor. This class is loaded
+ * on BOTH sides (RegisterPayloadHandlersEvent fires on client and dedicated server), and the server
+ * needs every codec registered too: it is the one sending the server-to-client payloads.
  * <p>
  * What the server must NOT do is create a direct method reference into {@link ClientNetworkHandler}
- * (e.g. {@code ClientNetworkHandler::handleGuiSync}). A method reference resolves its target
- * method eagerly, at the point the referencing bytecode runs — unconditionally, on every side —
- * unlike a guarded method call, which only resolves its target on first actual invocation.
- * {@code ClientNetworkHandler}'s body touches {@code net.minecraft.client.Minecraft}, a class
- * that plain doesn't exist on a real (unstripped-in-dev-only) dedicated server jar. So the
- * handler passed to {@code playToClient} below is {@link #dispatchGuiSync}, declared in this
- * class — it only calls into {@code ClientNetworkHandler} from inside an
- * {@code FMLEnvironment.dist.isClient()} branch that a dedicated server never enters, so that
- * class is never resolved/loaded server-side. Same technique as gating {@code new
- * LuckPermsService(...)} behind {@code ModList.isLoaded("luckperms")} — just gated on the
- * running side instead of an optional mod's presence.
+ * (e.g. {@code ClientNetworkHandler::handlePage}). A method reference resolves its target method
+ * eagerly, at the point the referencing bytecode runs, unconditionally and on every side, unlike a
+ * guarded method call, which only resolves its target on first actual invocation.
+ * {@code ClientNetworkHandler}'s body touches {@code net.minecraft.client.Minecraft}, a class that
+ * does not exist on a dedicated server. So the handlers passed to {@code playToClient} below are
+ * declared in this class, and only call into {@code ClientNetworkHandler} from inside an
+ * {@code FMLEnvironment.dist.isClient()} branch that a dedicated server never enters.
  * <p>
- * The registrar is also marked {@link PayloadRegistrar#optional()}: by default NeoForge treats
- * a registered payload channel as mandatory for the connection handshake — "connection will
- * fail" per {@code PayloadRegistrar}'s own javadoc if either side is missing a non-optional
- * channel. CustomPerm is meant to work with zero client-side mod install (README: "Server-side
- * only"); without {@code .optional()} here, a vanilla client would be flatly refused when
- * connecting to a server running this mod, just because the TesseraUI GUI feature exists.
+ * The registrar is also marked {@link PayloadRegistrar#optional()}: by default NeoForge treats a
+ * registered channel as mandatory for the connection handshake. CustomPerm works with zero
+ * client-side install; without {@code .optional()} a vanilla client would be refused just because
+ * the admin interface exists.
+ * <p>
+ * Protocol version 2 replaced the TesseraUI-era {@code gui_sync} channel with the native interface
+ * channels. A client running an older CustomPerm still connects (the channels are optional) but has
+ * no interface on a server running this version, and the other way round.
  */
 public final class NetworkHandler {
+
+    public static final String PROTOCOL_VERSION = "2";
 
     private NetworkHandler() {
     }
 
     public static void register(RegisterPayloadHandlersEvent event) {
-        PayloadRegistrar registrar = event.registrar("1").optional();
-        registrar.playToClient(GuiSyncPayload.TYPE, GuiSyncPayload.STREAM_CODEC, NetworkHandler::dispatchGuiSync);
-        registrar.playToServer(RequestGuiSyncPayload.TYPE, RequestGuiSyncPayload.STREAM_CODEC,
-                NetworkHandler::handleRequestSync);
+        PayloadRegistrar registrar = event.registrar(PROTOCOL_VERSION).optional();
 
-        // LuckPerms editor channel (H2.2). Registered unconditionally, exactly like the payloads
-        // above: whether LuckPerms is installed is a runtime property of the server, while the
-        // handshake channel list is fixed at registration time. LpRequestHandler answers a
-        // request on a LuckPerms-less server with an empty snapshot rather than nothing at all.
+        registrar.playToClient(GuiPagePayload.TYPE, GuiPagePayload.STREAM_CODEC, NetworkHandler::dispatchPage);
+        registrar.playToClient(GuiActionResultPayload.TYPE, GuiActionResultPayload.STREAM_CODEC,
+                NetworkHandler::dispatchActionResult);
+        registrar.playToServer(GuiRequestPayload.TYPE, GuiRequestPayload.STREAM_CODEC, GuiRequestHandler::handleRequest);
+        registrar.playToServer(GuiActionPayload.TYPE, GuiActionPayload.STREAM_CODEC, GuiRequestHandler::handleAction);
+
+        // LuckPerms editor channel. Registered unconditionally, like the channels above: whether
+        // LuckPerms is installed is a runtime property of the server, while the handshake channel
+        // list is fixed at registration time. LpRequestHandler answers a request on a LuckPerms-less
+        // server with an empty snapshot rather than nothing at all.
         registrar.playToClient(LpSyncPayload.TYPE, LpSyncPayload.STREAM_CODEC, NetworkHandler::dispatchLpSync);
         registrar.playToClient(LpEditResultPayload.TYPE, LpEditResultPayload.STREAM_CODEC,
                 NetworkHandler::dispatchLpEditResult);
@@ -76,6 +74,18 @@ public final class NetworkHandler {
                 LpRequestHandler::handleSync);
         registrar.playToServer(LpEditPayload.TYPE, LpEditPayload.STREAM_CODEC,
                 LpRequestHandler::handleEdit);
+    }
+
+    private static void dispatchPage(GuiPagePayload payload, IPayloadContext context) {
+        if (FMLEnvironment.dist.isClient()) {
+            ClientNetworkHandler.handlePage(payload, context);
+        }
+    }
+
+    private static void dispatchActionResult(GuiActionResultPayload payload, IPayloadContext context) {
+        if (FMLEnvironment.dist.isClient()) {
+            ClientNetworkHandler.handleActionResult(payload, context);
+        }
     }
 
     private static void dispatchLpSync(LpSyncPayload payload, IPayloadContext context) {
@@ -88,49 +98,5 @@ public final class NetworkHandler {
         if (FMLEnvironment.dist.isClient()) {
             ClientNetworkHandler.handleLpEditResult(payload, context);
         }
-    }
-
-    private static void dispatchGuiSync(GuiSyncPayload payload, IPayloadContext context) {
-        if (FMLEnvironment.dist.isClient()) {
-            ClientNetworkHandler.handleGuiSync(payload, context);
-        }
-    }
-
-    private static void handleRequestSync(RequestGuiSyncPayload payload, IPayloadContext context) {
-        context.enqueueWork(() -> {
-            if (!(context.player() instanceof ServerPlayer player)) return;
-            // Real security boundary — mirrors the op-level-2 gate on /customperm itself
-            // (CustomPermCommand.register). The client-side "gui" command's own .requires()
-            // is UX only; this check is what actually protects grades/aliases data.
-            if (!player.createCommandSourceStack().hasPermission(2)) return;
-            PacketDistributor.sendToPlayer(player, buildSnapshot(player.getServer()));
-        });
-    }
-
-    private static GuiSyncPayload buildSnapshot(MinecraftServer server) {
-        ConfigManager configManager = CustomPerm.configManager;
-        GradesConfig gradesConfig = configManager.getGrades();
-
-        Map<String, GuiSyncPayload.GradeDto> grades = new HashMap<>();
-        gradesConfig.grades.forEach((name, grade) -> grades.put(name, new GuiSyncPayload.GradeDto(
-                Set.copyOf(grade.permissions), Set.copyOf(grade.deniedPermissions))));
-
-        Map<String, Integer> aliases = new HashMap<>();
-        configManager.getAliases().aliases.forEach((name, steps) -> aliases.put(name, steps.size()));
-
-        boolean directCommandsEnabled = CustomPerm.isDirectCommandExposureEnabled();
-        int configuredExposed = configManager.getCommands().grantedCommands.size();
-
-        return new GuiSyncPayload(
-                CustomPerm.backendLabel(),
-                configManager.getSettings().luckPermsFallbackMode,
-                CustomPerm.isLuckPermsActive(),
-                directCommandsEnabled,
-                server.getCommands().getDispatcher().getRoot().getChildren().size(),
-                directCommandsEnabled ? configuredExposed : 0,
-                gradesConfig.userGrades.size(),
-                grades,
-                aliases
-        );
     }
 }

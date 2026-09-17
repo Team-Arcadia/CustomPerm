@@ -1,0 +1,134 @@
+/*
+ * CustomPerm - Copyright (C) 2026 THEFricadelle. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-CustomPerm-ARR
+ *
+ * Proprietary, source-available software. Public visibility of this source
+ * grants no right to copy, reuse, redistribute, or create derivative works.
+ * See LICENSE and CONTRIBUTING.md at the repository root.
+ */
+package com.arcadia.customperm.network.gui;
+
+import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.admin.AdminResult;
+import com.arcadia.customperm.admin.ConfigAdmin;
+import com.arcadia.customperm.command.RateLimiter;
+import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
+import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.network.handling.IPayloadContext;
+
+import java.util.List;
+
+/**
+ * Server side of the admin interface: page requests and actions.
+ *
+ * <p><strong>Trust model.</strong> Every packet is re-checked here: op level 2 to be answered at
+ * all (a non-operator gets no reply, not even a refusal), the area's write node for an action,
+ * the argument count, and a per-player rate limit. The client's read-only rendering is a
+ * convenience, never the gate.
+ *
+ * <p><strong>Refresh.</strong> After a successful action the server pushes the page the admin is on
+ * with {@code open = false}, so the screen updates in place without a second request and without
+ * reopening an interface the admin closed in the meantime.
+ */
+public final class GuiRequestHandler {
+
+    /** Anti-spam budgets, kept in memory like the LuckPerms editor's. */
+    private static final String PAGE_RATE_KEY = "gui:page";
+    private static final int PAGE_MAX_PER_WINDOW = 40;
+    private static final int PAGE_WINDOW_SECONDS = 10;
+
+    private static final String ACTION_RATE_KEY = "gui:action";
+    private static final int ACTION_MAX_PER_WINDOW = 30;
+    private static final int ACTION_WINDOW_SECONDS = 10;
+
+    static {
+        RateLimiter.registerInternalBudget(PAGE_RATE_KEY, PAGE_WINDOW_SECONDS);
+        RateLimiter.registerInternalBudget(ACTION_RATE_KEY, ACTION_WINDOW_SECONDS);
+    }
+
+    private GuiRequestHandler() {
+    }
+
+    /** Whether this player's client can display the interface, i.e. has CustomPerm installed. */
+    public static boolean clientSupportsInterface(ServerPlayer player) {
+        return player.connection.hasChannel(GuiPagePayload.TYPE);
+    }
+
+    /** Opens a page for a player who typed {@code /customperm gui}; the command already checked op level 2. */
+    public static void open(ServerPlayer player, GuiPage page) {
+        sendPage(player, page, true);
+    }
+
+    // ------------------------------------------------------------------ packets
+
+    public static void handleRequest(GuiRequestPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player)) return;
+            if (!GuiAccess.canRead(player)) return;
+            GuiPage page = GuiPage.fromId(payload.page());
+            if (page == null) return;
+            if (!RateLimiter.tryAcquire(PAGE_RATE_KEY, player.getUUID(), PAGE_MAX_PER_WINDOW, PAGE_WINDOW_SECONDS).allowed()) {
+                return;
+            }
+            sendPage(player, page, true);
+        });
+    }
+
+    public static void handleAction(GuiActionPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer player)) return;
+            if (!GuiAccess.canRead(player)) return;
+
+            GuiAction action = GuiAction.fromName(payload.action());
+            if (action == null) {
+                send(player, GuiActionResultPayload.fail("Unknown action."));
+                return;
+            }
+            if (payload.args().size() != action.arity()) {
+                send(player, GuiActionResultPayload.fail("Malformed request for " + action.name() + "."));
+                return;
+            }
+            if (action.area() != null && !GuiAccess.canEdit(player, action.area())) {
+                send(player, GuiActionResultPayload.fail("You do not have " + action.area().node() + "."));
+                return;
+            }
+            RateLimiter.Result budget = RateLimiter.tryAcquire(
+                    ACTION_RATE_KEY, player.getUUID(), ACTION_MAX_PER_WINDOW, ACTION_WINDOW_SECONDS);
+            if (!budget.allowed()) {
+                send(player, GuiActionResultPayload.fail(
+                        "Too many actions at once, retry in " + budget.retryAfterSeconds() + "s."));
+                return;
+            }
+
+            AdminResult result = apply(player, action, payload.args());
+            if (result.success()) {
+                // Audit line: a click in the interface changes what players are allowed to do.
+                CustomPerm.LOGGER.info("[CustomPerm] Admin interface: {} performed {} {} ({})",
+                        player.getGameProfile().getName(), action.name(), payload.args(), result.message());
+            }
+            send(player, new GuiActionResultPayload(result.success(), result.message()));
+            GuiPage page = GuiPage.fromId(payload.page());
+            if (result.success() && page != null) sendPage(player, page, false);
+        });
+    }
+
+    private static AdminResult apply(ServerPlayer player, GuiAction action, List<String> args) {
+        return switch (action) {
+            case RELOAD -> ConfigAdmin.reload(player.getServer());
+        };
+    }
+
+    // ------------------------------------------------------------------ sending
+
+    private static void sendPage(ServerPlayer player, GuiPage page, boolean open) {
+        if (player.hasDisconnected() || !clientSupportsInterface(player)) return;
+        PacketDistributor.sendToPlayer(player,
+                new GuiPagePayload(open, GuiSnapshots.context(player), GuiSnapshots.page(page, player)));
+    }
+
+    private static void send(ServerPlayer player, CustomPacketPayload payload) {
+        if (player.hasDisconnected() || !player.connection.hasChannel(payload.type())) return;
+        PacketDistributor.sendToPlayer(player, payload);
+    }
+}

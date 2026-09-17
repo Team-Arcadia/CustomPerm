@@ -16,6 +16,7 @@ import com.arcadia.customperm.config.ConfigManager;
 import com.arcadia.customperm.network.NetworkHandler;
 import com.arcadia.customperm.notify.AdminAlerts;
 import com.arcadia.customperm.notify.AdminNotifier;
+import com.arcadia.customperm.perm.BackendKind;
 import com.arcadia.customperm.perm.DenyPermissionService;
 import com.arcadia.customperm.perm.InternalPermService;
 import com.arcadia.customperm.perm.LuckPermsService;
@@ -175,18 +176,22 @@ public class CustomPerm {
     }
 
     public static String backendLabel() {
+        return backendKind().label();
+    }
+
+    public static BackendKind backendKind() {
         if (permissions instanceof LuckPermsService lps) {
             if (lps.isDegraded()) {
                 return configManager.getSettings().useInternalLuckPermsFallback()
-                        ? "Internal — fallback from LuckPerms"
-                        : "Deny — LuckPerms unavailable";
+                        ? BackendKind.INTERNAL_FALLBACK
+                        : BackendKind.DENY;
             }
-            return "LuckPerms";
+            return BackendKind.LUCKPERMS;
         }
         if (permissions instanceof DenyPermissionService) {
-            return "Deny — LuckPerms unavailable";
+            return BackendKind.DENY;
         }
-        return "Internal";
+        return BackendKind.INTERNAL;
     }
 
     public static boolean isLuckPermsActive() {
@@ -195,10 +200,6 @@ public class CustomPerm {
 
     public static boolean isLuckPermsPresent() {
         return ModList.get().isLoaded("luckperms");
-    }
-
-    public static boolean isTesseraUiPresent() {
-        return ModList.get().isLoaded("tesseraui");
     }
 
     public static boolean isDirectCommandExposureEnabled() {

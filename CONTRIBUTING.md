@@ -87,7 +87,7 @@ issue describing the problem instead. That is just as useful.
 |------|---------|-------|
 | Bug fixes | ✅ Yes | The best kind of PR. Include reproduction steps. |
 | Crash / NPE fixes | ✅ Yes | Attach the crash report or stack trace. |
-| Compatibility fixes | ✅ Yes | LuckPerms, TesseraUI, other mods. |
+| Compatibility fixes | ✅ Yes | LuckPerms, other mods. |
 | Performance improvements | ✅ Yes | Explain the measurement, not just the theory. |
 | Typos, localization fixes | ✅ Yes | Small and easy to merge. |
 | Documentation corrections | ✅ Yes | README, guides, comments. |
@@ -131,7 +131,7 @@ issue describing the problem instead. That is just as useful.
 Include, at minimum:
 
 - CustomPerm version, Minecraft version, NeoForge version.
-- Whether LuckPerms / TesseraUI are installed, and their versions.
+- Whether LuckPerms is installed and its version, and whether CustomPerm is installed client-side.
 - Steps to reproduce.
 - The relevant log excerpt or crash report (use a paste service for long logs).
 
@@ -242,7 +242,7 @@ ouvrez plutôt une issue décrivant le problème. C'est tout aussi utile.
 |------|-----------|-------|
 | Corrections de bugs | ✅ Oui | Le meilleur type de PR. Incluez les étapes de reproduction. |
 | Corrections de crash / NPE | ✅ Oui | Joignez le rapport de crash ou la stack trace. |
-| Corrections de compatibilité | ✅ Oui | LuckPerms, TesseraUI, autres mods. |
+| Corrections de compatibilité | ✅ Oui | LuckPerms, autres mods. |
 | Améliorations de performance | ✅ Oui | Expliquez la mesure, pas seulement la théorie. |
 | Fautes de frappe, localisation | ✅ Oui | Petit et facile à fusionner. |
 | Corrections de documentation | ✅ Oui | README, guides, commentaires. |
@@ -288,7 +288,7 @@ ouvrez plutôt une issue décrivant le problème. C'est tout aussi utile.
 Incluez au minimum :
 
 - La version de CustomPerm, de Minecraft et de NeoForge.
-- Si LuckPerms / TesseraUI sont installés, et leurs versions.
+- Si LuckPerms est installé et sa version, et si CustomPerm est installé côté client.
 - Les étapes de reproduction.
 - L'extrait de log pertinent ou le rapport de crash (utilisez un service de
   paste pour les logs volumineux).

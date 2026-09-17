@@ -9,8 +9,12 @@
 package com.arcadia.customperm.command;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.admin.AdminResult;
+import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
+import com.arcadia.customperm.network.gui.GuiPage;
+import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.notify.AdminNotifier;
 import com.arcadia.customperm.perm.LuckPermsService;
 import com.arcadia.customperm.perm.PermissionService;
@@ -58,6 +62,7 @@ import java.util.stream.Collectors;
  *                     list                                 # show configured limits
  * /customperm test    <player> <node>                   # debug: report grant/deny + backend
  * /customperm reload
+ * /customperm gui [page]                            # open the admin interface (CustomPerm needed client-side)
  *
  * The mod ships with NO commands pre-exposed. Each admin chooses what to expose via
  * /customperm command add. Until exposed, every command keeps its vanilla op-only behaviour.
@@ -313,7 +318,34 @@ public class CustomPermCommand {
                         .executes(CustomPermCommand::scanPattern)))
                 .then(Commands.literal("reload")
                     .executes(CustomPermCommand::reload))
+                .then(guiCommand())
         );
+    }
+
+    // ---------------- admin interface ----------------
+
+    /** {@code /customperm gui [page]}: opens the admin interface on the player's client. */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> guiCommand() {
+        var gui = Commands.literal("gui").executes(ctx -> openGui(ctx, GuiPage.DASHBOARD));
+        for (GuiPage page : GuiPage.values()) {
+            gui.then(Commands.literal(page.id()).executes(ctx -> openGui(ctx, page)));
+        }
+        return gui;
+    }
+
+    private static int openGui(CommandContext<CommandSourceStack> ctx, GuiPage page) {
+        if (!(ctx.getSource().getEntity() instanceof ServerPlayer player)) {
+            ctx.getSource().sendFailure(Component.literal(
+                "The admin interface opens on a player's screen. From the console, use the text commands."));
+            return 0;
+        }
+        if (!GuiRequestHandler.clientSupportsInterface(player)) {
+            ctx.getSource().sendFailure(Component.literal(
+                "The admin interface needs CustomPerm installed on your client. Every setting is also available through the /customperm text commands."));
+            return 0;
+        }
+        GuiRequestHandler.open(player, page);
+        return 1;
     }
 
     // ---------------- command exposure ----------------
@@ -976,39 +1008,12 @@ public class CustomPermCommand {
     // ---------------- reload ----------------
 
     private static int reload(CommandContext<CommandSourceStack> ctx) {
-        boolean reloaded = CustomPerm.configManager.load();
-        CustomPerm.syncConfigAlert();
-        if (!reloaded) {
-            String msg = CustomPerm.configManager.isReloading()
-                ? "[CustomPerm] Reload already in progress — try again in a moment."
-                : "[CustomPerm] Reload failed — check server logs for details (invalid JSON or disk error).";
-            ctx.getSource().sendFailure(Component.literal(msg));
+        AdminResult result = ConfigAdmin.reload(ctx.getSource().getServer());
+        if (!result.success()) {
+            ctx.getSource().sendFailure(Component.literal(result.message()));
             return 0;
         }
-
-        com.arcadia.customperm.config.ConfigSnapshot snapshot =
-            CustomPerm.configManager.getSnapshot();
-
-        // 1. Notifier le PermissionService du nouveau snapshot (no-op par défaut)
-        com.arcadia.customperm.perm.PermissionService.get().onConfigReload(snapshot);
-
-        // 2. Notifier le CommandTreeReloader — stub H1.3, implémentation concrète É2.6
-        var server = ctx.getSource().getServer();
-        CustomPerm.treeReloader.onConfigReload(snapshot, server);
-
-        // 3. Re-push ClientboundCommandsPacket à tous les clients — INVARIANT-501 :
-        //    obligatoirement via server.execute() pour garantir l'exécution sur le tick-thread,
-        //    même si on est déjà sur le tick-thread (futur-proof si reload hors tick-thread).
-        if (server != null) {
-            server.execute(() ->
-                server.getPlayerList().getPlayers()
-                    .forEach(p -> server.getCommands().sendCommands(p))
-            );
-        }
-
-        // 4. Log de succès
-        CustomPerm.LOGGER.info("[CustomPerm] Configuration reloaded successfully");
-        success(ctx, "Configuration reloaded successfully.");
+        success(ctx, result.message());
         return 1;
     }
 

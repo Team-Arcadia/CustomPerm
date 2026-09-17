@@ -26,6 +26,17 @@ public final class PermissionNodes {
      */
     public static final String LP_EDIT = "customperm.gui.luckperms.edit";
 
+    /**
+     * Write access to one area of the admin interface. Same rule as {@link #LP_EDIT}: reading needs
+     * op level 2, writing needs the area's node, level 4 bypasses. One node per area rather than a
+     * single "edit everything" node, so a helper can be trusted with aliases without being able to
+     * expose commands or change grades.
+     */
+    public static final String GUI_COMMANDS_EDIT = "customperm.gui.commands.edit";
+    public static final String GUI_ALIASES_EDIT = "customperm.gui.aliases.edit";
+    public static final String GUI_RATELIMITS_EDIT = "customperm.gui.ratelimits.edit";
+    public static final String GUI_GRADES_EDIT = "customperm.gui.grades.edit";
+
     private PermissionNodes() {
     }
 }
