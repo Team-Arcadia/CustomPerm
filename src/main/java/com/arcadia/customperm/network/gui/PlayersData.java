@@ -54,6 +54,11 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
             return held.prefix();
         }
 
+        /** Seconds left on an own node ({@code "allow"} or {@code "deny"}), 0 when it is permanent. */
+        public long remaining(String kind, String node) {
+            return Remaining.of(held.timers(), kind, node);
+        }
+
         public String suffix() {
             return held.suffix();
         }
@@ -63,14 +68,16 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
      * The grades a player holds, the ones they refuse wherever a grade of theirs would bring them, and the
      * prefix and suffix they carry themselves, empty for none.
      */
-    public record Held(List<String> grades, List<String> refused, String prefix, String suffix) {
-        public static final Held NONE = new Held(List.of(), List.of(), "", "");
+    public record Held(List<String> grades, List<String> refused, String prefix, String suffix,
+                       List<Remaining> timers) {
+        public static final Held NONE = new Held(List.of(), List.of(), "", "", List.of());
 
         public static final StreamCodec<ByteBuf, Held> CODEC = StreamCodec.composite(
                 GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Held::grades,
                 GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Held::refused,
                 GuiCodecs.TEXT, Held::prefix,
                 GuiCodecs.TEXT, Held::suffix,
+                Remaining.LIST, Held::timers,
                 Held::new);
     }
 

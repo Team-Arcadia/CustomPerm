@@ -31,12 +31,16 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
     /** Most nodes carried per grade, per kind. */
     public static final int NODES_MAX = 1024;
 
-    /** A player assigned to a grade; {@code name} is the UUID when no name is known. */
-    public record Member(String uuid, String name, boolean online) {
+    /**
+     * A player assigned to a grade, or refusing it; {@code name} is the UUID when no name is known, and
+     * {@code remaining} the seconds the assignment or the refusal has left, 0 when it is permanent.
+     */
+    public record Member(String uuid, String name, boolean online, long remaining) {
         public static final StreamCodec<ByteBuf, Member> CODEC = StreamCodec.composite(
                 GuiCodecs.TEXT, Member::uuid,
                 GuiCodecs.TEXT, Member::name,
                 ByteBufCodecs.BOOL, Member::online,
+                ByteBufCodecs.VAR_LONG, Member::remaining,
                 Member::new);
     }
 
@@ -49,13 +53,14 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
      * and refusal read as two lists everywhere else too.
      */
     public record Grade(Header header, Inheritance inheritance, List<String> allow, List<String> deny,
-                        Members players) {
+                        Members players, List<Remaining> timers) {
         public static final StreamCodec<ByteBuf, Grade> CODEC = StreamCodec.composite(
                 Header.CODEC, Grade::header,
                 Inheritance.CODEC, Grade::inheritance,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Grade::allow,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Grade::deny,
                 Members.CODEC, Grade::players,
+                Remaining.LIST, Grade::timers,
                 Grade::new);
 
         public String name() {
@@ -89,6 +94,11 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
 
         public List<Member> refusers() {
             return players.refusing();
+        }
+
+        /** Seconds left on a node of this grade ({@code "allow"} or {@code "deny"}), 0 when it is permanent. */
+        public long remaining(String kind, String node) {
+            return Remaining.of(timers, kind, node);
         }
     }
 

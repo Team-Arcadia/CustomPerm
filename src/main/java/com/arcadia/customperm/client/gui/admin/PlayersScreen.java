@@ -51,6 +51,7 @@ public final class PlayersScreen extends AdminScreen {
     private static final int FIELD = Atlas.INPUT_HEIGHT;
     private static final int BUTTON = Atlas.BUTTON_HEIGHT;
     private static final int GAP = 6;
+    private static final int DURATION_FIELD = 64;
 
     /** One node of the selected player. */
     private record NodeRow(String node, boolean deny) {
@@ -64,6 +65,8 @@ public final class PlayersScreen extends AdminScreen {
     private final CpList<NodeRow> nodeList;
     private final CpEditBox nodeField;
     private final ChatFields chat;
+    /** How long a node added lasts; empty for good. */
+    private final CpEditBox durationField;
     /** Whether the right-hand side shows the chat prefix and suffix rather than the nodes. */
     private boolean chatTab;
     /** Name typed in the field below the list, shown as a row while that player holds nothing. */
@@ -76,6 +79,8 @@ public final class PlayersScreen extends AdminScreen {
                 .hint(Component.literal("permission node"))
                 .onSubmit(() -> addNode(false));
         this.chat = new ChatFields(this::saveChat);
+        this.durationField = new CpEditBox(Component.literal("Duration"), 16)
+                .hint(Component.literal("for, e.g. 30d"));
         this.search = new CpEditBox(Component.literal("Search players"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
                 .onChange(text -> refilter());
@@ -269,8 +274,10 @@ public final class PlayersScreen extends AdminScreen {
             return;
         }
         addRenderableWidget(nodeList.at(list));
-        addRenderableWidget(nodeField.at(fieldRow));
+        addRenderableWidget(nodeField.at(fieldRow.beforeRight(DURATION_FIELD + 4)));
+        addRenderableWidget(durationField.at(fieldRow.right(DURATION_FIELD)));
         nodeField.setEditable(editable);
+        durationField.setEditable(editable);
 
         NodeRow selected = nodeList.getSelected();
         placeButtonRow(buttonRow, 6, true, List.of(
@@ -325,7 +332,7 @@ public final class PlayersScreen extends AdminScreen {
         String node = nodeField.getValue().trim();
         if (player == null || node.isEmpty()) return;
         // Adding addresses the player by name: a pending row has no UUID yet, the server resolves it.
-        act(GuiAction.USER_NODE_ADD, player.name(), node, deny ? "deny" : "allow");
+        act(GuiAction.USER_NODE_ADD, player.name(), node, deny ? "deny" : "allow", durationField.getValue().trim());
         nodeField.setValue("");
     }
 
@@ -356,7 +363,11 @@ public final class PlayersScreen extends AdminScreen {
         String label = row.deny() ? "DENY" : "ALLOW";
         int w = Skin.badge(g, font, label, r.x() + 4, r.centerY(), row.deny() ? Palette.DANGER : Palette.GOOD);
         int x = r.x() + 4 + Math.max(w, font.width("ALLOW") + 6) + 5;
-        Skin.text(g, font, row.node(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4, Palette.TEXT);
+        PlayersData.Player player = playerList.getSelected();
+        String left = player == null ? "" : GradesScreen.timeLeft(player.remaining(row.deny() ? "deny" : "allow", row.node()));
+        int lw = left.isEmpty() ? 0 : font.width(left) + 8;
+        if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
+        Skin.text(g, font, row.node(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4 - lw, Palette.TEXT);
     }
 
     @Override

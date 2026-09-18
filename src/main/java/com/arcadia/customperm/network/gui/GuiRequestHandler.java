@@ -176,7 +176,9 @@ public final class GuiRequestHandler {
             case GRADE_CREATE -> GradeAdmin.create(args.get(0));
             case GRADE_DELETE -> guarded(player, () -> GradeAdmin.delete(player.getServer(), args.get(0)));
             case GRADE_NODE_ADD -> kind(args.get(2)) == null ? malformed(action)
-                    : guarded(player, () -> GradeAdmin.addNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2))));
+                    : duration(args.get(3)) < 0 ? badDuration(args.get(3))
+                    : guarded(player, () -> GradeAdmin.addNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2)),
+                            duration(args.get(3))));
             case GRADE_NODE_REMOVE -> kind(args.get(2)) == null ? malformed(action)
                     : guarded(player, () -> GradeAdmin.removeNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2))));
             case GRADE_WEIGHT_SET -> signed(args.get(1)) == null ? malformed(action)
@@ -185,13 +187,17 @@ public final class GuiRequestHandler {
             case GRADE_PARENT_REMOVE -> guarded(player, () -> GradeAdmin.removeParent(player.getServer(), args.get(0), args.get(1)));
             case GRADE_PARENT_DENY -> guarded(player, () -> GradeAdmin.denyParent(player.getServer(), args.get(0), args.get(1)));
             case GRADE_PARENT_ALLOW -> guarded(player, () -> GradeAdmin.allowParent(player.getServer(), args.get(0), args.get(1)));
-            case GRADE_REFUSE -> guarded(player, () -> refuseByName(player, args.get(0), args.get(1)));
+            case GRADE_REFUSE -> duration(args.get(2)) < 0 ? badDuration(args.get(2))
+                    : guarded(player, () -> refuseByName(player, args.get(0), args.get(1), duration(args.get(2))));
             case GRADE_ACCEPT -> guarded(player, () -> acceptByUuid(player, args.get(0), args.get(1)));
-            case GRADE_ASSIGN -> guarded(player, () -> assignByName(player, args.get(0), args.get(1)));
+            case GRADE_ASSIGN -> duration(args.get(2)) < 0 ? badDuration(args.get(2))
+                    : guarded(player, () -> assignByName(player, args.get(0), args.get(1), duration(args.get(2))));
             case GRADE_UNASSIGN -> guarded(player, () -> unassignByUuid(player, args.get(0), args.get(1)));
             case GRADE_DEFAULT -> guarded(player, () -> GradeAdmin.setDefault(player.getServer(), args.get(0)));
             case USER_NODE_ADD -> kind(args.get(2)) == null ? malformed(action)
-                    : guarded(player, () -> userNodeByName(player, args.get(0), args.get(1), kind(args.get(2))));
+                    : duration(args.get(3)) < 0 ? badDuration(args.get(3))
+                    : guarded(player, () -> userNodeByName(player, args.get(0), args.get(1), kind(args.get(2)),
+                            duration(args.get(3))));
             case USER_NODE_REMOVE -> kind(args.get(2)) == null ? malformed(action)
                     : guarded(player, () -> userNodeByUuid(player, args.get(0), args.get(1), kind(args.get(2))));
             case IMPORT_PREVIEW -> bool(args.get(0)) == null ? malformed(action)
@@ -317,21 +323,30 @@ public final class GuiRequestHandler {
         return GradeAdmin.guarded(admin.createCommandSourceStack(), admin.getServer(), change);
     }
 
-    private static AdminResult assignByName(ServerPlayer admin, String name, String grade) {
+    /** Seconds in a duration box, 0 when it is empty (permanent), -1 when it cannot be read. */
+    private static long duration(String raw) {
+        return raw == null || raw.isBlank() ? 0 : com.arcadia.customperm.perm.Expiry.parse(raw);
+    }
+
+    private static AdminResult badDuration(String raw) {
+        return AdminResult.fail("Invalid duration '" + raw.trim() + "': use w, d, h, m, s, such as 30d or 1d12h.");
+    }
+
+    private static AdminResult assignByName(ServerPlayer admin, String name, String grade, long seconds) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
         return resolution.profile()
-                .map(profile -> GradeAdmin.assign(admin.getServer(), profile, grade))
+                .map(profile -> GradeAdmin.assign(admin.getServer(), profile, grade, seconds))
                 .orElseGet(() -> AdminResult.fail(resolution.problem()));
     }
 
-    private static AdminResult refuseByName(ServerPlayer admin, String name, String grade) {
+    private static AdminResult refuseByName(ServerPlayer admin, String name, String grade, long seconds) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
         return resolution.profile()
-                .map(profile -> UserAdmin.refuseGrade(admin.getServer(), profile.getId(), profile.getName(), grade))
+                .map(profile -> UserAdmin.refuseGrade(admin.getServer(), profile.getId(), profile.getName(), grade, seconds))
                 .orElseGet(() -> AdminResult.fail(resolution.problem()));
     }
 
@@ -342,12 +357,12 @@ public final class GuiRequestHandler {
     }
 
     /** Adding addresses the player by name: the screen offers a field for someone who holds nothing yet. */
-    private static AdminResult userNodeByName(ServerPlayer admin, String name, String node, boolean deny) {
+    private static AdminResult userNodeByName(ServerPlayer admin, String name, String node, boolean deny, long seconds) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
         return resolution.profile()
-                .map(profile -> UserAdmin.addNode(admin.getServer(), profile.getId(), profile.getName(), node, deny))
+                .map(profile -> UserAdmin.addNode(admin.getServer(), profile.getId(), profile.getName(), node, deny, seconds))
                 .orElseGet(() -> AdminResult.fail(resolution.problem()));
     }
 

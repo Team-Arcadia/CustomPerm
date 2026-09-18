@@ -80,7 +80,9 @@ public final class GuiSnapshots {
                     new PlayersData.Held(List.copyOf(config.userGrades.getOrDefault(rawUuid, List.of())),
                             List.copyOf(config.userDeniedGrades.getOrDefault(rawUuid, List.of())),
                             config.userPrefixes.getOrDefault(rawUuid, ""),
-                            config.userSuffixes.getOrDefault(rawUuid, "")),
+                            config.userSuffixes.getOrDefault(rawUuid, ""),
+                            timers(config.userPermissionExpiries.get(rawUuid),
+                                    config.userDeniedPermissionExpiries.get(rawUuid))),
                     UserAdmin.nodes(uuid, false).stream().limit(PlayersData.NODES_MAX).toList(),
                     UserAdmin.nodes(uuid, true).stream().limit(PlayersData.NODES_MAX).toList()));
         }
@@ -97,8 +99,8 @@ public final class GuiSnapshots {
         var config = CustomPerm.configManager.getGrades();
         java.util.Map<String, List<GradesData.Member>> members = new java.util.HashMap<>();
         java.util.Map<String, List<GradesData.Member>> refusers = new java.util.HashMap<>();
-        byGrade(server, config.userGrades, members);
-        byGrade(server, config.userDeniedGrades, refusers);
+        byGrade(server, config.userGrades, config.userGradeExpiries, members);
+        byGrade(server, config.userDeniedGrades, config.userDeniedGradeExpiries, refusers);
 
         // Heaviest first, then by name: the order in which two grades covering a node just as specifically
         // break the tie, so the list itself reads as the precedence.
@@ -120,13 +122,27 @@ public final class GuiSnapshots {
                     new TreeSet<>(grade.permissions).stream().limit(GradesData.NODES_MAX).toList(),
                     new TreeSet<>(grade.deniedPermissions).stream().limit(GradesData.NODES_MAX).toList(),
                     new GradesData.Members(assigned.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList(),
-                            refusing.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList())));
+                            refusing.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList()),
+                    timers(grade.permissionExpiries, grade.deniedPermissionExpiries)));
         }
         List<String> known = server == null ? List.of()
                 : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
         var settings = CustomPerm.configManager.getSettings();
         return new GradesData(grades, known, settings.luckPermsFallbackMode, settings.defaultGrade,
                 CustomPerm.gatesAllCommands(), nameSettings());
+    }
+
+    /** The nodes of one holder that are temporary, with the seconds each has left. */
+    private static List<Remaining> timers(java.util.Map<String, Long> allow, java.util.Map<String, Long> deny) {
+        List<Remaining> timers = new ArrayList<>();
+        if (allow != null) allow.forEach((node, at) -> timers.add(new Remaining("allow:" + node, left(at))));
+        if (deny != null) deny.forEach((node, at) -> timers.add(new Remaining("deny:" + node, left(at))));
+        return timers.size() > GuiCodecs.SERVER_LIST_MAX ? timers.subList(0, GuiCodecs.SERVER_LIST_MAX) : timers;
+    }
+
+    /** Seconds left before {@code at}, 0 for no expiry, and at least 1 for one not swept yet. */
+    private static long left(Long at) {
+        return at == null ? 0 : Math.max(1, at - com.arcadia.customperm.perm.Expiry.now());
     }
 
     static NameSettings nameSettings() {
@@ -136,6 +152,7 @@ public final class GuiSnapshots {
 
     /** Turns a UUID-to-grade-names map inside out: one entry per grade, with the players resolved. */
     private static void byGrade(MinecraftServer server, java.util.Map<String, List<String>> assignments,
+                                java.util.Map<String, java.util.Map<String, Long>> expiries,
                                 java.util.Map<String, List<GradesData.Member>> byGrade) {
         assignments.forEach((rawUuid, names) -> {
             java.util.UUID uuid;
@@ -146,9 +163,10 @@ public final class GuiSnapshots {
             }
             boolean online = server != null && server.getPlayerList().getPlayer(uuid) != null;
             String name = server == null ? rawUuid : GradeAdmin.displayName(server, uuid);
+            java.util.Map<String, Long> timed = expiries.getOrDefault(rawUuid, java.util.Map.of());
             for (String grade : names) {
                 byGrade.computeIfAbsent(grade, k -> new ArrayList<>())
-                        .add(new GradesData.Member(rawUuid, name, online));
+                        .add(new GradesData.Member(rawUuid, name, online, left(timed.get(grade))));
             }
         });
     }

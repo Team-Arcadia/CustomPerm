@@ -383,12 +383,12 @@ public class AdminInterfaceGameTest {
 
             owner.clearReceived();
             gradeAct(owner, GuiAction.GRADE_CREATE, grade);
-            gradeAct(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.weather", "allow");
-            gradeAct(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.time", "deny");
-            gradeAct(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.time", "maybe");
-            gradeAct(owner, GuiAction.GRADE_ASSIGN, "CP_I_MEMBER", grade);
-            gradeAct(owner, GuiAction.GRADE_ASSIGN, offlineName, grade);
-            gradeAct(owner, GuiAction.GRADE_ASSIGN, "cp_i_nobody_here", grade);
+            gradeAct(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.weather", "allow", "");
+            gradeAct(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.time", "deny", "");
+            gradeAct(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.time", "maybe", "");
+            gradeAct(owner, GuiAction.GRADE_ASSIGN, "CP_I_MEMBER", grade, "");
+            gradeAct(owner, GuiAction.GRADE_ASSIGN, offlineName, grade, "");
+            gradeAct(owner, GuiAction.GRADE_ASSIGN, "cp_i_nobody_here", grade, "");
             List<String> results = results(owner);
             if (!results.equals(List.of("OK: Created grade cp_i_grade",
                     "OK: Added customperm.command.weather -> cp_i_grade",
@@ -494,10 +494,10 @@ public class AdminInterfaceGameTest {
             member = target.uuid().toString();
 
             owner.clearReceived();
-            userAct(owner, GuiAction.USER_NODE_ADD, "CP_I_TARGET", "customperm.command.weather", "allow");
-            userAct(owner, GuiAction.USER_NODE_ADD, "cp_i_target", "customperm.command.time", "deny");
-            userAct(owner, GuiAction.USER_NODE_ADD, "cp_i_target", "customperm.command.time", "maybe");
-            userAct(owner, GuiAction.USER_NODE_ADD, "cp_i_nobody_here", "customperm.command.time", "allow");
+            userAct(owner, GuiAction.USER_NODE_ADD, "CP_I_TARGET", "customperm.command.weather", "allow", "");
+            userAct(owner, GuiAction.USER_NODE_ADD, "cp_i_target", "customperm.command.time", "deny", "");
+            userAct(owner, GuiAction.USER_NODE_ADD, "cp_i_target", "customperm.command.time", "maybe", "");
+            userAct(owner, GuiAction.USER_NODE_ADD, "cp_i_nobody_here", "customperm.command.time", "allow", "");
             List<String> results = results(owner);
             if (!results.equals(List.of("OK: Added customperm.command.weather -> cp_i_target",
                     "OK: Denied customperm.command.time -> cp_i_target",
@@ -553,7 +553,7 @@ public class AdminInterfaceGameTest {
              TestPlayer admin = TestPlayer.admin(helper.getLevel(), "cp_i_users_ow", 4)) {
             owner = admin.uuid().toString();
             reader.clearReceived();
-            userAct(reader, GuiAction.USER_NODE_ADD, "cp_i_users_ro", "customperm.command.weather", "allow");
+            userAct(reader, GuiAction.USER_NODE_ADD, "cp_i_users_ro", "customperm.command.weather", "allow", "");
             expectResult(reader, "FAIL: You do not have customperm.manage.grades.");
             if (config.userPermissions.containsKey(reader.uuid().toString()))
                 fail("A refused action stored the node.");
@@ -561,7 +561,7 @@ public class AdminInterfaceGameTest {
             // Exactly the node that gates this page: the admin's own grade allows customperm.*, which a
             // denied * would not even beat, being less specific.
             admin.clearReceived();
-            userAct(admin, GuiAction.USER_NODE_ADD, "cp_i_users_ow", "customperm.manage.grades", "deny");
+            userAct(admin, GuiAction.USER_NODE_ADD, "cp_i_users_ow", "customperm.manage.grades", "deny", "");
             expectResult(admin, "FAIL: Refused: you would lose customperm.admin or customperm.manage.grades yourself.");
             if (config.userDeniedPermissions.containsKey(owner))
                 fail("The refused change must be undone, not left in place.");
@@ -636,8 +636,8 @@ public class AdminInterfaceGameTest {
 
             gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_base");
             gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_mid");
-            gradeAct(owner, GuiAction.GRADE_REFUSE, "CP_I_REFUSED", "cp_i_f_base");
-            gradeAct(owner, GuiAction.GRADE_REFUSE, "cp_i_nobody_here", "cp_i_f_base");
+            gradeAct(owner, GuiAction.GRADE_REFUSE, "CP_I_REFUSED", "cp_i_f_base", "");
+            gradeAct(owner, GuiAction.GRADE_REFUSE, "cp_i_nobody_here", "cp_i_f_base", "");
             List<String> results = results(owner);
             if (!results.equals(List.of("OK: cp_i_f_leaf now refuses cp_i_f_base",
                     "FAIL: cp_i_f_leaf inherits cp_i_f_mid directly: remove that parent instead of refusing it.",

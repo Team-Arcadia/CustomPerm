@@ -17,6 +17,13 @@ import com.arcadia.customperm.gametest.support.Modes;
 import com.arcadia.customperm.gametest.support.ServerCommands;
 import com.arcadia.customperm.gametest.support.TestPlayer;
 import com.arcadia.customperm.log.ActivityLog;
+import com.arcadia.customperm.network.gui.GradesData;
+import com.arcadia.customperm.network.gui.GuiAction;
+import com.arcadia.customperm.network.gui.GuiActionPayload;
+import com.arcadia.customperm.network.gui.GuiActionResultPayload;
+import com.arcadia.customperm.network.gui.GuiPage;
+import com.arcadia.customperm.network.gui.GuiPagePayload;
+import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.log.LogEntry;
 import com.arcadia.customperm.log.LogKind;
 import com.arcadia.customperm.perm.Expiry;
@@ -149,6 +156,59 @@ public class TemporaryEntriesGameTest {
             ConfigAdmin.persist();
         }
         helper.succeed();
+    }
+
+    /** The interface: a duration box on a node and on an assignment, and the page saying what is left. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "customperm_temporary")
+    public static void theInterfaceTakesAndShowsDurations(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        String grade = GRADE + "_ui";
+        String uuid = null;
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_t_owner", 4);
+             TestPlayer member = TestPlayer.join(helper.getLevel(), "cp_t_member", 0)) {
+            uuid = member.uuid().toString();
+            grades.grades.remove(grade);
+            ServerCommands.run(helper.getLevel().getServer(), "customperm grade create " + grade);
+
+            act(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.seed", "allow", "someday");
+            result(owner, "FAIL: Invalid duration 'someday'");
+            act(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.seed", "allow", "7d");
+            result(owner, "OK: Added customperm.command.seed -> " + grade + " for 7d");
+            act(owner, GuiAction.GRADE_ASSIGN, "cp_t_member", grade, "1d");
+            result(owner, "OK: Assigned " + grade + " -> cp_t_member for 1d");
+
+            GradesData page = owner.payloads(GuiPagePayload.class).stream()
+                    .map(GuiPagePayload::data).filter(GradesData.class::isInstance).map(GradesData.class::cast)
+                    .reduce((first, second) -> second).orElseThrow(() -> new GameTestAssertException("No Grades page"));
+            GradesData.Grade shown = page.grades().stream().filter(g -> g.name().equals(grade)).findFirst().orElseThrow();
+            long nodeLeft = shown.remaining("allow", "customperm.command.seed");
+            check(nodeLeft > 7L * 86400 - 60 && nodeLeft <= 7L * 86400, "the page must carry the node's time left: " + nodeLeft);
+            long memberLeft = shown.members().stream().filter(m -> m.name().equals("cp_t_member")).findFirst()
+                    .orElseThrow().remaining();
+            check(memberLeft > 86400 - 60 && memberLeft <= 86400, "and the assignment's: " + memberLeft);
+        } finally {
+            grades.grades.remove(grade);
+            if (uuid != null) {
+                grades.userGrades.remove(uuid);
+                grades.userGradeExpiries.remove(uuid);
+            }
+            ConfigAdmin.persist();
+        }
+        helper.succeed();
+    }
+
+    private static void act(TestPlayer player, GuiAction action, String... args) {
+        player.clearReceived();
+        GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.GRADES.id()),
+                player.payloadContext());
+    }
+
+    private static void result(TestPlayer player, String prefix) {
+        List<String> results = player.payloads(GuiActionResultPayload.class).stream()
+                .map(r -> (r.success() ? "OK: " : "FAIL: ") + r.message()).toList();
+        if (results.size() != 1 || !results.get(0).startsWith(prefix))
+            throw new GameTestAssertException("Expected one result starting with '" + prefix + "', got " + results);
     }
 
     private static void expect(List<String> lines, String fragment) {
