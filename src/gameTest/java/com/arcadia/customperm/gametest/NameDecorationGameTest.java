@@ -11,6 +11,7 @@ package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.AdminResult;
+import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.admin.NameAdmin;
 import com.arcadia.customperm.admin.UserAdmin;
@@ -105,9 +106,12 @@ public class NameDecorationGameTest {
         MinecraftServer server = helper.getLevel().getServer();
         GradesConfig grades = CustomPerm.configManager.getGrades();
         SettingsConfig settings = CustomPerm.configManager.getSettings();
-        boolean decorateBefore = settings.decorateNames;
         String formatBefore = settings.nameFormat;
         String uuid = null;
+        // The GameTest config outlives a run: start from a known state rather than from what a failed run left.
+        settings.decorateNames = false;
+        grades.grades.remove(VIP);
+        grades.grades.remove(MEMBER);
         try (TestPlayer steve = TestPlayer.join(helper.getLevel(), "cp_n_steve", 0)) {
             ServerPlayer player = steve.player();
             uuid = player.getUUID().toString();
@@ -143,7 +147,7 @@ public class NameDecorationGameTest {
             equal("cp_n_steve", player.getDisplayName().getString(), "turning it off gives the plain name back");
             check(player.getTabListDisplayName() == null, "and the plain tab list entry");
         } finally {
-            settings.decorateNames = decorateBefore;
+            settings.decorateNames = false;
             settings.nameFormat = formatBefore;
             grades.grades.remove(VIP);
             grades.grades.remove(MEMBER);
@@ -152,6 +156,7 @@ public class NameDecorationGameTest {
                 grades.userPrefixes.remove(uuid);
                 grades.userSuffixes.remove(uuid);
             }
+            ConfigAdmin.persist();
         }
         helper.succeed();
     }
@@ -164,8 +169,9 @@ public class NameDecorationGameTest {
         if (!Modes.internalOnly(helper)) return;
         GradesConfig grades = CustomPerm.configManager.getGrades();
         SettingsConfig settings = CustomPerm.configManager.getSettings();
-        boolean decorateBefore = settings.decorateNames;
         String targetUuid = null;
+        settings.decorateNames = false;
+        grades.grades.remove(VIP);
         try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_n_owner", 4);
              TestPlayer reader = TestPlayer.reader(helper.getLevel(), "cp_n_reader", 2);
              TestPlayer target = TestPlayer.join(helper.getLevel(), "cp_n_target", 0)) {
@@ -191,9 +197,10 @@ public class NameDecorationGameTest {
             expect(owner, "OK: Names now carry");
             equal("cp_n_target *", target.player().getDisplayName().getString(), "the switch applies at once");
         } finally {
-            settings.decorateNames = decorateBefore;
+            settings.decorateNames = false;
             grades.grades.remove(VIP);
             if (targetUuid != null) grades.userSuffixes.remove(targetUuid);
+            ConfigAdmin.persist();
         }
         helper.succeed();
     }
@@ -222,7 +229,6 @@ public class NameDecorationGameTest {
         if (!Modes.luckPermsOnly(helper)) return;
         MinecraftServer server = helper.getLevel().getServer();
         SettingsConfig settings = CustomPerm.configManager.getSettings();
-        boolean decorateBefore = settings.decorateNames;
         try (TestPlayer alex = TestPlayer.join(helper.getLevel(), "cp_n_alex", 0)) {
             ServerPlayer player = alex.player();
             settings.decorateNames = true;
@@ -233,7 +239,8 @@ public class NameDecorationGameTest {
             check(GradeAdmin.setChat(server, "anything", false, "[X]").message().contains("/lp"),
                     "with LuckPerms, prefixes are set in LuckPerms");
         } finally {
-            settings.decorateNames = decorateBefore;
+            settings.decorateNames = false;
+            ConfigAdmin.persist();
             LuckPermsTestSupport.cleanup(List.of(LP_GROUP), List.of());
         }
         helper.succeed();
