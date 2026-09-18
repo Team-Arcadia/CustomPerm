@@ -11,10 +11,12 @@ package com.arcadia.customperm.admin;
 import com.arcadia.customperm.config.GradesConfig;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -43,9 +45,13 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
      */
     private static final Pattern LP_NAME = Pattern.compile("[a-z0-9_.\\-]{1,36}");
 
-    /** One grade as the group it would become; {@code prefix} and {@code suffix} are null for none. */
+    /**
+     * One grade as the group it would become; {@code prefix} and {@code suffix} are null for none, and
+     * {@code expiries} holds its temporary nodes keyed {@code allow:<node>} or {@code deny:<node>}.
+     */
     public record Group(String name, int weight, List<String> parents, List<String> deniedParents,
-                        Set<String> allow, Set<String> deny, String prefix, String suffix) {
+                        Set<String> allow, Set<String> deny, String prefix, String suffix,
+                        Map<String, Long> expiries) {
 
         int entries() {
             return parents.size() + deniedParents.size() + allow.size() + deny.size()
@@ -53,9 +59,13 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
         }
     }
 
-    /** One player as the LuckPerms user they would become, keyed by UUID. */
+    /**
+     * One player as the LuckPerms user they would become, keyed by UUID; {@code expiries} is keyed
+     * {@code allow:}, {@code deny:}, {@code grade:} or {@code refuse:}.
+     */
     public record Player(String uuid, List<String> grades, List<String> deniedGrades,
-                         Set<String> allow, Set<String> deny, String prefix, String suffix) {
+                         Set<String> allow, Set<String> deny, String prefix, String suffix,
+                         Map<String, Long> expiries) {
 
         int entries() {
             return grades.size() + deniedGrades.size() + allow.size() + deny.size()
@@ -92,6 +102,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
      * @param defaultGrade the grade applied to every player, empty for none
      */
     public static ExportPlan of(GradesConfig config, String defaultGrade) {
+        long now = com.arcadia.customperm.perm.Expiry.now();
         List<String> refused = new ArrayList<>();
         Set<String> exported = new HashSet<>();
         for (String name : new TreeMap<>(config.grades).keySet()) {
@@ -107,10 +118,13 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
             String name = entry.getKey();
             GradesConfig.Grade grade = entry.getValue();
             if (!exported.contains(name)) continue;
+            Map<String, Long> expiries = new HashMap<>();
             groups.add(new Group(name, grade.weight,
                     kept(grade.parents, exported, config, dropped, notes, "grade " + name),
                     kept(grade.deniedParents, exported, config, dropped, notes, "grade " + name),
-                    Set.copyOf(grade.permissions), Set.copyOf(grade.deniedPermissions), grade.prefix, grade.suffix));
+                    live(grade.permissions, grade.permissionExpiries, "allow:", expiries, now),
+                    live(grade.deniedPermissions, grade.deniedPermissionExpiries, "deny:", expiries, now),
+                    grade.prefix, grade.suffix, Map.copyOf(expiries)));
         }
 
         Set<String> holders = new TreeSet<>();
@@ -128,12 +142,20 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
                 continue;
             }
             String who = "player " + uuid;
-            Player player = new Player(uuid,
-                    kept(config.userGrades.getOrDefault(uuid, List.of()), exported, config, dropped, notes, who),
-                    kept(config.userDeniedGrades.getOrDefault(uuid, List.of()), exported, config, dropped, notes, who),
-                    Set.copyOf(config.userPermissions.getOrDefault(uuid, Set.of())),
-                    Set.copyOf(config.userDeniedPermissions.getOrDefault(uuid, Set.of())),
-                    config.userPrefixes.get(uuid), config.userSuffixes.get(uuid));
+            Map<String, Long> expiries = new HashMap<>();
+            List<String> held = kept(live(config.userGrades.getOrDefault(uuid, List.of()),
+                    config.userGradeExpiries.get(uuid), "grade:", expiries, now), exported, config, dropped, notes, who);
+            List<String> refusing = kept(live(config.userDeniedGrades.getOrDefault(uuid, List.of()),
+                    config.userDeniedGradeExpiries.get(uuid), "refuse:", expiries, now), exported, config, dropped, notes, who);
+            // An entry named in expiries but left out above would be written for nothing: keep only the used ones.
+            expiries.keySet().removeIf(key -> (key.startsWith("grade:") && !held.contains(key.substring(6)))
+                    || (key.startsWith("refuse:") && !refusing.contains(key.substring(7))));
+            Player player = new Player(uuid, held, refusing,
+                    live(config.userPermissions.getOrDefault(uuid, Set.of()), config.userPermissionExpiries.get(uuid),
+                            "allow:", expiries, now),
+                    live(config.userDeniedPermissions.getOrDefault(uuid, Set.of()),
+                            config.userDeniedPermissionExpiries.get(uuid), "deny:", expiries, now),
+                    config.userPrefixes.get(uuid), config.userSuffixes.get(uuid), Map.copyOf(expiries));
             if (player.entries() > 0) players.add(player);
         }
 
@@ -169,6 +191,27 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
                     : "Left out on " + holder + ": " + name + " is not a grade, so it grants nothing here either.");
         }
         return List.copyOf(kept);
+    }
+
+    /**
+     * The entries still alive, their expiry recorded under {@code prefix}: one that has run out is not
+     * exported, the resolver already treating it as gone.
+     */
+    private static Set<String> live(Set<String> entries, Map<String, Long> expiries, String prefix,
+                                    Map<String, Long> out, long now) {
+        return Set.copyOf(live(List.copyOf(entries), expiries, prefix, out, now));
+    }
+
+    private static List<String> live(List<String> entries, Map<String, Long> expiries, String prefix,
+                                     Map<String, Long> out, long now) {
+        List<String> alive = new ArrayList<>();
+        for (String entry : entries) {
+            Long at = expiries == null ? null : expiries.get(entry);
+            if (at != null && at <= now) continue;
+            alive.add(entry);
+            if (at != null) out.put(prefix + entry, at);
+        }
+        return alive;
     }
 
     private static boolean isUuid(String value) {
@@ -228,6 +271,10 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
             grade.deniedPermissions = new HashSet<>(source.deny());
             grade.prefix = source.prefix();
             grade.suffix = source.suffix();
+            source.expiries().forEach((key, at) -> {
+                if (key.startsWith("allow:")) grade.permissionExpiries.put(key.substring(6), at);
+                else if (key.startsWith("deny:")) grade.deniedPermissionExpiries.put(key.substring(5), at);
+            });
             config.grades.put(grade.name, grade);
         }
         for (Player player : players) {
@@ -237,6 +284,16 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
             }
             if (!player.allow().isEmpty()) config.userPermissions.put(player.uuid(), new HashSet<>(player.allow()));
             if (!player.deny().isEmpty()) config.userDeniedPermissions.put(player.uuid(), new HashSet<>(player.deny()));
+            player.expiries().forEach((key, at) -> {
+                int colon = key.indexOf(':');
+                Map<String, Map<String, Long>> byUser = switch (key.substring(0, colon)) {
+                    case "allow" -> config.userPermissionExpiries;
+                    case "deny" -> config.userDeniedPermissionExpiries;
+                    case "grade" -> config.userGradeExpiries;
+                    default -> config.userDeniedGradeExpiries;
+                };
+                byUser.computeIfAbsent(player.uuid(), k -> new HashMap<>()).put(key.substring(colon + 1), at);
+            });
         }
         return config;
     }

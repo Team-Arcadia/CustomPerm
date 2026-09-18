@@ -69,6 +69,15 @@ public final class LuckPermsTestSupport {
         user.getCachedData().invalidate();
     }
 
+    /** Makes a group inherit another for {@code seconds}: the editor offers durations on players only. */
+    public static void addTemporaryParent(String group, String parent, long seconds) {
+        await(api().getGroupManager().loadGroup(group)).ifPresent(loaded -> {
+            loaded.data().add(net.luckperms.api.node.types.InheritanceNode.builder(parent)
+                    .expiry(java.time.Duration.ofSeconds(seconds)).build());
+            await(api().getGroupManager().saveGroup(loaded));
+        });
+    }
+
     /** Removes every own node of a group with one of these keys, whatever its value. */
     public static void clearGroupNodes(String group, Collection<String> nodes) {
         await(api().getGroupManager().loadGroup(group)).ifPresent(loaded -> {

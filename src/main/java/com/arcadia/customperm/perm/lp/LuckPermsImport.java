@@ -86,11 +86,12 @@ public final class LuckPermsImport {
             Set<String> allow = new LinkedHashSet<>();
             Set<String> deny = new LinkedHashSet<>();
             Chat chat = new Chat();
-            readNodes(group.getNodes(), plan, exposeCommands, parents, deniedParents, allow, deny, chat,
-                    "group " + group.getName());
+            Map<String, Long> expiries = new java.util.HashMap<>();
+            readNodes(group.getNodes(), plan, exposeCommands, parents, deniedParents, allow, deny, chat, expiries,
+                    true, "group " + group.getName());
             plan.grade(new ImportPlan.Grade(group.getName(), group.getWeight().orElse(0),
                     List.copyOf(parents), List.copyOf(deniedParents), Set.copyOf(allow), Set.copyOf(deny),
-                    chat.prefix, chat.suffix));
+                    chat.prefix, chat.suffix, Map.copyOf(expiries)));
         }
         return null;
     }
@@ -139,12 +140,14 @@ public final class LuckPermsImport {
                 Set<String> allow = new LinkedHashSet<>();
                 Set<String> deny = new LinkedHashSet<>();
                 Chat chat = new Chat();
-                readNodes(user.getValue(), plan, exposeCommands, grades, deniedGrades, allow, deny, chat,
-                        "player " + uuid);
+                Map<String, Long> expiries = new java.util.HashMap<>();
+                readNodes(user.getValue(), plan, exposeCommands, grades, deniedGrades, allow, deny, chat, expiries,
+                        false, "player " + uuid);
                 if (grades.isEmpty() && deniedGrades.isEmpty() && allow.isEmpty() && deny.isEmpty()
                         && chat.prefix == null && chat.suffix == null) continue;
                 plan.player(new ImportPlan.Player(uuid.toString(), name(api, uuid), List.copyOf(grades),
-                        List.copyOf(deniedGrades), Set.copyOf(allow), Set.copyOf(deny), chat.prefix, chat.suffix));
+                        List.copyOf(deniedGrades), Set.copyOf(allow), Set.copyOf(deny), chat.prefix, chat.suffix,
+                        Map.copyOf(expiries)));
             }
             return null;
         });
@@ -158,6 +161,21 @@ public final class LuckPermsImport {
     }
 
     // ------------------------------------------------------------------ nodes
+
+    /**
+     * Records the expiry of an imported entry. LuckPerms can hold the same entry both for good and for a
+     * while: the permanent one wins, as it does there, and of two temporary ones the one that lasts longer.
+     */
+    private static void stamp(Map<String, Long> expiries, Set<String> permanent, String key, Long at,
+                              ImportPlan.Builder plan) {
+        if (at == null) {
+            permanent.add(key);
+            expiries.remove(key);
+            return;
+        }
+        plan.timed();
+        if (!permanent.contains(key)) expiries.merge(key, at, Math::max);
+    }
 
     /**
      * The prefix and suffix one holder keeps: a grade or a player carries one of each, so of several the
@@ -198,24 +216,38 @@ public final class LuckPermsImport {
      */
     private static void readNodes(Collection<? extends Node> nodes, ImportPlan.Builder plan,
                                   boolean exposeCommands, List<String> parents, List<String> deniedParents,
-                                  Set<String> allow, Set<String> deny, Chat chat, String holder) {
+                                  Set<String> allow, Set<String> deny, Chat chat, Map<String, Long> expiries,
+                                  boolean group, String holder) {
+        Set<String> permanent = new java.util.HashSet<>();
+        long now = com.arcadia.customperm.perm.Expiry.now();
         for (Node node : nodes) {
-            if (node.getExpiry() != null) {
-                plan.temporary();
-                plan.note("Temporary entries are not imported, nothing here expires: " + holder + ".");
-                continue;
-            }
             if (!node.getContexts().isEmpty()) {
                 plan.contextual();
                 plan.note("Contextual entries are not imported, a node here applies everywhere: " + holder + ".");
                 continue;
             }
+            Long at = node.getExpiry() == null ? null : node.getExpiry().getEpochSecond();
+            // Already over: LuckPerms drops it on its next pass, and so would the sweep here.
+            if (at != null && at <= now) continue;
             if (node instanceof InheritanceNode inheritance) {
+                if (at != null && group) {
+                    plan.temporary();
+                    plan.note("A grade inherits for good here: temporary parents of a group are not imported: "
+                            + holder + ".");
+                    continue;
+                }
                 (node.getValue() ? parents : deniedParents).add(inheritance.getGroupName());
+                stamp(expiries, permanent, (node.getValue() ? "grade:" : "refuse:") + inheritance.getGroupName(), at, plan);
                 plan.imported(false);
                 continue;
             }
             if (node instanceof ChatMetaNode<?, ?> meta) {
+                if (at != null) {
+                    plan.temporary();
+                    plan.note("A prefix or a suffix is set for good here: temporary ones are not imported: "
+                            + holder + ".");
+                    continue;
+                }
                 if (chat.offer(meta)) {
                     plan.imported(false);
                 } else {
@@ -237,6 +269,7 @@ public final class LuckPermsImport {
                 continue;
             }
             (node.getValue() ? allow : deny).add(translated);
+            stamp(expiries, permanent, (node.getValue() ? "allow:" : "deny:") + translated, at, plan);
             plan.imported(!translated.equals(node.getKey()));
             String command = ImportPlan.exposedCommand(node.getKey());
             if (exposeCommands && command != null && node.getValue()) plan.expose(command);

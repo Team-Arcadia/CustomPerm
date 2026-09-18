@@ -81,9 +81,9 @@ class ImportPlanTest {
     void theReportCountsWhatIsImportedAndWhatIsLeftBehind() {
         ImportPlan.Builder builder = new ImportPlan.Builder();
         builder.grade(new ImportPlan.Grade("vip", 10, List.of("default"), List.of(),
-                Set.of("customperm.command.tp"), Set.of(), "&6[VIP] ", null));
+                Set.of("customperm.command.tp"), Set.of(), "&6[VIP] ", null, java.util.Map.of()));
         builder.player(new ImportPlan.Player("00000000-0000-0000-0000-000000000001", "Alex",
-                List.of("vip"), List.of(), Set.of(), Set.of(), null, null));
+                List.of("vip"), List.of(), Set.of(), Set.of(), null, null, java.util.Map.of()));
         builder.imported(false);
         builder.imported(true);
         builder.expose("tp");

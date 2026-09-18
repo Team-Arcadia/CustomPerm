@@ -111,7 +111,7 @@ public final class LuckPermsExport {
                 for (String parent : source.deniedParents()) {
                     add(group, InheritanceNode.builder(parent).value(false).build(), kept);
                 }
-                addNodes(group, source.allow(), source.deny(), kept);
+                addNodes(group, source.allow(), source.deny(), source.expiries(), kept);
                 addChat(group, source.prefix(), source.suffix(), source.weight(), replace, kept);
                 await(api.getGroupManager().saveGroup(group));
                 groups++;
@@ -132,11 +132,14 @@ public final class LuckPermsExport {
                 holder = "player " + source.uuid();
                 User user = await(api.getUserManager().loadUser(UUID.fromString(source.uuid())));
                 if (replace) clearDecided(user, false);
-                for (String grade : source.grades()) add(user, InheritanceNode.builder(grade).build(), kept);
-                for (String grade : source.deniedGrades()) {
-                    add(user, InheritanceNode.builder(grade).value(false).build(), kept);
+                for (String grade : source.grades()) {
+                    add(user, timed(InheritanceNode.builder(grade), source.expiries().get("grade:" + grade)), kept);
                 }
-                addNodes(user, source.allow(), source.deny(), kept);
+                for (String grade : source.deniedGrades()) {
+                    add(user, timed(InheritanceNode.builder(grade).value(false), source.expiries().get("refuse:" + grade)),
+                            kept);
+                }
+                addNodes(user, source.allow(), source.deny(), source.expiries(), kept);
                 addChat(user, source.prefix(), source.suffix(), ExportPlan.PLAYER_PRIORITY, replace, kept);
                 await(api.getUserManager().saveUser(user));
                 user.getCachedData().invalidate();
@@ -151,9 +154,16 @@ public final class LuckPermsExport {
         }
     }
 
-    private static void addNodes(PermissionHolder holder, Set<String> allow, Set<String> deny, int[] kept) {
-        for (String key : allow) add(holder, Node.builder(key).value(true).build(), kept);
-        for (String key : deny) add(holder, Node.builder(key).value(false).build(), kept);
+    private static void addNodes(PermissionHolder holder, Set<String> allow, Set<String> deny,
+                                 java.util.Map<String, Long> expiries, int[] kept) {
+        for (String key : allow) add(holder, timed(Node.builder(key).value(true), expiries.get("allow:" + key)), kept);
+        for (String key : deny) add(holder, timed(Node.builder(key).value(false), expiries.get("deny:" + key)), kept);
+    }
+
+    /** The node, temporary until {@code at} when it has an expiry here, as LuckPerms stores one. */
+    private static Node timed(net.luckperms.api.node.NodeBuilder<?, ?> builder, Long at) {
+        if (at != null) builder.expiry(java.time.Instant.ofEpochSecond(at));
+        return builder.build();
     }
 
     /**

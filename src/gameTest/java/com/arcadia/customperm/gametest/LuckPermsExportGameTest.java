@@ -77,6 +77,12 @@ public class LuckPermsExportGameTest {
             GradesConfig config = new GradesConfig();
             grade(config, BASE, 0, List.of(), Set.of("customperm.command.time"), Set.of("customperm.command.ban"));
             config.grades.get(BASE).prefix = "&7[Base] ";
+            config.grades.get(BASE).permissions.add("customperm.command.list");
+            config.grades.get(BASE).permissionExpiries.put("customperm.command.list",
+                    com.arcadia.customperm.perm.Expiry.now() + 3600);
+            config.grades.get(BASE).permissions.add("customperm.command.dead");
+            config.grades.get(BASE).permissionExpiries.put("customperm.command.dead",
+                    com.arcadia.customperm.perm.Expiry.now() - 1);
             grade(config, VIP, 42, List.of(BASE), Set.of("customperm.command.fly"), Set.of());
             grade(config, "cp_X_Bad", 0, List.of(), Set.of(), Set.of());
             config.userGrades.put(USER.toString(), new ArrayList<>(List.of(VIP)));
@@ -98,6 +104,9 @@ public class LuckPermsExportGameTest {
             expect(base, "customperm.command.time=true", "A grade's node must arrive as it is");
             expect(base, "customperm.command.ban=false", "A denied node must arrive set to false");
             expect(base, "prefix.0.&7[Base] =true", "A grade's prefix must arrive at its weight");
+            expect(base, "customperm.command.list=true@expiring", "A temporary node must arrive temporary");
+            if (base.stream().anyMatch(node -> node.startsWith("customperm.command.dead")))
+                fail("A node that has already expired must not be exported: " + base);
             List<String> vip = LuckPermsTestSupport.groupNodes(VIP);
             expect(vip, "group." + BASE + "=true", "A parent must arrive as an inheritance node");
             expect(vip, "weight.42=true", "The weight must arrive on a group that had none");

@@ -81,6 +81,8 @@ public class LuckPermsImportGameTest {
             apply(LpEditOp.GROUP_PARENT_ADD, VIP, BASE, "");
             apply(LpEditOp.GROUP_WEIGHT_SET, VIP, "42");
             apply(LpEditOp.USER_PARENT_ADD, USER.toString(), VIP, "", "0");
+            apply(LpEditOp.USER_PARENT_ADD, USER.toString(), BASE, "", "7200");
+            LuckPermsTestSupport.addTemporaryParent(BASE, "default", 3600);
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "minecraft.command.weather", "true", "", "0");
 
             ImportPlan plan = LuckPermsTestSupport.await(LuckPermsImport.read(true));
@@ -98,14 +100,19 @@ public class LuckPermsImportGameTest {
             ImportPlan.Grade vip = grade(plan, VIP);
             if (vip.weight() != 42) fail("The group weight must arrive as the grade weight: " + vip);
             if (!vip.parents().equals(List.of(BASE))) fail("The group parent must arrive as a grade parent: " + vip);
-            if (!vip.allow().isEmpty())
-                fail("A temporary and a contextual node must both be left behind: " + vip);
+            if (!vip.allow().equals(java.util.Set.of("customperm.command.kick")))
+                fail("A temporary node must arrive and a contextual one be left behind: " + vip);
+            long kickAt = vip.expiries().getOrDefault("allow:customperm.command.kick", 0L);
+            if (Math.abs(kickAt - (com.arcadia.customperm.perm.Expiry.now() + 3600)) > 30)
+                fail("The temporary node must keep its expiry: " + vip.expiries());
+            if (!base.parents().isEmpty())
+                fail("A temporary parent of a group must be left behind, a grade inheriting for good: " + base);
             if (!"[VIP]".equals(vip.prefix()))
                 fail("The prefix LuckPerms shows first, the highest priority, must arrive: " + vip.prefix());
 
             if (!plan.exposeCommands().contains("gamemode") || !plan.exposeCommands().contains("weather"))
                 fail("A translated node must expose its command, or it grants nothing: " + plan.exposeCommands());
-            if (plan.exposeCommands().contains("seed") || plan.exposeCommands().contains("kick"))
+            if (plan.exposeCommands().contains("seed"))
                 fail("A node that was not imported must not expose anything: " + plan.exposeCommands());
 
             ImportPlan.Player player = plan.players().stream()
@@ -113,6 +120,9 @@ public class LuckPermsImportGameTest {
             if (player == null || !player.grades().contains(VIP)
                     || !player.allow().contains("customperm.command.weather"))
                 fail("The user's group and own node must both arrive: " + player);
+            if (!player.grades().contains(BASE) || !player.expiries().containsKey("grade:" + BASE)
+                    || player.expiries().containsKey("grade:" + VIP))
+                fail("A temporary group of a player must arrive with its expiry, a permanent one without: " + player);
 
             if (plan.counts().temporary() < 1 || plan.counts().contextual() < 1
                     || plan.counts().foreign() < 1 || plan.counts().other() < 1)
@@ -134,6 +144,10 @@ public class LuckPermsImportGameTest {
                 fail("The denial was not written.");
             if (!grades.userGrades.getOrDefault(USER.toString(), List.of()).contains(VIP))
                 fail("The player was not assigned.");
+            if (!grades.grades.get(VIP).permissionExpiries.containsKey("customperm.command.kick"))
+                fail("The temporary node was written without its expiry.");
+            if (!grades.userGradeExpiries.getOrDefault(USER.toString(), java.util.Map.of()).containsKey(BASE))
+                fail("The temporary grade was written without its expiry.");
             if (!commands.grantedCommands.contains("gamemode") || !commands.grantedCommands.contains("weather"))
                 fail("The commands the imported nodes need were not exposed.");
             if (result.notes().stream().noneMatch(note -> note.contains("LuckPerms still decides")))
@@ -145,6 +159,7 @@ public class LuckPermsImportGameTest {
             grades.userDeniedGrades.keySet().retainAll(holdersBefore);
             grades.userPermissions.keySet().retainAll(nodeHoldersBefore);
             grades.userDeniedPermissions.keySet().retainAll(nodeHoldersBefore);
+            grades.userGradeExpiries.keySet().retainAll(holdersBefore);
             LuckPermsTestSupport.cleanup(List.of(BASE, VIP), List.of());
         }
         helper.succeed();

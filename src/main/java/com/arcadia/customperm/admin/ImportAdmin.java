@@ -113,6 +113,8 @@ public final class ImportAdmin {
             } else if (replace) {
                 target.permissions.clear();
                 target.deniedPermissions.clear();
+                target.permissionExpiries.clear();
+                target.deniedPermissionExpiries.clear();
                 target.parents.clear();
                 target.deniedParents.clear();
                 target.weight = source.weight();
@@ -123,8 +125,15 @@ public final class ImportAdmin {
                 // a decision, and silently taking the one from LuckPerms would undo it.
                 merged.add(source.name());
             }
-            target.permissions.addAll(source.allow());
-            target.deniedPermissions.addAll(source.deny());
+            // A temporary node keeps its expiry only when the import adds it: one already here for good stays so.
+            for (String node : source.allow()) {
+                Long at = source.expiries().get("allow:" + node);
+                if (target.permissions.add(node) && at != null) target.permissionExpiries.put(node, at);
+            }
+            for (String node : source.deny()) {
+                Long at = source.expiries().get("deny:" + node);
+                if (target.deniedPermissions.add(node) && at != null) target.deniedPermissionExpiries.put(node, at);
+            }
             addAll(target.parents, source.parents());
             addAll(target.deniedParents, source.deniedParents());
             // Adding keeps a prefix already set here, like the weight: it is what the admin chose.
@@ -142,14 +151,32 @@ public final class ImportAdmin {
                 grades().userDeniedPermissions.remove(source.uuid());
                 grades().userPrefixes.remove(source.uuid());
                 grades().userSuffixes.remove(source.uuid());
+                grades().userGradeExpiries.remove(source.uuid());
+                grades().userDeniedGradeExpiries.remove(source.uuid());
+                grades().userPermissionExpiries.remove(source.uuid());
+                grades().userDeniedPermissionExpiries.remove(source.uuid());
             }
-            addAll(grades().userGrades.computeIfAbsent(source.uuid(), k -> new ArrayList<>()), source.grades());
-            addAll(grades().userDeniedGrades.computeIfAbsent(source.uuid(), k -> new ArrayList<>()),
-                    source.deniedGrades());
-            grades().userPermissions.computeIfAbsent(source.uuid(), k -> new LinkedHashSet<>())
-                    .addAll(source.allow());
-            grades().userDeniedPermissions.computeIfAbsent(source.uuid(), k -> new LinkedHashSet<>())
-                    .addAll(source.deny());
+            String uuid = source.uuid();
+            List<String> held = grades().userGrades.computeIfAbsent(uuid, k -> new ArrayList<>());
+            for (String grade : source.grades()) {
+                if (held.contains(grade)) continue;
+                held.add(grade);
+                timed(grades().userGradeExpiries, uuid, grade, source.expiries().get("grade:" + grade));
+            }
+            List<String> refusing = grades().userDeniedGrades.computeIfAbsent(uuid, k -> new ArrayList<>());
+            for (String grade : source.deniedGrades()) {
+                if (refusing.contains(grade)) continue;
+                refusing.add(grade);
+                timed(grades().userDeniedGradeExpiries, uuid, grade, source.expiries().get("refuse:" + grade));
+            }
+            java.util.Set<String> allowed = grades().userPermissions.computeIfAbsent(uuid, k -> new LinkedHashSet<>());
+            for (String node : source.allow()) {
+                if (allowed.add(node)) timed(grades().userPermissionExpiries, uuid, node, source.expiries().get("allow:" + node));
+            }
+            java.util.Set<String> denied = grades().userDeniedPermissions.computeIfAbsent(uuid, k -> new LinkedHashSet<>());
+            for (String node : source.deny()) {
+                if (denied.add(node)) timed(grades().userDeniedPermissionExpiries, uuid, node, source.expiries().get("deny:" + node));
+            }
             if (source.prefix() != null) grades().userPrefixes.putIfAbsent(source.uuid(), source.prefix());
             if (source.suffix() != null) grades().userSuffixes.putIfAbsent(source.uuid(), source.suffix());
             playersWritten++;
@@ -183,6 +210,11 @@ public final class ImportAdmin {
                     + "LuckPerms is removed, and can be read on the Grades page until then.");
         }
         return result.note("Every config file was copied to config/arcadia/customperm/backup/ first.");
+    }
+
+    /** Records the expiry of an entry the import just added to one player, when it has one. */
+    private static void timed(Map<String, Map<String, Long>> byUser, String uuid, String key, Long at) {
+        if (at != null) byUser.computeIfAbsent(uuid, k -> new HashMap<>()).put(key, at);
     }
 
     private static void addAll(List<String> target, List<String> values) {

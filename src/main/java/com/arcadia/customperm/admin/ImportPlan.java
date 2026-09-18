@@ -11,6 +11,7 @@ package com.arcadia.customperm.admin;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -28,24 +29,33 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
     public static final ImportPlan EMPTY =
             new ImportPlan(List.of(), List.of(), Set.of(), List.of(), Counts.NONE);
 
-    /** One LuckPerms group as the grade it would become; {@code prefix} and {@code suffix} are null for none. */
+    /**
+     * One LuckPerms group as the grade it would become; {@code prefix} and {@code suffix} are null for none.
+     * {@code expiries} holds the temporary nodes, keyed {@code allow:<node>} or {@code deny:<node>}, in epoch
+     * seconds.
+     */
     public record Grade(String name, int weight, List<String> parents, List<String> deniedParents,
-                        Set<String> allow, Set<String> deny, String prefix, String suffix) {
+                        Set<String> allow, Set<String> deny, String prefix, String suffix,
+                        Map<String, Long> expiries) {
     }
 
-    /** One LuckPerms user as what they would hold; {@code name} is display only, the UUID is the key. */
+    /**
+     * One LuckPerms user as what they would hold; {@code name} is display only, the UUID is the key.
+     * {@code expiries} is keyed {@code allow:}, {@code deny:}, {@code grade:} or {@code refuse:}.
+     */
     public record Player(String uuid, String name, List<String> grades, List<String> deniedGrades,
-                         Set<String> allow, Set<String> deny, String prefix, String suffix) {
+                         Set<String> allow, Set<String> deny, String prefix, String suffix,
+                         Map<String, Long> expiries) {
     }
 
     /**
      * What the report counts. The skipped ones matter as much as the imported ones: a permission that
      * silently disappears in a migration is how a server ends up open or locked without anyone knowing.
      */
-    public record Counts(int groups, int players, int nodes, int translated, int commands,
+    public record Counts(int groups, int players, int nodes, int translated, int timed, int commands,
                          int temporary, int contextual, int foreign, int other) {
 
-        public static final Counts NONE = new Counts(0, 0, 0, 0, 0, 0, 0, 0, 0);
+        public static final Counts NONE = new Counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
         public int skipped() {
             return temporary + contextual + foreign + other;
@@ -64,7 +74,8 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
         List<String> lines = new ArrayList<>();
         lines.add(counts.groups + " group(s) become grades, " + counts.players + " player(s) keep what they hold.");
         lines.add(counts.nodes + " node(s) imported, " + counts.translated + " of them translated from "
-                + "minecraft.command to customperm.command.");
+                + "minecraft.command to customperm.command"
+                + (counts.timed == 0 ? "." : ", " + counts.timed + " temporary, carried with their expiry."));
         if (!exposeCommands.isEmpty()) {
             lines.add(exposeCommands.size() + " command(s) also exposed, without which those nodes would grant "
                     + "nothing: " + String.join(", ", exposeCommands) + ".");
@@ -72,7 +83,8 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
         if (counts.skipped() == 0) {
             lines.add("Nothing is left behind.");
         } else {
-            lines.add(counts.skipped() + " entrie(s) are left behind: " + counts.temporary + " temporary, "
+            lines.add(counts.skipped() + " entrie(s) are left behind: " + counts.temporary + " temporary parent or "
+                    + "prefix, "
                     + counts.contextual + " contextual, " + counts.foreign + " belonging to other mods, "
                     + counts.other + " of a kind CustomPerm has no equivalent for (meta, display name, "
                     + "tracks).");
@@ -117,6 +129,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
         private final List<String> skipped = new ArrayList<>();
         private int nodes;
         private int translated;
+        private int timed;
         private int temporary;
         private int contextual;
         private int foreign;
@@ -137,6 +150,11 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
         public void imported(boolean wasTranslated) {
             nodes++;
             if (wasTranslated) translated++;
+        }
+
+        /** A temporary entry that is imported with its expiry. */
+        public void timed() {
+            timed++;
         }
 
         public void temporary() {
@@ -163,7 +181,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
         public ImportPlan build() {
             return new ImportPlan(List.copyOf(grades), List.copyOf(players), Set.copyOf(commands),
                     List.copyOf(skipped),
-                    new Counts(grades.size(), players.size(), nodes, translated, commands.size(),
+                    new Counts(grades.size(), players.size(), nodes, translated, timed, commands.size(),
                             temporary, contextual, foreign, other));
         }
     }
