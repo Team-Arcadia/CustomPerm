@@ -53,8 +53,8 @@ public final class PlayersScreen extends AdminScreen {
     private static final int GAP = 6;
     private static final int DURATION_FIELD = 64;
 
-    /** One node of the selected player. */
-    private record NodeRow(String node, boolean deny) {
+    /** One node of the selected player; {@code context} is empty for a node that applies everywhere. */
+    private record NodeRow(String node, boolean deny, String context) {
     }
 
     private PlayersData data;
@@ -67,6 +67,8 @@ public final class PlayersScreen extends AdminScreen {
     private final ChatFields chat;
     /** How long a node added lasts; empty for good. */
     private final CpEditBox durationField;
+    /** The world a node added is limited to; empty for everywhere. */
+    private final CpEditBox worldField;
     /** Whether the right-hand side shows the chat prefix and suffix rather than the nodes. */
     private boolean chatTab;
     /** Name typed in the field below the list, shown as a row while that player holds nothing. */
@@ -81,6 +83,8 @@ public final class PlayersScreen extends AdminScreen {
         this.chat = new ChatFields(this::saveChat);
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
                 .hint(Component.literal("for, e.g. 30d"));
+        this.worldField = new CpEditBox(Component.literal("World"), 64)
+                .hint(Component.literal("in, e.g. the_nether"));
         this.search = new CpEditBox(Component.literal("Search players"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
                 .onChange(text -> refilter());
@@ -190,8 +194,10 @@ public final class PlayersScreen extends AdminScreen {
         PlayersData.Player player = playerList.getSelected();
         List<NodeRow> nodes = new ArrayList<>();
         if (player != null) {
-            player.deny().forEach(n -> nodes.add(new NodeRow(n, true)));
-            player.allow().forEach(n -> nodes.add(new NodeRow(n, false)));
+            player.deny().forEach(n -> nodes.add(new NodeRow(n, true, "")));
+            player.allow().forEach(n -> nodes.add(new NodeRow(n, false, "")));
+            player.scoped().stream().filter(e -> !e.kind().equals("grade"))
+                    .forEach(e -> nodes.add(new NodeRow(e.value(), e.deny(), e.context())));
         }
         nodeList.setItems(nodes);
         chat.fill(player == null ? "" : player.prefix(), player == null ? "" : player.suffix());
@@ -274,9 +280,12 @@ public final class PlayersScreen extends AdminScreen {
             return;
         }
         addRenderableWidget(nodeList.at(list));
-        addRenderableWidget(nodeField.at(fieldRow.beforeRight(DURATION_FIELD + 4)));
+        addRenderableWidget(nodeField.at(fieldRow.beforeRight(DURATION_FIELD + GradesScreen.WORLD_FIELD + 8)));
+        addRenderableWidget(worldField.at(fieldRow.right(DURATION_FIELD + GradesScreen.WORLD_FIELD + 4)
+                .left(GradesScreen.WORLD_FIELD)));
         addRenderableWidget(durationField.at(fieldRow.right(DURATION_FIELD)));
         nodeField.setEditable(editable);
+        worldField.setEditable(editable);
         durationField.setEditable(editable);
 
         NodeRow selected = nodeList.getSelected();
@@ -332,14 +341,15 @@ public final class PlayersScreen extends AdminScreen {
         String node = nodeField.getValue().trim();
         if (player == null || node.isEmpty()) return;
         // Adding addresses the player by name: a pending row has no UUID yet, the server resolves it.
-        act(GuiAction.USER_NODE_ADD, player.name(), node, deny ? "deny" : "allow", durationField.getValue().trim());
+        act(GuiAction.USER_NODE_ADD, player.name(), node, deny ? "deny" : "allow", durationField.getValue().trim(),
+                GradesScreen.context(worldField.getValue()));
         nodeField.setValue("");
     }
 
     private void removeNode(NodeRow row) {
         PlayersData.Player player = playerList.getSelected();
         if (player == null || row == null || player.uuid().isEmpty()) return;
-        act(GuiAction.USER_NODE_REMOVE, player.uuid(), row.node(), row.deny() ? "deny" : "allow");
+        act(GuiAction.USER_NODE_REMOVE, player.uuid(), row.node(), row.deny() ? "deny" : "allow", row.context());
         nodeField.setValue("");
     }
 
@@ -349,7 +359,8 @@ public final class PlayersScreen extends AdminScreen {
                               boolean selected) {
         Skin.dot(g, r.x() + 6, r.centerY(), player.online() ? Palette.GOOD : Palette.LINE_STRONG);
         int x = r.x() + 6 + Atlas.DOT_SIZE + 5;
-        int own = player.allow().size() + player.deny().size();
+        int own = player.allow().size() + player.deny().size()
+                + (int) player.scoped().stream().filter(e -> !e.kind().equals("grade")).count();
         String count = own == 0 ? "" : String.valueOf(own);
         int cw = count.isEmpty() ? 0 : font.width(count) + 14;
         if (!count.isEmpty()) {
@@ -364,7 +375,8 @@ public final class PlayersScreen extends AdminScreen {
         int w = Skin.badge(g, font, label, r.x() + 4, r.centerY(), row.deny() ? Palette.DANGER : Palette.GOOD);
         int x = r.x() + 4 + Math.max(w, font.width("ALLOW") + 6) + 5;
         PlayersData.Player player = playerList.getSelected();
-        String left = player == null ? "" : GradesScreen.timeLeft(player.remaining(row.deny() ? "deny" : "allow", row.node()));
+        String left = !row.context().isEmpty() ? GradesScreen.where(row.context())
+                : player == null ? "" : GradesScreen.timeLeft(player.remaining(row.deny() ? "deny" : "allow", row.node()));
         int lw = left.isEmpty() ? 0 : font.width(left) + 8;
         if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
         Skin.text(g, font, row.node(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4 - lw, Palette.TEXT);
@@ -388,7 +400,10 @@ public final class PlayersScreen extends AdminScreen {
         Skin.text(g, font, player.name(), in.x(), in.y(), in.w(), Palette.TEXT);
         // Grades and refusals first: they are said nowhere else on this page, while the node counts are the
         // list right below. A narrow panel then clips the counts rather than the refusals.
-        String sub = (player.grades().isEmpty() ? "no grade" : "grades: " + String.join(", ", player.grades()))
+        List<String> held = new ArrayList<>(player.grades());
+        player.scoped().stream().filter(e -> e.kind().equals("grade"))
+                .forEach(e -> held.add(e.value() + " (" + GradesScreen.where(e.context()) + ")"));
+        String sub = (held.isEmpty() ? "no grade" : "grades: " + String.join(", ", held))
                 + (player.refused().isEmpty() ? "" : "  |  refuses: " + String.join(", ", player.refused()))
                 + "  |  " + player.allow().size() + " allow, " + player.deny().size() + " deny"
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());

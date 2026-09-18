@@ -171,11 +171,11 @@ public class TemporaryEntriesGameTest {
             grades.grades.remove(grade);
             ServerCommands.run(helper.getLevel().getServer(), "customperm grade create " + grade);
 
-            act(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.seed", "allow", "someday");
+            act(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.seed", "allow", "someday", "");
             result(owner, "FAIL: Invalid duration 'someday'");
-            act(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.seed", "allow", "7d");
+            act(owner, GuiAction.GRADE_NODE_ADD, grade, "customperm.command.seed", "allow", "7d", "");
             result(owner, "OK: Added customperm.command.seed -> " + grade + " for 7d");
-            act(owner, GuiAction.GRADE_ASSIGN, "cp_t_member", grade, "1d");
+            act(owner, GuiAction.GRADE_ASSIGN, "cp_t_member", grade, "1d", "");
             result(owner, "OK: Assigned " + grade + " -> cp_t_member for 1d");
 
             GradesData page = owner.payloads(GuiPagePayload.class).stream()

@@ -247,7 +247,7 @@ public class OperatorRestrictionGameTest {
 
             admin.clearReceived();
             GuiRequestHandler.handleAction(new GuiActionPayload(GuiAction.GRADE_UNASSIGN.name(),
-                    List.of(admin.uuid().toString(), "cp_o_mine"), GuiPage.GRADES.id()), admin.payloadContext());
+                    List.of(admin.uuid().toString(), "cp_o_mine", ""), GuiPage.GRADES.id()), admin.payloadContext());
             List<GuiActionResultPayload> results = admin.payloads(GuiActionResultPayload.class);
             if (results.size() != 1 || results.get(0).success() || !results.get(0).message().contains("Refused"))
                 fail("Unassigning the admin's own access grade through the interface must be refused, got " + results);

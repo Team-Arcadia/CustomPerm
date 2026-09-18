@@ -24,6 +24,7 @@ import com.arcadia.customperm.network.gui.GuiRequestPayload;
 import com.arcadia.customperm.network.gui.ImportData;
 import com.arcadia.customperm.network.gui.NameSettings;
 import com.arcadia.customperm.network.gui.Remaining;
+import com.arcadia.customperm.network.gui.ScopedEntry;
 import com.arcadia.customperm.network.gui.LogsData;
 import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.network.gui.PlayersData;
@@ -79,15 +80,18 @@ public class GuiPayloadCodecGameTest {
                                 new GradesData.Inheritance(List.of("base", "extra"), List.of("locked")),
                                 List.of("customperm.command.fly"), List.of("customperm.command.op"),
                                 new GradesData.Members(
-                                        List.of(new GradesData.Member("00000000-0000-0000-0000-000000000001", "Alex", true, 604800L)),
-                                        List.of(new GradesData.Member("00000000-0000-0000-0000-000000000003", "Sam", false, 0L))),
-                                List.of(new Remaining("allow:customperm.command.fly", 3600L)))),
+                                        List.of(new GradesData.Member("00000000-0000-0000-0000-000000000001", "Alex", true, 604800L, ""),
+                                                new GradesData.Member("00000000-0000-0000-0000-000000000004", "Kai", false, 0L, "world=minecraft:the_nether")),
+                                        List.of(new GradesData.Member("00000000-0000-0000-0000-000000000003", "Sam", false, 0L, ""))),
+                                new GradesData.Details(List.of(new Remaining("allow:customperm.command.fly", 3600L)),
+                                        List.of(new ScopedEntry("world=minecraft:the_nether", "deny", "customperm.command.fly"))))),
                         List.of("Alex", "Steve"), "internal", "vip", true,
                         new NameSettings(true, "{prefix}{name}{suffix}"))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0, false), new PlayersData(List.of(
                         new PlayersData.Player("00000000-0000-0000-0000-000000000002", "Steve", false,
-                                new PlayersData.Held(List.of("staff"), List.of("vip"), "&d[Me] ", "", List.of(new Remaining("deny:customperm.command.time", 60L))),
+                                new PlayersData.Held(List.of("staff"), List.of("vip"), "&d[Me] ", "", List.of(new Remaining("deny:customperm.command.time", 60L)),
+                                        List.of(new ScopedEntry("world=minecraft:the_end", "grade", "builder"))),
                                 List.of("customperm.command.weather"), List.of("customperm.command.time"))),
                         List.of("Alex", "Steve"), "deny", new NameSettings(false, "{prefix}&8| {name}"))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,

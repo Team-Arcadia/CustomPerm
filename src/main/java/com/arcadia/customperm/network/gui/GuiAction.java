@@ -60,20 +60,23 @@ public enum GuiAction {
     GRADE_CREATE(1, GuiArea.GRADES),
     /** {@code [grade]} Deletes a grade and unassigns it from every player. */
     GRADE_DELETE(1, GuiArea.GRADES),
-    /** {@code [grade, node, "allow"|"deny", duration]} Adds an ALLOW or a DENY node; an empty duration is permanent. */
-    GRADE_NODE_ADD(4, GuiArea.GRADES),
-    /** {@code [grade, node, "allow"|"deny"]} Removes an ALLOW or a DENY node. */
-    GRADE_NODE_REMOVE(3, GuiArea.GRADES),
+    /**
+     * {@code [grade, node, "allow"|"deny", duration, context]} Adds an ALLOW or a DENY node; an empty duration
+     * is permanent, an empty context applies everywhere, {@code world=the_nether} in that world only.
+     */
+    GRADE_NODE_ADD(5, GuiArea.GRADES),
+    /** {@code [grade, node, "allow"|"deny", context]} Removes an ALLOW or a DENY node, from that context. */
+    GRADE_NODE_REMOVE(4, GuiArea.GRADES),
     /** {@code [grade, weight]} Sets the tie-break weight, which decides between grades at the same specificity. */
     GRADE_WEIGHT_SET(2, GuiArea.GRADES),
     /** {@code [grade, parent]} Makes the grade inherit another; a cycle is refused. */
     GRADE_PARENT_ADD(2, GuiArea.GRADES),
     /** {@code [grade, parent]} Stops inheriting it. */
     GRADE_PARENT_REMOVE(2, GuiArea.GRADES),
-    /** {@code [playerName, grade, duration]} Assigns a grade to a player online or known to the server. */
-    GRADE_ASSIGN(3, GuiArea.GRADES),
-    /** {@code [playerUuid, grade]} Unassigns a grade, by UUID so unnamed entries can be cleaned up. */
-    GRADE_UNASSIGN(2, GuiArea.GRADES),
+    /** {@code [playerName, grade, duration, context]} Assigns a grade to a player online or known to the server. */
+    GRADE_ASSIGN(4, GuiArea.GRADES),
+    /** {@code [playerUuid, grade, context]} Unassigns a grade, by UUID so unnamed entries can be cleaned up. */
+    GRADE_UNASSIGN(3, GuiArea.GRADES),
     /** {@code [grade, parent]} Refuses a grade wherever this one would inherit it. */
     GRADE_PARENT_DENY(2, GuiArea.GRADES),
     /** {@code [grade, parent]} Stops refusing it. */
@@ -85,10 +88,13 @@ public enum GuiAction {
     /** {@code [grade]} Makes a grade apply to every player; an empty name clears the default grade. */
     GRADE_DEFAULT(1, GuiArea.GRADES),
 
-    /** {@code [playerName, node, "allow"|"deny", duration]} Adds a node the player carries themselves, above their grades. */
-    USER_NODE_ADD(4, GuiArea.GRADES),
-    /** {@code [playerUuid, node, "allow"|"deny"]} Removes one, by UUID so an unnamed entry can be cleaned up. */
-    USER_NODE_REMOVE(3, GuiArea.GRADES),
+    /**
+     * {@code [playerName, node, "allow"|"deny", duration, context]} Adds a node the player carries themselves,
+     * above their grades.
+     */
+    USER_NODE_ADD(5, GuiArea.GRADES),
+    /** {@code [playerUuid, node, "allow"|"deny", context]} Removes one, by UUID so an unnamed entry can be cleaned up. */
+    USER_NODE_REMOVE(4, GuiArea.GRADES),
 
     /**
      * {@code ["true"|"false"]} Reads LuckPerms and returns what an import would do, writing nothing. The

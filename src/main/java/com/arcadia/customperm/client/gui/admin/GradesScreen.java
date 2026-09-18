@@ -55,9 +55,11 @@ public final class GradesScreen extends AdminScreen {
     private static final int WEIGHT_FIELD = 40;
     /** Width of the duration box beside a node or a player name: enough for "1d12h" and its hint cut short. */
     private static final int DURATION_FIELD = 64;
+    /** Width of the world box beside it: enough for "the_nether". */
+    static final int WORLD_FIELD = 72;
 
-    /** One node of the selected grade. */
-    private record NodeRow(String node, boolean deny) {
+    /** One node of the selected grade; {@code context} is empty for a node that applies everywhere. */
+    private record NodeRow(String node, boolean deny, String context) {
     }
 
     /** One grade the selected grade inherits, or refuses to inherit. */
@@ -87,6 +89,8 @@ public final class GradesScreen extends AdminScreen {
     private final ChatFields chat;
     /** How long what is added lasts, shared by the node and player fields; empty for good. */
     private final CpEditBox durationField;
+    /** The world what is added is limited to, shared like the duration; empty for everywhere. */
+    private final CpEditBox worldField;
     /** Grade to select once the next refresh lands, after creating it. */
     private String pendingGrade;
 
@@ -106,6 +110,8 @@ public final class GradesScreen extends AdminScreen {
         this.chat = new ChatFields(this::saveChat);
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
                 .hint(Component.literal("for, e.g. 30d"));
+        this.worldField = new CpEditBox(Component.literal("World"), 64)
+                .hint(Component.literal("in, e.g. the_nether"));
         this.search = new CpEditBox(Component.literal("Search grades"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
                 .onChange(text -> refilter());
@@ -221,8 +227,9 @@ public final class GradesScreen extends AdminScreen {
         GradesData.Grade grade = gradeList.getSelected();
         List<NodeRow> nodes = new ArrayList<>();
         if (grade != null) {
-            grade.deny().forEach(n -> nodes.add(new NodeRow(n, true)));
-            grade.allow().forEach(n -> nodes.add(new NodeRow(n, false)));
+            grade.deny().forEach(n -> nodes.add(new NodeRow(n, true, "")));
+            grade.allow().forEach(n -> nodes.add(new NodeRow(n, false, "")));
+            grade.scoped().forEach(e -> nodes.add(new NodeRow(e.value(), e.deny(), e.context())));
         }
         nodeList.setItems(nodes);
         List<ParentRow> parents = new ArrayList<>();
@@ -341,9 +348,11 @@ public final class GradesScreen extends AdminScreen {
         Rect buttonRow = new Rect(in.x(), fieldRow.bottom() + 4, in.w(), BUTTON);
         if (tab == Tab.NODES) {
             addRenderableWidget(nodeList.at(list));
-            addRenderableWidget(nodeField.at(fieldRow.beforeRight(DURATION_FIELD + 4)));
+            addRenderableWidget(nodeField.at(fieldRow.beforeRight(DURATION_FIELD + WORLD_FIELD + 8)));
+            addRenderableWidget(worldField.at(fieldRow.right(DURATION_FIELD + WORLD_FIELD + 4).left(WORLD_FIELD)));
             addRenderableWidget(durationField.at(fieldRow.right(DURATION_FIELD)));
             nodeField.setEditable(editable);
+            worldField.setEditable(editable);
             durationField.setEditable(editable);
             NodeRow selected = nodeList.getSelected();
             placeButtonRow(buttonRow, 6, true, List.of(
@@ -387,9 +396,11 @@ public final class GradesScreen extends AdminScreen {
                                     + GuiArea.CONFIG.node() + "."))));
         } else {
             addRenderableWidget(memberList.at(list));
-            addRenderableWidget(playerField.at(fieldRow.beforeRight(DURATION_FIELD + 4)));
+            addRenderableWidget(playerField.at(fieldRow.beforeRight(DURATION_FIELD + WORLD_FIELD + 8)));
+            addRenderableWidget(worldField.at(fieldRow.right(DURATION_FIELD + WORLD_FIELD + 4).left(WORLD_FIELD)));
             addRenderableWidget(durationField.at(fieldRow.right(DURATION_FIELD)));
             playerField.setEditable(editable);
+            worldField.setEditable(editable);
             durationField.setEditable(editable);
             MemberRow selected = memberList.getSelected();
             placeButtonRow(buttonRow, 6, true, List.of(
@@ -521,14 +532,15 @@ public final class GradesScreen extends AdminScreen {
         GradesData.Grade grade = gradeList.getSelected();
         String node = nodeField.getValue().trim();
         if (grade == null || node.isEmpty()) return;
-        act(GuiAction.GRADE_NODE_ADD, grade.name(), node, deny ? "deny" : "allow", durationField.getValue().trim());
+        act(GuiAction.GRADE_NODE_ADD, grade.name(), node, deny ? "deny" : "allow", durationField.getValue().trim(),
+                context(worldField.getValue()));
         nodeField.setValue("");
     }
 
     private void removeNode(NodeRow row) {
         GradesData.Grade grade = gradeList.getSelected();
         if (grade == null || row == null) return;
-        act(GuiAction.GRADE_NODE_REMOVE, grade.name(), row.node(), row.deny() ? "deny" : "allow");
+        act(GuiAction.GRADE_NODE_REMOVE, grade.name(), row.node(), row.deny() ? "deny" : "allow", row.context());
         nodeField.setValue("");
     }
 
@@ -536,7 +548,7 @@ public final class GradesScreen extends AdminScreen {
         GradesData.Grade grade = gradeList.getSelected();
         String name = typedPlayer();
         if (grade == null || name == null) return;
-        act(GuiAction.GRADE_ASSIGN, name, grade.name(), durationField.getValue().trim());
+        act(GuiAction.GRADE_ASSIGN, name, grade.name(), durationField.getValue().trim(), context(worldField.getValue()));
         playerField.setValue("");
         playerField.setSuggestion(null);
     }
@@ -562,7 +574,17 @@ public final class GradesScreen extends AdminScreen {
     private void takeBack(MemberRow row) {
         GradesData.Grade grade = gradeList.getSelected();
         if (grade == null || row == null) return;
-        act(row.refused() ? GuiAction.GRADE_ACCEPT : GuiAction.GRADE_UNASSIGN, row.member().uuid(), grade.name());
+        if (row.refused()) {
+            act(GuiAction.GRADE_ACCEPT, row.member().uuid(), grade.name());
+        } else {
+            act(GuiAction.GRADE_UNASSIGN, row.member().uuid(), grade.name(), row.member().context());
+        }
+    }
+
+    /** What the world box holds, as a context: {@code the_nether} is {@code world=the_nether}, empty is everywhere. */
+    static String context(String typed) {
+        String world = typed.trim();
+        return world.isEmpty() || world.contains("=") ? world : "world=" + world;
     }
 
     // ------------------------------------------------------------------ rendering
@@ -594,10 +616,16 @@ public final class GradesScreen extends AdminScreen {
         int w = Skin.badge(g, font, label, r.x() + 4, r.centerY(), row.deny() ? Palette.DANGER : Palette.GOOD);
         int x = r.x() + 4 + Math.max(w, font.width("ALLOW") + 6) + 5;
         GradesData.Grade grade = gradeList.getSelected();
-        String left = grade == null ? "" : timeLeft(grade.remaining(row.deny() ? "deny" : "allow", row.node()));
+        String left = !row.context().isEmpty() ? where(row.context())
+                : grade == null ? "" : timeLeft(grade.remaining(row.deny() ? "deny" : "allow", row.node()));
         int lw = left.isEmpty() ? 0 : font.width(left) + 8;
         if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
         Skin.text(g, font, row.node(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4 - lw, Palette.TEXT);
+    }
+
+    /** {@code in the_nether}, or nothing for an entry that applies everywhere. */
+    static String where(String context) {
+        return context.isEmpty() ? "" : "in " + com.arcadia.customperm.perm.Contexts.describe(context);
     }
 
     /** {@code 29d 23h left}, or nothing for a permanent entry. */
@@ -610,7 +638,8 @@ public final class GradesScreen extends AdminScreen {
         Skin.dot(g, r.x() + 6, r.centerY(), member.online() ? Palette.GOOD : Palette.LINE_STRONG);
         int x = r.x() + 6 + Atlas.DOT_SIZE + 5;
         String state = (row.refused() ? "refuses it" : member.online() ? "online" : "offline")
-                + (member.remaining() > 0 ? ", " + timeLeft(member.remaining()) : "");
+                + (member.remaining() > 0 ? ", " + timeLeft(member.remaining()) : "")
+                + (member.context().isEmpty() ? "" : ", " + where(member.context()));
         int sw = font.width(state);
         Skin.text(g, font, state, r.right() - sw - 4, r.y() + (r.h() - 8) / 2,
                 row.refused() ? Palette.DANGER : Palette.TEXT_MUTE);

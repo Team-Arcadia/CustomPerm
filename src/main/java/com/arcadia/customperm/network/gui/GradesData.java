@@ -32,15 +32,17 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
     public static final int NODES_MAX = 1024;
 
     /**
-     * A player assigned to a grade, or refusing it; {@code name} is the UUID when no name is known, and
-     * {@code remaining} the seconds the assignment or the refusal has left, 0 when it is permanent.
+     * A player assigned to a grade, or refusing it; {@code name} is the UUID when no name is known,
+     * {@code remaining} the seconds the assignment or the refusal has left, 0 when it is permanent, and
+     * {@code context} the world it is held in, empty when it is held everywhere.
      */
-    public record Member(String uuid, String name, boolean online, long remaining) {
+    public record Member(String uuid, String name, boolean online, long remaining, String context) {
         public static final StreamCodec<ByteBuf, Member> CODEC = StreamCodec.composite(
                 GuiCodecs.TEXT, Member::uuid,
                 GuiCodecs.TEXT, Member::name,
                 ByteBufCodecs.BOOL, Member::online,
                 ByteBufCodecs.VAR_LONG, Member::remaining,
+                GuiCodecs.TEXT, Member::context,
                 Member::new);
     }
 
@@ -53,14 +55,14 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
      * and refusal read as two lists everywhere else too.
      */
     public record Grade(Header header, Inheritance inheritance, List<String> allow, List<String> deny,
-                        Members players, List<Remaining> timers) {
+                        Members players, Details details) {
         public static final StreamCodec<ByteBuf, Grade> CODEC = StreamCodec.composite(
                 Header.CODEC, Grade::header,
                 Inheritance.CODEC, Grade::inheritance,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Grade::allow,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Grade::deny,
                 Members.CODEC, Grade::players,
-                Remaining.LIST, Grade::timers,
+                Details.CODEC, Grade::details,
                 Grade::new);
 
         public String name() {
@@ -98,8 +100,23 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
 
         /** Seconds left on a node of this grade ({@code "allow"} or {@code "deny"}), 0 when it is permanent. */
         public long remaining(String kind, String node) {
-            return Remaining.of(timers, kind, node);
+            return Remaining.of(details.timers(), kind, node);
         }
+
+        /** Nodes this grade gives in one world only. */
+        public List<ScopedEntry> scoped() {
+            return details.scoped();
+        }
+    }
+
+    /** What a grade's nodes carry beyond their name: the time a temporary one has left, the world of a contextual one. */
+    public record Details(List<Remaining> timers, List<ScopedEntry> scoped) {
+        public static final Details NONE = new Details(List.of(), List.of());
+
+        public static final StreamCodec<ByteBuf, Details> CODEC = StreamCodec.composite(
+                Remaining.LIST, Details::timers,
+                ScopedEntry.LIST, Details::scoped,
+                Details::new);
     }
 
     /** A grade's own scalars: its name, its weight, and the prefix and suffix it gives, empty for none. */

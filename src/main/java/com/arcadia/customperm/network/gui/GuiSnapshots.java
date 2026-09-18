@@ -82,7 +82,8 @@ public final class GuiSnapshots {
                             config.userPrefixes.getOrDefault(rawUuid, ""),
                             config.userSuffixes.getOrDefault(rawUuid, ""),
                             timers(config.userPermissionExpiries.get(rawUuid),
-                                    config.userDeniedPermissionExpiries.get(rawUuid))),
+                                    config.userDeniedPermissionExpiries.get(rawUuid)),
+                            userScoped(uuid)),
                     UserAdmin.nodes(uuid, false).stream().limit(PlayersData.NODES_MAX).toList(),
                     UserAdmin.nodes(uuid, true).stream().limit(PlayersData.NODES_MAX).toList()));
         }
@@ -100,6 +101,7 @@ public final class GuiSnapshots {
         java.util.Map<String, List<GradesData.Member>> members = new java.util.HashMap<>();
         java.util.Map<String, List<GradesData.Member>> refusers = new java.util.HashMap<>();
         byGrade(server, config.userGrades, config.userGradeExpiries, members);
+        byGradeScoped(server, config.userContexts, members);
         byGrade(server, config.userDeniedGrades, config.userDeniedGradeExpiries, refusers);
 
         // Heaviest first, then by name: the order in which two grades covering a node just as specifically
@@ -123,7 +125,8 @@ public final class GuiSnapshots {
                     new TreeSet<>(grade.deniedPermissions).stream().limit(GradesData.NODES_MAX).toList(),
                     new GradesData.Members(assigned.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList(),
                             refusing.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList()),
-                    timers(grade.permissionExpiries, grade.deniedPermissionExpiries)));
+                    new GradesData.Details(timers(grade.permissionExpiries, grade.deniedPermissionExpiries),
+                            gradeScoped(grade))));
         }
         List<String> known = server == null ? List.of()
                 : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
@@ -138,6 +141,26 @@ public final class GuiSnapshots {
         if (allow != null) allow.forEach((node, at) -> timers.add(new Remaining("allow:" + node, left(at))));
         if (deny != null) deny.forEach((node, at) -> timers.add(new Remaining("deny:" + node, left(at))));
         return timers.size() > GuiCodecs.SERVER_LIST_MAX ? timers.subList(0, GuiCodecs.SERVER_LIST_MAX) : timers;
+    }
+
+    /** A grade's nodes limited to a world, sorted by world then node. */
+    private static List<ScopedEntry> gradeScoped(com.arcadia.customperm.config.GradesConfig.Grade grade) {
+        List<ScopedEntry> entries = new ArrayList<>();
+        new java.util.TreeMap<>(grade.contexts).forEach((context, scope) -> {
+            new TreeSet<>(scope.deniedPermissions).forEach(node -> entries.add(new ScopedEntry(context, "deny", node)));
+            new TreeSet<>(scope.permissions).forEach(node -> entries.add(new ScopedEntry(context, "allow", node)));
+        });
+        return entries.size() > GuiCodecs.SERVER_LIST_MAX ? entries.subList(0, GuiCodecs.SERVER_LIST_MAX) : entries;
+    }
+
+    /** What one player holds limited to a world, grades included. */
+    private static List<ScopedEntry> userScoped(java.util.UUID uuid) {
+        List<ScopedEntry> entries = new ArrayList<>();
+        UserAdmin.scoped(uuid).forEach((context, held) -> held.forEach(entry -> {
+            int colon = entry.indexOf(':');
+            entries.add(new ScopedEntry(context, entry.substring(0, colon), entry.substring(colon + 1)));
+        }));
+        return entries.size() > GuiCodecs.SERVER_LIST_MAX ? entries.subList(0, GuiCodecs.SERVER_LIST_MAX) : entries;
     }
 
     /** Seconds left before {@code at}, 0 for no expiry, and at least 1 for one not swept yet. */
@@ -166,8 +189,27 @@ public final class GuiSnapshots {
             java.util.Map<String, Long> timed = expiries.getOrDefault(rawUuid, java.util.Map.of());
             for (String grade : names) {
                 byGrade.computeIfAbsent(grade, k -> new ArrayList<>())
-                        .add(new GradesData.Member(rawUuid, name, online, left(timed.get(grade))));
+                        .add(new GradesData.Member(rawUuid, name, online, left(timed.get(grade)), ""));
             }
+        });
+    }
+
+    /** The players who hold a grade in one world only, one entry per grade and world. */
+    private static void byGradeScoped(MinecraftServer server,
+                                      java.util.Map<String, java.util.Map<String, com.arcadia.customperm.config.GradesConfig.UserScoped>> scopes,
+                                      java.util.Map<String, List<GradesData.Member>> byGrade) {
+        scopes.forEach((rawUuid, byContext) -> {
+            java.util.UUID uuid;
+            try {
+                uuid = java.util.UUID.fromString(rawUuid);
+            } catch (IllegalArgumentException e) {
+                return;
+            }
+            boolean online = server != null && server.getPlayerList().getPlayer(uuid) != null;
+            String name = server == null ? rawUuid : GradeAdmin.displayName(server, uuid);
+            byContext.forEach((context, scope) -> scope.grades.forEach(grade -> byGrade
+                    .computeIfAbsent(grade, k -> new ArrayList<>())
+                    .add(new GradesData.Member(rawUuid, name, online, 0, context))));
         });
     }
 
