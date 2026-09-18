@@ -250,6 +250,8 @@ public class CustomPermCommand {
                     if (!node.getName().equals("customperm")) nodes.add("customperm.command." + node.getName());
                 });
             }
+            // Nodes other mods declared through NeoForge: grantable here once CustomPerm answers them.
+            nodes.addAll(com.arcadia.customperm.perm.ModPermissions.declaredNodes());
             for (String a : CustomPerm.configManager.getAliases().aliases.keySet()) {
                 nodes.add("customperm.alias." + a);
             }

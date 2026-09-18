@@ -65,6 +65,14 @@ public class SettingsConfig {
     /** How the name is built: {@code {prefix}}, {@code {name}} and {@code {suffix}}, with {@code &} codes between. */
     public String nameFormat = DEFAULT_NAME_FORMAT;
 
+    /**
+     * Whether CustomPerm answers the permission checks other mods make through NeoForge's permission API.
+     * It then selects its handler at start, but only when LuckPerms is not installed and
+     * {@code permissionHandler} in {@code neoforge-server.toml} is still NeoForge's default: a value an admin
+     * chose is never touched. Read at server start only.
+     */
+    public boolean answerOtherMods = true;
+
     /** Default {@link #maskedCommands}: private messages, and the password commands of common login mods. */
     public static final List<String> DEFAULT_MASKED_COMMANDS = List.of(
             "msg", "tell", "w", "teammsg", "tm", "login", "l", "register", "reg", "changepassword", "changepw");
