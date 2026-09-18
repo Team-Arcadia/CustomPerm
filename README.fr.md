@@ -1242,6 +1242,14 @@ Un mod listé ici n'utilise peut-être LuckPerms que lorsqu'il est présent ; sa
 et CustomPerm eux-mêmes sont exclus. La réponse est gardée jusqu'au prochain démarrage, puisque les mods
 installés ne peuvent pas changer avant.
 
+Ce qui reste possible sans LuckPerms, quand un tel mod retombe sur le niveau d'opérateur comme la plupart :
+
+| Ce que le mod vérifie | Sans LuckPerms |
+|---|---|
+| Qui peut lancer une de ses commandes | L'exposer avec `/customperm command add <commande>` et donner `customperm.command.<commande>` dans un grade : la vérification de CustomPerm remplace celle du mod. |
+| Si la commande s'exécute ensuite (vérifié à l'intérieur) | Un alias : ses étapes tournent au niveau d'opérateur 4, pour les seuls joueurs qui ont `customperm.alias.<nom>`. |
+| Une action en jeu, hors de toute commande (construire, casser, utiliser un objet ou un sort à un endroit) | Rien qu'un mod de permissions puisse répondre. Chercher dans la config du mod un réglage de niveau ou « tout le monde », ou protéger la zone avec [ArcadiaGuard](https://github.com/Team-Arcadia/ArcadiaGuard), un mod de protection de zones pour NeoForge 1.21.1 qui bloque ces actions par zone, celles des autres mods comprises. |
+
 ### Mods qui modifient le dispatcher dynamiquement
 
 Cas rare. Si un mod ajoute des commandes **après** le `RegisterCommandsEvent`, elles ne sont pas wrappées et gardent leur `requires` original (souvent op-only). Pour forcer un re-wrapping : `/reload` (côté serveur).

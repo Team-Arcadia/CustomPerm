@@ -1219,6 +1219,14 @@ mod once, in the background, and lists the mods whose classes name LuckPerms' AP
 A mod listed here may only use LuckPerms when it is present; its page or config says. LuckPerms and CustomPerm
 themselves are left out. The answer is kept until the next start, since installed mods cannot change before.
 
+What can still be done without LuckPerms, when such a mod falls back to the operator level as most do:
+
+| What the mod checks | Without LuckPerms |
+|---|---|
+| Who may run one of its commands | Expose it with `/customperm command add <command>` and grant `customperm.command.<command>` in a grade: CustomPerm's check replaces the mod's. |
+| Whether the command then runs (checked inside it) | An alias: its steps run at operator level 4, for the players holding `customperm.alias.<name>` only. |
+| An action in game, outside any command (building, breaking, using an item or a spell in a place) | Nothing a permission mod can answer. Look in the mod's config for a level or an allow-all setting, or protect the area with [ArcadiaGuard](https://github.com/Team-Arcadia/ArcadiaGuard), a zone protection mod for NeoForge 1.21.1 that blocks those actions per zone, other mods' included. |
+
 ### Mods that mutate the dispatcher dynamically
 
 Edge case. If a mod adds commands **after** `RegisterCommandsEvent`, they aren't wrapped and keep their original `requires` (typically op-only). To force a re-wrap: `/reload` (server-side).
