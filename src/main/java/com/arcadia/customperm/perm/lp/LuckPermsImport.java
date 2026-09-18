@@ -213,7 +213,7 @@ public final class LuckPermsImport {
 
     /** A node that carries a context: kept when it is limited to one world and nothing else, left behind otherwise. */
     private static void readScoped(Node node, Long at, ImportPlan.Builder plan, boolean exposeCommands,
-                                   List<ScopedGrant> scoped, boolean group, String holder) {
+                                   List<ScopedGrant> scoped, Chat chat, boolean group, String holder) {
         String context = context(node.getContexts());
         if (context == null) {
             plan.contextual();
@@ -228,21 +228,27 @@ public final class LuckPermsImport {
             return;
         }
         if (node instanceof InheritanceNode inheritance) {
-            if (group || !node.getValue()) {
-                plan.contextual();
-                plan.note("Only a player's grades can be limited to a world here, not a group's parents or a "
-                        + "refusal: " + holder + ".");
-                return;
-            }
-            scoped.add(new ScopedGrant(context, ScopedGrant.GRADE, inheritance.getGroupName()));
+            // On a group, a parent or a refusal of its chain; on a player, a grade held or refused.
+            String kind = !node.getValue() ? ScopedGrant.REFUSED : group ? ScopedGrant.PARENT : ScopedGrant.GRADE;
+            scoped.add(new ScopedGrant(context, kind, inheritance.getGroupName()));
             plan.imported(false);
             plan.world();
             return;
         }
+        if (node instanceof ChatMetaNode<?, ?> meta) {
+            if (chat.offer(meta, null, context)) {
+                plan.imported(false);
+                plan.world();
+            } else {
+                plan.other();
+                plan.note("One prefix and one suffix per priority on a holder: of two at the same priority, "
+                        + "the text that sorts first is imported.");
+            }
+            return;
+        }
         if (!NodeType.PERMISSION.matches(node)) {
             plan.contextual();
-            plan.note("Prefixes, suffixes and meta limited to a world have no equivalent and are not imported: "
-                    + holder + ".");
+            plan.note("Meta limited to a world has no equivalent and is not imported: " + holder + ".");
             return;
         }
         String translated = ImportPlan.translate(node.getKey(), declared);
@@ -282,16 +288,22 @@ public final class LuckPermsImport {
     private static final class Chat {
         private final Map<String, com.arcadia.customperm.admin.ChatGrant> kept = new java.util.TreeMap<>();
 
-        /** False when the node is left behind: another at its priority sorts first, or it displaced one. */
         boolean offer(ChatMetaNode<?, ?> node, Long at) {
+            return offer(node, at, "");
+        }
+
+        /** False when the node is left behind: another at its priority sorts first, or it displaced one. */
+        boolean offer(ChatMetaNode<?, ?> node, Long at, String context) {
             boolean suffix = !(node instanceof PrefixNode);
-            String key = (suffix ? "suffix:" : "prefix:") + node.getPriority();
+            String key = (suffix ? "suffix:" : "prefix:") + node.getPriority() + "@" + context;
             long expires = at == null ? 0 : at;
-            var offered = new com.arcadia.customperm.admin.ChatGrant(suffix, node.getPriority(), node.getMetaValue(), expires);
+            var offered = new com.arcadia.customperm.admin.ChatGrant(suffix, node.getPriority(), node.getMetaValue(),
+                    expires, context);
             var existing = kept.get(key);
             if (existing != null && existing.text().equals(offered.text())) {
                 long longer = existing.expires() == 0 || expires == 0 ? 0 : Math.max(existing.expires(), expires);
-                kept.put(key, new com.arcadia.customperm.admin.ChatGrant(suffix, node.getPriority(), offered.text(), longer));
+                kept.put(key, new com.arcadia.customperm.admin.ChatGrant(suffix, node.getPriority(), offered.text(),
+                        longer, context));
                 return true;
             }
             if (existing != null && offered.text().compareTo(existing.text()) >= 0) return false;
@@ -321,7 +333,7 @@ public final class LuckPermsImport {
             // Already over: LuckPerms drops it on its next pass, and so would the sweep here.
             if (at != null && at <= now) continue;
             if (!node.getContexts().isEmpty()) {
-                readScoped(node, at, plan, exposeCommands, scoped, group, holder);
+                readScoped(node, at, plan, exposeCommands, scoped, chat, group, holder);
                 continue;
             }
             if (node instanceof InheritanceNode inheritance) {

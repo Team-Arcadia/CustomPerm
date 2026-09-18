@@ -147,6 +147,69 @@ public class ContextualEntriesGameTest {
         helper.succeed();
     }
 
+    /** A parent, a refusal and a prefix limited to the Nether, followed by a real player moving between worlds. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "customperm_contextual")
+    public static void aParentARefusalAndAPrefixHeldInOneWorld(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        var settings = CustomPerm.configManager.getSettings();
+        String base = GRADE + "_base";
+        String member = GRADE + "_member";
+        String uuid = null;
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_c_linked", 0);
+             CommandExposureGameTest.Exposure ignored = CommandExposureGameTest.Exposure.of(server, COMMAND)) {
+            uuid = player.uuid().toString();
+            grades.grades.remove(base);
+            grades.grades.remove(member);
+            ServerCommands.run(server, "customperm grade create " + base);
+            ServerCommands.run(server, "customperm grade create " + member);
+            ServerCommands.run(server, "customperm grade addperm " + base + " " + NODE);
+            ServerCommands.run(server, "customperm grade assign cp_c_linked " + member);
+
+            expect(ServerCommands.run(server, "customperm grade parent add " + member + " " + base + " world=the_nether"),
+                    member + " now inherits " + base + " in the_nether");
+            expect(ServerCommands.run(server, "customperm grade parent list " + member), "in the_nether: parent:" + base);
+            teleport(server, player, Level.OVERWORLD);
+            check(!player.canUse(COMMAND), "a parent inherited in the Nether must give nothing in the overworld");
+            teleport(server, player, Level.NETHER);
+            check(player.canUse(COMMAND), "it must be inherited in the Nether");
+
+            expect(ServerCommands.run(server, "customperm user denygrade cp_c_linked " + base + " world=the_nether"),
+                    "cp_c_linked now refuses " + base + " in the_nether");
+            check(!player.canUse(COMMAND), "the player's refusal in the Nether must take the parent away there");
+            expect(ServerCommands.run(server, "customperm user undenygrade cp_c_linked " + base + " world=the_nether"),
+                    "cp_c_linked no longer refuses " + base + " in the_nether");
+            check(player.canUse(COMMAND), "and give it back once withdrawn");
+
+            settings.decorateNames = true;
+            ServerCommands.run(server, "customperm grade prefix " + member + " add 0 [M] ");
+            expect(ServerCommands.run(server, "customperm grade prefix " + member + " in the_nether add 0 [Hot] "),
+                    "Prefix \"[Hot] \" at 0 -> " + member + " in the_nether");
+            check(player.player().getDisplayName().getString().equals("[Hot] cp_c_linked"),
+                    "in the Nether, the prefix limited to it shows first: " + player.player().getDisplayName().getString());
+            teleport(server, player, Level.OVERWORLD);
+            check(player.player().getDisplayName().getString().equals("[M] cp_c_linked"),
+                    "back in the overworld, the name must follow: " + player.player().getDisplayName().getString());
+
+            expect(ServerCommands.run(server, "customperm grade parent remove " + member + " " + base + " world=the_nether"),
+                    member + " no longer inherits " + base + " in the_nether");
+            expect(ServerCommands.run(server, "customperm grade prefix " + member + " in the_nether remove 0"),
+                    "Removed the prefix \"[Hot] \" at 0 from " + member + " in the_nether");
+            check(grades.grades.get(member).contexts.isEmpty(), "an emptied context must leave the file");
+        } finally {
+            settings.decorateNames = false;
+            grades.grades.remove(base);
+            grades.grades.remove(member);
+            if (uuid != null) {
+                grades.userGrades.remove(uuid);
+                grades.userContexts.remove(uuid);
+            }
+            ConfigAdmin.persist();
+        }
+        helper.succeed();
+    }
+
     private static void teleport(MinecraftServer server, TestPlayer player, net.minecraft.resources.ResourceKey<Level> world) {
         ServerLevel level = server.getLevel(world);
         if (level == null) throw new GameTestAssertException("world not loaded: " + world.location());

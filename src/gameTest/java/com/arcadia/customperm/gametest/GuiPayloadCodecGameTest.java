@@ -77,7 +77,7 @@ public class GuiPayloadCodecGameTest {
                         List.of("heal", "tp"))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0, true), new GradesData(List.of(
-                        new GradesData.Grade(new GradesData.Header("vip", -5, List.of(new ChatLine(false, 10, "&6[VIP] ", 3600L), new ChatLine(true, -3, " &7*", 0L))),
+                        new GradesData.Grade(new GradesData.Header("vip", -5, List.of(new ChatLine(false, 10, "&6[VIP] ", 3600L, ""), new ChatLine(true, -3, " &7*", 0L, "world=minecraft:the_nether"))),
                                 new GradesData.Inheritance(List.of("base", "extra"), List.of("locked")),
                                 List.of("customperm.command.fly"), List.of("customperm.command.op"),
                                 new GradesData.Members(
@@ -91,7 +91,7 @@ public class GuiPayloadCodecGameTest {
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0, false), new PlayersData(List.of(
                         new PlayersData.Player("00000000-0000-0000-0000-000000000002", "Steve", false,
-                                new PlayersData.Held(List.of("staff"), List.of("vip"), List.of(new ChatLine(false, 0, "&d[Me] ", 0L)), List.of(new Remaining("deny:customperm.command.time", 60L)),
+                                new PlayersData.Held(List.of("staff"), List.of("vip"), List.of(new ChatLine(false, 0, "&d[Me] ", 0L, "")), List.of(new Remaining("deny:customperm.command.time", 60L)),
                                         List.of(new ScopedEntry("world=minecraft:the_end", "grade", "builder"))),
                                 List.of("customperm.command.weather"), List.of("customperm.command.time"))),
                         List.of("Alex", "Steve"), "deny", new NameSettings(false, "{prefix}&8| {name}", new NameSettings.Stack(false, 3, "", "", ""), new NameSettings.Stack(false, 3, "", "", "")),

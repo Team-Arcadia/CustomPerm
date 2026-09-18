@@ -36,11 +36,13 @@ final class ChatFields {
     static final int PREVIEW = 46;
     static final int PRIORITY_FIELD = 44;
     static final int DURATION_FIELD = 64;
+    static final int WORLD_FIELD = GradesScreen.WORLD_FIELD;
 
     final CpList<ChatLine> list;
     final CpEditBox text;
     final CpEditBox priority;
     final CpEditBox duration;
+    final CpEditBox world;
 
     ChatFields(Runnable onRebuild) {
         this.text = new CpEditBox(Component.literal("Prefix or suffix"), LegacyText.MAX_LENGTH)
@@ -49,14 +51,17 @@ final class ChatFields {
                 .hint(Component.literal("priority"));
         this.duration = new CpEditBox(Component.literal("Duration"), 16)
                 .hint(Component.literal("for, e.g. 30d"));
+        this.world = new CpEditBox(Component.literal("World"), 64)
+                .hint(Component.literal("in, e.g. the_nether"));
         this.list = new CpList<ChatLine>(Component.literal("Prefixes and suffixes"), 14)
                 .renderer(this::renderLine)
                 .label(line -> (line.suffix() ? "suffix " : "prefix ") + line.text() + ", priority " + line.priority())
-                .identity(line -> (line.suffix() ? "suffix:" : "prefix:") + line.priority())
+                .identity(line -> (line.suffix() ? "suffix:" : "prefix:") + line.priority() + "@" + line.context())
                 .emptyText("No prefix or suffix: names show plain.")
                 .onSelect(line -> {
                     text.setValue(line.text());
                     priority.setValue(String.valueOf(line.priority()));
+                    world.setValue(com.arcadia.customperm.perm.Contexts.describe(line.context()));
                     onRebuild.run();
                 });
     }
@@ -70,6 +75,7 @@ final class ChatFields {
         text.setEditable(editable);
         priority.setEditable(editable);
         duration.setEditable(editable);
+        world.setEditable(editable);
     }
 
     /** The typed priority, 0 when the box is empty, {@code null} when it is not a whole number. */
@@ -93,13 +99,17 @@ final class ChatFields {
         return area.aboveBottom(PREVIEW);
     }
 
-    /** The text box, then the priority and duration boxes on the right of the row. */
+    /** The text box, then the priority, world and duration boxes on the right of the row. */
     Rect textRect(Rect row) {
-        return row.beforeRight(PRIORITY_FIELD + DURATION_FIELD + 8);
+        return row.beforeRight(PRIORITY_FIELD + WORLD_FIELD + DURATION_FIELD + 12);
     }
 
     Rect priorityRect(Rect row) {
-        return row.right(PRIORITY_FIELD + DURATION_FIELD + 4).left(PRIORITY_FIELD);
+        return row.right(PRIORITY_FIELD + WORLD_FIELD + DURATION_FIELD + 8).left(PRIORITY_FIELD);
+    }
+
+    Rect worldRect(Rect row) {
+        return row.right(WORLD_FIELD + DURATION_FIELD + 4).left(WORLD_FIELD);
     }
 
     Rect durationRect(Rect row) {
@@ -113,7 +123,7 @@ final class ChatFields {
         String where = String.valueOf(line.priority());
         Skin.text(g, font, where, x, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
         x += Math.max(font.width(where), font.width("000")) + 8;
-        String left = GradesScreen.timeLeft(line.remaining());
+        String left = !line.context().isEmpty() ? GradesScreen.where(line.context()) : GradesScreen.timeLeft(line.remaining());
         int lw = left.isEmpty() ? 0 : font.width(left) + 8;
         if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
         // Drawn with its codes applied, as players will see it; the box above shows the raw text.

@@ -185,14 +185,18 @@ public final class GuiRequestHandler {
             case GRADE_WEIGHT_SET -> signed(args.get(1)) == null ? malformed(action)
                     : guarded(player, () -> GradeAdmin.setWeight(player.getServer(), args.get(0), signed(args.get(1))));
             case GRADE_PARENT_ADD -> duration(args.get(2)) < 0 ? badDuration(args.get(2))
-                    : guarded(player, () -> GradeAdmin.addParent(player.getServer(), args.get(0), args.get(1), duration(args.get(2))));
-            case GRADE_PARENT_REMOVE -> guarded(player, () -> GradeAdmin.removeParent(player.getServer(), args.get(0), args.get(1)));
+                    : guarded(player, () -> GradeAdmin.addParent(player.getServer(), args.get(0), args.get(1), duration(args.get(2)),
+                            args.get(3)));
+            case GRADE_PARENT_REMOVE -> guarded(player, () -> GradeAdmin.removeParent(player.getServer(), args.get(0), args.get(1),
+                    args.get(2)));
             case GRADE_PARENT_DENY -> duration(args.get(2)) < 0 ? badDuration(args.get(2))
-                    : guarded(player, () -> GradeAdmin.denyParent(player.getServer(), args.get(0), args.get(1), duration(args.get(2))));
-            case GRADE_PARENT_ALLOW -> guarded(player, () -> GradeAdmin.allowParent(player.getServer(), args.get(0), args.get(1)));
+                    : guarded(player, () -> GradeAdmin.denyParent(player.getServer(), args.get(0), args.get(1), duration(args.get(2)),
+                            args.get(3)));
+            case GRADE_PARENT_ALLOW -> guarded(player, () -> GradeAdmin.allowParent(player.getServer(), args.get(0), args.get(1),
+                    args.get(2)));
             case GRADE_REFUSE -> duration(args.get(2)) < 0 ? badDuration(args.get(2))
-                    : guarded(player, () -> refuseByName(player, args.get(0), args.get(1), duration(args.get(2))));
-            case GRADE_ACCEPT -> guarded(player, () -> acceptByUuid(player, args.get(0), args.get(1)));
+                    : guarded(player, () -> refuseByName(player, args.get(0), args.get(1), duration(args.get(2)), args.get(3)));
+            case GRADE_ACCEPT -> guarded(player, () -> acceptByUuid(player, args.get(0), args.get(1), args.get(2)));
             case GRADE_ASSIGN -> duration(args.get(2)) < 0 ? badDuration(args.get(2))
                     : guarded(player, () -> assignByName(player, args.get(0), args.get(1), duration(args.get(2)), args.get(3)));
             case GRADE_UNASSIGN -> guarded(player, () -> unassignByUuid(player, args.get(0), args.get(1), args.get(2)));
@@ -211,15 +215,17 @@ public final class GuiRequestHandler {
             case GRADE_CHAT_ADD -> chatKind(args.get(1)) == null || signed(args.get(2)) == null ? malformed(action)
                     : duration(args.get(4)) < 0 ? badDuration(args.get(4))
                     : GradeAdmin.addChat(player.getServer(), args.get(0), chatKind(args.get(1)), signed(args.get(2)),
-                            args.get(3), duration(args.get(4)));
+                            args.get(3), duration(args.get(4)), args.get(5));
             case GRADE_CHAT_REMOVE -> chatKind(args.get(1)) == null || signed(args.get(2)) == null ? malformed(action)
-                    : GradeAdmin.removeChat(player.getServer(), args.get(0), chatKind(args.get(1)), signed(args.get(2)));
+                    : GradeAdmin.removeChat(player.getServer(), args.get(0), chatKind(args.get(1)), signed(args.get(2)),
+                            args.get(3));
             case USER_CHAT_ADD -> chatKind(args.get(1)) == null || signed(args.get(2)) == null ? malformed(action)
                     : duration(args.get(4)) < 0 ? badDuration(args.get(4))
                     : userChatByName(player, args.get(0), holder -> holder.add(chatKind(args.get(1)), signed(args.get(2)),
-                            args.get(3), duration(args.get(4))));
+                            args.get(3), duration(args.get(4)), args.get(5)));
             case USER_CHAT_REMOVE -> chatKind(args.get(1)) == null || signed(args.get(2)) == null ? malformed(action)
-                    : userChatByName(player, args.get(0), holder -> holder.remove(chatKind(args.get(1)), signed(args.get(2))));
+                    : userChatByName(player, args.get(0), holder -> holder.remove(chatKind(args.get(1)), signed(args.get(2)),
+                            args.get(3)));
             case NAMES_STACK -> !args.get(0).equals("highest") && !args.get(0).equals("stacked") ? malformed(action)
                     : com.arcadia.customperm.admin.NameAdmin.setStack(player.getServer(), "both",
                             args.get(0).equals("stacked"), null);
@@ -368,19 +374,21 @@ public final class GuiRequestHandler {
                 .orElseGet(() -> AdminResult.fail(resolution.problem()));
     }
 
-    private static AdminResult refuseByName(ServerPlayer admin, String name, String grade, long seconds) {
+    private static AdminResult refuseByName(ServerPlayer admin, String name, String grade, long seconds, String context) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
         return resolution.profile()
-                .map(profile -> UserAdmin.refuseGrade(admin.getServer(), profile.getId(), profile.getName(), grade, seconds))
+                .map(profile -> UserAdmin.refuseGrade(admin.getServer(), profile.getId(), profile.getName(), grade, seconds,
+                        context))
                 .orElseGet(() -> AdminResult.fail(resolution.problem()));
     }
 
-    private static AdminResult acceptByUuid(ServerPlayer admin, String rawUuid, String grade) {
+    private static AdminResult acceptByUuid(ServerPlayer admin, String rawUuid, String grade, String context) {
         java.util.UUID uuid = uuid(rawUuid);
         if (uuid == null) return malformed(GuiAction.GRADE_ACCEPT);
-        return UserAdmin.acceptGrade(admin.getServer(), uuid, GradeAdmin.displayName(admin.getServer(), uuid), grade);
+        return UserAdmin.acceptGrade(admin.getServer(), uuid, GradeAdmin.displayName(admin.getServer(), uuid), grade,
+                context);
     }
 
     /** Adding addresses the player by name: the screen offers a field for someone who holds nothing yet. */

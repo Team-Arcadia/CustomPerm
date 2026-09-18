@@ -195,7 +195,9 @@ public final class LuckPermsExport {
             String world = com.arcadia.customperm.perm.Contexts.luckPermsWorld(
                     com.arcadia.customperm.perm.Contexts.worldOf(entry.context()));
             net.luckperms.api.node.NodeBuilder<?, ?> builder = switch (entry.kind()) {
-                case com.arcadia.customperm.admin.ScopedGrant.GRADE -> InheritanceNode.builder(entry.value());
+                case com.arcadia.customperm.admin.ScopedGrant.GRADE, com.arcadia.customperm.admin.ScopedGrant.PARENT ->
+                        InheritanceNode.builder(entry.value());
+                case com.arcadia.customperm.admin.ScopedGrant.REFUSED -> InheritanceNode.builder(entry.value()).value(false);
                 case com.arcadia.customperm.admin.ScopedGrant.DENY -> Node.builder(entry.value()).value(false);
                 default -> Node.builder(entry.value()).value(true);
             };
@@ -210,35 +212,42 @@ public final class LuckPermsExport {
     }
 
     /**
-     * Writes a prefix and a suffix. Adding writes one only where the holder has none of its own, and counts
-     * one it keeps instead; replacing clears the holder's own first, but only for what the grade sets, so a
-     * group given a prefix in LuckPerms keeps it when the grade has none.
+     * Writes prefixes and suffixes, each at its priority and in its world. Adding keeps one the holder already
+     * has at that priority and in that context, and counts it when it says something else; replacing clears the
+     * holder's own first, but only for the kinds the grade sets, so a group given a prefix in LuckPerms keeps it
+     * when the grade has none.
      */
     private static void addChat(PermissionHolder holder, List<com.arcadia.customperm.admin.ChatGrant> chat,
                                 boolean replace, int[] kept) {
         if (chat.isEmpty()) return;
         if (replace) {
-            // Only the kinds this holder carries: a group given only a suffix here keeps its LuckPerms prefixes.
-            boolean prefixes = chat.stream().anyMatch(c -> !c.suffix());
-            boolean suffixes = chat.stream().anyMatch(com.arcadia.customperm.admin.ChatGrant::suffix);
-            holder.getNodes().stream().filter(LuckPermsExport::global)
-                    .filter(node -> (prefixes && NodeType.PREFIX.matches(node)) || (suffixes && NodeType.SUFFIX.matches(node)))
+            // Only the kinds, in the worlds, this holder carries: a group given only a suffix here, or only a
+            // prefix limited to the Nether, keeps its other LuckPerms prefixes.
+            Set<String> carried = new java.util.HashSet<>();
+            for (var grant : chat) carried.add(grant.suffix() + "@" + where(grant));
+            holder.getNodes().stream().filter(LuckPermsExport::decidedHere)
+                    .filter(node -> NodeType.PREFIX.matches(node) || NodeType.SUFFIX.matches(node))
+                    .filter(node -> carried.contains(NodeType.SUFFIX.matches(node) + "@" + node.getContexts()))
                     .toList().forEach(existing -> holder.data().remove(existing));
         }
         for (com.arcadia.customperm.admin.ChatGrant grant : chat) {
             NodeType<? extends ChatMetaNode<?, ?>> type = grant.suffix() ? NodeType.SUFFIX : NodeType.PREFIX;
-            ChatMetaNode<?, ?> same = holder.getNodes().stream().filter(LuckPermsExport::global)
+            net.luckperms.api.context.ImmutableContextSet where = where(grant);
+            ChatMetaNode<?, ?> same = holder.getNodes().stream().filter(node -> !node.hasExpiry())
                     .filter(type::matches).map(type::cast)
-                    .filter(node -> node.getPriority() == grant.priority()).findFirst().orElse(null);
+                    .filter(node -> node.getPriority() == grant.priority() && node.getContexts().equals(where))
+                    .findFirst().orElse(null);
             if (same != null) {
                 // Adding keeps what LuckPerms has at that priority, and counts it when it says something else.
                 if (!same.getMetaValue().equals(grant.text())) kept[0]++;
                 continue;
             }
             Long at = grant.expires() > 0 ? grant.expires() : null;
-            holder.data().add(grant.suffix()
-                    ? timed(SuffixNode.builder(grant.text(), grant.priority()), at)
-                    : timed(PrefixNode.builder(grant.text(), grant.priority()), at));
+            net.luckperms.api.node.NodeBuilder<?, ?> builder = grant.suffix()
+                    ? SuffixNode.builder(grant.text(), grant.priority())
+                    : PrefixNode.builder(grant.text(), grant.priority());
+            if (!grant.context().isEmpty()) builder.context(where);
+            holder.data().add(timed(builder, at));
         }
     }
 
@@ -277,9 +286,13 @@ public final class LuckPermsExport {
         for (Node node : doomed) holder.data().remove(node);
     }
 
-    /** A prefix or suffix CustomPerm could have written: permanent and global, a grade's prefix having no world. */
-    private static boolean global(Node node) {
-        return node.getContexts().isEmpty() && !node.hasExpiry();
+    /** The LuckPerms contexts a prefix limited to {@code grant}'s world is written with; empty for everywhere. */
+    private static net.luckperms.api.context.ImmutableContextSet where(com.arcadia.customperm.admin.ChatGrant grant) {
+        return grant.context().isEmpty()
+                ? net.luckperms.api.context.ImmutableContextSet.empty()
+                : net.luckperms.api.context.ImmutableContextSet.of(com.arcadia.customperm.perm.Contexts.WORLD,
+                        com.arcadia.customperm.perm.Contexts.luckPermsWorld(
+                                com.arcadia.customperm.perm.Contexts.worldOf(grant.context())));
     }
 
     /** A node CustomPerm could have written: no expiry, and no context or a single world. */

@@ -40,7 +40,7 @@ final class Scopes {
                 + "world=the_nether or world=mymod:mining.");
     }
 
-    /** Durations and contexts do not combine: a temporary entry applies everywhere. */
+    /** Durations and contexts do not combine yet: a temporary entry applies everywhere. */
     static AdminResult timedAndScoped() {
         return AdminResult.fail("An entry limited to a world is permanent: give a duration or a world, not both.");
     }
@@ -51,8 +51,13 @@ final class Scopes {
     }
 
     /** One grade's scope for {@code context}, created when absent. */
-    static GradesConfig.Scoped of(GradesConfig.Grade grade, String context) {
-        return grade.contexts.computeIfAbsent(context, k -> new GradesConfig.Scoped());
+    static GradesConfig.GradeScoped of(GradesConfig.Grade grade, String context) {
+        return grade.contexts.computeIfAbsent(context, k -> new GradesConfig.GradeScoped());
+    }
+
+    /** One grade's scope for {@code context}, or {@code null}. */
+    static GradesConfig.GradeScoped find(GradesConfig.Grade grade, String context) {
+        return grade.contexts.get(context);
     }
 
     /** One player's scope for {@code context}, created when absent. */
@@ -79,15 +84,23 @@ final class Scopes {
         if (scopes.isEmpty()) config.userContexts.remove(uuid.toString());
     }
 
-    static Map<String, GradesConfig.Scoped> copy(Map<String, GradesConfig.Scoped> scopes) {
-        Map<String, GradesConfig.Scoped> copy = new HashMap<>();
+    static Map<String, GradesConfig.GradeScoped> copy(Map<String, GradesConfig.GradeScoped> scopes) {
+        Map<String, GradesConfig.GradeScoped> copy = new HashMap<>();
         scopes.forEach((context, scope) -> {
-            GradesConfig.Scoped c = new GradesConfig.Scoped();
-            c.permissions.addAll(scope.permissions);
-            c.deniedPermissions.addAll(scope.deniedPermissions);
+            GradesConfig.GradeScoped c = new GradesConfig.GradeScoped();
+            copyInto(scope, c);
+            c.parents.addAll(scope.parents);
             copy.put(context, c);
         });
         return copy;
+    }
+
+    private static void copyInto(GradesConfig.Scoped from, GradesConfig.Scoped to) {
+        to.permissions.addAll(from.permissions);
+        to.deniedPermissions.addAll(from.deniedPermissions);
+        to.refused.addAll(from.refused);
+        to.prefixes = GradesConfig.ChatEntry.copy(from.prefixes);
+        to.suffixes = GradesConfig.ChatEntry.copy(from.suffixes);
     }
 
     static Map<String, Map<String, GradesConfig.UserScoped>> copyUsers(
@@ -97,8 +110,7 @@ final class Scopes {
             Map<String, GradesConfig.UserScoped> mine = new HashMap<>();
             scopes.forEach((context, scope) -> {
                 GradesConfig.UserScoped c = new GradesConfig.UserScoped();
-                c.permissions.addAll(scope.permissions);
-                c.deniedPermissions.addAll(scope.deniedPermissions);
+                copyInto(scope, c);
                 c.grades.addAll(scope.grades);
                 mine.put(context, c);
             });

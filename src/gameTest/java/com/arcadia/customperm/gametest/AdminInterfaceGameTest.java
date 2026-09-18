@@ -582,9 +582,9 @@ public class AdminInterfaceGameTest {
             owner.clearReceived();
             gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_p_base");
             gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_p_leaf");
-            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_leaf", "cp_i_p_base", "");
-            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_base", "cp_i_p_leaf", "");
-            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_leaf", "cp_i_p_missing", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_leaf", "cp_i_p_base", "", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_base", "cp_i_p_leaf", "", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_leaf", "cp_i_p_missing", "", "");
             List<String> results = results(owner);
             if (!results.equals(List.of("OK: Created grade cp_i_p_base",
                     "OK: Created grade cp_i_p_leaf",
@@ -603,8 +603,8 @@ public class AdminInterfaceGameTest {
                 fail("The refreshed page must carry the parents: " + row);
 
             owner.clearReceived();
-            gradeAct(owner, GuiAction.GRADE_PARENT_REMOVE, "cp_i_p_leaf", "cp_i_p_base");
-            gradeAct(owner, GuiAction.GRADE_PARENT_REMOVE, "cp_i_p_leaf", "cp_i_p_base");
+            gradeAct(owner, GuiAction.GRADE_PARENT_REMOVE, "cp_i_p_leaf", "cp_i_p_base", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_REMOVE, "cp_i_p_leaf", "cp_i_p_base", "");
             results = results(owner);
             if (!results.equals(List.of("OK: cp_i_p_leaf no longer inherits cp_i_p_base",
                     "OK: cp_i_p_leaf does not inherit cp_i_p_base — no change.")))
@@ -630,14 +630,14 @@ public class AdminInterfaceGameTest {
             gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_f_base");
             gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_f_mid");
             gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_f_leaf");
-            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_f_mid", "cp_i_f_base", "");
-            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_f_leaf", "cp_i_f_mid", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_f_mid", "cp_i_f_base", "", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_f_leaf", "cp_i_f_mid", "", "");
             owner.clearReceived();
 
-            gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_base", "");
-            gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_mid", "");
-            gradeAct(owner, GuiAction.GRADE_REFUSE, "CP_I_REFUSED", "cp_i_f_base", "");
-            gradeAct(owner, GuiAction.GRADE_REFUSE, "cp_i_nobody_here", "cp_i_f_base", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_base", "", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_mid", "", "");
+            gradeAct(owner, GuiAction.GRADE_REFUSE, "CP_I_REFUSED", "cp_i_f_base", "", "");
+            gradeAct(owner, GuiAction.GRADE_REFUSE, "cp_i_nobody_here", "cp_i_f_base", "", "");
             List<String> results = results(owner);
             if (!results.equals(List.of("OK: cp_i_f_leaf now refuses cp_i_f_base",
                     "FAIL: cp_i_f_leaf inherits cp_i_f_mid directly: remove that parent instead of refusing it.",
@@ -656,9 +656,9 @@ public class AdminInterfaceGameTest {
                 fail("The refreshed page must list who refuses the grade: " + row);
 
             owner.clearReceived();
-            gradeAct(owner, GuiAction.GRADE_PARENT_ALLOW, "cp_i_f_leaf", "cp_i_f_base");
-            gradeAct(owner, GuiAction.GRADE_ACCEPT, target, "cp_i_f_base");
-            gradeAct(owner, GuiAction.GRADE_ACCEPT, "not-a-uuid", "cp_i_f_base");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ALLOW, "cp_i_f_leaf", "cp_i_f_base", "");
+            gradeAct(owner, GuiAction.GRADE_ACCEPT, target, "cp_i_f_base", "");
+            gradeAct(owner, GuiAction.GRADE_ACCEPT, "not-a-uuid", "cp_i_f_base", "");
             results = results(owner);
             if (!results.equals(List.of("OK: cp_i_f_leaf no longer refuses cp_i_f_base",
                     "OK: cp_i_refused no longer refuses cp_i_f_base",

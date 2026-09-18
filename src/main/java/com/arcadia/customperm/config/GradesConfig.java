@@ -115,19 +115,35 @@ public class GradesConfig {
     }
 
     /**
-     * Nodes that apply in one context only. At the same specificity and from the same holder, one of these
-     * outranks the same node without a context, like a contextual node in LuckPerms.
+     * What applies in one context only. At the same specificity and from the same holder, a node here
+     * outranks the same node without a context, like a contextual node in LuckPerms; a prefix here outranks
+     * the holder's global one at the same priority. A grade refused here is refused only there.
      */
     public static class Scoped {
         public Set<String> permissions = new HashSet<>();
         public Set<String> deniedPermissions = new HashSet<>();
+        /** Grades refused in this context: by a grade in its own chain, by a player wherever they come from. */
+        public List<String> refused = new ArrayList<>();
+        public List<ChatEntry> prefixes = new ArrayList<>();
+        public List<ChatEntry> suffixes = new ArrayList<>();
 
         public boolean isEmpty() {
-            return permissions.isEmpty() && deniedPermissions.isEmpty();
+            return permissions.isEmpty() && deniedPermissions.isEmpty() && refused.isEmpty()
+                    && prefixes.isEmpty() && suffixes.isEmpty();
         }
     }
 
-    /** What one player holds in one context: nodes, and grades that apply to them only there. */
+    /** What one grade gives in one context: {@link Scoped}, and grades it inherits only there. */
+    public static class GradeScoped extends Scoped {
+        public List<String> parents = new ArrayList<>();
+
+        @Override
+        public boolean isEmpty() {
+            return super.isEmpty() && parents.isEmpty();
+        }
+    }
+
+    /** What one player holds in one context: {@link Scoped}, and grades that apply to them only there. */
     public static class UserScoped extends Scoped {
         public List<String> grades = new ArrayList<>();
 
@@ -177,7 +193,7 @@ public class GradesConfig {
         /** DENY node -> when it expires. */
         public Map<String, Long> deniedPermissionExpiries = new HashMap<>();
         /** Context -> the nodes this grade gives in that context only. */
-        public Map<String, Scoped> contexts = new HashMap<>();
+        public Map<String, GradeScoped> contexts = new HashMap<>();
         /** Parent -> when this grade stops inheriting it, in epoch seconds; a parent absent here is permanent. */
         public Map<String, Long> parentExpiries = new HashMap<>();
         /** Refused grade -> when this grade stops refusing it. */
@@ -216,7 +232,13 @@ public class GradesConfig {
             g.deniedPermissionExpiries = keepFor(g.deniedPermissionExpiries, g.deniedPermissions);
             g.parentExpiries = keepFor(g.parentExpiries, g.parents);
             g.deniedParentExpiries = keepFor(g.deniedParentExpiries, g.deniedParents);
-            g.contexts = normalizeScopes(g.contexts, Scoped::new);
+            g.contexts = normalizeScopes(g.contexts, GradeScoped::new);
+            // A grade inheriting or refusing itself in one world means nothing, as it does everywhere.
+            g.contexts.values().forEach(scope -> {
+                scope.parents.remove(g.name);
+                scope.refused.remove(g.name);
+            });
+            g.contexts.values().removeIf(Scoped::isEmpty);
         }
         normalizeUserGrades(userGrades);
         if (userDeniedGrades == null) userDeniedGrades = new HashMap<>();
@@ -263,15 +285,28 @@ public class GradesConfig {
             if (scope.deniedPermissions != null) scope.deniedPermissions.forEach(node -> {
                 if (node != null) target.deniedPermissions.add(node);
             });
-            if (scope instanceof UserScoped user && user.grades != null) {
-                List<String> grades = ((UserScoped) target).grades;
-                user.grades.forEach(grade -> {
-                    if (grade != null && !grades.contains(grade)) grades.add(grade);
-                });
-            }
+            addNames(target.refused, scope.refused);
+            target.prefixes = normalizeChat(concat(target.prefixes, scope.prefixes), null);
+            target.suffixes = normalizeChat(concat(target.suffixes, scope.suffixes), null);
+            if (scope instanceof UserScoped user) addNames(((UserScoped) target).grades, user.grades);
+            if (scope instanceof GradeScoped grade) addNames(((GradeScoped) target).parents, grade.parents);
         });
         clean.values().removeIf(Scoped::isEmpty);
         return clean;
+    }
+
+    private static void addNames(List<String> into, List<String> names) {
+        if (names == null) return;
+        names.forEach(name -> {
+            if (name != null && !into.contains(name)) into.add(name);
+        });
+    }
+
+    private static List<ChatEntry> concat(List<ChatEntry> first, List<ChatEntry> second) {
+        List<ChatEntry> all = new ArrayList<>();
+        if (first != null) all.addAll(first);
+        if (second != null) all.addAll(second);
+        return all;
     }
 
     /** Whether any grade or player holds an entry limited to a context: the only case worth a resync on a world change. */

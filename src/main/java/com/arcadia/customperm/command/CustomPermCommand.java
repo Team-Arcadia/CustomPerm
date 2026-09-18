@@ -73,8 +73,8 @@ import java.util.stream.Collectors;
  *                     addperm|removeperm <grade> <node>
  *                     adddeny|removedeny <grade> <node>   # most specific entry wins, DENY on a tie
  *                     weight <grade> <weight>             # breaks ties at the same specificity
- *                     parent add|remove <grade> <parent> [duration]  # inherit another grade, nearest entry wins
- *                     parent adddeny|removedeny <grade> <parent> [duration]  # refuse a grade, wherever it is inherited
+ *                     parent add|adddeny <grade> <parent> [duration|world=<dim>]  # inherit, or refuse wherever inherited
+ *                     parent remove|removedeny <grade> <parent> [world=<dim>]
  *                     parent list <grade>
  *                     assign|unassign <player> <grade>    # online, or joined the server before
  *                     setdefault <grade> | cleardefault   # grade applied to every player
@@ -107,12 +107,13 @@ import java.util.stream.Collectors;
  *                     unassign <player> <grade> [world=<dim>]
  * /customperm user    addperm|adddeny <player> <node> [duration|world=<dim>]
  *                     removeperm|removedeny <player> <node> [world=<dim>]
- *                     denygrade <player> <grade> [duration]
+ *                     denygrade <player> <grade> [duration|world=<dim>]
+ *                     undenygrade <player> <grade> [world=<dim>]
  * /customperm track   create|delete <track>             # a ladder of grades, lowest first
  *                     append <track> <grade> | insert <track> <grade> <position> | remove <track> <grade>
  *                     promote|demote <player> <track>   # one rung up or down
  *                     list [track]
- * /customperm grade   prefix|suffix <grade> [add <priority> <text> | addtemp <priority> <duration> <text>
+ * /customperm grade   prefix|suffix <grade> [in <world>] [add <priority> <text> | addtemp <priority> <duration> <text>
  *                                           | remove <priority> | clear]   # & colour codes, highest priority shows
  * /customperm user    prefix|suffix <player> [...]     # the same, one player's own
  * /customperm names   [on|off|format <format>]         # decorate names with them, {prefix}{name}{suffix}
@@ -154,6 +155,11 @@ public class CustomPermCommand {
         };
 
     /** One of this server's worlds, for removing a grade held there. */
+    /** The loaded worlds by id alone, for {@code prefix <holder> in <world>}. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_WORLD_IDS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(ctx.getSource().getServer() == null ? List.of()
+            : ctx.getSource().getServer().levelKeys().stream().map(key -> key.location().toString()).toList(), builder);
+
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_WORLDS =
         (ctx, builder) -> SharedSuggestionProvider.suggest(worldContexts(ctx.getSource().getServer()), builder);
 
@@ -438,30 +444,36 @@ public class CustomPermCommand {
                                 .then(Commands.argument("parent", StringArgumentType.word())
                                     .suggests(SUGGEST_PARENT_CANDIDATES)
                                     .executes(ctx -> gradeParentAdd(ctx, null))
-                                    .then(Commands.argument("duration", StringArgumentType.word())
-                                        .suggests(SUGGEST_DURATIONS)
-                                        .executes(ctx -> gradeParentAdd(ctx, StringArgumentType.getString(ctx, "duration")))))))
+                                    .then(Commands.argument("option", StringArgumentType.greedyString())
+                                        .suggests(SUGGEST_DURATIONS_AND_WORLDS)
+                                        .executes(ctx -> gradeParentAdd(ctx, StringArgumentType.getString(ctx, "option")))))))
                         .then(Commands.literal("remove").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
                                 .then(Commands.argument("parent", StringArgumentType.word())
                                     .suggests(SUGGEST_GRADE_PARENTS)
-                                    .executes(CustomPermCommand::gradeParentRemove))))
+                                    .executes(ctx -> gradeParentRemove(ctx, null))
+                                    .then(Commands.argument("context", StringArgumentType.greedyString())
+                                        .suggests(SUGGEST_WORLDS)
+                                        .executes(ctx -> gradeParentRemove(ctx, StringArgumentType.getString(ctx, "context")))))))
                         .then(Commands.literal("adddeny").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
                                 .then(Commands.argument("parent", StringArgumentType.word())
                                     .suggests(SUGGEST_REFUSABLE_PARENTS)
                                     .executes(ctx -> gradeParentDeny(ctx, null))
-                                    .then(Commands.argument("duration", StringArgumentType.word())
-                                        .suggests(SUGGEST_DURATIONS)
-                                        .executes(ctx -> gradeParentDeny(ctx, StringArgumentType.getString(ctx, "duration")))))))
+                                    .then(Commands.argument("option", StringArgumentType.greedyString())
+                                        .suggests(SUGGEST_DURATIONS_AND_WORLDS)
+                                        .executes(ctx -> gradeParentDeny(ctx, StringArgumentType.getString(ctx, "option")))))))
                         .then(Commands.literal("removedeny").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
                                 .then(Commands.argument("parent", StringArgumentType.word())
                                     .suggests(SUGGEST_GRADE_DENIED_PARENTS)
-                                    .executes(CustomPermCommand::gradeParentAllow))))
+                                    .executes(ctx -> gradeParentAllow(ctx, null))
+                                    .then(Commands.argument("context", StringArgumentType.greedyString())
+                                        .suggests(SUGGEST_WORLDS)
+                                        .executes(ctx -> gradeParentAllow(ctx, StringArgumentType.getString(ctx, "context")))))))
                         .then(Commands.literal("list")
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
@@ -525,16 +537,20 @@ public class CustomPermCommand {
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
                                 .executes(ctx -> userGradeRefusal(ctx, true, null))
-                                .then(Commands.argument("duration", StringArgumentType.word())
-                                    .suggests(SUGGEST_DURATIONS)
+                                .then(Commands.argument("option", StringArgumentType.greedyString())
+                                    .suggests(SUGGEST_DURATIONS_AND_WORLDS)
                                     .executes(ctx -> userGradeRefusal(ctx, true,
-                                        StringArgumentType.getString(ctx, "duration")))))))
+                                        StringArgumentType.getString(ctx, "option")))))))
                     .then(Commands.literal("undenygrade").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_PLAYER_REFUSED_GRADES)
-                                .executes(ctx -> userGradeRefusal(ctx, false, null)))))
+                                .executes(ctx -> userGradeRefusal(ctx, false, null))
+                                .then(Commands.argument("context", StringArgumentType.greedyString())
+                                    .suggests(SUGGEST_WORLDS)
+                                    .executes(ctx -> userGradeRefusal(ctx, false,
+                                        StringArgumentType.getString(ctx, "context")))))))
                     .then(Commands.literal("list")
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
@@ -1025,7 +1041,7 @@ public class CustomPermCommand {
                 .then(Commands.argument("priority", priorities)
                     .then(Commands.argument("text", StringArgumentType.greedyString())
                         .executes(ctx -> run.apply(ctx, h -> h.add(suffix, IntegerArgumentType.getInteger(ctx, "priority"),
-                            StringArgumentType.getString(ctx, "text"), 0))))))
+                            StringArgumentType.getString(ctx, "text"), 0, optionalContext(ctx)))))))
             .then(Commands.literal("addtemp")
                 .then(Commands.argument("priority", priorities)
                     .then(Commands.argument("duration", StringArgumentType.word())
@@ -1036,13 +1052,23 @@ public class CustomPermCommand {
                                 long seconds = Expiry.parse(duration);
                                 if (seconds < 0) return report(ctx, badDuration(duration));
                                 return run.apply(ctx, h -> h.add(suffix, IntegerArgumentType.getInteger(ctx, "priority"),
-                                    StringArgumentType.getString(ctx, "text"), seconds));
+                                    StringArgumentType.getString(ctx, "text"), seconds, optionalContext(ctx)));
                             })))))
             .then(Commands.literal("remove")
                 .then(Commands.argument("priority", priorities)
-                    .executes(ctx -> run.apply(ctx, h -> h.remove(suffix, IntegerArgumentType.getInteger(ctx, "priority"))))))
+                    .executes(ctx -> run.apply(ctx, h -> h.remove(suffix, IntegerArgumentType.getInteger(ctx, "priority"),
+                        optionalContext(ctx))))))
             .then(Commands.literal("clear")
-                .executes(ctx -> run.apply(ctx, h -> h.clear(suffix))));
+                .executes(ctx -> run.apply(ctx, h -> h.clear(suffix, optionalContext(ctx)))));
+    }
+
+    /** The world a chat edit was limited to, as a context, or null when none was typed. */
+    private static String optionalContext(CommandContext<CommandSourceStack> ctx) {
+        try {
+            return "world=" + net.minecraft.commands.arguments.ResourceLocationArgument.getId(ctx, "world");
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
     }
 
     /** {@code prefix|suffix <grade> ...}: see {@link #chatEdits}. */
@@ -1053,7 +1079,12 @@ public class CustomPermCommand {
                 .suggests(SUGGEST_GRADES)
                 .executes(ctx -> listChat(ctx, StringArgumentType.getString(ctx, "grade"),
                     GradeAdmin.chat(StringArgumentType.getString(ctx, "grade"), suffix), suffix)),
-                suffix, CustomPermCommand::gradeChat));
+                suffix, CustomPermCommand::gradeChat)
+                // Limited to one world: the same edits, after "in <world>". A word argument cannot hold the
+                // "=" of world=, and the text that follows forbids a greedy one.
+                .then(Commands.literal("in")
+                    .then(chatEdits(Commands.argument("world", net.minecraft.commands.arguments.ResourceLocationArgument.id())
+                        .suggests(SUGGEST_WORLD_IDS), suffix, CustomPermCommand::gradeChat))));
     }
 
     private static int gradeChat(CommandContext<CommandSourceStack> ctx, ChatEdit edit) {
@@ -1069,7 +1100,10 @@ public class CustomPermCommand {
             .then(chatEdits(Commands.argument("player", StringArgumentType.word())
                 .suggests(SUGGEST_KNOWN_PLAYERS)
                 .executes(ctx -> userChat(ctx, null, suffix)),
-                suffix, (ctx, edit) -> userChat(ctx, edit, suffix)));
+                suffix, (ctx, edit) -> userChat(ctx, edit, suffix))
+                .then(Commands.literal("in")
+                    .then(chatEdits(Commands.argument("world", net.minecraft.commands.arguments.ResourceLocationArgument.id())
+                        .suggests(SUGGEST_WORLD_IDS), suffix, (ctx, edit) -> userChat(ctx, edit, suffix)))));
     }
 
     /** Applies {@code edit} to the player named, or lists their own prefixes or suffixes when it is null. */
@@ -1097,28 +1131,31 @@ public class CustomPermCommand {
         return 1;
     }
 
-    private static int gradeParentAdd(CommandContext<CommandSourceStack> ctx, String duration) {
-        long seconds = seconds(duration);
-        if (seconds < 0) return report(ctx, badDuration(duration));
+    /** {@code option}: a duration or a {@code world=} context, or null for neither. */
+    private static int gradeParentAdd(CommandContext<CommandSourceStack> ctx, String option) {
+        Qualified qualified = Qualified.of(option, false);
+        if (qualified.problem() != null) return report(ctx, AdminResult.fail(qualified.problem()));
         return report(ctx, guarded(ctx, () -> GradeAdmin.addParent(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"), seconds)));
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"), qualified.seconds(),
+            qualified.context())));
     }
 
-    private static int gradeParentRemove(CommandContext<CommandSourceStack> ctx) {
+    private static int gradeParentRemove(CommandContext<CommandSourceStack> ctx, String context) {
         return report(ctx, guarded(ctx, () -> GradeAdmin.removeParent(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"))));
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"), context)));
     }
 
-    private static int gradeParentDeny(CommandContext<CommandSourceStack> ctx, String duration) {
-        long seconds = seconds(duration);
-        if (seconds < 0) return report(ctx, badDuration(duration));
+    private static int gradeParentDeny(CommandContext<CommandSourceStack> ctx, String option) {
+        Qualified qualified = Qualified.of(option, false);
+        if (qualified.problem() != null) return report(ctx, AdminResult.fail(qualified.problem()));
         return report(ctx, guarded(ctx, () -> GradeAdmin.denyParent(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"), seconds)));
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"), qualified.seconds(),
+            qualified.context())));
     }
 
-    private static int gradeParentAllow(CommandContext<CommandSourceStack> ctx) {
+    private static int gradeParentAllow(CommandContext<CommandSourceStack> ctx, String context) {
         return report(ctx, guarded(ctx, () -> GradeAdmin.allowParent(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"))));
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"), context)));
     }
 
     private static int gradeParentList(CommandContext<CommandSourceStack> ctx) {
@@ -1138,6 +1175,9 @@ public class CustomPermCommand {
         if (!refused.isEmpty()) {
             ctx.getSource().sendSuccess(() -> Component.literal("  refuses: " + String.join(", ", refused)), false);
         }
+        GradeAdmin.scopedParents(gradeName).forEach((context, entries) -> ctx.getSource().sendSuccess(() ->
+            Component.literal("  in " + com.arcadia.customperm.perm.Contexts.describe(context) + ": "
+                + String.join(", ", entries)), false));
         return 1;
     }
 
@@ -1226,11 +1266,13 @@ public class CustomPermCommand {
     }
 
     /** Makes a player refuse a grade, or stop refusing it. */
-    private static int userGradeRefusal(CommandContext<CommandSourceStack> ctx, boolean refuse, String duration) {
+    /** {@code option}: a duration or a {@code world=} context when refusing, a context when accepting. */
+    private static int userGradeRefusal(CommandContext<CommandSourceStack> ctx, boolean refuse, String option) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return report(ctx, refusal);
-        long seconds = seconds(duration);
-        if (seconds < 0) return report(ctx, badDuration(duration));
+        Qualified qualified = refuse ? Qualified.of(option, false) : new Qualified(null, 0, option, null);
+        if (qualified.problem() != null) return report(ctx, AdminResult.fail(qualified.problem()));
+        long seconds = qualified.seconds();
         var server = ctx.getSource().getServer();
         if (server == null) return 0;
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
@@ -1238,8 +1280,8 @@ public class CustomPermCommand {
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
         String grade = StringArgumentType.getString(ctx, "grade");
         return report(ctx, guarded(ctx, () -> refuse
-            ? UserAdmin.refuseGrade(server, profile.get().getId(), profile.get().getName(), grade, seconds)
-            : UserAdmin.acceptGrade(server, profile.get().getId(), profile.get().getName(), grade)));
+            ? UserAdmin.refuseGrade(server, profile.get().getId(), profile.get().getName(), grade, seconds, qualified.context())
+            : UserAdmin.acceptGrade(server, profile.get().getId(), profile.get().getName(), grade, qualified.context())));
     }
 
     /** What one player holds: their grades, then the nodes they carry themselves. */

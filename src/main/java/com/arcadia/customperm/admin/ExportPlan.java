@@ -125,7 +125,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                             grade.deniedParentExpiries, "refuse:", expiries, now),
                     live(grade.permissions, grade.permissionExpiries, "allow:", expiries, now),
                     live(grade.deniedPermissions, grade.deniedPermissionExpiries, "deny:", expiries, now),
-                    ChatGrant.of(grade.prefixes, grade.suffixes, now), Map.copyOf(expiries), worldOnly(ScopedGrant.of(grade.contexts),
+                    chatWorldOnly(ChatGrant.of(grade.prefixes, grade.suffixes, grade.contexts, now), dropped, notes,
+                            "grade " + name), Map.copyOf(expiries), worldOnly(ScopedGrant.of(grade.contexts),
                     exported, config, dropped, notes, "grade " + name)));
         }
 
@@ -158,7 +159,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                             "allow:", expiries, now),
                     live(config.userDeniedPermissions.getOrDefault(uuid, Set.of()),
                             config.userDeniedPermissionExpiries.get(uuid), "deny:", expiries, now),
-                    ChatGrant.of(config.userPrefixEntries.get(uuid), config.userSuffixEntries.get(uuid), now),
+                    chatWorldOnly(ChatGrant.of(config.userPrefixEntries.get(uuid), config.userSuffixEntries.get(uuid),
+                            config.userContexts.get(uuid), now), dropped, notes, who),
                     Map.copyOf(expiries),
                     worldOnly(ScopedGrant.of(config.userContexts.getOrDefault(uuid, Map.of())), exported, config,
                             dropped, notes, who));
@@ -228,12 +230,33 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                         + ", which is not a single world.");
                 continue;
             }
-            if (entry.kind().equals(ScopedGrant.GRADE)) {
+            if (entry.namesGrade()) {
                 if (kept(List.of(entry.value()), exported, config, dropped, notes, holder).isEmpty()) continue;
             }
             kept.add(entry);
         }
         return List.copyOf(kept);
+    }
+
+    /** The prefixes that apply everywhere or in a single world; one limited otherwise has no LuckPerms form here. */
+    private static List<ChatGrant> chatWorldOnly(List<ChatGrant> grants, int[] dropped, List<String> notes, String holder) {
+        List<ChatGrant> kept = new ArrayList<>();
+        for (ChatGrant grant : grants) {
+            if (!grant.context().isEmpty() && !singleWorld(grant.context())) {
+                dropped[0]++;
+                notes.add("Left out on " + holder + ": the " + (grant.suffix() ? "suffix " : "prefix ") + grant.text()
+                        + " is limited to " + grant.context() + ", which is not a single world.");
+                continue;
+            }
+            kept.add(grant);
+        }
+        return List.copyOf(kept);
+    }
+
+    private static boolean singleWorld(String raw) {
+        String context = com.arcadia.customperm.perm.Contexts.parse(raw);
+        return context != null && com.arcadia.customperm.perm.Contexts.size(context) == 1
+                && com.arcadia.customperm.perm.Contexts.worldOf(context) != null;
     }
 
     /**
@@ -312,7 +335,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
             grade.deniedParents = new ArrayList<>(source.deniedParents());
             grade.permissions = new HashSet<>(source.allow());
             grade.deniedPermissions = new HashSet<>(source.deny());
-            source.chat().forEach(chat -> chat.addTo(grade.prefixes, grade.suffixes));
+            source.chat().forEach(chat -> chat.addTo(grade));
             source.expiries().forEach((key, at) -> {
                 if (key.startsWith("allow:")) grade.permissionExpiries.put(key.substring(6), at);
                 else if (key.startsWith("deny:")) grade.deniedPermissionExpiries.put(key.substring(5), at);

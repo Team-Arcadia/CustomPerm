@@ -18,27 +18,28 @@ import java.util.UUID;
  */
 public interface ChatHolder {
 
-    AdminResult add(boolean suffix, int priority, String text, long seconds);
+    /** {@code context} as typed ({@code world=the_nether}), null or blank for everywhere. */
+    AdminResult add(boolean suffix, int priority, String text, long seconds, String context);
 
-    AdminResult remove(boolean suffix, int priority);
+    AdminResult remove(boolean suffix, int priority, String context);
 
-    AdminResult clear(boolean suffix);
+    AdminResult clear(boolean suffix, String context);
 
     static ChatHolder grade(MinecraftServer server, String gradeName) {
         return new ChatHolder() {
             @Override
-            public AdminResult add(boolean suffix, int priority, String text, long seconds) {
-                return GradeAdmin.addChat(server, gradeName, suffix, priority, text, seconds);
+            public AdminResult add(boolean suffix, int priority, String text, long seconds, String context) {
+                return GradeAdmin.addChat(server, gradeName, suffix, priority, text, seconds, context);
             }
 
             @Override
-            public AdminResult remove(boolean suffix, int priority) {
-                return GradeAdmin.removeChat(server, gradeName, suffix, priority);
+            public AdminResult remove(boolean suffix, int priority, String context) {
+                return GradeAdmin.removeChat(server, gradeName, suffix, priority, context);
             }
 
             @Override
-            public AdminResult clear(boolean suffix) {
-                return GradeAdmin.clearChat(server, gradeName, suffix);
+            public AdminResult clear(boolean suffix, String context) {
+                return GradeAdmin.clearChat(server, gradeName, suffix, context);
             }
         };
     }
@@ -46,18 +47,18 @@ public interface ChatHolder {
     static ChatHolder player(MinecraftServer server, UUID uuid, String displayName) {
         return new ChatHolder() {
             @Override
-            public AdminResult add(boolean suffix, int priority, String text, long seconds) {
-                return UserAdmin.addChat(server, uuid, displayName, suffix, priority, text, seconds);
+            public AdminResult add(boolean suffix, int priority, String text, long seconds, String context) {
+                return UserAdmin.addChat(server, uuid, displayName, suffix, priority, text, seconds, context);
             }
 
             @Override
-            public AdminResult remove(boolean suffix, int priority) {
-                return UserAdmin.removeChat(server, uuid, displayName, suffix, priority);
+            public AdminResult remove(boolean suffix, int priority, String context) {
+                return UserAdmin.removeChat(server, uuid, displayName, suffix, priority, context);
             }
 
             @Override
-            public AdminResult clear(boolean suffix) {
-                return UserAdmin.clearChat(server, uuid, displayName, suffix);
+            public AdminResult clear(boolean suffix, String context) {
+                return UserAdmin.clearChat(server, uuid, displayName, suffix, context);
             }
         };
     }

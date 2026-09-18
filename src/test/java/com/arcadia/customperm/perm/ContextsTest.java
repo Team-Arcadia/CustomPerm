@@ -223,6 +223,84 @@ class ContextsTest {
         assertTrue(grades.hasContextualEntries());
     }
 
+    // ─── Parents, refusals and prefixes limited to a world ──────────────────────
+
+    @Test
+    void aParentInheritedInOneWorldIsFollowedThereOnly() {
+        grade("builder", 0).permissions.add("x");
+        GradesConfig.Grade member = grade("member", 0);
+        scope(member, NETHER).parents.add("builder");
+        assign("member");
+        assertEquals(Tristate.ALLOW, check("x", IN_NETHER));
+        assertEquals(Tristate.UNSET, check("x", IN_OVERWORLD));
+        assertEquals(Tristate.UNSET, PermissionResolver.check(grades, player, "x", null), "no world, no parent");
+    }
+
+    @Test
+    void aParentInheritedInOneWorldCarriesItsOwnParents() {
+        grade("root", 0).permissions.add("x");
+        grade("builder", 0).parents.add("root");
+        scope(grade("member", 0), NETHER).parents.add("builder");
+        assign("member");
+        assertEquals(Tristate.ALLOW, check("x", IN_NETHER), "the chain goes on past a contextual link");
+    }
+
+    @Test
+    void aGradeRefusedInOneWorldByAGradeIsRefusedThereOnly() {
+        grade("base", 0).permissions.add("x");
+        grade("middle", 0).parents.add("base");
+        GradesConfig.Grade vip = grade("vip", 0);
+        vip.parents.add("middle");
+        scope(vip, NETHER).refused.add("base");
+        assign("vip");
+        assertEquals(Tristate.UNSET, check("x", IN_NETHER));
+        assertEquals(Tristate.ALLOW, check("x", IN_OVERWORLD));
+    }
+
+    @Test
+    void aGradeRefusedInOneWorldByThePlayerIsRefusedThereOnly() {
+        grade("vip", 0).permissions.add("x");
+        assign("vip");
+        userScope(NETHER).refused.add("vip");
+        assertEquals(Tristate.UNSET, check("x", IN_NETHER));
+        assertEquals(Tristate.ALLOW, check("x", IN_OVERWORLD));
+        assertTrue(grades.userDeniedGrades.isEmpty(), "the global refusals are untouched");
+    }
+
+    @Test
+    void aPrefixLimitedToAWorldShowsThereBeforeTheGlobalOneAtTheSamePriority() {
+        GradesConfig.Grade vip = grade("vip", 0);
+        vip.prefixes.add(new GradesConfig.ChatEntry(0, "[VIP]", 0));
+        scope(vip, NETHER).prefixes.add(new GradesConfig.ChatEntry(0, "[Hot]", 0));
+        assign("vip");
+        assertEquals(List.of("[Hot]", "[VIP]"), PermissionResolver.prefixes(grades, player, null, IN_NETHER));
+        assertEquals(List.of("[VIP]"), PermissionResolver.prefixes(grades, player, null, IN_OVERWORLD));
+        userScope(NETHER).prefixes.add(new GradesConfig.ChatEntry(0, "[Me]", 0));
+        assertEquals("[Me]", PermissionResolver.prefixes(grades, player, null, IN_NETHER).get(0),
+                "the holder still comes first");
+    }
+
+    @Test
+    void aGradeHeldInOneWorldGivesItsPrefixThere() {
+        grade("builder", 0).prefixes.add(new GradesConfig.ChatEntry(0, "[B]", 0));
+        userScope(NETHER).grades.add("builder");
+        assertEquals(List.of("[B]"), PermissionResolver.prefixes(grades, player, null, IN_NETHER));
+        assertEquals(List.of(), PermissionResolver.prefixes(grades, player, null, IN_OVERWORLD));
+    }
+
+    @Test
+    void aFileReadsItsNewScopedFieldsAndDropsSelfReferences() {
+        GradesConfig.Grade vip = grade("vip", 0);
+        GradesConfig.GradeScoped raw = scope(vip, "world=the_nether");
+        raw.parents.add("vip");
+        raw.parents.add("base");
+        raw.refused.add("vip");
+        grades.normalize();
+        GradesConfig.GradeScoped clean = vip.contexts.get(NETHER);
+        assertEquals(List.of("base"), clean.parents, "a grade inheriting itself in a world means nothing");
+        assertTrue(clean.refused.isEmpty());
+    }
+
     // ─── Helpers ───────────────────────────────────────────────────────────────
 
     private Tristate check(String node, Contexts contexts) {
@@ -241,8 +319,8 @@ class ContextsTest {
         grades.userGrades.put(player.toString(), new java.util.ArrayList<>(List.of(names)));
     }
 
-    private static GradesConfig.Scoped scope(GradesConfig.Grade grade, String context) {
-        return grade.contexts.computeIfAbsent(context, k -> new GradesConfig.Scoped());
+    private static GradesConfig.GradeScoped scope(GradesConfig.Grade grade, String context) {
+        return grade.contexts.computeIfAbsent(context, k -> new GradesConfig.GradeScoped());
     }
 
     private GradesConfig.UserScoped userScope(String context) {

@@ -103,51 +103,98 @@ public final class UserAdmin {
      */
     public static AdminResult addChat(MinecraftServer server, UUID uuid, String displayName, boolean suffix,
                                       int priority, String text, long seconds) {
+        return addChat(server, uuid, displayName, suffix, priority, text, seconds, null);
+    }
+
+    /** {@link #addChat(MinecraftServer, UUID, String, boolean, int, String, long)} in {@code rawContext} only. */
+    public static AdminResult addChat(MinecraftServer server, UUID uuid, String displayName, boolean suffix,
+                                      int priority, String text, long seconds, String rawContext) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
+        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         String problem = ChatEntries.problem(suffix, priority, text);
         if (problem != null) return AdminResult.fail(problem);
         Map<String, List<GradesConfig.ChatEntry>> byUser = suffix ? grades().userSuffixEntries : grades().userPrefixEntries;
-        List<GradesConfig.ChatEntry> entries = byUser.computeIfAbsent(uuid.toString(), k -> new ArrayList<>());
+        List<GradesConfig.ChatEntry> entries;
+        if (context == null) {
+            entries = byUser.computeIfAbsent(uuid.toString(), k -> new ArrayList<>());
+        } else {
+            GradesConfig.UserScoped scope = Scopes.of(grades(), uuid, context);
+            entries = suffix ? scope.suffixes : scope.prefixes;
+        }
         String what = suffix ? "Suffix" : "Prefix";
         ChatEntries.Change change = ChatEntries.put(entries, priority, text, seconds);
         if (change == ChatEntries.Change.UNCHANGED) {
-            return AdminResult.ok(what + " \"" + text + "\" at " + priority + " on " + displayName + " unchanged.");
+            return AdminResult.ok(what + " \"" + text + "\" at " + priority + " on " + displayName + Scopes.span(context)
+                    + " unchanged.");
         }
         String warning = ConfigAdmin.persist();
         GradeAdmin.resyncPlayer(server, uuid);
         return GradeAdmin.decorationNote(AdminResult.ok(what + " \"" + text + "\" at " + priority + " -> " + displayName
-                + Expiries.span(seconds) + (change == ChatEntries.Change.REPLACED ? ", replacing the one at that priority." : ""))
-                .warn(warning));
+                + Scopes.span(context) + Expiries.span(seconds)
+                + (change == ChatEntries.Change.REPLACED ? ", replacing the one at that priority." : "")).warn(warning));
     }
 
     /** Removes the prefix or suffix one player carries at {@code priority}. */
     public static AdminResult removeChat(MinecraftServer server, UUID uuid, String displayName, boolean suffix,
                                          int priority) {
+        return removeChat(server, uuid, displayName, suffix, priority, null);
+    }
+
+    /** Removes the one at {@code priority} in {@code rawContext}; blank for the one that applies everywhere. */
+    public static AdminResult removeChat(MinecraftServer server, UUID uuid, String displayName, boolean suffix,
+                                         int priority, String rawContext) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
         Map<String, List<GradesConfig.ChatEntry>> byUser = suffix ? grades().userSuffixEntries : grades().userPrefixEntries;
         String what = suffix ? "suffix" : "prefix";
-        List<GradesConfig.ChatEntry> entries = byUser.get(uuid.toString());
+        GradesConfig.UserScoped scope = context == null ? null : Scopes.find(grades(), uuid, context);
+        List<GradesConfig.ChatEntry> entries = context == null ? byUser.get(uuid.toString())
+                : scope == null ? null : (suffix ? scope.suffixes : scope.prefixes);
         GradesConfig.ChatEntry removed = ChatEntries.remove(entries, priority);
-        if (removed == null) return AdminResult.ok(displayName + " has no " + what + " at " + priority + " — no change.");
-        if (entries.isEmpty()) byUser.remove(uuid.toString());
+        if (removed == null) {
+            return AdminResult.ok(displayName + " has no " + what + " at " + priority + Scopes.span(context) + " — no change.");
+        }
+        if (context == null && entries.isEmpty()) byUser.remove(uuid.toString());
+        Scopes.tidy(grades(), uuid);
         String warning = ConfigAdmin.persist();
         GradeAdmin.resyncPlayer(server, uuid);
-        return AdminResult.ok("Removed the " + what + " " + ChatEntries.describe(removed) + " from " + displayName).warn(warning);
+        return AdminResult.ok("Removed the " + what + " " + ChatEntries.describe(removed) + " from " + displayName
+                + Scopes.span(context)).warn(warning);
     }
 
     /** Removes every prefix, or every suffix, one player carries themselves. */
     public static AdminResult clearChat(MinecraftServer server, UUID uuid, String displayName, boolean suffix) {
+        return clearChat(server, uuid, displayName, suffix, null);
+    }
+
+    public static AdminResult clearChat(MinecraftServer server, UUID uuid, String displayName, boolean suffix,
+                                        String rawContext) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
-        List<GradesConfig.ChatEntry> removed = (suffix ? grades().userSuffixEntries : grades().userPrefixEntries)
-                .remove(uuid.toString());
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
         String what = suffix ? "suffixes" : "prefixes";
-        if (removed == null || removed.isEmpty()) return AdminResult.ok(displayName + " has no " + what + " — no change.");
+        int count;
+        if (context == null) {
+            List<GradesConfig.ChatEntry> removed = (suffix ? grades().userSuffixEntries : grades().userPrefixEntries)
+                    .remove(uuid.toString());
+            count = removed == null ? 0 : removed.size();
+        } else {
+            GradesConfig.UserScoped scope = Scopes.find(grades(), uuid, context);
+            List<GradesConfig.ChatEntry> entries = scope == null ? new ArrayList<>() : (suffix ? scope.suffixes : scope.prefixes);
+            count = entries.size();
+            entries.clear();
+            Scopes.tidy(grades(), uuid);
+        }
+        if (count == 0) return AdminResult.ok(displayName + " has no " + what + Scopes.span(context) + " — no change.");
         String warning = ConfigAdmin.persist();
         GradeAdmin.resyncPlayer(server, uuid);
-        return AdminResult.ok("Cleared " + removed.size() + " " + what + " from " + displayName).warn(warning);
+        return AdminResult.ok("Cleared " + count + " " + what + " from " + displayName + Scopes.span(context)).warn(warning);
     }
 
     /**
@@ -166,9 +213,18 @@ public final class UserAdmin {
         return at == null ? 0 : Math.max(1, at - com.arcadia.customperm.perm.Expiry.now());
     }
 
-    /** The prefixes or suffixes a player carries themselves, for a listing, highest priority first. */
+    /**
+     * The prefixes or suffixes a player carries themselves, for a listing, highest priority first, then those
+     * limited to a world with it.
+     */
     public static List<String> chat(UUID uuid, boolean suffix) {
-        return ChatEntries.listing((suffix ? grades().userSuffixEntries : grades().userPrefixEntries).get(uuid.toString()));
+        List<String> out = new ArrayList<>(ChatEntries.listing(
+                (suffix ? grades().userSuffixEntries : grades().userPrefixEntries).get(uuid.toString())));
+        Map<String, GradesConfig.UserScoped> scopes = grades().userContexts.get(uuid.toString());
+        if (scopes != null) new java.util.TreeMap<>(scopes).forEach((context, scope) ->
+                ChatEntries.listing(suffix ? scope.suffixes : scope.prefixes)
+                        .forEach(line -> out.add(line + " " + Scopes.span(context).trim())));
+        return out;
     }
 
     /** Removes an ALLOW or a DENY node from one player; the entry goes with its last node. */
@@ -223,9 +279,33 @@ public final class UserAdmin {
     /** A refusal for {@code seconds}, 0 for good; on a refusal already there, the duration replaces its own. */
     public static AdminResult refuseGrade(MinecraftServer server, UUID uuid, String displayName, String gradeName,
                                           long seconds) {
+        return refuseGrade(server, uuid, displayName, gradeName, seconds, null);
+    }
+
+    /** A refusal in {@code rawContext} only, such as {@code world=the_nether}; blank for everywhere. */
+    public static AdminResult refuseGrade(MinecraftServer server, UUID uuid, String displayName, String gradeName,
+                                          long seconds, String rawContext) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
+        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         if (!grades().grades.containsKey(gradeName)) return AdminResult.fail("No such grade: " + gradeName);
+        if (context != null) {
+            GradesConfig.UserScoped scope = Scopes.find(grades(), uuid, context);
+            if (scope != null && scope.grades.contains(gradeName)) {
+                return AdminResult.fail(displayName + " is assigned " + gradeName + Scopes.span(context)
+                        + ": unassign it there instead of refusing it.");
+            }
+            if (scope != null && scope.refused.contains(gradeName)) {
+                return AdminResult.ok(displayName + " already refuses " + gradeName + Scopes.span(context) + " — no change.");
+            }
+            Scopes.of(grades(), uuid, context).refused.add(gradeName);
+            String warning = ConfigAdmin.persist();
+            GradeAdmin.resyncPlayer(server, uuid);
+            return AdminResult.ok(displayName + " now refuses " + gradeName + Scopes.span(context)).warn(warning)
+                    .note("Nothing they hold brings it back there, the default grade included.");
+        }
         if (grades().userGrades.getOrDefault(uuid.toString(), List.of()).contains(gradeName)) {
             return AdminResult.fail(displayName + " is assigned " + gradeName + " directly: unassign it instead "
                     + "of refusing it.");
@@ -249,8 +329,26 @@ public final class UserAdmin {
     }
 
     public static AdminResult acceptGrade(MinecraftServer server, UUID uuid, String displayName, String gradeName) {
+        return acceptGrade(server, uuid, displayName, gradeName, null);
+    }
+
+    /** Stops refusing {@code gradeName} in {@code rawContext}; blank for the refusal held everywhere. */
+    public static AdminResult acceptGrade(MinecraftServer server, UUID uuid, String displayName, String gradeName,
+                                          String rawContext) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
+        if (context != null) {
+            GradesConfig.UserScoped scope = Scopes.find(grades(), uuid, context);
+            if (scope == null || !scope.refused.remove(gradeName)) {
+                return AdminResult.ok(displayName + " does not refuse " + gradeName + Scopes.span(context) + " — no change.");
+            }
+            Scopes.tidy(grades(), uuid);
+            String warning = ConfigAdmin.persist();
+            GradeAdmin.resyncPlayer(server, uuid);
+            return AdminResult.ok(displayName + " no longer refuses " + gradeName + Scopes.span(context)).warn(warning);
+        }
         List<String> refused = grades().userDeniedGrades.get(uuid.toString());
         if (refused == null || !refused.remove(gradeName)) {
             return AdminResult.ok(displayName + " does not refuse " + gradeName + " — no change.");
@@ -274,8 +372,8 @@ public final class UserAdmin {
     }
 
     /**
-     * What one player holds limited to a context, by context, sorted: {@code "grade"}, {@code "allow"} and
-     * {@code "deny"} entries, each as {@code kind:value}. Empty when they hold nothing limited to one.
+     * What one player holds limited to a context, by context, sorted: {@code "grade"}, {@code "refused"},
+     * {@code "allow"} and {@code "deny"} entries, each as {@code kind:value}. Empty when they hold nothing limited to one.
      */
     public static Map<String, List<String>> scoped(UUID uuid) {
         Map<String, List<String>> out = new java.util.TreeMap<>();
@@ -284,9 +382,10 @@ public final class UserAdmin {
         scopes.forEach((context, scope) -> {
             List<String> entries = new ArrayList<>();
             scope.grades.stream().sorted().forEach(grade -> entries.add("grade:" + grade));
+            scope.refused.stream().sorted().forEach(grade -> entries.add("refused:" + grade));
             new TreeSet<>(scope.permissions).forEach(node -> entries.add("allow:" + node));
             new TreeSet<>(scope.deniedPermissions).forEach(node -> entries.add("deny:" + node));
-            out.put(context, entries);
+            if (!entries.isEmpty()) out.put(context, entries);
         });
         return out;
     }

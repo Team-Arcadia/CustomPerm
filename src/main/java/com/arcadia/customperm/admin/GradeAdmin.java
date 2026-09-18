@@ -86,7 +86,10 @@ public final class GradeAdmin {
         grades().userGradeExpiries.values().forEach(expiries -> expiries.remove(name));
         grades().userGradeExpiries.values().removeIf(Map::isEmpty);
         grades().userContexts.values().forEach(scopes -> {
-            scopes.values().forEach(scope -> scope.grades.remove(name));
+            scopes.values().forEach(scope -> {
+                scope.grades.remove(name);
+                scope.refused.remove(name);
+            });
             scopes.values().removeIf(GradesConfig.Scoped::isEmpty);
         });
         grades().userContexts.values().removeIf(Map::isEmpty);
@@ -222,58 +225,117 @@ public final class GradeAdmin {
      */
     public static AdminResult addChat(MinecraftServer server, String gradeName, boolean suffix, int priority,
                                       String text, long seconds) {
+        return addChat(server, gradeName, suffix, priority, text, seconds, null);
+    }
+
+    /** {@link #addChat(MinecraftServer, String, boolean, int, String, long)} in {@code rawContext} only. */
+    public static AdminResult addChat(MinecraftServer server, String gradeName, boolean suffix, int priority,
+                                      String text, long seconds, String rawContext) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
+        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
         String problem = ChatEntries.problem(suffix, priority, text);
         if (problem != null) return AdminResult.fail(problem);
         String what = suffix ? "Suffix" : "Prefix";
-        ChatEntries.Change change = ChatEntries.put(suffix ? grade.suffixes : grade.prefixes, priority, text, seconds);
+        GradesConfig.Scoped scope = context == null ? null : Scopes.of(grade, context);
+        List<GradesConfig.ChatEntry> entries = scope == null ? (suffix ? grade.suffixes : grade.prefixes)
+                : (suffix ? scope.suffixes : scope.prefixes);
+        ChatEntries.Change change = ChatEntries.put(entries, priority, text, seconds);
         if (change == ChatEntries.Change.UNCHANGED) {
-            return AdminResult.ok(what + " \"" + text + "\" at " + priority + " on " + gradeName + " unchanged.");
+            return AdminResult.ok(what + " \"" + text + "\" at " + priority + " on " + gradeName + Scopes.span(context)
+                    + " unchanged.");
         }
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
         return decorationNote(AdminResult.ok(what + " \"" + text + "\" at " + priority + " -> " + gradeName
-                + Expiries.span(seconds) + (change == ChatEntries.Change.REPLACED ? ", replacing the one at that priority." : ""))
-                .warn(warning));
+                + Scopes.span(context) + Expiries.span(seconds)
+                + (change == ChatEntries.Change.REPLACED ? ", replacing the one at that priority." : "")).warn(warning));
     }
 
     /** Removes the prefix or suffix a grade has at {@code priority}. */
     public static AdminResult removeChat(MinecraftServer server, String gradeName, boolean suffix, int priority) {
+        return removeChat(server, gradeName, suffix, priority, null);
+    }
+
+    /** Removes the one at {@code priority} in {@code rawContext}; blank for the one that applies everywhere. */
+    public static AdminResult removeChat(MinecraftServer server, String gradeName, boolean suffix, int priority,
+                                         String rawContext) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
         String what = suffix ? "suffix" : "prefix";
-        GradesConfig.ChatEntry removed = ChatEntries.remove(suffix ? grade.suffixes : grade.prefixes, priority);
-        if (removed == null) return AdminResult.ok(gradeName + " has no " + what + " at " + priority + " — no change.");
+        GradesConfig.Scoped scope = context == null ? null : Scopes.find(grade, context);
+        List<GradesConfig.ChatEntry> entries = context == null ? (suffix ? grade.suffixes : grade.prefixes)
+                : scope == null ? null : (suffix ? scope.suffixes : scope.prefixes);
+        GradesConfig.ChatEntry removed = ChatEntries.remove(entries, priority);
+        if (removed == null) {
+            return AdminResult.ok(gradeName + " has no " + what + " at " + priority + Scopes.span(context) + " — no change.");
+        }
+        Scopes.tidy(grade);
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
-        return AdminResult.ok("Removed the " + what + " " + ChatEntries.describe(removed) + " from " + gradeName).warn(warning);
+        return AdminResult.ok("Removed the " + what + " " + ChatEntries.describe(removed) + " from " + gradeName
+                + Scopes.span(context)).warn(warning);
     }
 
-    /** Removes every prefix, or every suffix, of a grade. */
+    /** Removes every prefix, or every suffix, of a grade: everywhere, or in {@code rawContext} only. */
     public static AdminResult clearChat(MinecraftServer server, String gradeName, boolean suffix) {
+        return clearChat(server, gradeName, suffix, null);
+    }
+
+    public static AdminResult clearChat(MinecraftServer server, String gradeName, boolean suffix, String rawContext) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
-        List<GradesConfig.ChatEntry> entries = suffix ? grade.suffixes : grade.prefixes;
+        GradesConfig.Scoped scope = context == null ? null : Scopes.find(grade, context);
+        List<GradesConfig.ChatEntry> entries = context == null ? (suffix ? grade.suffixes : grade.prefixes)
+                : scope == null ? List.of() : (suffix ? scope.suffixes : scope.prefixes);
         String what = suffix ? "suffixes" : "prefixes";
-        if (entries.isEmpty()) return AdminResult.ok(gradeName + " has no " + what + " — no change.");
+        if (entries.isEmpty()) return AdminResult.ok(gradeName + " has no " + what + Scopes.span(context) + " — no change.");
         int count = entries.size();
         entries.clear();
+        Scopes.tidy(grade);
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
-        return AdminResult.ok("Cleared " + count + " " + what + " from " + gradeName).warn(warning);
+        return AdminResult.ok("Cleared " + count + " " + what + " from " + gradeName + Scopes.span(context)).warn(warning);
     }
 
-    /** A grade's prefixes or suffixes for a listing, highest priority first; empty for an unknown grade. */
+    /**
+     * A grade's prefixes or suffixes for a listing, highest priority first, then those limited to a world
+     * with it; empty for an unknown grade.
+     */
     public static List<String> chat(String gradeName, boolean suffix) {
         GradesConfig.Grade grade = grades().grades.get(gradeName);
-        return grade == null ? List.of() : ChatEntries.listing(suffix ? grade.suffixes : grade.prefixes);
+        if (grade == null) return List.of();
+        List<String> out = new ArrayList<>(ChatEntries.listing(suffix ? grade.suffixes : grade.prefixes));
+        new java.util.TreeMap<>(grade.contexts).forEach((context, scope) ->
+                ChatEntries.listing(suffix ? scope.suffixes : scope.prefixes)
+                        .forEach(line -> out.add(line + " " + Scopes.span(context).trim())));
+        return out;
+    }
+
+    /** The parents and refusals of a grade limited to a world, as {@code parent:<grade>} and {@code refused:<grade>}, by context. */
+    public static Map<String, List<String>> scopedParents(String gradeName) {
+        Map<String, List<String>> out = new java.util.TreeMap<>();
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        if (grade == null) return out;
+        grade.contexts.forEach((context, scope) -> {
+            List<String> entries = new ArrayList<>();
+            scope.parents.forEach(parent -> entries.add("parent:" + parent));
+            scope.refused.forEach(parent -> entries.add("refused:" + parent));
+            if (!entries.isEmpty()) out.put(context, entries);
+        });
+        return out;
     }
 
     /** Says a prefix shows nowhere while decoration is off. Shared with {@link UserAdmin}. */
@@ -296,12 +358,42 @@ public final class GradeAdmin {
      * there, the duration replaces what it had, as for a node.
      */
     public static AdminResult addParent(MinecraftServer server, String gradeName, String parentName, long seconds) {
+        return addParent(server, gradeName, parentName, seconds, null);
+    }
+
+    /** {@link #addParent(MinecraftServer, String, String, long)} in {@code rawContext} only; blank for everywhere. */
+    public static AdminResult addParent(MinecraftServer server, String gradeName, String parentName, long seconds,
+                                        String rawContext) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
+        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
         if (!grades().grades.containsKey(parentName)) return AdminResult.fail("No such grade: " + parentName);
         if (gradeName.equals(parentName)) return AdminResult.fail("A grade cannot inherit from itself.");
+        if (context != null) {
+            GradesConfig.GradeScoped scope = Scopes.find(grade, context);
+            if (scope != null && scope.parents.contains(parentName)) {
+                return AdminResult.ok(gradeName + " already inherits " + parentName + Scopes.span(context) + " — no change.");
+            }
+            if (scope != null && scope.refused.contains(parentName)) {
+                return AdminResult.fail(gradeName + " refuses " + parentName + Scopes.span(context)
+                        + ": remove that refusal first, or the file would say both at once.");
+            }
+            List<String> loop = inheritancePath(parentName, gradeName);
+            if (loop != null) {
+                return AdminResult.fail("Refused: " + String.join(" inherits ", loop) + ", so " + gradeName
+                        + " cannot inherit " + parentName + ", in any world.");
+            }
+            Scopes.of(grade, context).parents.add(parentName);
+            String warning = ConfigAdmin.persist();
+            ConfigAdmin.resyncCommands(server);
+            AdminResult result = AdminResult.ok(gradeName + " now inherits " + parentName + Scopes.span(context)).warn(warning);
+            return grade.parents.contains(parentName)
+                    ? result.note("It also inherits it everywhere, which already covers that world.") : result;
+        }
         if (grade.parents.contains(parentName)) {
             if (!Expiries.apply(grade.parentExpiries, parentName, seconds)) {
                 return AdminResult.ok(gradeName + " already inherits " + parentName + " — no change.");
@@ -328,10 +420,27 @@ public final class GradeAdmin {
     }
 
     public static AdminResult removeParent(MinecraftServer server, String gradeName, String parentName) {
+        return removeParent(server, gradeName, parentName, null);
+    }
+
+    /** Stops inheriting {@code parentName} in {@code rawContext}; blank for the parent held everywhere. */
+    public static AdminResult removeParent(MinecraftServer server, String gradeName, String parentName, String rawContext) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        if (context != null) {
+            GradesConfig.GradeScoped scope = Scopes.find(grade, context);
+            if (scope == null || !scope.parents.remove(parentName)) {
+                return AdminResult.ok(gradeName + " does not inherit " + parentName + Scopes.span(context) + " — no change.");
+            }
+            Scopes.tidy(grade);
+            String warning = ConfigAdmin.persist();
+            ConfigAdmin.resyncCommands(server);
+            return AdminResult.ok(gradeName + " no longer inherits " + parentName + Scopes.span(context)).warn(warning);
+        }
         if (!grade.parents.remove(parentName)) {
             return AdminResult.ok(gradeName + " does not inherit " + parentName + " — no change.");
         }
@@ -351,12 +460,36 @@ public final class GradeAdmin {
 
     /** {@link #denyParent(MinecraftServer, String, String)} for {@code seconds}, 0 for good. */
     public static AdminResult denyParent(MinecraftServer server, String gradeName, String parentName, long seconds) {
+        return denyParent(server, gradeName, parentName, seconds, null);
+    }
+
+    /** {@link #denyParent(MinecraftServer, String, String, long)} in {@code rawContext} only; blank for everywhere. */
+    public static AdminResult denyParent(MinecraftServer server, String gradeName, String parentName, long seconds,
+                                         String rawContext) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
+        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
         if (!grades().grades.containsKey(parentName)) return AdminResult.fail("No such grade: " + parentName);
         if (gradeName.equals(parentName)) return AdminResult.fail("A grade cannot refuse itself.");
+        if (context != null) {
+            GradesConfig.GradeScoped scope = Scopes.find(grade, context);
+            if (scope != null && scope.parents.contains(parentName)) {
+                return AdminResult.fail(gradeName + " inherits " + parentName + Scopes.span(context)
+                        + " directly: remove that parent instead of refusing it.");
+            }
+            if (scope != null && scope.refused.contains(parentName)) {
+                return AdminResult.ok(gradeName + " already refuses " + parentName + Scopes.span(context) + " — no change.");
+            }
+            Scopes.of(grade, context).refused.add(parentName);
+            String warning = ConfigAdmin.persist();
+            ConfigAdmin.resyncCommands(server);
+            return AdminResult.ok(gradeName + " now refuses " + parentName + Scopes.span(context)).warn(warning)
+                    .note("Nothing " + gradeName + " inherits brings it back there. Other grades a player holds are unaffected.");
+        }
         if (grade.parents.contains(parentName)) {
             return AdminResult.fail(gradeName + " inherits " + parentName + " directly: remove that parent "
                     + "instead of refusing it.");
@@ -378,10 +511,27 @@ public final class GradeAdmin {
     }
 
     public static AdminResult allowParent(MinecraftServer server, String gradeName, String parentName) {
+        return allowParent(server, gradeName, parentName, null);
+    }
+
+    /** Stops refusing {@code parentName} in {@code rawContext}; blank for the refusal held everywhere. */
+    public static AdminResult allowParent(MinecraftServer server, String gradeName, String parentName, String rawContext) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        if (context != null) {
+            GradesConfig.GradeScoped scope = Scopes.find(grade, context);
+            if (scope == null || !scope.refused.remove(parentName)) {
+                return AdminResult.ok(gradeName + " does not refuse " + parentName + Scopes.span(context) + " — no change.");
+            }
+            Scopes.tidy(grade);
+            String warning = ConfigAdmin.persist();
+            ConfigAdmin.resyncCommands(server);
+            return AdminResult.ok(gradeName + " no longer refuses " + parentName + Scopes.span(context)).warn(warning);
+        }
         if (!grade.deniedParents.remove(parentName)) {
             return AdminResult.ok(gradeName + " does not refuse " + parentName + " — no change.");
         }
@@ -433,7 +583,10 @@ public final class GradeAdmin {
             }
             GradesConfig.Grade grade = grades().grades.get(name);
             if (grade == null) continue;
-            for (String parent : grade.parents) {
+            // Parents inherited in one world only count too: a cycle there is a cycle in that world.
+            List<String> all = new ArrayList<>(grade.parents);
+            grade.contexts.values().forEach(scope -> all.addAll(scope.parents));
+            for (String parent : all) {
                 if (parent == null || reachedFrom.containsKey(parent)) continue;
                 reachedFrom.put(parent, name);
                 queue.add(parent);

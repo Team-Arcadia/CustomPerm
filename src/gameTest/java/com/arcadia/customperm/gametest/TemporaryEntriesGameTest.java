@@ -209,9 +209,9 @@ public class TemporaryEntriesGameTest {
                                     && entry.action().equals(child + " no longer inherits " + base)),
                     "the removal must be in the activity log");
 
-            act(owner, GuiAction.GRADE_PARENT_ADD, child, base, "never");
+            act(owner, GuiAction.GRADE_PARENT_ADD, child, base, "never", "");
             result(owner, "FAIL: Invalid duration 'never'");
-            act(owner, GuiAction.GRADE_PARENT_ADD, child, base, "7d");
+            act(owner, GuiAction.GRADE_PARENT_ADD, child, base, "7d", "");
             result(owner, "OK: " + child + " now inherits " + base + " for 7d");
             GradesData page = owner.payloads(GuiPagePayload.class).stream()
                     .map(GuiPagePayload::data).filter(GradesData.class::isInstance).map(GradesData.class::cast)

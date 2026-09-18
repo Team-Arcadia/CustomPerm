@@ -92,9 +92,13 @@ public class LuckPermsExportGameTest {
             config.userGrades.put(USER.toString(), new ArrayList<>(List.of(VIP)));
             config.userPermissions.put(USER.toString(), new LinkedHashSet<>(Set.of("customperm.command.home")));
             config.userPrefixEntries.put(USER.toString(), new ArrayList<>(List.of(new GradesConfig.ChatEntry(100, "[Me] ", 0))));
-            GradesConfig.Scoped nether = new GradesConfig.Scoped();
+            GradesConfig.GradeScoped nether = new GradesConfig.GradeScoped();
             nether.deniedPermissions.add("customperm.command.time");
             config.grades.get(BASE).contexts.put("world=minecraft:the_nether", nether);
+            GradesConfig.GradeScoped vipNether = new GradesConfig.GradeScoped();
+            vipNether.refused.add(BASE);
+            vipNether.prefixes.add(new GradesConfig.ChatEntry(30, "[Hot] ", 0));
+            config.grades.get(VIP).contexts.put("world=minecraft:the_nether", vipNether);
             GradesConfig.UserScoped end = new GradesConfig.UserScoped();
             end.grades.add(BASE);
             config.userContexts.put(USER.toString(), new java.util.HashMap<>(java.util.Map.of("world=minecraft:the_end", end)));
@@ -123,6 +127,8 @@ public class LuckPermsExportGameTest {
                 fail("A node that has already expired must not be exported: " + base);
             List<String> vip = LuckPermsTestSupport.groupNodes(VIP);
             expect(vip, "group." + BASE + "=true@expiring", "A temporary parent must arrive as a temporary inheritance node");
+            expect(vip, "group." + BASE + "=false[world=the_nether]", "A refusal limited to a world must arrive in it");
+            expect(vip, "prefix.30.[Hot] =true[world=the_nether]", "A prefix limited to a world must arrive in it");
             expect(vip, "weight.42=true", "The weight must arrive on a group that had none");
             expect(vip, "customperm.command.fly=false", "Adding must keep LuckPerms' value");
             expect(vip, "customperm.command.kick=true", "Adding must keep what LuckPerms holds");

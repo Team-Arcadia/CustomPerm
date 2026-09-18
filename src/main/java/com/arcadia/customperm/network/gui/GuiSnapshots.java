@@ -79,7 +79,8 @@ public final class GuiSnapshots {
             players.add(new PlayersData.Player(rawUuid, name, online,
                     new PlayersData.Held(List.copyOf(config.userGrades.getOrDefault(rawUuid, List.of())),
                             List.copyOf(config.userDeniedGrades.getOrDefault(rawUuid, List.of())),
-                            ChatLine.of(config.userPrefixEntries.get(rawUuid), config.userSuffixEntries.get(rawUuid)),
+                            ChatLine.of(config.userPrefixEntries.get(rawUuid), config.userSuffixEntries.get(rawUuid),
+                                    config.userContexts.get(rawUuid)),
                             timers(config.userPermissionExpiries.get(rawUuid),
                                     config.userDeniedPermissionExpiries.get(rawUuid)),
                             userScoped(uuid)),
@@ -104,8 +105,9 @@ public final class GuiSnapshots {
         java.util.Map<String, List<GradesData.Member>> members = new java.util.HashMap<>();
         java.util.Map<String, List<GradesData.Member>> refusers = new java.util.HashMap<>();
         byGrade(server, config.userGrades, config.userGradeExpiries, members);
-        byGradeScoped(server, config.userContexts, members);
+        byGradeScoped(server, config.userContexts, members, false);
         byGrade(server, config.userDeniedGrades, config.userDeniedGradeExpiries, refusers);
+        byGradeScoped(server, config.userContexts, refusers, true);
 
         // Heaviest first, then by name: the order in which two grades covering a node just as specifically
         // break the tie, so the list itself reads as the precedence.
@@ -122,7 +124,7 @@ public final class GuiSnapshots {
             List<GradesData.Member> refusing = refusers.getOrDefault(name, new ArrayList<>());
             refusing.sort(java.util.Comparator.comparing(GradesData.Member::name, String.CASE_INSENSITIVE_ORDER));
             grades.add(new GradesData.Grade(new GradesData.Header(name, grade.weight,
-                    ChatLine.of(grade.prefixes, grade.suffixes)),
+                    ChatLine.of(grade.prefixes, grade.suffixes, grade.contexts)),
                     new GradesData.Inheritance(List.copyOf(grade.parents), List.copyOf(grade.deniedParents)),
                     new TreeSet<>(grade.permissions).stream().limit(GradesData.NODES_MAX).toList(),
                     new TreeSet<>(grade.deniedPermissions).stream().limit(GradesData.NODES_MAX).toList(),
@@ -159,6 +161,8 @@ public final class GuiSnapshots {
         new java.util.TreeMap<>(grade.contexts).forEach((context, scope) -> {
             new TreeSet<>(scope.deniedPermissions).forEach(node -> entries.add(new ScopedEntry(context, "deny", node)));
             new TreeSet<>(scope.permissions).forEach(node -> entries.add(new ScopedEntry(context, "allow", node)));
+            scope.parents.forEach(parent -> entries.add(new ScopedEntry(context, "parent", parent)));
+            scope.refused.forEach(parent -> entries.add(new ScopedEntry(context, "refused", parent)));
         });
         return entries.size() > GuiCodecs.SERVER_LIST_MAX ? entries.subList(0, GuiCodecs.SERVER_LIST_MAX) : entries;
     }
@@ -205,10 +209,10 @@ public final class GuiSnapshots {
         });
     }
 
-    /** The players who hold a grade in one world only, one entry per grade and world. */
+    /** The players who hold, or refuse, a grade in one world only, one entry per grade and world. */
     private static void byGradeScoped(MinecraftServer server,
                                       java.util.Map<String, java.util.Map<String, com.arcadia.customperm.config.GradesConfig.UserScoped>> scopes,
-                                      java.util.Map<String, List<GradesData.Member>> byGrade) {
+                                      java.util.Map<String, List<GradesData.Member>> byGrade, boolean refused) {
         scopes.forEach((rawUuid, byContext) -> {
             java.util.UUID uuid;
             try {
@@ -218,7 +222,7 @@ public final class GuiSnapshots {
             }
             boolean online = server != null && server.getPlayerList().getPlayer(uuid) != null;
             String name = server == null ? rawUuid : GradeAdmin.displayName(server, uuid);
-            byContext.forEach((context, scope) -> scope.grades.forEach(grade -> byGrade
+            byContext.forEach((context, scope) -> (refused ? scope.refused : scope.grades).forEach(grade -> byGrade
                     .computeIfAbsent(grade, k -> new ArrayList<>())
                     .add(new GradesData.Member(rawUuid, name, online, 0, context))));
         });

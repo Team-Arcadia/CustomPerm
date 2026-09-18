@@ -212,7 +212,7 @@ public class NameDecorationGameTest {
             targetUuid = target.uuid().toString();
             ok(GradeAdmin.create(VIP));
 
-            act(owner, GuiAction.GRADE_CHAT_ADD, GuiPage.GRADES, VIP, "prefix", "10", "&6[VIP] ", "7d");
+            act(owner, GuiAction.GRADE_CHAT_ADD, GuiPage.GRADES, VIP, "prefix", "10", "&6[VIP] ", "7d", "");
             expect(owner, "OK: Prefix \"&6[VIP] \" at 10 -> " + VIP + " for 7d");
             GradesConfig.ChatEntry written = grades.grades.get(VIP).prefixes.get(0);
             equal("&6[VIP] ", written.text, "the grade prefix was not written");
@@ -224,15 +224,15 @@ public class NameDecorationGameTest {
             check(page != null && page.grades().stream().filter(g -> g.name().equals(VIP)).findFirst().orElseThrow()
                     .chat().stream().anyMatch(line -> line.priority() == 10 && line.remaining() > 0),
                     "the page must carry the prefix with its priority and time left");
-            act(owner, GuiAction.GRADE_CHAT_ADD, GuiPage.GRADES, VIP, "colour", "10", "x", "");
+            act(owner, GuiAction.GRADE_CHAT_ADD, GuiPage.GRADES, VIP, "colour", "10", "x", "", "");
             expect(owner, "FAIL: Malformed request for GRADE_CHAT_ADD.");
-            act(owner, GuiAction.GRADE_CHAT_ADD, GuiPage.GRADES, VIP, "prefix", "high", "x", "");
+            act(owner, GuiAction.GRADE_CHAT_ADD, GuiPage.GRADES, VIP, "prefix", "high", "x", "", "");
             expect(owner, "FAIL: Malformed request for GRADE_CHAT_ADD.");
-            act(owner, GuiAction.GRADE_CHAT_REMOVE, GuiPage.GRADES, VIP, "prefix", "10");
+            act(owner, GuiAction.GRADE_CHAT_REMOVE, GuiPage.GRADES, VIP, "prefix", "10", "");
             expect(owner, "OK: Removed the prefix \"&6[VIP] \" at 10 from " + VIP);
             check(grades.grades.get(VIP).prefixes.isEmpty(), "removing by priority must remove it");
 
-            act(owner, GuiAction.USER_CHAT_ADD, GuiPage.PLAYERS, "cp_n_target", "suffix", "0", " &7*", "");
+            act(owner, GuiAction.USER_CHAT_ADD, GuiPage.PLAYERS, "cp_n_target", "suffix", "0", " &7*", "", "");
             expect(owner, "OK: Suffix \" &7*\" at 0 -> cp_n_target");
             equal(" &7*", grades.userSuffixEntries.get(targetUuid).get(0).text, "the player's suffix was not written");
 

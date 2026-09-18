@@ -104,7 +104,7 @@ public class PermissionResolverBenchmark {
         explorer.name = "explorer";
         for (int i = 0; i < 10; i++) explorer.permissions.add("customperm.explorer.perm" + i);
         explorer.permissions.add(ALLOWED_NODE);
-        GradesConfig.Scoped nether = new GradesConfig.Scoped();
+        GradesConfig.GradeScoped nether = new GradesConfig.GradeScoped();
         for (int i = 0; i < 10; i++) nether.permissions.add("customperm.nether.perm" + i);
         nether.deniedPermissions.add(ALLOWED_NODE);
         explorer.contexts.put("world=minecraft:the_nether", nether);

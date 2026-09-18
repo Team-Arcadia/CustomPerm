@@ -69,22 +69,28 @@ public enum GuiAction {
     GRADE_NODE_REMOVE(4, GuiArea.GRADES),
     /** {@code [grade, weight]} Sets the tie-break weight, which decides between grades at the same specificity. */
     GRADE_WEIGHT_SET(2, GuiArea.GRADES),
-    /** {@code [grade, parent, duration]} Makes the grade inherit another; a cycle is refused. Empty duration: for good. */
-    GRADE_PARENT_ADD(3, GuiArea.GRADES),
-    /** {@code [grade, parent]} Stops inheriting it. */
-    GRADE_PARENT_REMOVE(2, GuiArea.GRADES),
+    /**
+     * {@code [grade, parent, duration, context]} Makes the grade inherit another; a cycle is refused. Empty
+     * duration: for good; empty context: everywhere.
+     */
+    GRADE_PARENT_ADD(4, GuiArea.GRADES),
+    /** {@code [grade, parent, context]} Stops inheriting it, in that context. */
+    GRADE_PARENT_REMOVE(3, GuiArea.GRADES),
     /** {@code [playerName, grade, duration, context]} Assigns a grade to a player online or known to the server. */
     GRADE_ASSIGN(4, GuiArea.GRADES),
     /** {@code [playerUuid, grade, context]} Unassigns a grade, by UUID so unnamed entries can be cleaned up. */
     GRADE_UNASSIGN(3, GuiArea.GRADES),
-    /** {@code [grade, parent, duration]} Refuses a grade wherever this one would inherit it. */
-    GRADE_PARENT_DENY(3, GuiArea.GRADES),
-    /** {@code [grade, parent]} Stops refusing it. */
-    GRADE_PARENT_ALLOW(2, GuiArea.GRADES),
-    /** {@code [playerName, grade, duration]} Makes a player refuse a grade, wherever one of theirs would bring it. */
-    GRADE_REFUSE(3, GuiArea.GRADES),
-    /** {@code [playerUuid, grade]} Stops refusing it, by UUID like unassigning. */
-    GRADE_ACCEPT(2, GuiArea.GRADES),
+    /** {@code [grade, parent, duration, context]} Refuses a grade wherever this one would inherit it. */
+    GRADE_PARENT_DENY(4, GuiArea.GRADES),
+    /** {@code [grade, parent, context]} Stops refusing it, in that context. */
+    GRADE_PARENT_ALLOW(3, GuiArea.GRADES),
+    /**
+     * {@code [playerName, grade, duration, context]} Makes a player refuse a grade, wherever one of theirs
+     * would bring it.
+     */
+    GRADE_REFUSE(4, GuiArea.GRADES),
+    /** {@code [playerUuid, grade, context]} Stops refusing it, by UUID like unassigning. */
+    GRADE_ACCEPT(3, GuiArea.GRADES),
     /** {@code [grade]} Makes a grade apply to every player; an empty name clears the default grade. */
     GRADE_DEFAULT(1, GuiArea.GRADES),
 
@@ -113,16 +119,16 @@ public enum GuiAction {
     EXPORT_APPLY(1, GuiArea.LUCKPERMS),
 
     /**
-     * {@code [grade, "prefix"|"suffix", priority, text, duration]} Gives a grade a prefix or suffix at that
-     * priority, replacing one already there; an empty duration is for good.
+     * {@code [grade, "prefix"|"suffix", priority, text, duration, context]} Gives a grade a prefix or suffix
+     * at that priority, replacing one already there; an empty duration is for good, an empty context everywhere.
      */
-    GRADE_CHAT_ADD(5, GuiArea.GRADES),
-    /** {@code [grade, "prefix"|"suffix", priority]} Removes the one at that priority. */
-    GRADE_CHAT_REMOVE(3, GuiArea.GRADES),
-    /** {@code [playerName, "prefix"|"suffix", priority, text, duration]} One player's own; by name, like a node. */
-    USER_CHAT_ADD(5, GuiArea.GRADES),
-    /** {@code [playerName, "prefix"|"suffix", priority]} Removes one player's own at that priority. */
-    USER_CHAT_REMOVE(3, GuiArea.GRADES),
+    GRADE_CHAT_ADD(6, GuiArea.GRADES),
+    /** {@code [grade, "prefix"|"suffix", priority, context]} Removes the one at that priority, in that context. */
+    GRADE_CHAT_REMOVE(4, GuiArea.GRADES),
+    /** {@code [playerName, "prefix"|"suffix", priority, text, duration, context]} One player's own; by name. */
+    USER_CHAT_ADD(6, GuiArea.GRADES),
+    /** {@code [playerName, "prefix"|"suffix", priority, context]} Removes one player's own at that priority. */
+    USER_CHAT_REMOVE(4, GuiArea.GRADES),
     /** {@code ["highest"|"stacked"]} Shows one prefix and suffix, or several in a row, like {@code names stack both}. */
     NAMES_STACK(1, GuiArea.CONFIG),
     /** {@code ["true"|"false"]} Decorates names with their prefix and suffix, like {@code /customperm names}. */

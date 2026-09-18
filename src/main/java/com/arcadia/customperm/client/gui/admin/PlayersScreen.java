@@ -316,6 +316,7 @@ public final class PlayersScreen extends AdminScreen {
             addRenderableWidget(chat.text.at(chat.textRect(fieldRow)));
             addRenderableWidget(chat.priority.at(chat.priorityRect(fieldRow)));
             addRenderableWidget(chat.duration.at(chat.durationRect(fieldRow)));
+            addRenderableWidget(chat.world.at(chat.worldRect(fieldRow)));
             chat.setEditable(editable);
             placeButtonRow(buttonRow, 6, true, List.of(
                     CpButton.accent(Component.literal("Prefix"), () -> addChat(false)).icon(Icon.PLUS).enabled(editable)
@@ -387,7 +388,7 @@ public final class PlayersScreen extends AdminScreen {
             return;
         }
         act(GuiAction.USER_CHAT_ADD, player.name(), suffix ? "suffix" : "prefix", String.valueOf(priority), text,
-                chat.duration.getValue().trim());
+                chat.duration.getValue().trim(), GradesScreen.context(chat.world.getValue()));
         chat.clearTyped();
     }
 
@@ -395,7 +396,8 @@ public final class PlayersScreen extends AdminScreen {
         PlayersData.Player player = playerList.getSelected();
         com.arcadia.customperm.network.gui.ChatLine line = chat.list.getSelected();
         if (player == null || line == null) return;
-        act(GuiAction.USER_CHAT_REMOVE, player.name(), line.suffix() ? "suffix" : "prefix", String.valueOf(line.priority()));
+        act(GuiAction.USER_CHAT_REMOVE, player.name(), line.suffix() ? "suffix" : "prefix", String.valueOf(line.priority()),
+                line.context());
     }
 
     /** Selects a player by name, adding a local row when the server does not know them yet. */

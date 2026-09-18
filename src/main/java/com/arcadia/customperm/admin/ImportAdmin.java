@@ -141,7 +141,7 @@ public final class ImportAdmin {
             addTimed(target.parents, target.parentExpiries, source.parents(), source.expiries(), "grade:");
             addTimed(target.deniedParents, target.deniedParentExpiries, source.deniedParents(), source.expiries(), "refuse:");
             // Adding keeps a prefix already set here at that priority, like the weight: it is what the admin chose.
-            for (ChatGrant chat : source.chat()) chat.addTo(target.prefixes, target.suffixes);
+            for (ChatGrant chat : source.chat()) chat.addTo(target);
             gradesWritten++;
         }
 
@@ -183,13 +183,7 @@ public final class ImportAdmin {
             }
             java.util.UUID id = java.util.UUID.fromString(uuid);
             for (ScopedGrant entry : source.scoped()) entry.addTo(Scopes.of(grades(), id, entry.context()));
-            if (!source.chat().isEmpty()) {
-                List<GradesConfig.ChatEntry> prefixes = grades().userPrefixEntries.computeIfAbsent(uuid, k -> new ArrayList<>());
-                List<GradesConfig.ChatEntry> suffixes = grades().userSuffixEntries.computeIfAbsent(uuid, k -> new ArrayList<>());
-                for (ChatGrant chat : source.chat()) chat.addTo(prefixes, suffixes);
-                if (prefixes.isEmpty()) grades().userPrefixEntries.remove(uuid);
-                if (suffixes.isEmpty()) grades().userSuffixEntries.remove(uuid);
-            }
+            for (ChatGrant chat : source.chat()) chat.addTo(grades(), id);
             playersWritten++;
         }
         int tracksWritten = 0;

@@ -85,6 +85,10 @@ public class LuckPermsImportGameTest {
             apply(LpEditOp.GROUP_PREFIX_SET, VIP, "5", "[Lesser]", "");
             apply(LpEditOp.GROUP_META_SET, VIP, "rank", "gold", "");
             apply(LpEditOp.GROUP_PARENT_ADD, VIP, BASE, "");
+            apply(LpEditOp.GROUP_PARENT_ADD, VIP, "default", "world=the_nether");
+            apply(LpEditOp.GROUP_PERM_ADD, VIP, "group.default", "false", "world=the_end", "0");
+            apply(LpEditOp.GROUP_PREFIX_SET, VIP, "20", "[Hot]", "world=the_nether");
+            apply(LpEditOp.USER_PERM_ADD, USER.toString(), "group." + BASE, "false", "world=the_end", "0");
             apply(LpEditOp.GROUP_WEIGHT_SET, VIP, "42");
             apply(LpEditOp.USER_PARENT_ADD, USER.toString(), VIP, "", "0");
             apply(LpEditOp.USER_PARENT_ADD, USER.toString(), BASE, "", "7200");
@@ -115,7 +119,10 @@ public class LuckPermsImportGameTest {
             if (!vip.parents().equals(List.of(BASE))) fail("The group parent must arrive as a grade parent: " + vip);
             if (!vip.allow().equals(java.util.Set.of("customperm.command.kick")))
                 fail("A temporary node must arrive, and a contextual one not as a global node: " + vip);
-            if (!vip.scoped().equals(List.of(new ScopedGrant(NETHER, ScopedGrant.ALLOW, "customperm.command.seed"))))
+            if (!new java.util.HashSet<>(vip.scoped()).equals(java.util.Set.of(
+                    new ScopedGrant(NETHER, ScopedGrant.ALLOW, "customperm.command.seed"),
+                    new ScopedGrant(NETHER, ScopedGrant.PARENT, "default"),
+                    new ScopedGrant(END, ScopedGrant.REFUSED, "default"))))
                 fail("A node limited to one world must arrive with it, one limited to a server be left behind: "
                         + vip.scoped());
             long kickAt = vip.expiries().getOrDefault("allow:customperm.command.kick", 0L);
@@ -125,10 +132,10 @@ public class LuckPermsImportGameTest {
             if (!base.parents().equals(List.of("default"))
                     || Math.abs(parentAt - (com.arcadia.customperm.perm.Expiry.now() + 3600)) > 30)
                 fail("A temporary parent of a group must arrive with its expiry: " + base);
-            if (!vip.chat().equals(List.of(new com.arcadia.customperm.admin.ChatGrant(false, 5, "[Lesser]", 0),
-                    new com.arcadia.customperm.admin.ChatGrant(false, 10, "[VIP]", 0)))
-                    && !vip.chat().equals(List.of(new com.arcadia.customperm.admin.ChatGrant(false, 10, "[VIP]", 0),
-                    new com.arcadia.customperm.admin.ChatGrant(false, 5, "[Lesser]", 0))))
+            if (!new java.util.HashSet<>(vip.chat()).equals(java.util.Set.of(
+                    new com.arcadia.customperm.admin.ChatGrant(false, 5, "[Lesser]", 0),
+                    new com.arcadia.customperm.admin.ChatGrant(false, 10, "[VIP]", 0),
+                    new com.arcadia.customperm.admin.ChatGrant(false, 20, "[Hot]", 0, NETHER))))
                 fail("Every prefix must arrive with its priority: " + vip.chat());
 
             if (!plan.exposeCommands().contains("gamemode") || !plan.exposeCommands().contains("weather"))
@@ -149,9 +156,11 @@ public class LuckPermsImportGameTest {
                 fail("A temporary group of a player must arrive with its expiry, a permanent one without: " + player);
             if (!player.deny().contains("cptest.probe.open"))
                 fail("A player's node another mod declared must be searched for and imported: " + player);
-            if (!player.scoped().equals(List.of(new ScopedGrant(END, ScopedGrant.DENY, "customperm.command.seed"))))
-                fail("A player's node limited to a world must arrive with it: " + player.scoped());
-            if (plan.counts().worlds() != 2) fail("Both entries limited to a world must be counted: " + plan.counts());
+            if (!new java.util.HashSet<>(player.scoped()).equals(java.util.Set.of(
+                    new ScopedGrant(END, ScopedGrant.DENY, "customperm.command.seed"),
+                    new ScopedGrant(END, ScopedGrant.REFUSED, BASE))))
+                fail("A player's node and refusal limited to a world must arrive with it: " + player.scoped());
+            if (plan.counts().worlds() != 6) fail("Every entry limited to a world must be counted: " + plan.counts());
             if (!List.of(BASE, VIP).equals(plan.tracks().get(TRACK)))
                 fail("A track must arrive with its groups in order: " + plan.tracks());
 
@@ -188,6 +197,13 @@ public class LuckPermsImportGameTest {
                 fail("The node limited to the Nether was not written there.");
             if (!grades.userContexts.get(USER.toString()).get(END).deniedPermissions.contains("customperm.command.seed"))
                 fail("The player's node limited to the End was not written there.");
+            if (!grades.userContexts.get(USER.toString()).get(END).refused.contains(BASE))
+                fail("The player's refusal limited to the End was not written there.");
+            GradesConfig.GradeScoped vipNether = grades.grades.get(VIP).contexts.get(NETHER);
+            if (!vipNether.parents.contains("default") || vipNether.prefixes.stream().noneMatch(e -> e.text.equals("[Hot]")))
+                fail("The group's parent and prefix limited to the Nether were not written there.");
+            if (!grades.grades.get(VIP).contexts.get(END).refused.contains("default"))
+                fail("The group's refusal limited to the End was not written there.");
             if (!commands.grantedCommands.contains("gamemode") || !commands.grantedCommands.contains("weather"))
                 fail("The commands the imported nodes need were not exposed.");
             if (result.notes().stream().noneMatch(note -> note.contains("LuckPerms still decides")))

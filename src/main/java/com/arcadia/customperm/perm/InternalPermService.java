@@ -44,10 +44,11 @@ public class InternalPermService implements PermissionService {
     public ChatMeta chatMeta(ServerPlayer player) {
         var settings = config.getSettings();
         String defaultGrade = settings.defaultGrade;
+        Contexts where = contexts(player);
         return new ChatMeta(
-                ChatStack.format(PermissionResolver.prefixes(config.getGrades(), player.getUUID(), defaultGrade),
+                ChatStack.format(PermissionResolver.prefixes(config.getGrades(), player.getUUID(), defaultGrade, where),
                         settings.prefixStack),
-                ChatStack.format(PermissionResolver.suffixes(config.getGrades(), player.getUUID(), defaultGrade),
+                ChatStack.format(PermissionResolver.suffixes(config.getGrades(), player.getUUID(), defaultGrade, where),
                         settings.suffixStack));
     }
 }

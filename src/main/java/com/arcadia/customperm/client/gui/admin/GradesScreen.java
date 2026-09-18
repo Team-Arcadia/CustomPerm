@@ -62,8 +62,8 @@ public final class GradesScreen extends AdminScreen {
     private record NodeRow(String node, boolean deny, String context) {
     }
 
-    /** One grade the selected grade inherits, or refuses to inherit. */
-    private record ParentRow(String grade, boolean refused) {
+    /** One grade the selected grade inherits, or refuses to inherit; {@code context} is empty for everywhere. */
+    private record ParentRow(String grade, boolean refused, String context) {
     }
 
     /** One player assigned to the selected grade, or refusing it. */
@@ -144,7 +144,7 @@ public final class GradesScreen extends AdminScreen {
         this.parentList = new CpList<ParentRow>(Component.literal("Parents"), 14)
                 .renderer(this::renderParent)
                 .label(row -> (row.refused() ? "refuses " : "inherits ") + row.grade())
-                .identity(row -> (row.refused() ? "deny:" : "parent:") + row.grade())
+                .identity(row -> (row.refused() ? "deny:" : "parent:") + row.grade() + "@" + row.context())
                 .emptyText("No parent: this grade inherits nothing.")
                 .onSelect(row -> {
                     parentField.setValue(row.grade());
@@ -235,8 +235,10 @@ public final class GradesScreen extends AdminScreen {
         List<ParentRow> parents = new ArrayList<>();
         List<MemberRow> members = new ArrayList<>();
         if (grade != null) {
-            grade.parents().forEach(name -> parents.add(new ParentRow(name, false)));
-            grade.deniedParents().forEach(name -> parents.add(new ParentRow(name, true)));
+            grade.parents().forEach(name -> parents.add(new ParentRow(name, false, "")));
+            grade.deniedParents().forEach(name -> parents.add(new ParentRow(name, true, "")));
+            grade.scoped().stream().filter(e -> e.kind().equals("parent") || e.kind().equals("refused"))
+                    .forEach(e -> parents.add(new ParentRow(e.value(), e.kind().equals("refused"), e.context())));
             grade.members().forEach(member -> members.add(new MemberRow(member, false)));
             grade.refusers().forEach(member -> members.add(new MemberRow(member, true)));
         }
@@ -364,9 +366,11 @@ public final class GradesScreen extends AdminScreen {
                             .enabled(editable && selected != null)));
         } else if (tab == Tab.PARENTS) {
             addRenderableWidget(parentList.at(list));
-            addRenderableWidget(parentField.at(fieldRow.beforeRight(DURATION_FIELD + 4)));
+            addRenderableWidget(parentField.at(fieldRow.beforeRight(DURATION_FIELD + WORLD_FIELD + 8)));
+            addRenderableWidget(worldField.at(fieldRow.right(DURATION_FIELD + WORLD_FIELD + 4).left(WORLD_FIELD)));
             addRenderableWidget(durationField.at(fieldRow.right(DURATION_FIELD)));
             parentField.setEditable(editable);
+            worldField.setEditable(editable);
             durationField.setEditable(editable);
             ParentRow selected = parentList.getSelected();
             placeButtonRow(buttonRow, 6, true, List.of(
@@ -383,6 +387,7 @@ public final class GradesScreen extends AdminScreen {
             addRenderableWidget(chat.text.at(chat.textRect(fieldRow)));
             addRenderableWidget(chat.priority.at(chat.priorityRect(fieldRow)));
             addRenderableWidget(chat.duration.at(chat.durationRect(fieldRow)));
+            addRenderableWidget(chat.world.at(chat.worldRect(fieldRow)));
             chat.setEditable(editable);
             boolean decorate = data.names().decorate();
             boolean stacked = data.names().prefix().stacked();
@@ -475,7 +480,7 @@ public final class GradesScreen extends AdminScreen {
             return;
         }
         act(GuiAction.GRADE_CHAT_ADD, grade.name(), suffix ? "suffix" : "prefix", String.valueOf(priority), text,
-                chat.duration.getValue().trim());
+                chat.duration.getValue().trim(), context(chat.world.getValue()));
         chat.clearTyped();
     }
 
@@ -483,7 +488,8 @@ public final class GradesScreen extends AdminScreen {
         GradesData.Grade grade = gradeList.getSelected();
         com.arcadia.customperm.network.gui.ChatLine line = chat.list.getSelected();
         if (grade == null || line == null) return;
-        act(GuiAction.GRADE_CHAT_REMOVE, grade.name(), line.suffix() ? "suffix" : "prefix", String.valueOf(line.priority()));
+        act(GuiAction.GRADE_CHAT_REMOVE, grade.name(), line.suffix() ? "suffix" : "prefix", String.valueOf(line.priority()),
+                line.context());
     }
 
     /** Submits the weight box. A grade that weighs nothing is the norm, so a blank box means 0. */
@@ -504,7 +510,7 @@ public final class GradesScreen extends AdminScreen {
     private void addParent(String name) {
         GradesData.Grade grade = gradeList.getSelected();
         if (grade == null || name.isEmpty()) return;
-        act(GuiAction.GRADE_PARENT_ADD, grade.name(), name, durationField.getValue().trim());
+        act(GuiAction.GRADE_PARENT_ADD, grade.name(), name, durationField.getValue().trim(), context(worldField.getValue()));
         parentField.setValue("");
         parentField.setSuggestion(null);
     }
@@ -519,7 +525,7 @@ public final class GradesScreen extends AdminScreen {
         String typed = parentField.getValue().trim();
         String name = Objects.requireNonNullElse(parentCompletion(typed), typed);
         if (grade == null || name.isEmpty()) return;
-        act(GuiAction.GRADE_PARENT_DENY, grade.name(), name, durationField.getValue().trim());
+        act(GuiAction.GRADE_PARENT_DENY, grade.name(), name, durationField.getValue().trim(), context(worldField.getValue()));
         parentField.setValue("");
         parentField.setSuggestion(null);
     }
@@ -527,7 +533,8 @@ public final class GradesScreen extends AdminScreen {
     private void removeParent(ParentRow row) {
         GradesData.Grade grade = gradeList.getSelected();
         if (grade == null || row == null) return;
-        act(row.refused() ? GuiAction.GRADE_PARENT_ALLOW : GuiAction.GRADE_PARENT_REMOVE, grade.name(), row.grade());
+        act(row.refused() ? GuiAction.GRADE_PARENT_ALLOW : GuiAction.GRADE_PARENT_REMOVE, grade.name(), row.grade(),
+                row.context());
         parentField.setValue("");
     }
 
@@ -587,7 +594,7 @@ public final class GradesScreen extends AdminScreen {
         GradesData.Grade grade = gradeList.getSelected();
         String name = typedPlayer();
         if (grade == null || name == null) return;
-        act(GuiAction.GRADE_REFUSE, name, grade.name(), durationField.getValue().trim());
+        act(GuiAction.GRADE_REFUSE, name, grade.name(), durationField.getValue().trim(), context(worldField.getValue()));
         playerField.setValue("");
         playerField.setSuggestion(null);
     }
@@ -596,7 +603,7 @@ public final class GradesScreen extends AdminScreen {
         GradesData.Grade grade = gradeList.getSelected();
         if (grade == null || row == null) return;
         if (row.refused()) {
-            act(GuiAction.GRADE_ACCEPT, row.member().uuid(), grade.name());
+            act(GuiAction.GRADE_ACCEPT, row.member().uuid(), grade.name(), row.member().context());
         } else {
             act(GuiAction.GRADE_UNASSIGN, row.member().uuid(), grade.name(), row.member().context());
         }
@@ -630,7 +637,8 @@ public final class GradesScreen extends AdminScreen {
         int w = Skin.badge(g, font, label, r.x() + 4, r.centerY(), row.refused() ? Palette.DANGER : Palette.ACCENT);
         int x = r.x() + 4 + Math.max(w, font.width("INHERITS") + 6) + 5;
         GradesData.Grade grade = gradeList.getSelected();
-        String left = grade == null ? "" : timeLeft(grade.remaining(row.refused() ? "refusedParent" : "parent", row.grade()));
+        String left = !row.context().isEmpty() ? where(row.context())
+                : grade == null ? "" : timeLeft(grade.remaining(row.refused() ? "refusedParent" : "parent", row.grade()));
         int lw = left.isEmpty() ? 0 : font.width(left) + 8;
         if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
         Skin.text(g, font, row.grade(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4 - lw, Palette.TEXT);

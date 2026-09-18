@@ -228,10 +228,10 @@ class ExportPlanTest {
     void entriesLimitedToAWorldAreCarriedAndReadBackTheSame() {
         GradesConfig config = new GradesConfig();
         grade(config, "base", 0, List.of(), List.of(), Set.of(), Set.of());
-        GradesConfig.Scoped nether = new GradesConfig.Scoped();
+        GradesConfig.GradeScoped nether = new GradesConfig.GradeScoped();
         nether.deniedPermissions.add("customperm.command.home");
         config.grades.get("base").contexts.put("world=minecraft:the_nether", nether);
-        GradesConfig.Scoped server = new GradesConfig.Scoped();
+        GradesConfig.GradeScoped server = new GradesConfig.GradeScoped();
         server.permissions.add("customperm.command.fly");
         config.grades.get("base").contexts.put("server=lobby", server);
         GradesConfig.UserScoped end = new GradesConfig.UserScoped();
@@ -252,6 +252,43 @@ class ExportPlanTest {
         assertEquals(Tristate.DENY, PermissionResolver.check(back, player, "customperm.command.home", "base",
                 com.arcadia.customperm.perm.Contexts.world("minecraft:the_nether")));
         assertTrue(back.userContexts.get(PLAYER).get("world=minecraft:the_end").grades.contains("base"));
+    }
+
+    @Test
+    void parentsRefusalsAndPrefixesLimitedToAWorldAreCarriedToo() {
+        GradesConfig config = new GradesConfig();
+        grade(config, "base", 0, List.of(), List.of(), Set.of("customperm.command.home"), Set.of());
+        grade(config, "staff", 0, List.of(), List.of(), Set.of(), Set.of());
+        grade(config, "vip", 0, List.of(), List.of(), Set.of(), Set.of());
+        GradesConfig.GradeScoped nether = new GradesConfig.GradeScoped();
+        nether.parents.add("base");
+        nether.refused.add("staff");
+        nether.prefixes.add(new GradesConfig.ChatEntry(5, "[Hot]", 0));
+        config.grades.get("vip").contexts.put("world=minecraft:the_nether", nether);
+        GradesConfig.GradeScoped server = new GradesConfig.GradeScoped();
+        server.prefixes.add(new GradesConfig.ChatEntry(5, "[Lobby]", 0));
+        config.grades.get("vip").contexts.put("server=lobby", server);
+        GradesConfig.UserScoped end = new GradesConfig.UserScoped();
+        end.refused.add("vip");
+        config.userContexts.put(PLAYER, new java.util.HashMap<>(java.util.Map.of("world=minecraft:the_end", end)));
+
+        ExportPlan plan = ExportPlan.of(config, "");
+
+        ExportPlan.Group vip = group(plan, "vip");
+        assertEquals(List.of(new ScopedGrant("world=minecraft:the_nether", ScopedGrant.PARENT, "base"),
+                new ScopedGrant("world=minecraft:the_nether", ScopedGrant.REFUSED, "staff")), vip.scoped());
+        assertEquals(List.of(new ChatGrant(false, 5, "[Hot]", 0, "world=minecraft:the_nether")), vip.chat(),
+                "a prefix limited to a server has no LuckPerms form written here");
+        assertEquals(List.of(new ScopedGrant("world=minecraft:the_end", ScopedGrant.REFUSED, "vip")),
+                plan.players().get(0).scoped());
+
+        GradesConfig back = plan.asConfig();
+        UUID player = UUID.fromString(PLAYER);
+        back.userGrades.put(PLAYER, new ArrayList<>(List.of("vip")));
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(back, player, "customperm.command.home", null,
+                com.arcadia.customperm.perm.Contexts.world("minecraft:the_nether")), "the parent in the Nether came back");
+        assertEquals(List.of("[Hot]"), PermissionResolver.prefixes(back, player, null,
+                com.arcadia.customperm.perm.Contexts.world("minecraft:the_nether")));
     }
 
     // --- tracks ---
