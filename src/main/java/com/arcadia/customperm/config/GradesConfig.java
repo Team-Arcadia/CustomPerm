@@ -255,6 +255,35 @@ public class GradesConfig {
         public Map<String, String> meta = new java.util.TreeMap<>();
         /** Meta key -> when it expires. */
         public Map<String, Long> metaExpiries = new HashMap<>();
+        /**
+         * A readable name shown in place of the grade's name by the pages and the listings, like a LuckPerms
+         * display name; {@code null} for none. Never a key: commands, files and other grades still name the
+         * grade by its name.
+         */
+        public String displayName;
+
+        /** {@code Very Important (vip)} when the grade has a display name, {@code vip} otherwise. */
+        public String label(String id) {
+            return displayName == null ? id : displayName + " (" + id + ")";
+        }
+    }
+
+    /** Longest display name kept: enough for a title, short enough for a list row. */
+    public static final int DISPLAY_NAME_MAX = 48;
+
+    /**
+     * Why {@code text} cannot be a display name, or {@code null} when it can. Blank is not a problem here:
+     * it means none, and callers treat it as clearing.
+     */
+    public static String displayNameProblem(String text) {
+        String clean = text.strip();
+        if (clean.length() > DISPLAY_NAME_MAX) {
+            return "A display name is at most " + DISPLAY_NAME_MAX + " characters.";
+        }
+        if (clean.chars().anyMatch(Character::isISOControl)) {
+            return "A display name cannot hold a line break or another control character.";
+        }
+        return null;
     }
 
     public void normalize() {
@@ -300,6 +329,10 @@ public class GradesConfig {
                 scope.refusedExpiries.remove(g.name);
             });
             g.contexts.values().removeIf(Scoped::isEmpty);
+            if (g.displayName != null) {
+                g.displayName = g.displayName.strip();
+                if (g.displayName.isEmpty()) g.displayName = null;
+            }
         }
         normalizeUserGrades(userGrades);
         if (userDeniedGrades == null) userDeniedGrades = new HashMap<>();

@@ -86,6 +86,15 @@ public final class LuckPermsTestSupport {
         });
     }
 
+    /** Gives a group a display name for {@code seconds}: the editor sets display names for good only. */
+    public static void addTemporaryDisplayName(String group, String text, long seconds) {
+        await(api().getGroupManager().loadGroup(group)).ifPresent(loaded -> {
+            loaded.data().add(net.luckperms.api.node.types.DisplayNameNode.builder(text)
+                    .expiry(java.time.Duration.ofSeconds(seconds)).build());
+            await(api().getGroupManager().saveGroup(loaded));
+        });
+    }
+
     /** Removes every own node of a group with one of these keys, whatever its value. */
     public static void clearGroupNodes(String group, Collection<String> nodes) {
         await(api().getGroupManager().loadGroup(group)).ifPresent(loaded -> {

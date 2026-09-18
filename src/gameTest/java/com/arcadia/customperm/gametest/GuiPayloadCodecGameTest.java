@@ -78,7 +78,7 @@ public class GuiPayloadCodecGameTest {
                         List.of("heal", "tp"))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0, true), new GradesData(List.of(
-                        new GradesData.Grade(new GradesData.Header("vip", -5, List.of(new ChatLine(false, 10, "&6[VIP] ", 3600L, ""), new ChatLine(true, -3, " &7*", 0L, "world=minecraft:the_nether"))),
+                        new GradesData.Grade(new GradesData.Header("vip", "Very Important", -5, List.of(new ChatLine(false, 10, "&6[VIP] ", 3600L, ""), new ChatLine(true, -3, " &7*", 0L, "world=minecraft:the_nether"))),
                                 new GradesData.Inheritance(List.of("base", "extra"), List.of("locked")),
                                 List.of("customperm.command.fly"), List.of("customperm.command.op"),
                                 new GradesData.Members(

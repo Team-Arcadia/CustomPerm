@@ -109,6 +109,7 @@ public final class ImportAdmin {
                 target = new GradesConfig.Grade();
                 target.name = source.name();
                 target.weight = source.weight();
+                target.displayName = shown(source);
                 grades().grades.put(source.name(), target);
             } else if (replace) {
                 target.permissions.clear();
@@ -121,14 +122,17 @@ public final class ImportAdmin {
                 target.parentExpiries.clear();
                 target.deniedParentExpiries.clear();
                 target.weight = source.weight();
+                target.displayName = shown(source);
                 target.prefixes.clear();
                 target.suffixes.clear();
                 target.meta.clear();
                 target.metaExpiries.clear();
             } else {
                 // A grade that already exists keeps its weight: the number an admin set by hand here is
-                // a decision, and silently taking the one from LuckPerms would undo it.
+                // a decision, and silently taking the one from LuckPerms would undo it. A display name the
+                // same: taken only where there is none.
                 merged.add(source.name());
+                if (target.displayName == null) target.displayName = shown(source);
             }
             // A temporary node keeps its expiry only when the import adds it: one already here for good stays so.
             for (String node : source.allow()) {
@@ -231,7 +235,7 @@ public final class ImportAdmin {
                     + ". Import with replace to take LuckPerms' order.");
         }
         if (!merged.isEmpty()) {
-            result = result.note("Added to grades that already existed, keeping their weight: "
+            result = result.note("Added to grades that already existed, keeping their weight and display name: "
                     + String.join(", ", merged) + ".");
         }
         if (!refused.isEmpty()) {
@@ -247,6 +251,11 @@ public final class ImportAdmin {
     /** Records the expiry of an entry the import just added to one player, when it has one. */
     private static void timed(Map<String, Map<String, Long>> byUser, String uuid, String key, Long at) {
         if (at != null) byUser.computeIfAbsent(uuid, k -> new HashMap<>()).put(key, at);
+    }
+
+    /** The display name a grade is given, {@code null} for none; the reader only keeps ones that are valid. */
+    private static String shown(ImportPlan.Grade source) {
+        return source.displayName().isBlank() ? null : source.displayName().strip();
     }
 
     /** Adds what is not there yet, with its expiry when it has one; an entry already here keeps its own. */

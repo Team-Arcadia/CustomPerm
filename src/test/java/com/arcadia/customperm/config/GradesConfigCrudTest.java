@@ -160,4 +160,42 @@ class GradesConfigCrudTest {
         assertTrue(cfg.grades.keySet().contains("mod"));
         assertTrue(cfg.grades.keySet().contains("vip"));
     }
+
+    // --- display names ---
+
+    @Test
+    void aDisplayNameIsShownBesideTheNameNeverInsteadOfIt() {
+        GradesConfig.Grade grade = new GradesConfig.Grade();
+        assertEquals("vip", grade.label("vip"), "no display name: the name alone");
+        grade.displayName = "Very Important";
+        assertEquals("Very Important (vip)", grade.label("vip"));
+    }
+
+    @Test
+    void aDisplayNameIsBoundedAndSingleLine() {
+        assertNull(GradesConfig.displayNameProblem("Very Important"));
+        assertNull(GradesConfig.displayNameProblem("  "), "blank means none, callers clear");
+        assertNull(GradesConfig.displayNameProblem("x".repeat(GradesConfig.DISPLAY_NAME_MAX)));
+        assertNotNull(GradesConfig.displayNameProblem("x".repeat(GradesConfig.DISPLAY_NAME_MAX + 1)));
+        assertNotNull(GradesConfig.displayNameProblem("two\nlines"));
+        assertNotNull(GradesConfig.displayNameProblem("tab\there"));
+    }
+
+    @Test
+    void aHandEditedDisplayNameIsTrimmedAndABlankOneIsNone() {
+        GradesConfig cfg = new GradesConfig();
+        GradesConfig.Grade padded = new GradesConfig.Grade();
+        padded.name = "vip";
+        padded.displayName = "  Very Important ";
+        GradesConfig.Grade blank = new GradesConfig.Grade();
+        blank.name = "base";
+        blank.displayName = "   ";
+        cfg.grades.put("vip", padded);
+        cfg.grades.put("base", blank);
+
+        cfg.normalize();
+
+        assertEquals("Very Important", cfg.grades.get("vip").displayName);
+        assertNull(cfg.grades.get("base").displayName);
+    }
 }

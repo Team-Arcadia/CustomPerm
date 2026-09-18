@@ -74,6 +74,7 @@ public class LuckPermsExportGameTest {
             apply(LpEditOp.GROUP_PERM_ADD, VIP, "essentials.fly", "true", "", "0");
             apply(LpEditOp.GROUP_PERM_ADD, VIP, "customperm.command.fly", "false", "", "0");
             apply(LpEditOp.GROUP_PERM_ADD, VIP, "customperm.command.kick", "true", "", "0");
+            apply(LpEditOp.GROUP_DISPLAYNAME_SET, VIP, "Old Name");
 
             GradesConfig config = new GradesConfig();
             grade(config, BASE, 0, List.of(), Set.of("customperm.command.time"), Set.of("customperm.command.ban"));
@@ -88,6 +89,8 @@ public class LuckPermsExportGameTest {
                     com.arcadia.customperm.perm.Expiry.now() - 1);
             grade(config, VIP, 42, List.of(BASE), Set.of("customperm.command.fly"), Set.of());
             config.grades.get(VIP).parentExpiries.put(BASE, com.arcadia.customperm.perm.Expiry.now() + 3600);
+            config.grades.get(VIP).displayName = "Very Important";
+            config.grades.get(BASE).displayName = "Base Rank";
             grade(config, "cp_X_Bad", 0, List.of(), Set.of(), Set.of());
             config.userGrades.put(USER.toString(), new ArrayList<>(List.of(VIP)));
             config.userPermissions.put(USER.toString(), new LinkedHashSet<>(Set.of("customperm.command.home")));
@@ -149,6 +152,9 @@ public class LuckPermsExportGameTest {
             expect(vip, "customperm.command.fly=false", "Adding must keep LuckPerms' value");
             expect(vip, "customperm.command.kick=true", "Adding must keep what LuckPerms holds");
             expect(vip, "prefix.10.[VIP]=true", "Adding must keep the prefix");
+            expect(vip, "displayname.Old Name=true", "Adding must keep the display name LuckPerms has");
+            if (vip.contains("displayname.Very Important=true")) fail("Adding must not write a second display name: " + vip);
+            expect(base, "displayname.Base Rank=true", "A grade's display name must arrive on a group that had none");
             expect(LuckPermsTestSupport.groupNodes(ExportPlan.LP_DEFAULT), "group." + BASE + "=true",
                     "The default grade must become a parent of the default group");
             List<String> user = LuckPermsTestSupport.userNodes(USER);
@@ -167,6 +173,8 @@ public class LuckPermsExportGameTest {
             if (vip.contains("customperm.command.kick=true")) fail("Replacing must clear the customperm nodes: " + vip);
             expect(vip, "essentials.fly=true", "Replacing must keep the nodes of other mods");
             expect(vip, "prefix.10.[VIP]=true", "Replacing must keep a prefix the grade does not set");
+            expect(vip, "displayname.Very Important=true", "Replacing must write the grade's display name");
+            if (vip.contains("displayname.Old Name=true")) fail("Replacing must take LuckPerms' display name away: " + vip);
             expect(vip, "group." + BASE + "=true@expiring", "Replacing must write the parent back, still temporary");
             expect(LuckPermsTestSupport.userNodes(USER), "group.default=true",
                     "Replacing must leave a player in the default group");

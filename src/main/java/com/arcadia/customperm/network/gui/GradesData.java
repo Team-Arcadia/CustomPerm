@@ -73,6 +73,11 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
             return header.weight();
         }
 
+        /** The name shown for the grade: its display name, or its name when it has none. */
+        public String shown() {
+            return header.displayName().isEmpty() ? header.name() : header.displayName();
+        }
+
         /** Its prefixes then its suffixes, highest priority first, raw text with codes. */
         public List<ChatLine> chat() {
             return header.chat();
@@ -132,13 +137,22 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
         }
     }
 
-    /** A grade's own scalars: its name, its weight, and the prefixes and suffixes it gives. */
-    public record Header(String name, int weight, List<ChatLine> chat) {
+    /**
+     * A grade's own scalars: its name, its display name (empty for none), its weight, and the prefixes and
+     * suffixes it gives.
+     */
+    public record Header(String name, String displayName, int weight, List<ChatLine> chat) {
         public static final StreamCodec<ByteBuf, Header> CODEC = StreamCodec.composite(
                 GuiCodecs.TEXT, Header::name,
+                GuiCodecs.TEXT, Header::displayName,
                 ByteBufCodecs.VAR_INT, Header::weight,
                 ChatLine.LIST, Header::chat,
                 Header::new);
+
+        /** One without a display name. */
+        public Header(String name, int weight, List<ChatLine> chat) {
+            this(name, "", weight, chat);
+        }
     }
 
     /** What a grade inherits, and what it refuses to inherit. */

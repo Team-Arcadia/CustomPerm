@@ -412,6 +412,15 @@ public class AdminInterfaceGameTest {
                 fail("The refreshed page must list both players with their state: " + row);
 
             owner.clearReceived();
+            gradeAct(owner, GuiAction.GRADE_DISPLAYNAME_SET, grade, " Grade Page ");
+            expectResult(owner, "OK: cp_i_grade is now shown as Grade Page");
+            pages = owner.payloads(GuiPagePayload.class);
+            row = pages.isEmpty() || !(pages.get(pages.size() - 1).data() instanceof GradesData named) ? null
+                    : named.grades().stream().filter(g -> g.name().equals(grade)).findFirst().orElse(null);
+            if (row == null || !row.header().displayName().equals("Grade Page") || !row.shown().equals("Grade Page"))
+                fail("The refreshed page must carry the display name, the grade keeping its name: " + row);
+
+            owner.clearReceived();
             gradeAct(owner, GuiAction.GRADE_UNASSIGN, offline.getId().toString(), grade, "");
             gradeAct(owner, GuiAction.GRADE_UNASSIGN, "not-a-uuid", grade, "");
             owner.type("customperm grade adddeny cp_i_grade customperm.command.seed");

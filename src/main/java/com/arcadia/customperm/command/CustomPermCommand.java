@@ -73,6 +73,7 @@ import java.util.stream.Collectors;
  *                     addperm|removeperm <grade> <node>
  *                     adddeny|removedeny <grade> <node>   # most specific entry wins, DENY on a tie
  *                     weight <grade> <weight>             # breaks ties at the same specificity
+ *                     displayname <grade> [set <text> | clear]  # shown by pages and listings, never a key
  *                     parent add|adddeny <grade> <parent> [duration] [world=<dim>]  # inherit, or refuse wherever inherited
  *                     parent remove|removedeny <grade> <parent> [world=<dim>]
  *                     parent list <grade>
@@ -453,6 +454,17 @@ public class CustomPermCommand {
                             .suggests(SUGGEST_GRADES)
                             .then(Commands.argument("weight", IntegerArgumentType.integer())
                                 .executes(CustomPermCommand::gradeWeight))))
+                    .then(Commands.literal("displayname").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("grade", StringArgumentType.word())
+                            .suggests(SUGGEST_GRADES)
+                            .executes(CustomPermCommand::gradeDisplayNameShow)
+                            .then(Commands.literal("set")
+                                .then(Commands.argument("text", StringArgumentType.greedyString())
+                                    .executes(ctx -> report(ctx, GradeAdmin.setDisplayName(
+                                        StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "text"))))))
+                            .then(Commands.literal("clear")
+                                .executes(ctx -> report(ctx, GradeAdmin.setDisplayName(
+                                    StringArgumentType.getString(ctx, "grade"), ""))))))
                     .then(gradeChat("prefix", false))
                     .then(gradeChat("suffix", true))
                     .then(metaEdits(Commands.argument("grade", StringArgumentType.word()).suggests(SUGGEST_GRADES),
@@ -1397,6 +1409,18 @@ public class CustomPermCommand {
             StringArgumentType.getString(ctx, "grade"), context)));
     }
 
+    private static int gradeDisplayNameShow(CommandContext<CommandSourceStack> ctx) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        String name = StringArgumentType.getString(ctx, "grade");
+        GradesConfig.Grade grade = CustomPerm.configManager.getGrades().grades.get(name);
+        if (grade == null) return report(ctx, AdminResult.fail("No such grade: " + name));
+        String line = grade.displayName == null ? name + " has no display name: it is shown by its name."
+            : name + " is shown as " + grade.displayName;
+        ctx.getSource().sendSuccess(() -> Component.literal(line), false);
+        return 1;
+    }
+
     private static int gradeList(CommandContext<CommandSourceStack> ctx) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return report(ctx, refusal);
@@ -1408,7 +1432,8 @@ public class CustomPermCommand {
             String list = defined.entrySet().stream()
                 .sorted(Comparator.comparingInt((Map.Entry<String, GradesConfig.Grade> e) -> -e.getValue().weight)
                     .thenComparing(Map.Entry::getKey))
-                .map(e -> e.getValue().weight == 0 ? e.getKey() : e.getKey() + " (weight " + e.getValue().weight + ")")
+                .map(e -> e.getValue().label(e.getKey())
+                    + (e.getValue().weight == 0 ? "" : " (weight " + e.getValue().weight + ")"))
                 .collect(Collectors.joining(", "));
             ctx.getSource().sendSuccess(() -> Component.literal("Grades: " + list), false);
         }
@@ -1472,9 +1497,11 @@ public class CustomPermCommand {
         List<String> assigned = CustomPerm.configManager.getGrades().userGrades
             .getOrDefault(uuid.toString(), List.of());
         List<String> refused = UserAdmin.refusedGrades(uuid);
-        ctx.getSource().sendSuccess(() -> Component.literal(name + " — grades: " + join(timed(uuid, "grade", assigned))), false);
+        ctx.getSource().sendSuccess(() -> Component.literal(name + " — grades: "
+            + join(timedGrades(uuid, "grade", assigned))), false);
         if (!refused.isEmpty()) {
-            ctx.getSource().sendSuccess(() -> Component.literal("  refuses: " + join(timed(uuid, "refuse", refused))), false);
+            ctx.getSource().sendSuccess(() -> Component.literal("  refuses: "
+                + join(timedGrades(uuid, "refuse", refused))), false);
         }
         ctx.getSource().sendSuccess(() -> Component.literal("  own allow: "
             + join(timed(uuid, "allow", UserAdmin.nodes(uuid, false)))), false);
@@ -1503,6 +1530,15 @@ public class CustomPermCommand {
         return entries.stream().map(entry -> {
             long left = UserAdmin.remaining(uuid, kind, entry);
             return left > 0 ? entry + " (" + Expiry.describe(left) + " left)" : entry;
+        }).toList();
+    }
+
+    /** {@link #timed} for grades, each under its display name when it has one. */
+    private static List<String> timedGrades(java.util.UUID uuid, String kind, List<String> grades) {
+        return grades.stream().map(grade -> {
+            long left = UserAdmin.remaining(uuid, kind, grade);
+            String label = GradeAdmin.label(grade);
+            return left > 0 ? label + " (" + Expiry.describe(left) + " left)" : label;
         }).toList();
     }
 
@@ -1548,7 +1584,8 @@ public class CustomPermCommand {
             return 1;
         }
         for (String name : names) {
-            String rungs = com.arcadia.customperm.admin.TrackAdmin.describe(com.arcadia.customperm.admin.TrackAdmin.rungs(name));
+            String rungs = com.arcadia.customperm.admin.TrackAdmin.describe(com.arcadia.customperm.admin.TrackAdmin.rungs(name)
+                .stream().map(GradeAdmin::label).toList());
             ctx.getSource().sendSuccess(() -> Component.literal(name + ": " + rungs), false);
         }
         return 1;

@@ -125,7 +125,8 @@ public final class GuiSnapshots {
             assigned.sort(java.util.Comparator.comparing(GradesData.Member::name, String.CASE_INSENSITIVE_ORDER));
             List<GradesData.Member> refusing = refusers.getOrDefault(name, new ArrayList<>());
             refusing.sort(java.util.Comparator.comparing(GradesData.Member::name, String.CASE_INSENSITIVE_ORDER));
-            grades.add(new GradesData.Grade(new GradesData.Header(name, grade.weight,
+            grades.add(new GradesData.Grade(new GradesData.Header(name,
+                    grade.displayName == null ? "" : grade.displayName, grade.weight,
                     ChatLine.of(grade.prefixes, grade.suffixes, grade.contexts)),
                     new GradesData.Inheritance(List.copyOf(grade.parents), List.copyOf(grade.deniedParents)),
                     new TreeSet<>(grade.permissions).stream().limit(GradesData.NODES_MAX).toList(),

@@ -51,6 +51,22 @@ class ExportPlanTest {
     }
 
     @Test
+    void aDisplayNameIsExportedAndCountedAndAGradeWithoutOneWritesNone() {
+        GradesConfig config = new GradesConfig();
+        grade(config, "base", 0, List.of(), List.of(), Set.of(), Set.of());
+        grade(config, "vip", 0, List.of(), List.of(), Set.of(), Set.of());
+        config.grades.get("vip").displayName = "Very Important";
+
+        ExportPlan plan = ExportPlan.of(config, "");
+
+        assertEquals("Very Important", group(plan, "vip").displayName());
+        assertEquals("", group(plan, "base").displayName());
+        assertEquals(1, plan.entries(), "the display name is the one entry written");
+        assertEquals("Very Important", plan.asConfig().grades.get("vip").displayName);
+        assertNull(plan.asConfig().grades.get("base").displayName);
+    }
+
+    @Test
     void aTemporaryParentIsExportedWithItsExpiryAndAnExpiredOneIsNot() {
         GradesConfig config = new GradesConfig();
         grade(config, "base", 0, List.of(), List.of(), Set.of(), Set.of());

@@ -17,6 +17,7 @@ import net.luckperms.api.model.user.User;
 import net.luckperms.api.node.Node;
 import net.luckperms.api.node.NodeType;
 import net.luckperms.api.node.types.ChatMetaNode;
+import net.luckperms.api.node.types.DisplayNameNode;
 import net.luckperms.api.node.types.InheritanceNode;
 import net.luckperms.api.node.types.PrefixNode;
 import net.luckperms.api.node.types.SuffixNode;
@@ -109,6 +110,7 @@ public final class LuckPermsExport {
                     group.data().clear(NodeType.WEIGHT::matches);
                     if (source.weight() != 0) group.data().add(WeightNode.builder(source.weight()).build());
                 }
+                writeDisplayName(group, source.displayName(), replace);
                 for (String parent : source.parents()) {
                     add(group, timed(InheritanceNode.builder(parent), source.expiries().get("grade:" + parent)), kept);
                 }
@@ -304,6 +306,18 @@ public final class LuckPermsExport {
      * contexts, temporary entries and the nodes other mods read stay, those being what LuckPerms is kept for. A player keeps the default group,
      * which LuckPerms would otherwise have to give back on their next login.
      */
+    /**
+     * The group's display name, the one that applies everywhere. Adding keeps one LuckPerms already has, as the
+     * weight: it is what was chosen there. Replacing writes this side's, or none. A display name LuckPerms keeps
+     * for a context is left alone either way: this side has none to put in its place.
+     */
+    private static void writeDisplayName(Group group, String displayName, boolean replace) {
+        boolean present = group.getNodes(NodeType.DISPLAY_NAME).stream().anyMatch(node -> node.getContexts().isEmpty());
+        if (present && !replace) return;
+        group.data().clear(node -> NodeType.DISPLAY_NAME.matches(node) && node.getContexts().isEmpty());
+        if (!displayName.isEmpty()) group.data().add(DisplayNameNode.builder(displayName).build());
+    }
+
     private static void clearDecided(PermissionHolder holder, boolean group) {
         List<Node> doomed = holder.getNodes().stream()
                 .filter(LuckPermsExport::decidedHere)

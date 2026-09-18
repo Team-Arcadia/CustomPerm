@@ -102,6 +102,7 @@ public class LuckPermsImportGameTest {
             apply(LpEditOp.USER_PARENT_ADD, USER.toString(), VIP, "", "0");
             apply(LpEditOp.USER_PARENT_ADD, USER.toString(), BASE, "", "7200");
             LuckPermsTestSupport.addTemporaryParent(BASE, "default", 3600);
+            LuckPermsTestSupport.addTemporaryDisplayName(BASE, "Fleeting", 3600);
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "minecraft.command.weather", "true", "", "0");
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "customperm.command.seed", "false", "dimension-type=the_end", "0");
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "customperm.command.time", "true", "dimension-type=the_nether", "3600");
@@ -128,6 +129,10 @@ public class LuckPermsImportGameTest {
 
             ImportPlan.Grade vip = grade(plan, VIP);
             if (vip.weight() != 42) fail("The group weight must arrive as the grade weight: " + vip);
+            if (!vip.displayName().equals("Very Important"))
+                fail("The group display name must arrive as the grade display name: " + vip);
+            if (!base.displayName().isEmpty())
+                fail("A temporary display name must be left behind, a grade's has no expiry: " + base);
             if (!vip.parents().equals(List.of(BASE))) fail("The group parent must arrive as a grade parent: " + vip);
             if (!vip.allow().equals(java.util.Set.of("customperm.command.kick")))
                 fail("A temporary node must arrive, and a contextual one not as a global node: " + vip);
@@ -197,6 +202,10 @@ public class LuckPermsImportGameTest {
             String report = String.join(" | ", plan.report());
             if (!report.contains("left behind")) fail("The report must say what it leaves behind: " + report);
             if (!report.contains("save's name")) fail("The report must say why LuckPerms' world context is left: " + report);
+            if (!report.contains("temporary display name"))
+                fail("The report must say why a temporary display name is left: " + report);
+            if (report.contains("Display names have no equivalent"))
+                fail("A weight or a display name is carried, not left behind as having no equivalent: " + report);
 
             // Nothing is written until it is applied.
             if (grades.grades.containsKey(BASE)) fail("Reading must not write anything.");
@@ -210,6 +219,8 @@ public class LuckPermsImportGameTest {
                 fail("The meta was not written: " + grades.grades.get(VIP).meta + " " + grades.userMeta);
             if (grades.grades.get(VIP).weight != 42 || !grades.grades.get(VIP).parents.contains(BASE))
                 fail("The weight and the parent were not written.");
+            if (!"Very Important".equals(grades.grades.get(VIP).displayName) || grades.grades.get(BASE).displayName != null)
+                fail("The display name was not written, or a temporary one was: " + grades.grades.get(VIP).displayName);
             if (grades.grades.get(VIP).prefixes.size() != 2 || !"[VIP]".equals(grades.grades.get(VIP).prefixes.get(0).text))
                 fail("The prefixes were not written, highest priority first.");
             if (!grades.grades.get(BASE).deniedPermissions.contains("customperm.command.ban"))

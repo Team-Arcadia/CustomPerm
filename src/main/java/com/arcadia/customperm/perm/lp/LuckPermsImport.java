@@ -17,6 +17,7 @@ import net.luckperms.api.node.Node;
 import net.luckperms.api.node.NodeType;
 import net.luckperms.api.node.matcher.NodeMatcher;
 import net.luckperms.api.node.types.ChatMetaNode;
+import net.luckperms.api.node.types.DisplayNameNode;
 import net.luckperms.api.node.types.InheritanceNode;
 import net.luckperms.api.node.types.PrefixNode;
 
@@ -102,9 +103,15 @@ public final class LuckPermsImport {
             Metas meta = new Metas();
             readNodes(group.getNodes(), plan, exposeCommands, parents, deniedParents, allow, deny, chat, expiries,
                     scoped, meta, true, "group " + group.getName());
+            // The one that applies everywhere and for good: readNodes reports the others as left behind.
+            String displayName = group.getNodes(NodeType.DISPLAY_NAME).stream()
+                    .filter(node -> node.getContexts().isEmpty() && !node.hasExpiry())
+                    .map(DisplayNameNode::getDisplayName)
+                    .filter(LuckPermsImport::importable)
+                    .findFirst().orElse("");
             plan.grade(new ImportPlan.Grade(group.getName(), group.getWeight().orElse(0),
                     List.copyOf(parents), List.copyOf(deniedParents), Set.copyOf(allow), Set.copyOf(deny),
-                    chat.grants(), Map.copyOf(expiries), ScopedGrant.merged(scoped), meta.grants()));
+                    chat.grants(), Map.copyOf(expiries), ScopedGrant.merged(scoped), meta.grants(), displayName));
         }
         return null;
     }
@@ -280,9 +287,15 @@ public final class LuckPermsImport {
             if (at != null) plan.timed();
             return;
         }
+        if (node instanceof net.luckperms.api.node.types.WeightNode || node instanceof DisplayNameNode) {
+            plan.other();
+            plan.note("A weight or a display name limited to a context is not imported: a grade has one of each "
+                    + "everywhere. " + holder + ".");
+            return;
+        }
         if (!NodeType.PERMISSION.matches(node)) {
             plan.other();
-            plan.note("Display names have no equivalent and are not imported: " + holder + ".");
+            plan.note("Regular expression permissions have no equivalent and are not imported: " + holder + ".");
             return;
         }
         String translated = ImportPlan.translate(node.getKey(), declared);
@@ -297,6 +310,32 @@ public final class LuckPermsImport {
         if (at != null) plan.timed();
         String command = ImportPlan.exposedCommand(node.getKey());
         if (exposeCommands && command != null && node.getValue()) plan.expose(command);
+    }
+
+    /**
+     * Counts a display name that applies everywhere: {@link #readGroups} carries it. One that expires, one on a
+     * player, or one this side would refuse is left behind and said.
+     */
+    private static void readDisplayName(DisplayNameNode node, Long at, ImportPlan.Builder plan, boolean group,
+                                        String holder) {
+        if (!group) {
+            plan.other();
+            plan.note("A display name on a player is not imported: only grades have one. " + holder + ".");
+        } else if (at != null) {
+            plan.other();
+            plan.note("A temporary display name is not imported: a grade's display name has no expiry. " + holder + ".");
+        } else if (!importable(node.getDisplayName())) {
+            plan.other();
+            plan.note("Display name of " + holder + " not imported: "
+                    + com.arcadia.customperm.config.GradesConfig.displayNameProblem(node.getDisplayName()));
+        } else {
+            plan.imported(false);
+        }
+    }
+
+    /** A display name this side would accept from its own commands; blank means none, so it is not one. */
+    private static boolean importable(String displayName) {
+        return !displayName.isBlank() && com.arcadia.customperm.config.GradesConfig.displayNameProblem(displayName) == null;
     }
 
     /** One meta node: kept unless its key or value cannot be stored here, or another value of its key wins. */
@@ -447,9 +486,19 @@ public final class LuckPermsImport {
                 if (at != null) plan.timed();
                 continue;
             }
+            if (node instanceof net.luckperms.api.node.types.WeightNode) {
+                // A group's weight is read by readGroups; a user's means nothing to LuckPerms either.
+                if (group) plan.imported(false);
+                else plan.other();
+                continue;
+            }
+            if (node instanceof DisplayNameNode display) {
+                readDisplayName(display, at, plan, group, holder);
+                continue;
+            }
             if (!NodeType.PERMISSION.matches(node)) {
                 plan.other();
-                plan.note("Display names have no equivalent and are not imported.");
+                plan.note("Regular expression permissions have no equivalent and are not imported.");
                 continue;
             }
             String translated = ImportPlan.translate(node.getKey(), declared);

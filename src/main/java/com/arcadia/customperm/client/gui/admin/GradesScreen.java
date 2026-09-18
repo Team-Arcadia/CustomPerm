@@ -53,6 +53,8 @@ public final class GradesScreen extends AdminScreen {
     private static final int GAP = 6;
     /** Width of the weight box in the header: enough for a minus sign and four digits. */
     private static final int WEIGHT_FIELD = 40;
+    /** Widest the display name box grows in the header; it gives way to the grade's name on a narrow panel. */
+    private static final int DISPLAY_FIELD = 110;
     /** Width of the duration box beside a node or a player name: enough for "1d12h" and its hint cut short. */
     private static final int DURATION_FIELD = 64;
     /** Width of the world box beside it: enough for "the_nether". */
@@ -89,6 +91,9 @@ public final class GradesScreen extends AdminScreen {
     private final CpList<MemberRow> memberList;
     private final CpEditBox playerField;
     private final CpEditBox weightField;
+    private final CpEditBox displayField;
+    /** Width the display name box took in the header at the last layout, which the title is clipped around. */
+    private int displayW;
     private final ChatFields chat;
     private final MetaFields meta;
     /** How long what is added lasts, shared by the node and player fields; empty for good. */
@@ -111,6 +116,13 @@ public final class GradesScreen extends AdminScreen {
         this.weightField = new CpEditBox(Component.literal("Grade weight"), 7)
                 .hint(Component.literal("weight"))
                 .onSubmit(this::applyWeight);
+        this.displayField = new CpEditBox(Component.literal("Display name"),
+                com.arcadia.customperm.config.GradesConfig.DISPLAY_NAME_MAX)
+                .hint(Component.literal("display name"))
+                .onSubmit(this::applyDisplayName);
+        displayField.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal(
+                "Shown here and in the listings in place of the grade's name, which commands and files keep using. "
+                        + "Empty: none.")));
         this.chat = new ChatFields(this::rebuild);
         this.meta = new MetaFields(this::rebuild);
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
@@ -122,7 +134,7 @@ public final class GradesScreen extends AdminScreen {
                 .onChange(text -> refilter());
         this.gradeList = new CpList<GradesData.Grade>(Component.literal("Grades"), ROW)
                 .renderer(this::renderGrade)
-                .label(g -> g.name() + ", weight " + g.weight() + ", " + g.allow().size() + " allowed, "
+                .label(g -> g.shown() + (g.shown().equals(g.name()) ? "" : ", grade " + g.name()) + ", weight " + g.weight() + ", " + g.allow().size() + " allowed, "
                         + g.deny().size() + " denied, " + g.members().size() + " players")
                 .identity(GradesData.Grade::name)
                 .emptyText("No grade yet: create one below.")
@@ -219,7 +231,8 @@ public final class GradesScreen extends AdminScreen {
         String query = search.getValue().trim().toLowerCase(Locale.ROOT);
         GradesData.Grade before = gradeList.getSelected();
         gradeList.setItems(data.grades().stream()
-                .filter(g -> query.isEmpty() || g.name().toLowerCase(Locale.ROOT).contains(query))
+                .filter(g -> query.isEmpty() || g.name().toLowerCase(Locale.ROOT).contains(query)
+                        || g.header().displayName().toLowerCase(Locale.ROOT).contains(query))
                 .toList());
         if (layout != null && !Objects.equals(before == null ? null : before.name(),
                 gradeList.getSelected() == null ? null : gradeList.getSelected().name())) {
@@ -252,6 +265,7 @@ public final class GradesScreen extends AdminScreen {
         memberList.setItems(members);
         // The box shows the weight in force, so submitting it unchanged is a no-op rather than a reset.
         weightField.setValue(grade == null ? "" : String.valueOf(grade.weight()));
+        displayField.setValue(grade == null ? "" : grade.header().displayName());
         chat.fill(grade == null ? List.of() : grade.chat());
         meta.fill(grade == null ? List.of() : grade.meta());
     }
@@ -328,6 +342,13 @@ public final class GradesScreen extends AdminScreen {
         // The box shows the weight in force. Set here rather than only when the selection changes: the first
         // selection after the page opens left it empty, and a placed widget must not disagree with the data.
         if (!weightField.isFocused()) weightField.setValue(String.valueOf(grade.weight()));
+        // Whatever the header has left beside the name, up to a cap: the name keeps at least as much.
+        int headerLeft = in.w() - FIELD - 4 - defaultW - 4 - WEIGHT_FIELD - 4;
+        displayW = Math.min(DISPLAY_FIELD, headerLeft / 2);
+        addRenderableWidget(displayField.at(new Rect(in.right() - FIELD - 4 - defaultW - 4 - WEIGHT_FIELD - 4 - displayW,
+                in.y(), displayW, FIELD)));
+        displayField.setEditable(editable);
+        if (!displayField.isFocused()) displayField.setValue(grade.header().displayName());
 
         Rect tabs = new Rect(in.x(), in.y() + 24, in.w(), FIELD);
         String nodesTab = "Nodes (" + (grade.allow().size() + grade.deny().size()) + ")";
@@ -546,6 +567,15 @@ public final class GradesScreen extends AdminScreen {
         act(GuiAction.GRADE_WEIGHT_SET, grade.name(), typed);
     }
 
+    /** Submits the display name box. Blank clears it: the grade is then shown by its name. */
+    private void applyDisplayName() {
+        GradesData.Grade grade = gradeList.getSelected();
+        if (grade == null) return;
+        String typed = displayField.getValue().strip();
+        if (typed.equals(grade.header().displayName())) return;
+        act(GuiAction.GRADE_DISPLAYNAME_SET, grade.name(), typed);
+    }
+
     private void addParent(String name) {
         GradesData.Grade grade = gradeList.getSelected();
         if (grade == null || name.isEmpty()) return;
@@ -677,7 +707,14 @@ public final class GradesScreen extends AdminScreen {
         if (!weight.isEmpty()) {
             Skin.text(g, font, weight, r.right() - cw - 14 - ww, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
         }
-        Skin.text(g, font, grade.name(), r.x() + 6, r.y() + (r.h() - 8) / 2, r.w() - cw - 26 - ww, Palette.TEXT);
+        int room = r.w() - cw - 26 - ww;
+        String shown = grade.shown();
+        Skin.text(g, font, shown, r.x() + 6, r.y() + (r.h() - 8) / 2, room, Palette.TEXT);
+        // The name after a display name, muted: it is what commands take, so it stays findable.
+        int sw = font.width(shown) + 4;
+        if (!shown.equals(grade.name()) && sw < room) {
+            Skin.text(g, font, grade.name(), r.x() + 6 + sw, r.y() + (r.h() - 8) / 2, room - sw, Palette.TEXT_MUTE);
+        }
     }
 
     private void renderParent(GuiGraphics g, Font font, ParentRow row, Rect r, boolean hovered, boolean selected) {
@@ -750,8 +787,9 @@ public final class GradesScreen extends AdminScreen {
             return;
         }
         boolean isDefault = grade.name().equals(data.defaultGrade());
-        int headerW = in.w() - FIELD - 10 - font.width("Default") - 26 - WEIGHT_FIELD - 4;
-        Skin.text(g, font, grade.name(), in.x(), in.y(), headerW, Palette.TEXT);
+        int headerW = in.w() - FIELD - 10 - font.width("Default") - 26 - WEIGHT_FIELD - 4 - displayW - 4;
+        String title = grade.shown().equals(grade.name()) ? grade.name() : grade.shown() + " (" + grade.name() + ")";
+        Skin.text(g, font, title, in.x(), in.y(), headerW, Palette.TEXT);
         // Player and node totals are on the tabs: keep this line short enough for the Default button beside it.
         // Ordered by what is said nowhere else on the page: the weight has its own box and the counts are
         // on the tabs, so they go last, where a narrow panel clips them.

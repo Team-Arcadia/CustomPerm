@@ -50,15 +50,17 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
      * One grade as the group it would become; {@code chat} holds its prefixes and suffixes, and
      * {@code expiries} holds its temporary entries keyed {@code allow:<node>}, {@code deny:<node>},
      * {@code grade:<parent>} or {@code refuse:<parent>}, and
-     * {@code scoped} its entries limited to a context, written with LuckPerms' contexts.
+     * {@code scoped} its entries limited to a context, written with LuckPerms' contexts. {@code displayName}
+     * is empty for none.
      */
     public record Group(String name, int weight, List<String> parents, List<String> deniedParents,
                         Set<String> allow, Set<String> deny, List<ChatGrant> chat,
-                        Map<String, Long> expiries, List<ScopedGrant> scoped, List<MetaGrant> meta) {
+                        Map<String, Long> expiries, List<ScopedGrant> scoped, List<MetaGrant> meta,
+                        String displayName) {
 
         int entries() {
             return parents.size() + deniedParents.size() + allow.size() + deny.size() + scoped.size() + chat.size()
-                    + meta.size();
+                    + meta.size() + (displayName.isEmpty() ? 0 : 1);
         }
     }
 
@@ -131,7 +133,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                             "grade " + name), Map.copyOf(expiries), worldOnly(ScopedGrant.of(grade.contexts, now),
                     exported, config, dropped, notes, "grade " + name),
                     metaExportable(MetaGrant.of(grade.meta, grade.metaExpiries, grade.contexts, now), dropped, notes,
-                            "grade " + name)));
+                            "grade " + name),
+                    grade.displayName == null ? "" : grade.displayName));
         }
 
         Set<String> holders = new TreeSet<>();
@@ -353,6 +356,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
             GradesConfig.Grade grade = new GradesConfig.Grade();
             grade.name = source.name();
             grade.weight = source.weight();
+            grade.displayName = source.displayName().isEmpty() ? null : source.displayName();
             grade.parents = new ArrayList<>(source.parents());
             grade.deniedParents = new ArrayList<>(source.deniedParents());
             grade.permissions = new HashSet<>(source.allow());

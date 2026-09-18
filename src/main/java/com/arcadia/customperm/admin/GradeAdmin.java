@@ -215,6 +215,39 @@ public final class GradeAdmin {
                 .note("Only breaks ties at the same specificity: an exact node in a lighter grade still wins.");
     }
 
+    /** How a listing names a grade: {@code Very Important (vip)}, or its name alone when it has no display name. */
+    public static String label(String gradeName) {
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        return grade == null ? gradeName : grade.label(gradeName);
+    }
+
+    /**
+     * Sets the name the pages and the listings show for a grade, or clears it when {@code text} is blank.
+     * Display only: the grade keeps its name everywhere it is looked up, so nothing is resent to players.
+     */
+    public static AdminResult setDisplayName(String gradeName, String text) {
+        AdminResult refusal = unavailable();
+        if (refusal != null) return refusal;
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        String problem = GradesConfig.displayNameProblem(text);
+        if (problem != null) return AdminResult.fail(problem);
+        String wanted = text.strip().isEmpty() ? null : text.strip();
+        if (java.util.Objects.equals(grade.displayName, wanted)) {
+            return AdminResult.ok(wanted == null ? gradeName + " has no display name — no change."
+                    : gradeName + " is already shown as " + wanted + " — no change.");
+        }
+        grade.displayName = wanted;
+        String warning = ConfigAdmin.persist();
+        if (wanted == null) return AdminResult.ok("Cleared the display name of " + gradeName).warn(warning);
+        AdminResult result = AdminResult.ok(gradeName + " is now shown as " + wanted).warn(warning);
+        // Not refused: LuckPerms allows it too. Said, since two rows reading the same are easy to mix up.
+        String twin = grades().grades.entrySet().stream()
+                .filter(e -> !e.getKey().equals(gradeName) && wanted.equalsIgnoreCase(e.getValue().displayName))
+                .map(Map.Entry::getKey).sorted().findFirst().orElse(null);
+        return twin == null ? result : result.note(twin + " is shown under the same name.");
+    }
+
     /**
      * Gives a grade a chat prefix or suffix at {@code priority}, for {@code seconds} or for good (0). The
      * highest priority a player reaches shows first; one already at that priority is replaced. Shown only
@@ -782,6 +815,7 @@ public final class GradeAdmin {
             g.deniedParentExpiries = new java.util.HashMap<>(grade.deniedParentExpiries);
             g.meta = new java.util.TreeMap<>(grade.meta);
             g.metaExpiries = new java.util.HashMap<>(grade.metaExpiries);
+            g.displayName = grade.displayName;
             copy.grades.put(name, g);
         });
         source.userGrades.forEach((uuid, list) -> copy.userGrades.put(uuid, new ArrayList<>(list)));

@@ -69,6 +69,8 @@ public enum GuiAction {
     GRADE_NODE_REMOVE(4, GuiArea.GRADES),
     /** {@code [grade, weight]} Sets the tie-break weight, which decides between grades at the same specificity. */
     GRADE_WEIGHT_SET(2, GuiArea.GRADES),
+    /** {@code [grade, text]} Sets the name pages and listings show for the grade; empty text clears it. */
+    GRADE_DISPLAYNAME_SET(2, GuiArea.GRADES),
     /**
      * {@code [grade, parent, duration, context]} Makes the grade inherit another; a cycle is refused. Empty
      * duration: for good; empty context: everywhere.

@@ -34,11 +34,19 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
      * One LuckPerms group as the grade it would become; {@code chat} holds its prefixes and suffixes.
      * {@code expiries} holds the temporary entries in epoch seconds, keyed {@code allow:<node>},
      * {@code deny:<node>}, {@code grade:<parent>} or {@code refuse:<parent>}, and {@code scoped} the nodes
-     * limited to a world.
+     * limited to a world. {@code displayName} is the group's display name, empty for none.
      */
     public record Grade(String name, int weight, List<String> parents, List<String> deniedParents,
                         Set<String> allow, Set<String> deny, List<ChatGrant> chat,
-                        Map<String, Long> expiries, List<ScopedGrant> scoped, List<MetaGrant> meta) {
+                        Map<String, Long> expiries, List<ScopedGrant> scoped, List<MetaGrant> meta,
+                        String displayName) {
+
+        /** One without a display name. */
+        public Grade(String name, int weight, List<String> parents, List<String> deniedParents, Set<String> allow,
+                     Set<String> deny, List<ChatGrant> chat, Map<String, Long> expiries, List<ScopedGrant> scoped,
+                     List<MetaGrant> meta) {
+            this(name, weight, parents, deniedParents, allow, deny, chat, expiries, scoped, meta, "");
+        }
 
         /** One without meta. */
         public Grade(String name, int weight, List<String> parents, List<String> deniedParents, Set<String> allow,

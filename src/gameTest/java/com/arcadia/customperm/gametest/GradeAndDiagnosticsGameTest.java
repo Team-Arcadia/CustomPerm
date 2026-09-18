@@ -233,6 +233,43 @@ public class GradeAndDiagnosticsGameTest {
     }
 
     /**
+     * Display name: shown by the listings beside the grade's name, never a key, bounded, and cleared by the
+     * same command.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void displayNameIsShownButNeverAKey(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        try {
+            expect(ServerCommands.run(server, "customperm grade create cp_gt_dn"), "Created grade");
+            expect(ServerCommands.run(server, "customperm grade displayname cp_gt_dn"), "has no display name");
+            expect(ServerCommands.run(server, "customperm grade displayname cp_gt_dn set Very Important"),
+                    "cp_gt_dn is now shown as Very Important");
+            if (!"Very Important".equals(grades.grades.get("cp_gt_dn").displayName))
+                fail("The display name was not stored: " + grades.grades.get("cp_gt_dn").displayName);
+            expect(ServerCommands.run(server, "customperm grade displayname cp_gt_dn"), "shown as Very Important");
+            expect(ServerCommands.run(server, "customperm grade list"), "Very Important (cp_gt_dn)");
+            expect(ServerCommands.run(server, "customperm grade displayname cp_gt_dn set Very Important"), "no change");
+            expect(ServerCommands.run(server, "customperm grade displayname cp_gt_dn set " + "x".repeat(49)),
+                    "at most 48 characters");
+
+            // Still found by its name, and only by it.
+            expect(ServerCommands.run(server, "customperm grade weight cp_gt_dn 3"), "Weight of cp_gt_dn set to 3");
+            if (grades.grades.containsKey("Very Important")) fail("A display name must never become a grade key.");
+
+            expect(ServerCommands.run(server, "customperm grade displayname cp_gt_dn clear"),
+                    "Cleared the display name of cp_gt_dn");
+            if (grades.grades.get("cp_gt_dn").displayName != null) fail("Clearing must leave no display name.");
+            expect(ServerCommands.run(server, "customperm grade displayname cp_gt_dn clear"), "no change");
+            expect(ServerCommands.run(server, "customperm grade displayname cp_gt_missing set Nope"), "No such grade");
+        } finally {
+            grades.grades.remove("cp_gt_dn");
+        }
+        helper.succeed();
+    }
+
+    /**
      * Nodes carried by the player themselves: they outrank their grades at the same level, a more specific
      * grade node still wins, and the text commands apply live.
      */
