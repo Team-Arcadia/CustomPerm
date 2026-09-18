@@ -85,6 +85,11 @@ public final class GradeAdmin {
         }
         grades().userGradeExpiries.values().forEach(expiries -> expiries.remove(name));
         grades().userGradeExpiries.values().removeIf(Map::isEmpty);
+        grades().userContexts.values().forEach(scopes -> {
+            scopes.values().forEach(scope -> scope.grades.remove(name));
+            scopes.values().removeIf(GradesConfig.Scoped::isEmpty);
+        });
+        grades().userContexts.values().removeIf(Map::isEmpty);
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
         AdminResult result = AdminResult.ok("Deleted grade " + name).warn(warning);
@@ -106,12 +111,35 @@ public final class GradeAdmin {
      */
     public static AdminResult addNode(MinecraftServer server, String gradeName, String rawNode, boolean deny,
                                       long seconds) {
+        return addNode(server, gradeName, rawNode, deny, seconds, null);
+    }
+
+    /**
+     * {@link #addNode(MinecraftServer, String, String, boolean, long)} limited to {@code rawContext}, such as
+     * {@code world=the_nether}; blank for everywhere. An entry limited to a world is permanent.
+     */
+    public static AdminResult addNode(MinecraftServer server, String gradeName, String rawNode, boolean deny,
+                                      long seconds, String rawContext) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
         String node = normalizeNode(rawNode);
         if (node == null) return AdminResult.fail("Invalid permission node '" + rawNode.trim() + "'.");
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
+        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        if (context != null) {
+            GradesConfig.Scoped scope = Scopes.of(grade, context);
+            if (!(deny ? scope.deniedPermissions : scope.permissions).add(node)) {
+                return AdminResult.ok(node + " is already " + (deny ? "denied to " : "granted to ") + gradeName
+                        + Scopes.span(context) + " — no change.");
+            }
+            String warning = ConfigAdmin.persist();
+            ConfigAdmin.resyncCommands(server);
+            return AdminResult.ok((deny ? "Denied " : "Added ") + node + " -> " + gradeName + Scopes.span(context))
+                    .warn(warning);
+        }
         Set<String> nodes = deny ? grade.deniedPermissions : grade.permissions;
         boolean added = nodes.add(node);
         boolean timed = Expiries.apply(deny ? grade.deniedPermissionExpiries : grade.permissionExpiries, node, seconds);
@@ -125,11 +153,31 @@ public final class GradeAdmin {
     }
 
     public static AdminResult removeNode(MinecraftServer server, String gradeName, String rawNode, boolean deny) {
+        return removeNode(server, gradeName, rawNode, deny, null);
+    }
+
+    /** Removes a node limited to {@code rawContext}; blank removes the one that applies everywhere. */
+    public static AdminResult removeNode(MinecraftServer server, String gradeName, String rawNode, boolean deny,
+                                         String rawContext) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
         String node = rawNode.trim();
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        if (context != null) {
+            GradesConfig.Scoped scope = grade.contexts.get(context);
+            if (scope == null || !(deny ? scope.deniedPermissions : scope.permissions).remove(node)) {
+                return AdminResult.ok(node + " is not " + (deny ? "denied to " : "granted to ") + gradeName
+                        + Scopes.span(context) + " — no change.");
+            }
+            Scopes.tidy(grade);
+            String warning = ConfigAdmin.persist();
+            ConfigAdmin.resyncCommands(server);
+            return AdminResult.ok((deny ? "Removed the denial of " : "Removed ") + node + " from " + gradeName
+                    + Scopes.span(context)).warn(warning);
+        }
         Set<String> nodes = deny ? grade.deniedPermissions : grade.permissions;
         if (!nodes.remove(node)) {
             return AdminResult.ok(node + " is not " + (deny ? "denied to " : "granted to ") + gradeName + " — no change.");
@@ -318,12 +366,37 @@ public final class GradeAdmin {
 
     /** Assigns a grade for {@code seconds}, 0 for good; on a grade already held, the duration replaces its own. */
     public static AdminResult assign(MinecraftServer server, GameProfile profile, String gradeName, long seconds) {
+        return assign(server, profile, gradeName, seconds, null);
+    }
+
+    /** Assigns a grade that applies only in {@code rawContext}, such as {@code world=the_nether}; blank for everywhere. */
+    public static AdminResult assign(MinecraftServer server, GameProfile profile, String gradeName, long seconds,
+                                     String rawContext) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
+        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         if (!grades().grades.containsKey(gradeName)) return AdminResult.fail("No such grade: " + gradeName);
         if (grades().userDeniedGrades.getOrDefault(profile.getId().toString(), List.of()).contains(gradeName)) {
             return AdminResult.fail(profile.getName() + " refuses " + gradeName + ": remove that refusal first, "
                     + "or the file would say both at once.");
+        }
+        if (context != null) {
+            List<String> scoped = Scopes.of(grades(), profile.getId(), context).grades;
+            if (scoped.contains(gradeName)) {
+                Scopes.tidy(grades(), profile.getId());
+                return AdminResult.ok(profile.getName() + " is already assigned to " + gradeName + Scopes.span(context)
+                        + " — no change.");
+            }
+            scoped.add(gradeName);
+            String warning = ConfigAdmin.persist();
+            resyncPlayer(server, profile.getId());
+            AdminResult result = AdminResult.ok("Assigned " + gradeName + " -> " + profile.getName() + Scopes.span(context))
+                    .warn(warning);
+            return grades().userGrades.getOrDefault(profile.getId().toString(), List.of()).contains(gradeName)
+                    ? result.note("They also hold it everywhere, which already covers that world.")
+                    : result;
         }
         List<String> list = grades().userGrades.computeIfAbsent(profile.getId().toString(), k -> new ArrayList<>());
         boolean added = !list.contains(gradeName);
@@ -340,8 +413,27 @@ public final class GradeAdmin {
     }
 
     public static AdminResult unassign(MinecraftServer server, UUID uuid, String displayName, String gradeName) {
+        return unassign(server, uuid, displayName, gradeName, null);
+    }
+
+    /** Unassigns a grade held in {@code rawContext} only; blank unassigns the one held everywhere. */
+    public static AdminResult unassign(MinecraftServer server, UUID uuid, String displayName, String gradeName,
+                                       String rawContext) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
+        if (context != null) {
+            GradesConfig.UserScoped scope = Scopes.find(grades(), uuid, context);
+            if (scope == null || !scope.grades.remove(gradeName)) {
+                return AdminResult.ok(displayName + " is not assigned to " + gradeName + Scopes.span(context)
+                        + " — no change.");
+            }
+            Scopes.tidy(grades(), uuid);
+            String warning = ConfigAdmin.persist();
+            resyncPlayer(server, uuid);
+            return AdminResult.ok("Unassigned " + gradeName + " from " + displayName + Scopes.span(context)).warn(warning);
+        }
         List<String> list = grades().userGrades.get(uuid.toString());
         if (list == null || !list.remove(gradeName)) {
             return AdminResult.ok(displayName + " is not assigned to " + gradeName + " — no change.");
@@ -425,6 +517,7 @@ public final class GradeAdmin {
             g.suffix = grade.suffix;
             g.permissionExpiries = new java.util.HashMap<>(grade.permissionExpiries);
             g.deniedPermissionExpiries = new java.util.HashMap<>(grade.deniedPermissionExpiries);
+            g.contexts = Scopes.copy(grade.contexts);
             copy.grades.put(name, g);
         });
         source.userGrades.forEach((uuid, list) -> copy.userGrades.put(uuid, new ArrayList<>(list)));
@@ -437,6 +530,7 @@ public final class GradeAdmin {
         copyExpiries(source.userDeniedPermissionExpiries, copy.userDeniedPermissionExpiries);
         copyExpiries(source.userGradeExpiries, copy.userGradeExpiries);
         copyExpiries(source.userDeniedGradeExpiries, copy.userDeniedGradeExpiries);
+        copy.userContexts = Scopes.copyUsers(source.userContexts);
         return copy;
     }
 
@@ -463,6 +557,8 @@ public final class GradeAdmin {
         target.userGradeExpiries.putAll(saved.userGradeExpiries);
         target.userDeniedGradeExpiries.clear();
         target.userDeniedGradeExpiries.putAll(saved.userDeniedGradeExpiries);
+        target.userContexts.clear();
+        target.userContexts.putAll(saved.userContexts);
     }
 
     private static void copyExpiries(Map<String, Map<String, Long>> from, Map<String, Map<String, Long>> to) {

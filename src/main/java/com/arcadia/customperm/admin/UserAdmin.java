@@ -54,10 +54,30 @@ public final class UserAdmin {
     /** The same for {@code seconds}, 0 for permanent; on a node already there, the duration replaces its own. */
     public static AdminResult addNode(MinecraftServer server, UUID uuid, String displayName, String rawNode,
                                       boolean deny, long seconds) {
+        return addNode(server, uuid, displayName, rawNode, deny, seconds, null);
+    }
+
+    /** The same limited to {@code rawContext}, such as {@code world=the_nether}; blank for everywhere. */
+    public static AdminResult addNode(MinecraftServer server, UUID uuid, String displayName, String rawNode,
+                                      boolean deny, long seconds, String rawContext) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
         String node = GradeAdmin.normalizeNode(rawNode);
         if (node == null) return AdminResult.fail("Invalid permission node '" + rawNode.trim() + "'.");
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
+        if (context != null && seconds > 0) return Scopes.timedAndScoped();
+        if (context != null) {
+            GradesConfig.UserScoped scope = Scopes.of(grades(), uuid, context);
+            if (!(deny ? scope.deniedPermissions : scope.permissions).add(node)) {
+                return AdminResult.ok(node + " is already " + (deny ? "denied to " : "granted to ") + displayName
+                        + Scopes.span(context) + " — no change.");
+            }
+            String warning = ConfigAdmin.persist();
+            GradeAdmin.resyncPlayer(server, uuid);
+            return AdminResult.ok((deny ? "Denied " : "Added ") + node + " -> " + displayName + Scopes.span(context))
+                    .warn(warning);
+        }
         Set<String> nodes = holder(deny).computeIfAbsent(uuid.toString(), key -> new LinkedHashSet<>());
         boolean added = nodes.add(node);
         Map<String, Map<String, Long>> expiries = expiries(deny);
@@ -119,9 +139,29 @@ public final class UserAdmin {
     /** Removes an ALLOW or a DENY node from one player; the entry goes with its last node. */
     public static AdminResult removeNode(MinecraftServer server, UUID uuid, String displayName, String rawNode,
                                          boolean deny) {
+        return removeNode(server, uuid, displayName, rawNode, deny, null);
+    }
+
+    /** Removes a node limited to {@code rawContext}; blank removes the one that applies everywhere. */
+    public static AdminResult removeNode(MinecraftServer server, UUID uuid, String displayName, String rawNode,
+                                         boolean deny, String rawContext) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
         String node = rawNode.trim();
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
+        if (context != null) {
+            GradesConfig.UserScoped scope = Scopes.find(grades(), uuid, context);
+            if (scope == null || !(deny ? scope.deniedPermissions : scope.permissions).remove(node)) {
+                return AdminResult.ok(node + " is not " + (deny ? "denied to " : "granted to ") + displayName
+                        + Scopes.span(context) + " — no change.");
+            }
+            Scopes.tidy(grades(), uuid);
+            String warning = ConfigAdmin.persist();
+            GradeAdmin.resyncPlayer(server, uuid);
+            return AdminResult.ok((deny ? "Removed the denial of " : "Removed ") + node + " from " + displayName
+                    + Scopes.span(context)).warn(warning);
+        }
         Map<String, Set<String>> target = holder(deny);
         Set<String> nodes = target.get(uuid.toString());
         if (nodes == null || !nodes.remove(node)) {
@@ -198,6 +238,24 @@ public final class UserAdmin {
         return nodes == null ? List.of() : List.copyOf(new TreeSet<>(nodes));
     }
 
+    /**
+     * What one player holds limited to a context, by context, sorted: {@code "grade"}, {@code "allow"} and
+     * {@code "deny"} entries, each as {@code kind:value}. Empty when they hold nothing limited to one.
+     */
+    public static Map<String, List<String>> scoped(UUID uuid) {
+        Map<String, List<String>> out = new java.util.TreeMap<>();
+        Map<String, GradesConfig.UserScoped> scopes = grades().userContexts.get(uuid.toString());
+        if (scopes == null) return out;
+        scopes.forEach((context, scope) -> {
+            List<String> entries = new ArrayList<>();
+            scope.grades.stream().sorted().forEach(grade -> entries.add("grade:" + grade));
+            new TreeSet<>(scope.permissions).forEach(node -> entries.add("allow:" + node));
+            new TreeSet<>(scope.deniedPermissions).forEach(node -> entries.add("deny:" + node));
+            out.put(context, entries);
+        });
+        return out;
+    }
+
     /** Every player who carries a node of their own or a grade, as UUID strings. */
     public static Set<String> knownHolders() {
         Set<String> holders = new LinkedHashSet<>(grades().userGrades.keySet());
@@ -206,6 +264,7 @@ public final class UserAdmin {
         holders.addAll(grades().userDeniedPermissions.keySet());
         holders.addAll(grades().userPrefixes.keySet());
         holders.addAll(grades().userSuffixes.keySet());
+        holders.addAll(grades().userContexts.keySet());
         return holders;
     }
 }

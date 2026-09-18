@@ -101,9 +101,12 @@ import java.util.stream.Collectors;
  *                     confirm [replace]                # applies what was previewed, nothing else
  * /customperm export  preview                          # what an export to LuckPerms would write
  *                     confirm [replace]                # writes what was previewed, in the background
- * /customperm grade   addperm|adddeny <grade> <node> [duration]   # 30d, 2h, 1d12h: temporary until then
- *                     assign <player> <grade> [duration]
- * /customperm user    addperm|adddeny <player> <node> [duration]
+ * /customperm grade   addperm|adddeny <grade> <node> [duration|world=<dim>]  # 30d, 2h: temporary; world=the_nether: there only
+ *                     removeperm|removedeny <grade> <node> [world=<dim>]
+ *                     assign <player> <grade> [duration|world=<dim>]
+ *                     unassign <player> <grade> [world=<dim>]
+ * /customperm user    addperm|adddeny <player> <node> [duration|world=<dim>]
+ *                     removeperm|removedeny <player> <node> [world=<dim>]
  *                     denygrade <player> <grade> [duration]
  * /customperm grade   prefix|suffix <grade> [text]     # chat prefix/suffix of a grade, & colour codes
  * /customperm user    prefix|suffix <player> [text]    # one player's own, above their grades
@@ -135,6 +138,28 @@ public class CustomPermCommand {
     /** A few durations, to show the form; any combination of w, d, h, m and s is accepted. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_DURATIONS =
         (ctx, builder) -> SharedSuggestionProvider.suggest(List.of("1h", "12h", "1d", "7d", "30d"), builder);
+
+    /** What may follow a grade being assigned: a duration, or one of this server's worlds. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_DURATIONS_AND_WORLDS =
+        (ctx, builder) -> {
+            List<String> options = new java.util.ArrayList<>(List.of("1h", "12h", "1d", "7d", "30d"));
+            options.addAll(worldContexts(ctx.getSource().getServer()));
+            return SharedSuggestionProvider.suggest(options, builder);
+        };
+
+    /** One of this server's worlds, for removing a grade held there. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_WORLDS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(worldContexts(ctx.getSource().getServer()), builder);
+
+    /** {@code world=the_nether} and the like, one per loaded dimension, written as the commands take them. */
+    private static List<String> worldContexts(net.minecraft.server.MinecraftServer server) {
+        if (server == null) return List.of();
+        List<String> worlds = new java.util.ArrayList<>();
+        for (var level : server.getAllLevels()) {
+            worlds.add("world=" + com.arcadia.customperm.perm.Contexts.luckPermsWorld(level.dimension().location().toString()));
+        }
+        return worlds;
+    }
 
     /** Alias existants. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_ALIASES =
@@ -416,15 +441,18 @@ public class CustomPermCommand {
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
                                 .executes(ctx -> gradeAssign(ctx, null))
-                                .then(Commands.argument("duration", StringArgumentType.word())
-                                    .suggests(SUGGEST_DURATIONS)
-                                    .executes(ctx -> gradeAssign(ctx, StringArgumentType.getString(ctx, "duration")))))))
+                                .then(Commands.argument("options", StringArgumentType.greedyString())
+                                    .suggests(SUGGEST_DURATIONS_AND_WORLDS)
+                                    .executes(ctx -> gradeAssign(ctx, StringArgumentType.getString(ctx, "options")))))))
                     .then(Commands.literal("unassign").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_PLAYER_GRADES)
-                                .executes(CustomPermCommand::gradeUnassign))))
+                                .executes(ctx -> gradeUnassign(ctx, null))
+                                .then(Commands.argument("context", StringArgumentType.greedyString())
+                                    .suggests(SUGGEST_WORLDS)
+                                    .executes(ctx -> gradeUnassign(ctx, StringArgumentType.getString(ctx, "context")))))))
                     .then(Commands.literal("setdefault").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("grade", StringArgumentType.word())
                             .suggests(SUGGEST_GRADES)
@@ -806,18 +834,43 @@ public class CustomPermCommand {
     }
 
     /**
-     * {@code <node> [duration]}: a node never holds a space, so what follows one is the duration, and a
-     * line written before durations existed reads exactly as it did.
+     * {@code <node> [duration|world=<dim>]}: a node never holds a space, so what follows one qualifies it, and
+     * a line written before durations and worlds existed reads exactly as it did. A word holding {@code =} is
+     * a context, anything else a duration. {@code node} is null when the text qualifies no node (assign).
      */
-    private record Timed(String node, long seconds, String problem) {
-        static Timed of(String raw) {
-            String[] parts = raw.trim().split("\\s+");
-            if (parts.length == 1) return new Timed(parts[0], 0, null);
-            if (parts.length > 2) return new Timed(null, 0, "Expected a node, then optionally a duration such as 30d.");
-            long seconds = Expiry.parse(parts[1]);
+    private record Qualified(String node, long seconds, String context, String problem) {
+        static Qualified of(String raw, boolean withNode) {
+            String[] parts = raw == null || raw.isBlank() ? new String[0] : raw.trim().split("\\s+");
+            int first = withNode ? 1 : 0;
+            if (withNode && parts.length == 0) return fail("Expected a node.");
+            if (parts.length > first + 1) {
+                return fail("Expected " + (withNode ? "a node, then optionally " : "optionally ")
+                    + "a duration such as 30d or a world such as world=the_nether.");
+            }
+            String node = withNode ? parts[0] : null;
+            if (parts.length == first) return new Qualified(node, 0, null, null);
+            String option = parts[first];
+            if (option.contains("=")) return new Qualified(node, 0, option, null);
+            long seconds = Expiry.parse(option);
             return seconds < 0
-                ? new Timed(null, 0, "Invalid duration '" + parts[1] + "': use w, d, h, m, s, such as 30d or 1d12h, ten years at most.")
-                : new Timed(parts[0], seconds, null);
+                ? fail("Invalid duration '" + option + "': use w, d, h, m, s, such as 30d or 1d12h, ten years at most.")
+                : new Qualified(node, seconds, null, null);
+        }
+
+        private static Qualified fail(String problem) {
+            return new Qualified(null, 0, null, problem);
+        }
+    }
+
+    /** {@code <node> [world=<dim>]}, for removing: a duration names nothing to remove. */
+    private record Located(String node, String context, String problem) {
+        static Located of(String raw) {
+            String[] parts = raw.trim().split("\\s+");
+            if (parts.length == 1) return new Located(parts[0], null, null);
+            if (parts.length > 2 || !parts[1].contains("=")) {
+                return new Located(null, null, "Expected a node, then optionally a world such as world=the_nether.");
+            }
+            return new Located(parts[0], parts[1], null);
         }
     }
 
@@ -831,15 +884,21 @@ public class CustomPermCommand {
     }
 
     private static int gradeAddNode(CommandContext<CommandSourceStack> ctx, boolean deny) {
-        Timed timed = Timed.of(StringArgumentType.getString(ctx, "node"));
-        if (timed.problem() != null) return report(ctx, AdminResult.fail(timed.problem()));
+        Qualified qualified = Qualified.of(StringArgumentType.getString(ctx, "node"), true);
+        if (qualified.problem() != null) return report(ctx, AdminResult.fail(qualified.problem()));
         return report(ctx, guarded(ctx, () -> GradeAdmin.addNode(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), timed.node(), deny, timed.seconds())));
+            StringArgumentType.getString(ctx, "grade"), qualified.node(), deny, qualified.seconds(), qualified.context())));
+    }
+
+    private static int gradeRemoveNode(CommandContext<CommandSourceStack> ctx, boolean deny) {
+        Located located = Located.of(StringArgumentType.getString(ctx, "node"));
+        if (located.problem() != null) return report(ctx, AdminResult.fail(located.problem()));
+        return report(ctx, guarded(ctx, () -> GradeAdmin.removeNode(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"), located.node(), deny, located.context())));
     }
 
     private static int gradeRemovePerm(CommandContext<CommandSourceStack> ctx) {
-        return report(ctx, guarded(ctx, () -> GradeAdmin.removeNode(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "node"), false)));
+        return gradeRemoveNode(ctx, false);
     }
 
     private static int gradeAddDeny(CommandContext<CommandSourceStack> ctx) {
@@ -847,8 +906,7 @@ public class CustomPermCommand {
     }
 
     private static int gradeRemoveDeny(CommandContext<CommandSourceStack> ctx) {
-        return report(ctx, guarded(ctx, () -> GradeAdmin.removeNode(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "node"), true)));
+        return gradeRemoveNode(ctx, true);
     }
 
     private static int gradeWeight(CommandContext<CommandSourceStack> ctx) {
@@ -946,11 +1004,11 @@ public class CustomPermCommand {
         return GradeAdmin.guarded(ctx.getSource(), ctx.getSource().getServer(), change);
     }
 
-    private static int gradeAssign(CommandContext<CommandSourceStack> ctx, String duration) {
+    private static int gradeAssign(CommandContext<CommandSourceStack> ctx, String options) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return report(ctx, refusal);
-        long seconds = seconds(duration);
-        if (seconds < 0) return report(ctx, badDuration(duration));
+        Qualified qualified = Qualified.of(options, false);
+        if (qualified.problem() != null) return report(ctx, AdminResult.fail(qualified.problem()));
         var server = ctx.getSource().getServer();
         String name = StringArgumentType.getString(ctx, "player");
         if (server == null) return 0;
@@ -958,10 +1016,10 @@ public class CustomPermCommand {
         var profile = resolution.profile();
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
         return report(ctx, guarded(ctx, () -> GradeAdmin.assign(server, profile.get(), StringArgumentType.getString(ctx, "grade"),
-            seconds)));
+            qualified.seconds(), qualified.context())));
     }
 
-    private static int gradeUnassign(CommandContext<CommandSourceStack> ctx) {
+    private static int gradeUnassign(CommandContext<CommandSourceStack> ctx, String context) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return report(ctx, refusal);
         var server = ctx.getSource().getServer();
@@ -971,7 +1029,7 @@ public class CustomPermCommand {
         var profile = resolution.profile();
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
         return report(ctx, guarded(ctx, () -> GradeAdmin.unassign(server, profile.get().getId(), profile.get().getName(),
-            StringArgumentType.getString(ctx, "grade"))));
+            StringArgumentType.getString(ctx, "grade"), context)));
     }
 
     private static int gradeList(CommandContext<CommandSourceStack> ctx) {
@@ -1005,13 +1063,15 @@ public class CustomPermCommand {
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
         String node = StringArgumentType.getString(ctx, "node");
         if (!add) {
-            return report(ctx, guarded(ctx, () ->
-                UserAdmin.removeNode(server, profile.get().getId(), profile.get().getName(), node, deny)));
+            Located located = Located.of(node);
+            if (located.problem() != null) return report(ctx, AdminResult.fail(located.problem()));
+            return report(ctx, guarded(ctx, () -> UserAdmin.removeNode(server, profile.get().getId(),
+                profile.get().getName(), located.node(), deny, located.context())));
         }
-        Timed timed = Timed.of(node);
-        if (timed.problem() != null) return report(ctx, AdminResult.fail(timed.problem()));
+        Qualified qualified = Qualified.of(node, true);
+        if (qualified.problem() != null) return report(ctx, AdminResult.fail(qualified.problem()));
         return report(ctx, guarded(ctx, () -> UserAdmin.addNode(server, profile.get().getId(), profile.get().getName(),
-            timed.node(), deny, timed.seconds())));
+            qualified.node(), deny, qualified.seconds(), qualified.context())));
     }
 
     /** Makes a player refuse a grade, or stop refusing it. */
@@ -1053,6 +1113,8 @@ public class CustomPermCommand {
             + join(timed(uuid, "allow", UserAdmin.nodes(uuid, false)))), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  own deny : "
             + join(timed(uuid, "deny", UserAdmin.nodes(uuid, true)))), false);
+        UserAdmin.scoped(uuid).forEach((context, entries) -> ctx.getSource().sendSuccess(() -> Component.literal(
+            "  in " + com.arcadia.customperm.perm.Contexts.describe(context) + ": " + String.join(", ", entries)), false));
         String prefix = UserAdmin.chat(uuid, false);
         String suffix = UserAdmin.chat(uuid, true);
         if (prefix != null || suffix != null) {
