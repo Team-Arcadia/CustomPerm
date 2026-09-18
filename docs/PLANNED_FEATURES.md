@@ -72,17 +72,16 @@ only: here moving a player needs `customperm.manage.grades`, like assigning a gr
 
 ## 5. Answering the permission checks of other mods
 
-**What it is.** A LuckPerms setup usually carries nodes that other mods read. CustomPerm does not answer
-those checks, so storing such a node would store a string nothing reads.
+**Done.** CustomPerm offers a NeoForge permission handler that answers, from the grades, the checks mods
+make on the nodes they declare. NeoForge keeps a single handler, named in `neoforge-server.toml`, with no
+chain between handlers, and LuckPerms takes that value when it is still the default. So CustomPerm selects
+itself only without LuckPerms, when the value is still the default and `answerOtherMods` allows, and never
+replaces a value an admin chose. The import carries the nodes mods declared, on groups and players. See the
+changelog and the README.
 
-**What it will take.** NeoForge has the mechanism: a mod can register the handler that answers
-`PermissionAPI` checks, and mods declare their nodes through the same API. Registering as that handler is
-what turns those nodes from dead strings into permissions CustomPerm decides. One handler is registered for
-the server and LuckPerms registers one, so which one answers, and what happens to a node neither knows, is
-settled before any of it is written.
-
-**Until then.** Mods that read permissions through LuckPerms need LuckPerms; CustomPerm runs alongside it.
-An import leaves those nodes behind and counts them on groups, and does not even read them on players.
+**What is left.** Nodes holding a number or a text, which have no storage here and answer their default.
+Nodes a mod reads without declaring them to NeoForge (through LuckPerms' own API, say), which only LuckPerms
+can answer; an import still leaves them behind and counts them.
 
 ---
 
@@ -161,16 +160,13 @@ sur une seule échelle : ici déplacer un joueur demande `customperm.manage.grad
 
 ## 5. Répondre aux tests de permission des autres mods
 
-**De quoi il s'agit.** Une installation LuckPerms porte en général des nœuds que d'autres mods lisent.
-CustomPerm ne répond pas à ces tests, donc stocker un tel nœud reviendrait à stocker une chaîne que rien ne
-lit.
+**Fait.** CustomPerm propose un handler de permissions NeoForge qui répond, depuis les grades, aux tests
+que les mods font sur les nœuds qu'ils déclarent. NeoForge garde un seul handler, nommé dans
+`neoforge-server.toml`, sans chaîne entre handlers, et LuckPerms prend cette valeur quand elle est encore
+celle par défaut. CustomPerm ne se sélectionne donc que sans LuckPerms, quand la valeur est encore celle par
+défaut et que `answerOtherMods` le permet, et ne remplace jamais une valeur choisie par un admin. L'import
+transporte les nœuds déclarés par les mods, sur les groupes et les joueurs. Voir le changelog et le README.
 
-**Ce qu'il faudra.** NeoForge a le mécanisme : un mod peut enregistrer le handler qui répond aux tests de
-`PermissionAPI`, et les mods déclarent leurs nœuds via la même API. S'enregistrer comme ce handler est ce qui
-transforme ces nœuds de chaînes mortes en permissions que CustomPerm décide. Un seul handler est enregistré
-pour le serveur et LuckPerms en enregistre un : lequel répond, et ce qu'il advient d'un nœud qu'aucun des
-deux ne connaît, se tranche avant d'écrire quoi que ce soit.
-
-**En attendant.** Les mods qui lisent les permissions via LuckPerms ont besoin de LuckPerms ; CustomPerm
-fonctionne à côté. Un import laisse ces nœuds et les compte sur les groupes, et ne les lit même pas sur les
-joueurs.
+**Ce qui reste.** Les nœuds qui portent un nombre ou un texte, sans stockage ici, qui répondent leur valeur
+par défaut. Les nœuds qu'un mod lit sans les déclarer à NeoForge (via l'API propre de LuckPerms, par
+exemple), auxquels seul LuckPerms peut répondre ; un import les laisse toujours de côté et les compte.
