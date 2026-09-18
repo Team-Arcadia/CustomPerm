@@ -10,8 +10,12 @@ package com.arcadia.customperm.admin;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.GradesConfig;
+import com.arcadia.customperm.perm.AdminAccess;
+import com.arcadia.customperm.perm.PermissionNodes;
 import com.mojang.authlib.GameProfile;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -47,7 +51,7 @@ public final class TrackAdmin {
         return List.copyOf(tracks().getOrDefault(track, List.of()));
     }
 
-    public static AdminResult create(String name) {
+    public static AdminResult create(MinecraftServer server, String name) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
         if (!GradeAdmin.validName(name)) {
@@ -55,17 +59,22 @@ public final class TrackAdmin {
         }
         if (tracks().containsKey(name)) return AdminResult.fail("Track already exists: " + name);
         tracks().put(name, new ArrayList<>());
+        String warning = ConfigAdmin.persist();
+        // Promote and demote show to whoever may move on some track: a new one may open them to a moderator.
+        ConfigAdmin.resyncCommands(server);
         return AdminResult.ok("Created track " + name + ". Add its grades lowest first with /customperm track append.")
-                .warn(ConfigAdmin.persist());
+                .warn(warning);
     }
 
     /** Deletes a track. The grades on it and the players holding them are untouched: a track grants nothing. */
-    public static AdminResult delete(String name) {
+    public static AdminResult delete(MinecraftServer server, String name) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
         if (tracks().remove(name) == null) return AdminResult.fail("No such track: " + name);
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
         return AdminResult.ok("Deleted track " + name + ". Its grades and who holds them are unchanged.")
-                .warn(ConfigAdmin.persist());
+                .warn(warning);
     }
 
     /** Adds a grade as the new top rung. */
@@ -108,6 +117,28 @@ public final class TrackAdmin {
     /** {@code member > vip > staff}, or a word for an empty track. */
     public static String describe(List<String> rungs) {
         return rungs.isEmpty() ? "no grade yet" : String.join(" > ", rungs);
+    }
+
+    /**
+     * {@link #move(MinecraftServer, GameProfile, String, boolean, String)} on behalf of {@code actor}, checking
+     * they may: {@code customperm.manage.grades}, or {@code customperm.track.<track>} for that track. With the
+     * track node alone, moving oneself is refused, since a rung up the ladder may be the grade that hands out
+     * {@code customperm.manage.grades}. The lockout guard still applies to what the move leaves.
+     */
+    public static AdminResult moveBy(CommandSourceStack actor, MinecraftServer server, GameProfile profile, String track,
+                                     boolean up, String rawContext) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        if (!AdminAccess.canMoveOn(actor, track)) {
+            return AdminResult.fail("Moving a player on " + track + " needs " + PermissionNodes.MANAGE_GRADES + " or "
+                    + PermissionNodes.track(track) + ".");
+        }
+        if (actor.getEntity() instanceof ServerPlayer self && self.getUUID().equals(profile.getId())
+                && !AdminAccess.canManage(self, PermissionNodes.MANAGE_GRADES)) {
+            return AdminResult.fail("Refused: moving yourself on a track needs " + PermissionNodes.MANAGE_GRADES
+                    + ", " + PermissionNodes.track(track) + " covers other players only.");
+        }
+        return GradeAdmin.guarded(actor, server, () -> move(server, profile, track, up, rawContext));
     }
 
     /**

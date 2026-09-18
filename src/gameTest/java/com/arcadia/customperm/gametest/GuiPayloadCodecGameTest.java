@@ -98,8 +98,8 @@ public class GuiPayloadCodecGameTest {
                                         List.of(new MetaLine("homes", "3", 3600L, ""))),
                                 List.of("customperm.command.weather"), List.of("customperm.command.time"))),
                         List.of("Alex", "Steve"), "deny", new NameSettings(false, "{prefix}&8| {name}", new NameSettings.Stack(false, 3, "", "", ""), new NameSettings.Stack(false, 3, "", "", "")),
-                        List.of(new PlayersData.Track("staff", List.of("member", "vip", "staff")),
-                                new PlayersData.Track("empty", List.of())),
+                        List.of(new PlayersData.Track("staff", List.of("member", "vip", "staff"), true),
+                                new PlayersData.Track("empty", List.of(), false)),
                         new PlayersData.Labels(List.of(new PlayersData.GradeName("vip", "Very Important")),
                                 List.of(new PlayersData.GradeName("00000000-0000-0000-0000-000000000002", "&bStevie"))))));
         PlayersData named = new PlayersData(List.of(), List.of(), "deny", null, List.of(),

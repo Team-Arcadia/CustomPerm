@@ -45,7 +45,7 @@ public final class GuiSnapshots {
             case ALIASES -> aliases();
             case RATE_LIMITS -> rateLimits();
             case GRADES -> grades(player.getServer());
-            case PLAYERS -> players(player.getServer());
+            case PLAYERS -> players(player.getServer(), player);
             case LUCKPERMS -> new LuckPermsData(LuckPermsData.GROUPS);
             case IMPORT -> importPage(player);
             case LOGS -> logs();
@@ -56,7 +56,7 @@ public final class GuiSnapshots {
      * Everyone who holds something of their own, plus everyone online: a player with nothing yet is
      * reached by typing their name, not by scrolling a list of every account the server has ever seen.
      */
-    static PlayersData players(MinecraftServer server) {
+    static PlayersData players(MinecraftServer server, ServerPlayer viewer) {
         var config = CustomPerm.configManager.getGrades();
         java.util.Set<String> uuids = new java.util.LinkedHashSet<>(UserAdmin.knownHolders());
         if (server != null) {
@@ -96,7 +96,9 @@ public final class GuiSnapshots {
                 : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
         List<PlayersData.Track> tracks = com.arcadia.customperm.admin.TrackAdmin.names().stream()
                 .limit(GuiCodecs.SERVER_LIST_MAX)
-                .map(name -> new PlayersData.Track(name, com.arcadia.customperm.admin.TrackAdmin.rungs(name)))
+                .map(name -> new PlayersData.Track(name, com.arcadia.customperm.admin.TrackAdmin.rungs(name),
+                        viewer == null || com.arcadia.customperm.perm.AdminAccess.canMoveOn(
+                                viewer.createCommandSourceStack(), name)))
                 .toList();
         List<PlayersData.GradeName> gradeNames = new java.util.TreeMap<>(config.grades).entrySet().stream()
                 .filter(e -> e.getValue().displayName != null)

@@ -326,7 +326,9 @@ public final class PlayersScreen extends AdminScreen {
             addRenderableWidget(worldField.at(fieldRow));
             worldField.setEditable(editable);
             TrackRow selected = trackList.getSelected();
-            boolean movable = editable && selected != null && !selected.track().grades().isEmpty();
+            // Per track: customperm.track.<track> moves on that one without the Grades area.
+            boolean movable = !context.luckPermsActive() && selected != null && selected.track().movable()
+                    && !selected.track().grades().isEmpty();
             placeButtonRow(buttonRow, 6, true, List.of(
                     CpButton.good(Component.literal("Promote"), () -> move(selected, true)).icon(Icon.PLUS)
                             .enabled(movable && selected.rung() < selected.track().grades().size() - 1)

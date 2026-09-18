@@ -208,8 +208,8 @@ public final class GuiRequestHandler {
                             duration(args.get(3)), args.get(4)));
             case USER_NODE_REMOVE -> kind(args.get(2)) == null ? malformed(action)
                     : guarded(player, () -> userNodeByUuid(player, args.get(0), args.get(1), kind(args.get(2)), args.get(3)));
-            case TRACK_PROMOTE -> guarded(player, () -> moveByName(player, args.get(0), args.get(1), true, args.get(2)));
-            case TRACK_DEMOTE -> guarded(player, () -> moveByName(player, args.get(0), args.get(1), false, args.get(2)));
+            case TRACK_PROMOTE -> moveByName(player, args.get(0), args.get(1), true, args.get(2));
+            case TRACK_DEMOTE -> moveByName(player, args.get(0), args.get(1), false, args.get(2));
             case IMPORT_PREVIEW -> bool(args.get(0)) == null ? malformed(action)
                     : importPreview(player, bool(args.get(0)));
             case IMPORT_APPLY -> importApply(player, args.get(0));
@@ -375,7 +375,8 @@ public final class GuiRequestHandler {
         if (refusal != null) return refusal;
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
         return resolution.profile()
-                .map(profile -> com.arcadia.customperm.admin.TrackAdmin.move(admin.getServer(), profile, track, up, context))
+                .map(profile -> com.arcadia.customperm.admin.TrackAdmin.moveBy(admin.createCommandSourceStack(),
+                        admin.getServer(), profile, track, up, context))
                 .orElseGet(() -> AdminResult.fail(resolution.problem()));
     }
 

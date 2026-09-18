@@ -51,6 +51,16 @@ public final class PermissionNodes {
      */
     public static final String NICK_COLOR = "customperm.nick.color";
 
+    /**
+     * Promoting and demoting on one track only, {@code customperm.track.<track>}, on top of {@link #ADMIN}:
+     * a moderator trusted with one ladder. {@link #MANAGE_GRADES} keeps allowing every track.
+     */
+    public static final String TRACK_PREFIX = "customperm.track.";
+
+    public static String track(String name) {
+        return TRACK_PREFIX + name;
+    }
+
     /** Every fixed node above, for command suggestions. */
     public static java.util.List<String> all() {
         return java.util.List.of(ADMIN, MANAGE_COMMANDS, MANAGE_ALIASES, MANAGE_RATELIMITS, MANAGE_GRADES, MANAGE_LOGS,

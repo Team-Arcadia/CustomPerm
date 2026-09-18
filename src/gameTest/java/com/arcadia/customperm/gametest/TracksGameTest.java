@@ -12,6 +12,7 @@ package com.arcadia.customperm.gametest;
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.config.GradesConfig;
+import com.arcadia.customperm.gametest.support.Grants;
 import com.arcadia.customperm.gametest.support.Modes;
 import com.arcadia.customperm.gametest.support.ServerCommands;
 import com.arcadia.customperm.gametest.support.TestPlayer;
@@ -23,6 +24,7 @@ import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.network.gui.PlayersData;
 import com.arcadia.customperm.perm.Expiry;
+import com.arcadia.customperm.perm.PermissionNodes;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -146,7 +148,7 @@ public class TracksGameTest {
             PlayersData page = owner.payloads(GuiPagePayload.class).stream()
                     .map(GuiPagePayload::data).filter(PlayersData.class::isInstance).map(PlayersData.class::cast)
                     .reduce((first, second) -> second).orElseThrow(() -> new GameTestAssertException("No Players page"));
-            check(page.tracks().contains(new PlayersData.Track(TRACK, List.of(LOW, MID))),
+            check(page.tracks().contains(new PlayersData.Track(TRACK, List.of(LOW, MID), true)),
                     "the page must carry the track and its rungs: " + page.tracks());
 
             act(owner, GuiAction.TRACK_DEMOTE, "cp_k_climber", "cp_k_nothing", "");
@@ -227,6 +229,81 @@ public class TracksGameTest {
                 grades.userGrades.remove(uuid);
                 grades.userContexts.remove(uuid);
             }
+            ConfigAdmin.persist();
+        }
+        helper.succeed();
+    }
+
+    /**
+     * customperm.track.<track>: a moderator moves other players on that track only, by command and from the page,
+     * never themselves, and nothing else of the grades opens to them.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "customperm_tracks")
+    public static void aTrackNodeMovesOnThatTrackOnly(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        String other = "cp_k_other";
+        String targetId = null;
+        String modId = null;
+        try (TestPlayer mod = TestPlayer.join(helper.getLevel(), "cp_k_mod", 2);
+             TestPlayer target = TestPlayer.join(helper.getLevel(), "cp_k_target", 0)) {
+            targetId = target.uuid().toString();
+            modId = mod.uuid().toString();
+            for (String grade : List.of(LOW, MID, TOP)) ServerCommands.run(server, "customperm grade create " + grade);
+            ServerCommands.run(server, "customperm track create " + TRACK);
+            ServerCommands.run(server, "customperm track append " + TRACK + " " + LOW);
+            ServerCommands.run(server, "customperm track append " + TRACK + " " + MID);
+            ServerCommands.run(server, "customperm track create " + other);
+            ServerCommands.run(server, "customperm track append " + other + " " + TOP);
+
+            try (Grants onlyTrack = Grants.allow(mod, PermissionNodes.track(TRACK))) {
+                check(!mod.canUse("customperm"), "a track node alone does not open /customperm");
+            }
+            try (Grants access = Grants.allow(mod, PermissionNodes.ADMIN, PermissionNodes.track(TRACK))) {
+                mod.clearReceived();
+                mod.type("customperm track promote cp_k_target " + TRACK);
+                check(grades.userGrades.getOrDefault(targetId, List.of()).equals(List.of(LOW)),
+                        "the track node must move another player on it: " + mod.chat());
+
+                mod.clearReceived();
+                mod.type("customperm track promote cp_k_target " + other);
+                check(mod.chatContains("needs " + PermissionNodes.MANAGE_GRADES + " or " + PermissionNodes.track(other)),
+                        "another track must be refused: " + mod.chat());
+                check(!grades.userGrades.get(targetId).contains(TOP), "and nothing written");
+
+                mod.clearReceived();
+                mod.type("customperm track promote cp_k_mod " + TRACK);
+                check(mod.chatContains("moving yourself"), "moving oneself must be refused: " + mod.chat());
+                check(!grades.userGrades.getOrDefault(modId, List.of()).contains(LOW), "and no rung written for the moderator");
+
+                mod.clearReceived();
+                mod.type("customperm grade assign cp_k_target " + TOP);
+                check(!grades.userGrades.get(targetId).contains(TOP), "a track node must not open grade assignment");
+
+                act(mod, GuiAction.TRACK_PROMOTE, "cp_k_target", TRACK, "");
+                result(mod, "OK: Promoted cp_k_target on " + TRACK + ": " + LOW + " -> " + MID);
+                act(mod, GuiAction.TRACK_PROMOTE, "cp_k_target", other, "");
+                result(mod, "FAIL: Moving a player on " + other + " needs");
+                act(mod, GuiAction.GRADE_ASSIGN, "cp_k_target", TOP, "", "");
+                result(mod, "FAIL: You do not have " + PermissionNodes.MANAGE_GRADES);
+
+                mod.clearReceived();
+                GuiRequestHandler.handleRequest(new com.arcadia.customperm.network.gui.GuiRequestPayload(
+                        GuiPage.PLAYERS.id()), mod.payloadContext());
+                PlayersData page = mod.payloads(GuiPagePayload.class).stream()
+                        .map(GuiPagePayload::data).filter(PlayersData.class::isInstance).map(PlayersData.class::cast)
+                        .reduce((first, second) -> second).orElseThrow(() -> new GameTestAssertException("No Players page"));
+                check(page.tracks().contains(new PlayersData.Track(TRACK, List.of(LOW, MID), true))
+                        && page.tracks().contains(new PlayersData.Track(other, List.of(TOP), false)),
+                        "the page must say which tracks this viewer moves on: " + page.tracks());
+            }
+        } finally {
+            grades.tracks.remove(TRACK);
+            grades.tracks.remove(other);
+            for (String grade : List.of(LOW, MID, TOP)) grades.grades.remove(grade);
+            if (targetId != null) grades.userGrades.remove(targetId);
+            if (modId != null) grades.userGrades.getOrDefault(modId, new java.util.ArrayList<>()).remove(LOW);
             ConfigAdmin.persist();
         }
         helper.succeed();

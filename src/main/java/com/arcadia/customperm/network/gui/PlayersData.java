@@ -71,11 +71,12 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
         return grade;
     }
 
-    /** A ladder of grades, lowest first. */
-    public record Track(String name, List<String> grades) {
+    /** A ladder of grades, lowest first; {@code movable} is whether the viewer may promote and demote on it. */
+    public record Track(String name, List<String> grades, boolean movable) {
         public static final StreamCodec<ByteBuf, Track> CODEC = StreamCodec.composite(
                 GuiCodecs.TEXT, Track::name,
                 GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Track::grades,
+                ByteBufCodecs.BOOL, Track::movable,
                 Track::new);
     }
 

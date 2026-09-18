@@ -110,11 +110,12 @@ public enum GuiAction {
     USER_NODE_REMOVE(4, GuiArea.GRADES),
     /**
      * {@code [playerName, track, context]} Moves a player one rung up a track, like {@code /customperm track
-     * promote}; with a context, among the grades held there only.
+     * promote}; with a context, among the grades held there only. No area: {@code customperm.manage.grades} or
+     * {@code customperm.track.<track>} is checked for the track named, like the text command.
      */
-    TRACK_PROMOTE(3, GuiArea.GRADES),
+    TRACK_PROMOTE(3, null),
     /** {@code [playerName, track, context]} Moves a player one rung down, off the track from its first rung. */
-    TRACK_DEMOTE(3, GuiArea.GRADES),
+    TRACK_DEMOTE(3, null),
 
     /**
      * {@code ["true"|"false"]} Reads LuckPerms and returns what an import would do, writing nothing. The

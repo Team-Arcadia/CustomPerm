@@ -114,7 +114,8 @@ import java.util.stream.Collectors;
  *                     undenygrade <player> <grade> [world=<dim>]
  * /customperm track   create|delete <track>             # a ladder of grades, lowest first
  *                     append <track> <grade> | insert <track> <grade> <position> | remove <track> <grade>
- *                     promote|demote <player> <track> [world=<dim>]  # one rung up or down, there only with a world
+ *                     promote|demote <player> <track> [world=<dim>]  # one rung up or down, there only with a world;
+ *                                                       # manage.grades, or customperm.track.<track> for that one
  *                     list [track]
  * /customperm contexts [player]                      # the static contexts, or what holds for a player now
  *             contexts set <key> <value> | unset <key>  # a context every player here is in (region=eu)
@@ -614,12 +615,12 @@ public class CustomPermCommand {
                     .then(Commands.literal("create").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("track", StringArgumentType.word())
                             .executes(ctx -> report(ctx, com.arcadia.customperm.admin.TrackAdmin.create(
-                                StringArgumentType.getString(ctx, "track"))))))
+                                ctx.getSource().getServer(), StringArgumentType.getString(ctx, "track"))))))
                     .then(Commands.literal("delete").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("track", StringArgumentType.word())
                             .suggests(SUGGEST_TRACKS)
                             .executes(ctx -> report(ctx, com.arcadia.customperm.admin.TrackAdmin.delete(
-                                StringArgumentType.getString(ctx, "track"))))))
+                                ctx.getSource().getServer(), StringArgumentType.getString(ctx, "track"))))))
                     .then(Commands.literal("append").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("track", StringArgumentType.word())
                             .suggests(SUGGEST_TRACKS)
@@ -1585,7 +1586,8 @@ public class CustomPermCommand {
     /** {@code promote|demote <player> <track>}: one rung, through the lockout guard like any grade change. */
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> trackMove(String literal,
                                                                                                   boolean up) {
-        return Commands.literal(literal).requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+        // customperm.manage.grades or one customperm.track.<track>; which track is checked when it runs.
+        return Commands.literal(literal).requires(AdminAccess::canMoveOnAny)
             .then(Commands.argument("player", StringArgumentType.word())
                 .suggests(SUGGEST_KNOWN_PLAYERS)
                 .then(Commands.argument("track", StringArgumentType.word())
@@ -1604,8 +1606,8 @@ public class CustomPermCommand {
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
         var profile = resolution.profile();
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
-        return report(ctx, guarded(ctx, () -> com.arcadia.customperm.admin.TrackAdmin.move(server, profile.get(),
-            StringArgumentType.getString(ctx, "track"), up, context)));
+        return report(ctx, com.arcadia.customperm.admin.TrackAdmin.moveBy(ctx.getSource(), server, profile.get(),
+            StringArgumentType.getString(ctx, "track"), up, context));
     }
 
     /** Every track with its rungs, or one track. */

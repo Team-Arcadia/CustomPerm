@@ -69,6 +69,26 @@ public final class AdminAccess {
         return source.hasPermission(2);
     }
 
+    /**
+     * Whether this source may promote and demote on {@code track}: {@code customperm.manage.grades} for every
+     * track, or the entry plus {@code customperm.track.<track>} for that one.
+     */
+    public static boolean canMoveOn(CommandSourceStack source, String track) {
+        if (!(source.getEntity() instanceof ServerPlayer player)) return source.hasPermission(2);
+        return canManage(player, PermissionNodes.MANAGE_GRADES) || canAdminister(player)
+                && explicit(player.createCommandSourceStack(), PermissionNodes.track(track)) == Tristate.ALLOW;
+    }
+
+    /** Requirement of promote and demote: allowed on at least one track, so a one-track moderator sees them. */
+    public static boolean canMoveOnAny(CommandSourceStack source) {
+        if (canManage(source, PermissionNodes.MANAGE_GRADES)) return true;
+        if (!canAdminister(source)) return false;
+        for (String track : CustomPerm.configManager.getGrades().tracks.keySet()) {
+            if (canMoveOn(source, track)) return true;
+        }
+        return false;
+    }
+
     /** Requirement for a {@code /customperm} subcommand that changes the area of {@code node}. */
     public static Predicate<CommandSourceStack> manage(String node) {
         return source -> canManage(source, node);
