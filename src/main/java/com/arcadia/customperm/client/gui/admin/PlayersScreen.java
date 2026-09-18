@@ -54,7 +54,7 @@ public final class PlayersScreen extends AdminScreen {
     private static final int DURATION_FIELD = 64;
 
     /** One node of the selected player; {@code context} is empty for a node that applies everywhere. */
-    private record NodeRow(String node, boolean deny, String context) {
+    private record NodeRow(String node, boolean deny, String context, long remaining) {
     }
 
     private PlayersData data;
@@ -114,7 +114,7 @@ public final class PlayersScreen extends AdminScreen {
         this.nodeList = new CpList<NodeRow>(Component.literal("Nodes"), 14)
                 .renderer(this::renderNode)
                 .label(n -> (n.deny() ? "denied " : "allowed ") + n.node())
-                .identity(n -> (n.deny() ? "deny:" : "allow:") + n.node())
+                .identity(n -> (n.deny() ? "deny:" : "allow:") + n.node() + "@" + n.context())
                 .emptyText("No node of their own: this player follows their grades only.")
                 .onSelect(n -> {
                     nodeField.setValue(n.node());
@@ -208,10 +208,10 @@ public final class PlayersScreen extends AdminScreen {
         PlayersData.Player player = playerList.getSelected();
         List<NodeRow> nodes = new ArrayList<>();
         if (player != null) {
-            player.deny().forEach(n -> nodes.add(new NodeRow(n, true, "")));
-            player.allow().forEach(n -> nodes.add(new NodeRow(n, false, "")));
-            player.scoped().stream().filter(e -> !e.kind().equals("grade"))
-                    .forEach(e -> nodes.add(new NodeRow(e.value(), e.deny(), e.context())));
+            player.deny().forEach(n -> nodes.add(new NodeRow(n, true, "", 0)));
+            player.allow().forEach(n -> nodes.add(new NodeRow(n, false, "", 0)));
+            player.scoped().stream().filter(PlayersScreen::isNode)
+                    .forEach(e -> nodes.add(new NodeRow(e.value(), e.deny(), e.context(), e.remaining())));
         }
         nodeList.setItems(nodes);
         List<TrackRow> tracks = new ArrayList<>();
@@ -435,12 +435,17 @@ public final class PlayersScreen extends AdminScreen {
 
     // ------------------------------------------------------------------ rendering
 
+    /** A node limited to a world, as opposed to a grade held or refused there. */
+    private static boolean isNode(com.arcadia.customperm.network.gui.ScopedEntry entry) {
+        return entry.kind().equals("allow") || entry.kind().equals("deny");
+    }
+
     private void renderPlayer(GuiGraphics g, Font font, PlayersData.Player player, Rect r, boolean hovered,
                               boolean selected) {
         Skin.dot(g, r.x() + 6, r.centerY(), player.online() ? Palette.GOOD : Palette.LINE_STRONG);
         int x = r.x() + 6 + Atlas.DOT_SIZE + 5;
         int own = player.allow().size() + player.deny().size()
-                + (int) player.scoped().stream().filter(e -> !e.kind().equals("grade")).count();
+                + (int) player.scoped().stream().filter(PlayersScreen::isNode).count();
         String count = own == 0 ? "" : String.valueOf(own);
         int cw = count.isEmpty() ? 0 : font.width(count) + 14;
         if (!count.isEmpty()) {
@@ -455,7 +460,7 @@ public final class PlayersScreen extends AdminScreen {
         int w = Skin.badge(g, font, label, r.x() + 4, r.centerY(), row.deny() ? Palette.DANGER : Palette.GOOD);
         int x = r.x() + 4 + Math.max(w, font.width("ALLOW") + 6) + 5;
         PlayersData.Player player = playerList.getSelected();
-        String left = !row.context().isEmpty() ? GradesScreen.where(row.context())
+        String left = !row.context().isEmpty() ? GradesScreen.label(row.context(), row.remaining())
                 : player == null ? "" : GradesScreen.timeLeft(player.remaining(row.deny() ? "deny" : "allow", row.node()));
         int lw = left.isEmpty() ? 0 : font.width(left) + 8;
         if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
@@ -482,9 +487,12 @@ public final class PlayersScreen extends AdminScreen {
         // list right below. A narrow panel then clips the counts rather than the refusals.
         List<String> held = new ArrayList<>(player.grades());
         player.scoped().stream().filter(e -> e.kind().equals("grade"))
-                .forEach(e -> held.add(e.value() + " (" + GradesScreen.where(e.context()) + ")"));
+                .forEach(e -> held.add(e.value() + " (" + GradesScreen.label(e.context(), e.remaining()) + ")"));
+        List<String> refused = new ArrayList<>(player.refused());
+        player.scoped().stream().filter(e -> e.kind().equals("refused"))
+                .forEach(e -> refused.add(e.value() + " (" + GradesScreen.label(e.context(), e.remaining()) + ")"));
         String sub = (held.isEmpty() ? "no grade" : "grades: " + String.join(", ", held))
-                + (player.refused().isEmpty() ? "" : "  |  refuses: " + String.join(", ", player.refused()))
+                + (refused.isEmpty() ? "" : "  |  refuses: " + String.join(", ", refused))
                 + "  |  " + player.allow().size() + " allow, " + player.deny().size() + " deny"
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, in.w(), Palette.TEXT_MUTE);

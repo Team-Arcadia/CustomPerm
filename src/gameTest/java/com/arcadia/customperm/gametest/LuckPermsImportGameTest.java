@@ -95,6 +95,7 @@ public class LuckPermsImportGameTest {
             LuckPermsTestSupport.addTemporaryParent(BASE, "default", 3600);
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "minecraft.command.weather", "true", "", "0");
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "customperm.command.seed", "false", "world=the_end", "0");
+            apply(LpEditOp.USER_PERM_ADD, USER.toString(), "customperm.command.time", "true", "world=the_nether", "3600");
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "cptest.probe.open", "false", "", "0");
             apply(LpEditOp.TRACK_CREATE, TRACK);
             apply(LpEditOp.TRACK_APPEND, TRACK, BASE);
@@ -156,11 +157,17 @@ public class LuckPermsImportGameTest {
                 fail("A temporary group of a player must arrive with its expiry, a permanent one without: " + player);
             if (!player.deny().contains("cptest.probe.open"))
                 fail("A player's node another mod declared must be searched for and imported: " + player);
-            if (!new java.util.HashSet<>(player.scoped()).equals(java.util.Set.of(
+            if (!new java.util.HashSet<>(player.scoped().stream()
+                    .map(entry -> new ScopedGrant(entry.context(), entry.kind(), entry.value())).toList()).equals(java.util.Set.of(
                     new ScopedGrant(END, ScopedGrant.DENY, "customperm.command.seed"),
-                    new ScopedGrant(END, ScopedGrant.REFUSED, BASE))))
+                    new ScopedGrant(END, ScopedGrant.REFUSED, BASE),
+                    new ScopedGrant(NETHER, ScopedGrant.ALLOW, "customperm.command.time"))))
                 fail("A player's node and refusal limited to a world must arrive with it: " + player.scoped());
-            if (plan.counts().worlds() != 6) fail("Every entry limited to a world must be counted: " + plan.counts());
+            long timeAt = player.scoped().stream().filter(entry -> entry.value().equals("customperm.command.time"))
+                    .mapToLong(ScopedGrant::expires).findFirst().orElse(0);
+            if (Math.abs(timeAt - (com.arcadia.customperm.perm.Expiry.now() + 3600)) > 30)
+                fail("A temporary node limited to a world must arrive with its expiry: " + player.scoped());
+            if (plan.counts().worlds() != 7) fail("Every entry limited to a world must be counted: " + plan.counts());
             if (!List.of(BASE, VIP).equals(plan.tracks().get(TRACK)))
                 fail("A track must arrive with its groups in order: " + plan.tracks());
 
@@ -197,6 +204,8 @@ public class LuckPermsImportGameTest {
                 fail("The node limited to the Nether was not written there.");
             if (!grades.userContexts.get(USER.toString()).get(END).deniedPermissions.contains("customperm.command.seed"))
                 fail("The player's node limited to the End was not written there.");
+            if (!grades.userContexts.get(USER.toString()).get(NETHER).permissionExpiries.containsKey("customperm.command.time"))
+                fail("The player's temporary node limited to the Nether was written without its expiry.");
             if (!grades.userContexts.get(USER.toString()).get(END).refused.contains(BASE))
                 fail("The player's refusal limited to the End was not written there.");
             GradesConfig.GradeScoped vipNether = grades.grades.get(VIP).contexts.get(NETHER);

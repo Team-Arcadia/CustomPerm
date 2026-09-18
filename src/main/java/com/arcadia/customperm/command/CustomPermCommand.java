@@ -73,7 +73,7 @@ import java.util.stream.Collectors;
  *                     addperm|removeperm <grade> <node>
  *                     adddeny|removedeny <grade> <node>   # most specific entry wins, DENY on a tie
  *                     weight <grade> <weight>             # breaks ties at the same specificity
- *                     parent add|adddeny <grade> <parent> [duration|world=<dim>]  # inherit, or refuse wherever inherited
+ *                     parent add|adddeny <grade> <parent> [duration] [world=<dim>]  # inherit, or refuse wherever inherited
  *                     parent remove|removedeny <grade> <parent> [world=<dim>]
  *                     parent list <grade>
  *                     assign|unassign <player> <grade>    # online, or joined the server before
@@ -101,13 +101,13 @@ import java.util.stream.Collectors;
  *                     confirm [replace]                # applies what was previewed, nothing else
  * /customperm export  preview                          # what an export to LuckPerms would write
  *                     confirm [replace]                # writes what was previewed, in the background
- * /customperm grade   addperm|adddeny <grade> <node> [duration|world=<dim>]  # 30d, 2h: temporary; world=the_nether: there only
+ * /customperm grade   addperm|adddeny <grade> <node> [duration] [world=<dim>]  # 30d, 2h: temporary; world=the_nether: there only
  *                     removeperm|removedeny <grade> <node> [world=<dim>]
- *                     assign <player> <grade> [duration|world=<dim>]
+ *                     assign <player> <grade> [duration] [world=<dim>]
  *                     unassign <player> <grade> [world=<dim>]
- * /customperm user    addperm|adddeny <player> <node> [duration|world=<dim>]
+ * /customperm user    addperm|adddeny <player> <node> [duration] [world=<dim>]
  *                     removeperm|removedeny <player> <node> [world=<dim>]
- *                     denygrade <player> <grade> [duration|world=<dim>]
+ *                     denygrade <player> <grade> [duration] [world=<dim>]
  *                     undenygrade <player> <grade> [world=<dim>]
  * /customperm track   create|delete <track>             # a ladder of grades, lowest first
  *                     append <track> <grade> | insert <track> <grade> <position> | remove <track> <grade>
@@ -146,20 +146,29 @@ public class CustomPermCommand {
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_DURATIONS =
         (ctx, builder) -> SharedSuggestionProvider.suggest(List.of("1h", "12h", "1d", "7d", "30d"), builder);
 
-    /** What may follow a grade being assigned: a duration, or one of this server's worlds. */
+    /**
+     * What may follow a grade being assigned: a duration, one of this server's worlds, or both. Suggested for
+     * the word being typed, so the second option is offered once the first is written.
+     */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_DURATIONS_AND_WORLDS =
         (ctx, builder) -> {
-            List<String> options = new java.util.ArrayList<>(List.of("1h", "12h", "1d", "7d", "30d"));
-            options.addAll(worldContexts(ctx.getSource().getServer()));
-            return SharedSuggestionProvider.suggest(options, builder);
+            String typed = builder.getRemaining();
+            int space = typed.lastIndexOf(' ');
+            List<String> written = space < 0 ? List.of() : List.of(typed.substring(0, space).trim().split("\\s+"));
+            List<String> options = new java.util.ArrayList<>();
+            if (written.stream().allMatch(word -> word.isEmpty() || word.contains("="))) {
+                options.addAll(List.of("1h", "12h", "1d", "7d", "30d"));
+            }
+            if (written.stream().noneMatch(word -> word.contains("="))) options.addAll(worldContexts(ctx.getSource().getServer()));
+            return SharedSuggestionProvider.suggest(options, space < 0 ? builder : builder.createOffset(builder.getStart() + space + 1));
         };
 
-    /** One of this server's worlds, for removing a grade held there. */
     /** The loaded worlds by id alone, for {@code prefix <holder> in <world>}. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_WORLD_IDS =
         (ctx, builder) -> SharedSuggestionProvider.suggest(ctx.getSource().getServer() == null ? List.of()
             : ctx.getSource().getServer().levelKeys().stream().map(key -> key.location().toString()).toList(), builder);
 
+    /** One of this server's worlds, for removing a grade held there. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_WORLDS =
         (ctx, builder) -> SharedSuggestionProvider.suggest(worldContexts(ctx.getSource().getServer()), builder);
 
@@ -925,27 +934,38 @@ public class CustomPermCommand {
     }
 
     /**
-     * {@code <node> [duration|world=<dim>]}: a node never holds a space, so what follows one qualifies it, and
-     * a line written before durations and worlds existed reads exactly as it did. A word holding {@code =} is
-     * a context, anything else a duration. {@code node} is null when the text qualifies no node (assign).
+     * {@code <node> [duration] [world=<dim>]}: a node never holds a space, so what follows one qualifies it,
+     * and a line written before durations and worlds existed reads exactly as it did. A word holding {@code =}
+     * is a context, anything else a duration; one of each at most, in either order. {@code node} is null when
+     * the text qualifies no node (assign).
      */
     private record Qualified(String node, long seconds, String context, String problem) {
         static Qualified of(String raw, boolean withNode) {
             String[] parts = raw == null || raw.isBlank() ? new String[0] : raw.trim().split("\\s+");
             int first = withNode ? 1 : 0;
             if (withNode && parts.length == 0) return fail("Expected a node.");
-            if (parts.length > first + 1) {
+            if (parts.length > first + 2) {
                 return fail("Expected " + (withNode ? "a node, then optionally " : "optionally ")
-                    + "a duration such as 30d or a world such as world=the_nether.");
+                    + "a duration such as 30d and a world such as world=the_nether.");
             }
             String node = withNode ? parts[0] : null;
-            if (parts.length == first) return new Qualified(node, 0, null, null);
-            String option = parts[first];
-            if (option.contains("=")) return new Qualified(node, 0, option, null);
-            long seconds = Expiry.parse(option);
-            return seconds < 0
-                ? fail("Invalid duration '" + option + "': use w, d, h, m, s, such as 30d or 1d12h, ten years at most.")
-                : new Qualified(node, seconds, null, null);
+            long seconds = 0;
+            String context = null;
+            for (int i = first; i < parts.length; i++) {
+                String option = parts[i];
+                if (option.contains("=")) {
+                    if (context != null) return fail("One world at most: an entry is limited to one world or applies everywhere.");
+                    context = option;
+                    continue;
+                }
+                long parsed = Expiry.parse(option);
+                if (parsed < 0) {
+                    return fail("Invalid duration '" + option + "': use w, d, h, m, s, such as 30d or 1d12h, ten years at most.");
+                }
+                if (seconds > 0) return fail("One duration at most, such as 30d or 1d12h.");
+                seconds = parsed;
+            }
+            return new Qualified(node, seconds, context, null);
         }
 
         private static Qualified fail(String problem) {
@@ -1131,7 +1151,7 @@ public class CustomPermCommand {
         return 1;
     }
 
-    /** {@code option}: a duration or a {@code world=} context, or null for neither. */
+    /** {@code option}: a duration, a {@code world=} context, both, or null for neither. */
     private static int gradeParentAdd(CommandContext<CommandSourceStack> ctx, String option) {
         Qualified qualified = Qualified.of(option, false);
         if (qualified.problem() != null) return report(ctx, AdminResult.fail(qualified.problem()));
@@ -1177,7 +1197,11 @@ public class CustomPermCommand {
         }
         GradeAdmin.scopedParents(gradeName).forEach((context, entries) -> ctx.getSource().sendSuccess(() ->
             Component.literal("  in " + com.arcadia.customperm.perm.Contexts.describe(context) + ": "
-                + String.join(", ", entries)), false));
+                + String.join(", ", entries.stream().map(entry -> {
+                    int colon = entry.indexOf(':');
+                    return withTimeLeft(entry, GradeAdmin.scopedRemaining(gradeName, context, entry.substring(0, colon),
+                        entry.substring(colon + 1)));
+                }).toList())), false));
         return 1;
     }
 
@@ -1266,7 +1290,7 @@ public class CustomPermCommand {
     }
 
     /** Makes a player refuse a grade, or stop refusing it. */
-    /** {@code option}: a duration or a {@code world=} context when refusing, a context when accepting. */
+    /** {@code option}: a duration and a {@code world=} context when refusing, a context when accepting. */
     private static int userGradeRefusal(CommandContext<CommandSourceStack> ctx, boolean refuse, String option) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return report(ctx, refusal);
@@ -1307,7 +1331,12 @@ public class CustomPermCommand {
         ctx.getSource().sendSuccess(() -> Component.literal("  own deny : "
             + join(timed(uuid, "deny", UserAdmin.nodes(uuid, true)))), false);
         UserAdmin.scoped(uuid).forEach((context, entries) -> ctx.getSource().sendSuccess(() -> Component.literal(
-            "  in " + com.arcadia.customperm.perm.Contexts.describe(context) + ": " + String.join(", ", entries)), false));
+            "  in " + com.arcadia.customperm.perm.Contexts.describe(context) + ": " + String.join(", ", entries.stream()
+                .map(entry -> {
+                    int colon = entry.indexOf(':');
+                    return withTimeLeft(entry, UserAdmin.remaining(uuid, context, entry.substring(0, colon),
+                        entry.substring(colon + 1)));
+                }).toList())), false));
         List<String> prefixes = UserAdmin.chat(uuid, false);
         List<String> suffixes = UserAdmin.chat(uuid, true);
         if (!prefixes.isEmpty() || !suffixes.isEmpty()) {

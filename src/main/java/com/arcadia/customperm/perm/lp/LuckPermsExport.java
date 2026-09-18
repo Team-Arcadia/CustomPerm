@@ -188,7 +188,7 @@ public final class LuckPermsExport {
         for (String key : deny) add(holder, timed(Node.builder(key).value(false), expiries.get("deny:" + key)), kept);
     }
 
-    /** Entries limited to a world, written with LuckPerms' {@code world} context. */
+    /** Entries limited to a world, written with LuckPerms' {@code world} context, a temporary one with its expiry. */
     private static void addScoped(PermissionHolder holder, List<com.arcadia.customperm.admin.ScopedGrant> scoped,
                                   int[] kept) {
         for (var entry : scoped) {
@@ -201,7 +201,8 @@ public final class LuckPermsExport {
                 case com.arcadia.customperm.admin.ScopedGrant.DENY -> Node.builder(entry.value()).value(false);
                 default -> Node.builder(entry.value()).value(true);
             };
-            add(holder, builder.withContext(com.arcadia.customperm.perm.Contexts.WORLD, world).build(), kept);
+            add(holder, timed(builder.withContext(com.arcadia.customperm.perm.Contexts.WORLD, world),
+                    entry.expires() > 0 ? entry.expires() : null), kept);
         }
     }
 

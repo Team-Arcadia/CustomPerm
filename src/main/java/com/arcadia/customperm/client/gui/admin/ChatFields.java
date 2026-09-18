@@ -123,7 +123,7 @@ final class ChatFields {
         String where = String.valueOf(line.priority());
         Skin.text(g, font, where, x, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
         x += Math.max(font.width(where), font.width("000")) + 8;
-        String left = !line.context().isEmpty() ? GradesScreen.where(line.context()) : GradesScreen.timeLeft(line.remaining());
+        String left = GradesScreen.label(line.context(), line.remaining());
         int lw = left.isEmpty() ? 0 : font.width(left) + 8;
         if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
         // Drawn with its codes applied, as players will see it; the box above shows the raw text.

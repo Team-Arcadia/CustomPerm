@@ -11,10 +11,12 @@ package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.ConfigAdmin;
+import com.arcadia.customperm.admin.ExpirySweeper;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.gametest.support.Modes;
 import com.arcadia.customperm.gametest.support.ServerCommands;
 import com.arcadia.customperm.gametest.support.TestPlayer;
+import com.arcadia.customperm.perm.Expiry;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -55,6 +57,8 @@ public class ContextualEntriesGameTest {
             ServerCommands.run(server, "customperm grade create " + GRADE);
 
             expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " world=bad name"),
+                    "Invalid duration 'name'");
+            expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " 1d world=the_end 2h"),
                     "Expected a node, then optionally a duration");
             expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " world=Bad!"),
                     "Invalid context 'world=Bad!'");
@@ -107,10 +111,13 @@ public class ContextualEntriesGameTest {
             ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE);
 
             expect(ServerCommands.run(server, "customperm grade assign cp_c_holder " + GRADE + " 7d world=the_nether"),
-                    "Expected optionally a duration");
+                    "Assigned " + GRADE + " -> cp_c_holder in the_nether for 7d");
+            check(grades.userContexts.get(uuid).get(NETHER).gradeExpiries.containsKey(GRADE),
+                    "a duration and a world together must make the grade held there temporary");
             expect(ServerCommands.run(server, "customperm grade assign cp_c_holder " + GRADE + " world=the_nether"),
-                    "Assigned " + GRADE + " -> cp_c_holder in the_nether");
+                    GRADE + " for cp_c_holder in the_nether is now permanent");
             check(grades.userContexts.get(uuid).get(NETHER).grades.contains(GRADE), "the grade must be held in the Nether");
+            check(grades.userContexts.get(uuid).get(NETHER).gradeExpiries.isEmpty(), "and for good once told so");
             check(!grades.userGrades.containsKey(uuid), "and not everywhere");
 
             teleport(server, player, Level.OVERWORLD);
@@ -122,7 +129,7 @@ public class ContextualEntriesGameTest {
                     "Denied " + NODE + " -> cp_c_holder in the_nether");
             check(!player.canUse(COMMAND), "the player's own contextual DENY must outrank their grade");
             expect(ServerCommands.run(server, "customperm user adddeny cp_c_holder " + NODE + " 1d world=the_nether"),
-                    "Expected a node, then optionally a duration");
+                    NODE + " for cp_c_holder in the_nether now expires in 1d");
             expect(ServerCommands.run(server, "customperm user list cp_c_holder"),
                     "in the_nether: grade:" + GRADE + ", deny:" + NODE);
 
@@ -217,6 +224,84 @@ public class ContextualEntriesGameTest {
         if (player.player().level() != level) {
             throw new GameTestAssertException("the player did not reach " + world.location());
         }
+    }
+
+    /** Entries both limited to a world and temporary: they apply there while they last, then the sweep removes them. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "customperm_contextual")
+    public static void aTemporaryEntryHeldInOneWorld(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        String base = GRADE + "_tbase";
+        String member = GRADE + "_tmember";
+        String end = "world=minecraft:the_end";
+        String uuid = null;
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_c_timed", 0);
+             CommandExposureGameTest.Exposure ignored = CommandExposureGameTest.Exposure.of(server, COMMAND)) {
+            uuid = player.uuid().toString();
+            for (String name : List.of(base, member)) {
+                grades.grades.remove(name);
+                ServerCommands.run(server, "customperm grade create " + name);
+            }
+            ServerCommands.run(server, "customperm grade addperm " + base + " " + NODE);
+            ServerCommands.run(server, "customperm grade assign cp_c_timed " + member);
+            teleport(server, player, Level.NETHER);
+
+            expect(ServerCommands.run(server, "customperm grade parent add " + member + " " + base + " world=the_nether 2h 1d"),
+                    "Expected optionally a duration such as 30d and a world");
+            expect(ServerCommands.run(server, "customperm grade parent add " + member + " " + base + " 2h 1d"),
+                    "One duration at most");
+            expect(ServerCommands.run(server, "customperm grade parent add " + member + " " + base + " 2h world=the_nether"),
+                    member + " now inherits " + base + " in the_nether for 2h");
+            check(player.canUse(COMMAND), "a temporary parent in the Nether must be inherited there while it lasts");
+            List<String> listed = ServerCommands.run(server, "customperm grade parent list " + member);
+            check(listed.stream().anyMatch(line -> line.contains("parent:" + base + " (2h left)")
+                    || line.contains("parent:" + base + " (1h 59m left)")), "the listing must show the time left: " + listed);
+            grades.grades.get(member).contexts.get(NETHER).parentExpiries.put(base, Expiry.now() - 1);
+            check(!player.canUse(COMMAND), "an expired parent limited to a world must stop before any sweep");
+            List<String> removed = ExpirySweeper.sweep(server);
+            check(removed.contains(member + " in the_nether no longer inherits " + base), "the sweep must say so: " + removed);
+            check(!grades.grades.get(member).contexts.containsKey(NETHER), "and leave no emptied world entry behind");
+
+            // Either order.
+            expect(ServerCommands.run(server, "customperm user addperm cp_c_timed " + NODE + " world=the_nether 1d"),
+                    "Added " + NODE + " -> cp_c_timed in the_nether for 1d");
+            check(player.canUse(COMMAND), "a temporary node of the player's own must apply in its world");
+            expect(ServerCommands.run(server, "customperm user addperm cp_c_timed " + NODE + " world=the_nether"),
+                    NODE + " for cp_c_timed in the_nether is now permanent");
+            check(grades.userContexts.get(uuid).get(NETHER).permissionExpiries.isEmpty(), "the expiry must be gone");
+            ServerCommands.run(server, "customperm user removeperm cp_c_timed " + NODE + " world=the_nether");
+            check(!grades.userContexts.containsKey(uuid), "a removed node must take its world entry with it");
+
+            expect(ServerCommands.run(server, "customperm grade assign cp_c_timed " + base + " 3h world=the_nether"),
+                    "Assigned " + base + " -> cp_c_timed in the_nether for 3h");
+            expect(ServerCommands.run(server, "customperm user denygrade cp_c_timed " + base + " world=the_end 1h"),
+                    "cp_c_timed now refuses " + base + " in the_end for 1h");
+            expect(ServerCommands.run(server, "customperm grade prefix " + member + " in the_nether addtemp 5 1h [Hot]"),
+                    "Prefix \"[Hot]\" at 5 -> " + member + " in the_nether for 1h");
+            check(player.canUse(COMMAND), "a grade held in the Nether for a while must apply there");
+            expect(ServerCommands.run(server, "customperm user list cp_c_timed"), "grade:" + base + " (");
+
+            grades.userContexts.get(uuid).get(NETHER).gradeExpiries.put(base, Expiry.now() - 1);
+            check(!player.canUse(COMMAND), "an expired grade held in a world must stop applying before any sweep");
+            grades.userContexts.get(uuid).get(end).refusedExpiries.put(base, Expiry.now() - 1);
+            grades.grades.get(member).contexts.get(NETHER).prefixes.get(0).expires = Expiry.now() - 1;
+            removed = ExpirySweeper.sweep(server);
+            check(removed.contains("cp_c_timed in the_nether no longer holds " + base), "the grade must be swept: " + removed);
+            check(removed.contains("cp_c_timed in the_end no longer refuses " + base), "the refusal too: " + removed);
+            check(removed.contains(member + " in the_nether no longer shows the prefix \"[Hot]\" at 5"),
+                    "and the prefix: " + removed);
+            check(!grades.userContexts.containsKey(uuid), "every emptied world entry must leave the file");
+            check(!grades.grades.get(member).contexts.containsKey(NETHER), "the grade's too");
+        } finally {
+            for (String name : List.of(base, member)) grades.grades.remove(name);
+            if (uuid != null) {
+                grades.userGrades.remove(uuid);
+                grades.userContexts.remove(uuid);
+            }
+            ConfigAdmin.persist();
+        }
+        helper.succeed();
     }
 
     private static void expect(List<String> lines, String fragment) {

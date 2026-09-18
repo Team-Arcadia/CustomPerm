@@ -126,7 +126,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                     live(grade.permissions, grade.permissionExpiries, "allow:", expiries, now),
                     live(grade.deniedPermissions, grade.deniedPermissionExpiries, "deny:", expiries, now),
                     chatWorldOnly(ChatGrant.of(grade.prefixes, grade.suffixes, grade.contexts, now), dropped, notes,
-                            "grade " + name), Map.copyOf(expiries), worldOnly(ScopedGrant.of(grade.contexts),
+                            "grade " + name), Map.copyOf(expiries), worldOnly(ScopedGrant.of(grade.contexts, now),
                     exported, config, dropped, notes, "grade " + name)));
         }
 
@@ -162,7 +162,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                     chatWorldOnly(ChatGrant.of(config.userPrefixEntries.get(uuid), config.userSuffixEntries.get(uuid),
                             config.userContexts.get(uuid), now), dropped, notes, who),
                     Map.copyOf(expiries),
-                    worldOnly(ScopedGrant.of(config.userContexts.getOrDefault(uuid, Map.of())), exported, config,
+                    worldOnly(ScopedGrant.of(config.userContexts.getOrDefault(uuid, Map.of()), now), exported, config,
                             dropped, notes, who));
             if (player.entries() > 0) players.add(player);
         }

@@ -159,10 +159,10 @@ public final class GuiSnapshots {
     private static List<ScopedEntry> gradeScoped(com.arcadia.customperm.config.GradesConfig.Grade grade) {
         List<ScopedEntry> entries = new ArrayList<>();
         new java.util.TreeMap<>(grade.contexts).forEach((context, scope) -> {
-            new TreeSet<>(scope.deniedPermissions).forEach(node -> entries.add(new ScopedEntry(context, "deny", node)));
-            new TreeSet<>(scope.permissions).forEach(node -> entries.add(new ScopedEntry(context, "allow", node)));
-            scope.parents.forEach(parent -> entries.add(new ScopedEntry(context, "parent", parent)));
-            scope.refused.forEach(parent -> entries.add(new ScopedEntry(context, "refused", parent)));
+            new TreeSet<>(scope.deniedPermissions).forEach(node -> entries.add(scoped(scope, context, "deny", node)));
+            new TreeSet<>(scope.permissions).forEach(node -> entries.add(scoped(scope, context, "allow", node)));
+            scope.parents.forEach(parent -> entries.add(scoped(scope, context, "parent", parent)));
+            scope.refused.forEach(parent -> entries.add(scoped(scope, context, "refused", parent)));
         });
         return entries.size() > GuiCodecs.SERVER_LIST_MAX ? entries.subList(0, GuiCodecs.SERVER_LIST_MAX) : entries;
     }
@@ -172,9 +172,17 @@ public final class GuiSnapshots {
         List<ScopedEntry> entries = new ArrayList<>();
         UserAdmin.scoped(uuid).forEach((context, held) -> held.forEach(entry -> {
             int colon = entry.indexOf(':');
-            entries.add(new ScopedEntry(context, entry.substring(0, colon), entry.substring(colon + 1)));
+            String kind = entry.substring(0, colon);
+            String value = entry.substring(colon + 1);
+            entries.add(new ScopedEntry(context, kind, value, UserAdmin.remaining(uuid, context, kind, value)));
         }));
         return entries.size() > GuiCodecs.SERVER_LIST_MAX ? entries.subList(0, GuiCodecs.SERVER_LIST_MAX) : entries;
+    }
+
+    /** One entry of {@code scope}, with the time it has left. */
+    private static ScopedEntry scoped(com.arcadia.customperm.config.GradesConfig.Scoped scope, String context,
+                                      String kind, String value) {
+        return new ScopedEntry(context, kind, value, left(scope.expiries(kind).get(value)));
     }
 
     /** Seconds left before {@code at}, 0 for no expiry, and at least 1 for one not swept yet. */
@@ -224,7 +232,8 @@ public final class GuiSnapshots {
             String name = server == null ? rawUuid : GradeAdmin.displayName(server, uuid);
             byContext.forEach((context, scope) -> (refused ? scope.refused : scope.grades).forEach(grade -> byGrade
                     .computeIfAbsent(grade, k -> new ArrayList<>())
-                    .add(new GradesData.Member(rawUuid, name, online, 0, context))));
+                    .add(new GradesData.Member(rawUuid, name, online,
+                            left((refused ? scope.refusedExpiries : scope.gradeExpiries).get(grade)), context))));
         });
     }
 

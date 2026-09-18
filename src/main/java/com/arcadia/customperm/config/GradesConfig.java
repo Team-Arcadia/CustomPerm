@@ -117,7 +117,8 @@ public class GradesConfig {
     /**
      * What applies in one context only. At the same specificity and from the same holder, a node here
      * outranks the same node without a context, like a contextual node in LuckPerms; a prefix here outranks
-     * the holder's global one at the same priority. A grade refused here is refused only there.
+     * the holder's global one at the same priority. A grade refused here is refused only there. Each
+     * collection keeps its expiries beside it, as the global ones do: an entry absent from them is permanent.
      */
     public static class Scoped {
         public Set<String> permissions = new HashSet<>();
@@ -126,30 +127,64 @@ public class GradesConfig {
         public List<String> refused = new ArrayList<>();
         public List<ChatEntry> prefixes = new ArrayList<>();
         public List<ChatEntry> suffixes = new ArrayList<>();
+        /** ALLOW node -> when it expires, in epoch seconds. */
+        public Map<String, Long> permissionExpiries = new HashMap<>();
+        /** DENY node -> when it expires. */
+        public Map<String, Long> deniedPermissionExpiries = new HashMap<>();
+        /** Refused grade -> when the refusal ends. */
+        public Map<String, Long> refusedExpiries = new HashMap<>();
 
         public boolean isEmpty() {
             return permissions.isEmpty() && deniedPermissions.isEmpty() && refused.isEmpty()
                     && prefixes.isEmpty() && suffixes.isEmpty();
+        }
+
+        /**
+         * The expiries of the entries a listing calls {@code kind}: {@code allow}, {@code deny} and
+         * {@code refused} here, {@code parent} or {@code grade} on the holder's own kind of scope. Empty for
+         * any other kind.
+         */
+        public Map<String, Long> expiries(String kind) {
+            return switch (kind) {
+                case "allow" -> permissionExpiries;
+                case "deny" -> deniedPermissionExpiries;
+                case "refused" -> refusedExpiries;
+                default -> Map.of();
+            };
         }
     }
 
     /** What one grade gives in one context: {@link Scoped}, and grades it inherits only there. */
     public static class GradeScoped extends Scoped {
         public List<String> parents = new ArrayList<>();
+        /** Parent -> when this grade stops inheriting it here. */
+        public Map<String, Long> parentExpiries = new HashMap<>();
 
         @Override
         public boolean isEmpty() {
             return super.isEmpty() && parents.isEmpty();
+        }
+
+        @Override
+        public Map<String, Long> expiries(String kind) {
+            return kind.equals("parent") ? parentExpiries : super.expiries(kind);
         }
     }
 
     /** What one player holds in one context: {@link Scoped}, and grades that apply to them only there. */
     public static class UserScoped extends Scoped {
         public List<String> grades = new ArrayList<>();
+        /** Grade held here -> when the player stops holding it here. */
+        public Map<String, Long> gradeExpiries = new HashMap<>();
 
         @Override
         public boolean isEmpty() {
             return super.isEmpty() && grades.isEmpty();
+        }
+
+        @Override
+        public Map<String, Long> expiries(String kind) {
+            return kind.equals("grade") ? gradeExpiries : super.expiries(kind);
         }
     }
 
@@ -237,6 +272,8 @@ public class GradesConfig {
             g.contexts.values().forEach(scope -> {
                 scope.parents.remove(g.name);
                 scope.refused.remove(g.name);
+                scope.parentExpiries.remove(g.name);
+                scope.refusedExpiries.remove(g.name);
             });
             g.contexts.values().removeIf(Scoped::isEmpty);
         }
@@ -288,11 +325,38 @@ public class GradesConfig {
             addNames(target.refused, scope.refused);
             target.prefixes = normalizeChat(concat(target.prefixes, scope.prefixes), null);
             target.suffixes = normalizeChat(concat(target.suffixes, scope.suffixes), null);
-            if (scope instanceof UserScoped user) addNames(((UserScoped) target).grades, user.grades);
-            if (scope instanceof GradeScoped grade) addNames(((GradeScoped) target).parents, grade.parents);
+            addExpiries(target.permissionExpiries, scope.permissionExpiries);
+            addExpiries(target.deniedPermissionExpiries, scope.deniedPermissionExpiries);
+            addExpiries(target.refusedExpiries, scope.refusedExpiries);
+            if (scope instanceof UserScoped user) {
+                addNames(((UserScoped) target).grades, user.grades);
+                addExpiries(((UserScoped) target).gradeExpiries, user.gradeExpiries);
+            }
+            if (scope instanceof GradeScoped grade) {
+                addNames(((GradeScoped) target).parents, grade.parents);
+                addExpiries(((GradeScoped) target).parentExpiries, grade.parentExpiries);
+            }
         });
         clean.values().removeIf(Scoped::isEmpty);
+        clean.values().forEach(GradesConfig::keepScopedExpiries);
         return clean;
+    }
+
+    /** The expiries of one scope that still name one of its entries, as {@link #keepFor} does for a holder. */
+    private static void keepScopedExpiries(Scoped scope) {
+        scope.permissionExpiries = keepFor(scope.permissionExpiries, scope.permissions);
+        scope.deniedPermissionExpiries = keepFor(scope.deniedPermissionExpiries, scope.deniedPermissions);
+        scope.refusedExpiries = keepFor(scope.refusedExpiries, scope.refused);
+        if (scope instanceof UserScoped user) user.gradeExpiries = keepFor(user.gradeExpiries, user.grades);
+        if (scope instanceof GradeScoped grade) grade.parentExpiries = keepFor(grade.parentExpiries, grade.parents);
+    }
+
+    /** Two spellings of one context merged: of two expiries for one entry, the later one. */
+    private static void addExpiries(Map<String, Long> into, Map<String, Long> expiries) {
+        if (expiries == null) return;
+        expiries.forEach((key, at) -> {
+            if (key != null && at != null) into.merge(key, at, Math::max);
+        });
     }
 
     private static void addNames(List<String> into, List<String> names) {

@@ -12,6 +12,7 @@ import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.log.ActivityLog;
 import com.arcadia.customperm.log.LogEntry;
+import com.arcadia.customperm.perm.Contexts;
 import com.arcadia.customperm.perm.Expiry;
 import net.minecraft.server.MinecraftServer;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -64,6 +65,13 @@ public final class ExpirySweeper {
                     parent -> removed.add(entry.getKey() + " no longer refuses " + parent));
             expireChat(grade.prefixes, now, text -> removed.add(entry.getKey() + " no longer shows the prefix " + text));
             expireChat(grade.suffixes, now, text -> removed.add(entry.getKey() + " no longer shows the suffix " + text));
+            if (grade.contexts.isEmpty()) continue;
+            grade.contexts.forEach((context, scope) -> {
+                String where = entry.getKey() + " in " + Contexts.describe(context);
+                expireScope(scope, now, where, removed);
+                expire(scope.parentExpiries, scope.parents, now, parent -> removed.add(where + " no longer inherits " + parent));
+            });
+            grade.contexts.values().removeIf(GradesConfig.Scoped::isEmpty);
         }
         expireUsers(server, config.userPermissionExpiries, config.userPermissions, now, removed,
                 (who, node) -> who + " no longer has " + node);
@@ -75,6 +83,21 @@ public final class ExpirySweeper {
                 (who, grade) -> who + " no longer refuses " + grade);
         expireUserChat(server, config.userPrefixEntries, now, removed, "prefix");
         expireUserChat(server, config.userSuffixEntries, now, removed, "suffix");
+        Iterator<Map.Entry<String, Map<String, GradesConfig.UserScoped>>> users = config.userContexts.entrySet().iterator();
+        while (users.hasNext()) {
+            Map.Entry<String, Map<String, GradesConfig.UserScoped>> user = users.next();
+            user.getValue().forEach((context, scope) -> {
+                // The name is looked up only once something did expire, as for the global entries.
+                List<String> gone = new ArrayList<>();
+                expireScope(scope, now, "", gone);
+                expire(scope.gradeExpiries, scope.grades, now, grade -> gone.add(" no longer holds " + grade));
+                if (gone.isEmpty()) return;
+                String where = name(server, user.getKey()) + " in " + Contexts.describe(context);
+                gone.forEach(line -> removed.add(where + line));
+            });
+            user.getValue().values().removeIf(GradesConfig.Scoped::isEmpty);
+            if (user.getValue().isEmpty()) users.remove();
+        }
         if (removed.isEmpty()) return removed;
 
         String warning = ConfigAdmin.persist();
@@ -85,6 +108,15 @@ public final class ExpirySweeper {
         }
         if (warning != null) CustomPerm.LOGGER.warn("[CustomPerm] {}", warning);
         return removed;
+    }
+
+    /** What one scope holds that has run out, each line starting with {@code who}. */
+    private static void expireScope(GradesConfig.Scoped scope, long now, String who, List<String> removed) {
+        expire(scope.permissionExpiries, scope.permissions, now, node -> removed.add(who + " no longer grants " + node));
+        expire(scope.deniedPermissionExpiries, scope.deniedPermissions, now, node -> removed.add(who + " no longer denies " + node));
+        expire(scope.refusedExpiries, scope.refused, now, grade -> removed.add(who + " no longer refuses " + grade));
+        expireChat(scope.prefixes, now, text -> removed.add(who + " no longer shows the prefix " + text));
+        expireChat(scope.suffixes, now, text -> removed.add(who + " no longer shows the suffix " + text));
     }
 
     private static void expireChat(List<GradesConfig.ChatEntry> entries, long now,

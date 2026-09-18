@@ -89,6 +89,8 @@ public final class GradeAdmin {
             scopes.values().forEach(scope -> {
                 scope.grades.remove(name);
                 scope.refused.remove(name);
+                scope.gradeExpiries.remove(name);
+                scope.refusedExpiries.remove(name);
             });
             scopes.values().removeIf(GradesConfig.Scoped::isEmpty);
         });
@@ -126,7 +128,7 @@ public final class GradeAdmin {
 
     /**
      * {@link #addNode(MinecraftServer, String, String, boolean, long)} limited to {@code rawContext}, such as
-     * {@code world=the_nether}; blank for everywhere. An entry limited to a world is permanent.
+     * {@code world=the_nether}; blank for everywhere. A duration applies there as it does everywhere.
      */
     public static AdminResult addNode(MinecraftServer server, String gradeName, String rawNode, boolean deny,
                                       long seconds, String rawContext) {
@@ -136,30 +138,24 @@ public final class GradeAdmin {
         if (node == null) return AdminResult.fail("Invalid permission node '" + rawNode.trim() + "'.");
         String context = Scopes.parse(rawContext);
         if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
-        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
-        if (context != null) {
-            GradesConfig.Scoped scope = Scopes.of(grade, context);
-            if (!(deny ? scope.deniedPermissions : scope.permissions).add(node)) {
-                return AdminResult.ok(node + " is already " + (deny ? "denied to " : "granted to ") + gradeName
-                        + Scopes.span(context) + " — no change.");
-            }
-            String warning = ConfigAdmin.persist();
-            ConfigAdmin.resyncCommands(server);
-            return AdminResult.ok((deny ? "Denied " : "Added ") + node + " -> " + gradeName + Scopes.span(context))
-                    .warn(warning);
-        }
-        Set<String> nodes = deny ? grade.deniedPermissions : grade.permissions;
+        GradesConfig.Scoped scope = context == null ? null : Scopes.of(grade, context);
+        Set<String> nodes = scope == null ? (deny ? grade.deniedPermissions : grade.permissions)
+                : (deny ? scope.deniedPermissions : scope.permissions);
+        Map<String, Long> expiries = scope == null ? (deny ? grade.deniedPermissionExpiries : grade.permissionExpiries)
+                : (deny ? scope.deniedPermissionExpiries : scope.permissionExpiries);
+        String where = Scopes.span(context);
         boolean added = nodes.add(node);
-        boolean timed = Expiries.apply(deny ? grade.deniedPermissionExpiries : grade.permissionExpiries, node, seconds);
+        boolean timed = Expiries.apply(expiries, node, seconds);
         if (!added && !timed) {
-            return AdminResult.ok(node + " is already " + (deny ? "denied to " : "granted to ") + gradeName + " — no change.");
+            return AdminResult.ok(node + " is already " + (deny ? "denied to " : "granted to ") + gradeName + where
+                    + " — no change.");
         }
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
-        return AdminResult.ok(added ? (deny ? "Denied " : "Added ") + node + " -> " + gradeName + Expiries.span(seconds)
-                : node + " on " + gradeName + " " + Expiries.became(seconds)).warn(warning);
+        return AdminResult.ok(added ? (deny ? "Denied " : "Added ") + node + " -> " + gradeName + where + Expiries.span(seconds)
+                : node + " on " + gradeName + where + " " + Expiries.became(seconds)).warn(warning);
     }
 
     public static AdminResult removeNode(MinecraftServer server, String gradeName, String rawNode, boolean deny) {
@@ -182,6 +178,7 @@ public final class GradeAdmin {
                 return AdminResult.ok(node + " is not " + (deny ? "denied to " : "granted to ") + gradeName
                         + Scopes.span(context) + " — no change.");
             }
+            (deny ? scope.deniedPermissionExpiries : scope.permissionExpiries).remove(node);
             Scopes.tidy(grade);
             String warning = ConfigAdmin.persist();
             ConfigAdmin.resyncCommands(server);
@@ -235,7 +232,6 @@ public final class GradeAdmin {
         if (refusal != null) return refusal;
         String context = Scopes.parse(rawContext);
         if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
-        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
         String problem = ChatEntries.problem(suffix, priority, text);
@@ -338,6 +334,12 @@ public final class GradeAdmin {
         return out;
     }
 
+    /** Seconds left on the entry {@code kind:value} a grade holds in {@code context}, 0 for a permanent one. */
+    public static long scopedRemaining(String gradeName, String context, String kind, String value) {
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        return grade == null ? 0 : Scopes.remaining(Scopes.find(grade, context), kind, value);
+    }
+
     /** Says a prefix shows nowhere while decoration is off. Shared with {@link UserAdmin}. */
     static AdminResult decorationNote(AdminResult result) {
         return CustomPerm.configManager.getSettings().decorateNames ? result
@@ -368,7 +370,6 @@ public final class GradeAdmin {
         if (refusal != null) return refusal;
         String context = Scopes.parse(rawContext);
         if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
-        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
         if (!grades().grades.containsKey(parentName)) return AdminResult.fail("No such grade: " + parentName);
@@ -376,7 +377,13 @@ public final class GradeAdmin {
         if (context != null) {
             GradesConfig.GradeScoped scope = Scopes.find(grade, context);
             if (scope != null && scope.parents.contains(parentName)) {
-                return AdminResult.ok(gradeName + " already inherits " + parentName + Scopes.span(context) + " — no change.");
+                if (!Expiries.apply(scope.parentExpiries, parentName, seconds)) {
+                    return AdminResult.ok(gradeName + " already inherits " + parentName + Scopes.span(context) + " — no change.");
+                }
+                String warning = ConfigAdmin.persist();
+                ConfigAdmin.resyncCommands(server);
+                return AdminResult.ok(gradeName + " inheriting " + parentName + Scopes.span(context) + " "
+                        + Expiries.became(seconds)).warn(warning);
             }
             if (scope != null && scope.refused.contains(parentName)) {
                 return AdminResult.fail(gradeName + " refuses " + parentName + Scopes.span(context)
@@ -387,10 +394,13 @@ public final class GradeAdmin {
                 return AdminResult.fail("Refused: " + String.join(" inherits ", loop) + ", so " + gradeName
                         + " cannot inherit " + parentName + ", in any world.");
             }
-            Scopes.of(grade, context).parents.add(parentName);
+            GradesConfig.GradeScoped target = Scopes.of(grade, context);
+            target.parents.add(parentName);
+            Expiries.apply(target.parentExpiries, parentName, seconds);
             String warning = ConfigAdmin.persist();
             ConfigAdmin.resyncCommands(server);
-            AdminResult result = AdminResult.ok(gradeName + " now inherits " + parentName + Scopes.span(context)).warn(warning);
+            AdminResult result = AdminResult.ok(gradeName + " now inherits " + parentName + Scopes.span(context)
+                    + Expiries.span(seconds)).warn(warning);
             return grade.parents.contains(parentName)
                     ? result.note("It also inherits it everywhere, which already covers that world.") : result;
         }
@@ -436,6 +446,7 @@ public final class GradeAdmin {
             if (scope == null || !scope.parents.remove(parentName)) {
                 return AdminResult.ok(gradeName + " does not inherit " + parentName + Scopes.span(context) + " — no change.");
             }
+            scope.parentExpiries.remove(parentName);
             Scopes.tidy(grade);
             String warning = ConfigAdmin.persist();
             ConfigAdmin.resyncCommands(server);
@@ -470,7 +481,6 @@ public final class GradeAdmin {
         if (refusal != null) return refusal;
         String context = Scopes.parse(rawContext);
         if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
-        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
         if (!grades().grades.containsKey(parentName)) return AdminResult.fail("No such grade: " + parentName);
@@ -482,12 +492,21 @@ public final class GradeAdmin {
                         + " directly: remove that parent instead of refusing it.");
             }
             if (scope != null && scope.refused.contains(parentName)) {
-                return AdminResult.ok(gradeName + " already refuses " + parentName + Scopes.span(context) + " — no change.");
+                if (!Expiries.apply(scope.refusedExpiries, parentName, seconds)) {
+                    return AdminResult.ok(gradeName + " already refuses " + parentName + Scopes.span(context) + " — no change.");
+                }
+                String warning = ConfigAdmin.persist();
+                ConfigAdmin.resyncCommands(server);
+                return AdminResult.ok(gradeName + " refusing " + parentName + Scopes.span(context) + " "
+                        + Expiries.became(seconds)).warn(warning);
             }
-            Scopes.of(grade, context).refused.add(parentName);
+            GradesConfig.GradeScoped target = Scopes.of(grade, context);
+            target.refused.add(parentName);
+            Expiries.apply(target.refusedExpiries, parentName, seconds);
             String warning = ConfigAdmin.persist();
             ConfigAdmin.resyncCommands(server);
-            return AdminResult.ok(gradeName + " now refuses " + parentName + Scopes.span(context)).warn(warning)
+            return AdminResult.ok(gradeName + " now refuses " + parentName + Scopes.span(context) + Expiries.span(seconds))
+                    .warn(warning)
                     .note("Nothing " + gradeName + " inherits brings it back there. Other grades a player holds are unaffected.");
         }
         if (grade.parents.contains(parentName)) {
@@ -527,6 +546,7 @@ public final class GradeAdmin {
             if (scope == null || !scope.refused.remove(parentName)) {
                 return AdminResult.ok(gradeName + " does not refuse " + parentName + Scopes.span(context) + " — no change.");
             }
+            scope.refusedExpiries.remove(parentName);
             Scopes.tidy(grade);
             String warning = ConfigAdmin.persist();
             ConfigAdmin.resyncCommands(server);
@@ -611,24 +631,28 @@ public final class GradeAdmin {
         if (refusal != null) return refusal;
         String context = Scopes.parse(rawContext);
         if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
-        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         if (!grades().grades.containsKey(gradeName)) return AdminResult.fail("No such grade: " + gradeName);
         if (grades().userDeniedGrades.getOrDefault(profile.getId().toString(), List.of()).contains(gradeName)) {
             return AdminResult.fail(profile.getName() + " refuses " + gradeName + ": remove that refusal first, "
                     + "or the file would say both at once.");
         }
         if (context != null) {
-            List<String> scoped = Scopes.of(grades(), profile.getId(), context).grades;
-            if (scoped.contains(gradeName)) {
-                Scopes.tidy(grades(), profile.getId());
+            GradesConfig.UserScoped scope = Scopes.of(grades(), profile.getId(), context);
+            boolean added = !scope.grades.contains(gradeName);
+            if (added) scope.grades.add(gradeName);
+            boolean timed = Expiries.apply(scope.gradeExpiries, gradeName, seconds);
+            if (!added && !timed) {
                 return AdminResult.ok(profile.getName() + " is already assigned to " + gradeName + Scopes.span(context)
                         + " — no change.");
             }
-            scoped.add(gradeName);
             String warning = ConfigAdmin.persist();
             resyncPlayer(server, profile.getId());
-            AdminResult result = AdminResult.ok("Assigned " + gradeName + " -> " + profile.getName() + Scopes.span(context))
-                    .warn(warning);
+            if (!added) {
+                return AdminResult.ok(gradeName + " for " + profile.getName() + Scopes.span(context) + " "
+                        + Expiries.became(seconds)).warn(warning);
+            }
+            AdminResult result = AdminResult.ok("Assigned " + gradeName + " -> " + profile.getName() + Scopes.span(context)
+                    + Expiries.span(seconds)).warn(warning);
             return grades().userGrades.getOrDefault(profile.getId().toString(), List.of()).contains(gradeName)
                     ? result.note("They also hold it everywhere, which already covers that world.")
                     : result;
@@ -664,6 +688,7 @@ public final class GradeAdmin {
                 return AdminResult.ok(displayName + " is not assigned to " + gradeName + Scopes.span(context)
                         + " — no change.");
             }
+            scope.gradeExpiries.remove(gradeName);
             Scopes.tidy(grades(), uuid);
             String warning = ConfigAdmin.persist();
             resyncPlayer(server, uuid);

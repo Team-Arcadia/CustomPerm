@@ -198,6 +198,115 @@ class ExpiryTest {
                 "a parent expiry naming no parent is dropped too");
     }
 
+    // --- limited to a world and temporary ---
+
+    private static final String NETHER = "world=minecraft:the_nether";
+
+    private Contexts inNether() {
+        return Contexts.world("minecraft:the_nether");
+    }
+
+    @Test
+    void anExpiredNodeLimitedToAWorldLetsTheGlobalOneAnswer() {
+        GradesConfig.Grade vip = grade("vip");
+        vip.permissions.add("customperm.command.fly");
+        GradesConfig.GradeScoped nether = new GradesConfig.GradeScoped();
+        nether.deniedPermissions.add("customperm.command.fly");
+        nether.deniedPermissionExpiries.put("customperm.command.fly", Expiry.now() + 60);
+        vip.contexts.put(NETHER, nether);
+        assign("vip");
+        assertEquals(Tristate.DENY, PermissionResolver.check(grades, player, "customperm.command.fly", null, inNether()));
+        nether.deniedPermissionExpiries.put("customperm.command.fly", Expiry.now() - 1);
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.fly", null, inNether()),
+                "once the Nether denial is over, the grade's global node answers there");
+    }
+
+    @Test
+    void aPlayersTemporaryEntriesInAWorldExpire() {
+        GradesConfig.Grade vip = grade("vip");
+        vip.permissions.add("customperm.command.fly");
+        GradesConfig.UserScoped nether = new GradesConfig.UserScoped();
+        nether.grades.add("vip");
+        nether.gradeExpiries.put("vip", Expiry.now() + 60);
+        nether.permissions.add("customperm.command.home");
+        nether.permissionExpiries.put("customperm.command.home", Expiry.now() - 1);
+        grades.userContexts.put(user, new HashMap<>(Map.of(NETHER, nether)));
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.fly", null, inNether()));
+        assertEquals(Tristate.UNSET, PermissionResolver.check(grades, player, "customperm.command.home", null, inNether()),
+                "an expired node of the player's own in a world grants nothing");
+        nether.gradeExpiries.put("vip", Expiry.now() - 1);
+        assertEquals(Tristate.UNSET, PermissionResolver.check(grades, player, "customperm.command.fly", null, inNether()),
+                "an expired grade held in a world is no longer held there");
+    }
+
+    @Test
+    void anExpiredParentOrRefusalLimitedToAWorldStopsThere() {
+        GradesConfig.Grade base = grade("base");
+        base.permissions.add("customperm.command.fly");
+        GradesConfig.Grade vip = grade("vip");
+        GradesConfig.GradeScoped nether = new GradesConfig.GradeScoped();
+        nether.parents.add("base");
+        nether.parentExpiries.put("base", Expiry.now() + 60);
+        vip.contexts.put(NETHER, nether);
+        assign("vip");
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.fly", null, inNether()));
+        nether.parentExpiries.put("base", Expiry.now() - 1);
+        assertEquals(Tristate.UNSET, PermissionResolver.check(grades, player, "customperm.command.fly", null, inNether()),
+                "an expired parent in a world is not followed there");
+
+        vip.contexts.clear();
+        vip.parents.add("base");
+        GradesConfig.GradeScoped refusing = new GradesConfig.GradeScoped();
+        refusing.refused.add("base");
+        refusing.refusedExpiries.put("base", Expiry.now() - 1);
+        vip.contexts.put(NETHER, refusing);
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.fly", null, inNether()),
+                "an expired refusal by a grade in a world refuses nothing");
+
+        vip.contexts.clear();
+        GradesConfig.UserScoped mine = new GradesConfig.UserScoped();
+        mine.refused.add("base");
+        mine.refusedExpiries.put("base", Expiry.now() + 60);
+        grades.userContexts.put(user, new HashMap<>(Map.of(NETHER, mine)));
+        assertEquals(Tristate.UNSET, PermissionResolver.check(grades, player, "customperm.command.fly", null, inNether()));
+        mine.refusedExpiries.put("base", Expiry.now() - 1);
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.fly", null, inNether()),
+                "an expired refusal by the player in a world gives the grade back there");
+    }
+
+    @Test
+    void anExpiredPrefixLimitedToAWorldShowsNoMore() {
+        GradesConfig.Grade vip = grade("vip");
+        vip.prefixes.add(new GradesConfig.ChatEntry(0, "[VIP]", 0));
+        GradesConfig.GradeScoped nether = new GradesConfig.GradeScoped();
+        nether.prefixes.add(new GradesConfig.ChatEntry(5, "[Hot]", Expiry.now() + 60));
+        vip.contexts.put(NETHER, nether);
+        assign("vip");
+        assertEquals(List.of("[Hot]", "[VIP]"), PermissionResolver.prefixes(grades, player, null, inNether()));
+        nether.prefixes.get(0).expires = Expiry.now() - 1;
+        assertEquals(List.of("[VIP]"), PermissionResolver.prefixes(grades, player, null, inNether()));
+    }
+
+    @Test
+    void anExpiryInAWorldNamingNothingIsDroppedWhenTheFileIsRead() {
+        GradesConfig.Grade vip = grade("vip");
+        GradesConfig.GradeScoped nether = new GradesConfig.GradeScoped();
+        nether.permissions.add("customperm.command.fly");
+        nether.permissionExpiries.put("gone", Expiry.now() + 60);
+        nether.parentExpiries.put("gone", Expiry.now() + 60);
+        vip.contexts.put(NETHER, nether);
+        GradesConfig.UserScoped mine = new GradesConfig.UserScoped();
+        mine.grades.add("vip");
+        mine.gradeExpiries.put("vip", Expiry.now() + 60);
+        mine.gradeExpiries.put("gone", Expiry.now() + 60);
+        grades.userContexts.put(user, new HashMap<>(Map.of("world=the_nether", mine)));
+        grades.normalize();
+        assertTrue(vip.contexts.get(NETHER).permissionExpiries.isEmpty()
+                && vip.contexts.get(NETHER).parentExpiries.isEmpty(), "expiries naming no entry are dropped");
+        assertEquals(Map.of("vip", mine.gradeExpiries.get("vip")), grades.userContexts.get(user).get(NETHER).gradeExpiries,
+                "the one naming a grade held there is kept, under the merged spelling of the world");
+    }
+
     private GradesConfig.Grade grade(String name) {
         GradesConfig.Grade grade = new GradesConfig.Grade();
         grade.name = name;

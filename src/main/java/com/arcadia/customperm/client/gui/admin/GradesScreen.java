@@ -58,12 +58,15 @@ public final class GradesScreen extends AdminScreen {
     /** Width of the world box beside it: enough for "the_nether". */
     static final int WORLD_FIELD = 72;
 
-    /** One node of the selected grade; {@code context} is empty for a node that applies everywhere. */
-    private record NodeRow(String node, boolean deny, String context) {
+    /**
+     * One node of the selected grade; {@code context} is empty for a node that applies everywhere, and
+     * {@code remaining} carries the time left of one limited to a world (a global one reads the grade's timers).
+     */
+    private record NodeRow(String node, boolean deny, String context, long remaining) {
     }
 
     /** One grade the selected grade inherits, or refuses to inherit; {@code context} is empty for everywhere. */
-    private record ParentRow(String grade, boolean refused, String context) {
+    private record ParentRow(String grade, boolean refused, String context, long remaining) {
     }
 
     /** One player assigned to the selected grade, or refusing it. */
@@ -131,7 +134,7 @@ public final class GradesScreen extends AdminScreen {
         this.nodeList = new CpList<NodeRow>(Component.literal("Nodes"), 14)
                 .renderer(this::renderNode)
                 .label(n -> (n.deny() ? "denied " : "allowed ") + n.node())
-                .identity(n -> (n.deny() ? "deny:" : "allow:") + n.node())
+                .identity(n -> (n.deny() ? "deny:" : "allow:") + n.node() + "@" + n.context())
                 .emptyText("No node: this grade grants nothing yet.")
                 .onSelect(n -> {
                     nodeField.setValue(n.node());
@@ -227,18 +230,19 @@ public final class GradesScreen extends AdminScreen {
         GradesData.Grade grade = gradeList.getSelected();
         List<NodeRow> nodes = new ArrayList<>();
         if (grade != null) {
-            grade.deny().forEach(n -> nodes.add(new NodeRow(n, true, "")));
-            grade.allow().forEach(n -> nodes.add(new NodeRow(n, false, "")));
-            grade.scoped().forEach(e -> nodes.add(new NodeRow(e.value(), e.deny(), e.context())));
+            grade.deny().forEach(n -> nodes.add(new NodeRow(n, true, "", 0)));
+            grade.allow().forEach(n -> nodes.add(new NodeRow(n, false, "", 0)));
+            grade.scoped().stream().filter(e -> e.kind().equals("allow") || e.kind().equals("deny"))
+                    .forEach(e -> nodes.add(new NodeRow(e.value(), e.deny(), e.context(), e.remaining())));
         }
         nodeList.setItems(nodes);
         List<ParentRow> parents = new ArrayList<>();
         List<MemberRow> members = new ArrayList<>();
         if (grade != null) {
-            grade.parents().forEach(name -> parents.add(new ParentRow(name, false, "")));
-            grade.deniedParents().forEach(name -> parents.add(new ParentRow(name, true, "")));
+            grade.parents().forEach(name -> parents.add(new ParentRow(name, false, "", 0)));
+            grade.deniedParents().forEach(name -> parents.add(new ParentRow(name, true, "", 0)));
             grade.scoped().stream().filter(e -> e.kind().equals("parent") || e.kind().equals("refused"))
-                    .forEach(e -> parents.add(new ParentRow(e.value(), e.kind().equals("refused"), e.context())));
+                    .forEach(e -> parents.add(new ParentRow(e.value(), e.kind().equals("refused"), e.context(), e.remaining())));
             grade.members().forEach(member -> members.add(new MemberRow(member, false)));
             grade.refusers().forEach(member -> members.add(new MemberRow(member, true)));
         }
@@ -637,7 +641,7 @@ public final class GradesScreen extends AdminScreen {
         int w = Skin.badge(g, font, label, r.x() + 4, r.centerY(), row.refused() ? Palette.DANGER : Palette.ACCENT);
         int x = r.x() + 4 + Math.max(w, font.width("INHERITS") + 6) + 5;
         GradesData.Grade grade = gradeList.getSelected();
-        String left = !row.context().isEmpty() ? where(row.context())
+        String left = !row.context().isEmpty() ? label(row.context(), row.remaining())
                 : grade == null ? "" : timeLeft(grade.remaining(row.refused() ? "refusedParent" : "parent", row.grade()));
         int lw = left.isEmpty() ? 0 : font.width(left) + 8;
         if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
@@ -649,7 +653,7 @@ public final class GradesScreen extends AdminScreen {
         int w = Skin.badge(g, font, label, r.x() + 4, r.centerY(), row.deny() ? Palette.DANGER : Palette.GOOD);
         int x = r.x() + 4 + Math.max(w, font.width("ALLOW") + 6) + 5;
         GradesData.Grade grade = gradeList.getSelected();
-        String left = !row.context().isEmpty() ? where(row.context())
+        String left = !row.context().isEmpty() ? label(row.context(), row.remaining())
                 : grade == null ? "" : timeLeft(grade.remaining(row.deny() ? "deny" : "allow", row.node()));
         int lw = left.isEmpty() ? 0 : font.width(left) + 8;
         if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
@@ -664,6 +668,13 @@ public final class GradesScreen extends AdminScreen {
     /** {@code 29d 23h left}, or nothing for a permanent entry. */
     static String timeLeft(long seconds) {
         return seconds > 0 ? com.arcadia.customperm.perm.Expiry.describe(seconds) + " left" : "";
+    }
+
+    /** {@code in the_nether, 2d left}: where an entry applies and the time it has left, each only when there is one. */
+    static String label(String context, long seconds) {
+        String where = where(context);
+        String left = timeLeft(seconds);
+        return where.isEmpty() ? left : left.isEmpty() ? where : where + ", " + left;
     }
 
     private void renderMember(GuiGraphics g, Font font, MemberRow row, Rect r, boolean hovered, boolean selected) {

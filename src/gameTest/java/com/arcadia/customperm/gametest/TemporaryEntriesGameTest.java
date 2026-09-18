@@ -69,7 +69,7 @@ public class TemporaryEntriesGameTest {
             expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " 30x"),
                     "Invalid duration '30x'");
             expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " 30d extra"),
-                    "Expected a node, then optionally a duration");
+                    "Invalid duration 'extra'");
             expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " 30d"),
                     "Added " + NODE + " -> " + GRADE + " for 30d");
             long at = grades.grades.get(GRADE).permissionExpiries.getOrDefault(NODE, 0L);

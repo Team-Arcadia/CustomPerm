@@ -50,7 +50,8 @@ import java.util.function.BinaryOperator;
  *       a heavier grade, or the player's own node, still decides over a lighter grade's contextual one.
  *       An entry limited to a context the player is not in does not exist for this check. A grade held in
  *       a context only is read like a grade held everywhere, while the player is there; so is a parent
- *       inherited, or a grade refused, in a context only.</li>
+ *       inherited, or a grade refused, in a context only. An entry there may be temporary too, and one that
+ *       has run out does not exist, as everywhere else.</li>
  *   <li>Between equal ranks, a DENY wins over an ALLOW, whichever grades they come from
  *       (INVARIANT-101). Every weight left at 0, which is what a file written before the field
  *       deserializes to, makes this the only tie-break, as it was.</li>
@@ -114,8 +115,9 @@ public final class PermissionResolver {
         if (scoped != null) {
             for (Map.Entry<String, GradesConfig.UserScoped> entry : scoped.entrySet()) {
                 if (!contexts.satisfies(entry.getKey())) continue;
-                offerNode(own, specificity(entry.getValue().permissions, node),
-                        specificity(entry.getValue().deniedPermissions, node), PLAYER_RANK,
+                GradesConfig.UserScoped scope = entry.getValue();
+                offerNode(own, specificity(scope.permissions, scope.permissionExpiries, node),
+                        specificity(scope.deniedPermissions, scope.deniedPermissionExpiries, node), PLAYER_RANK,
                         Contexts.size(entry.getKey()));
             }
         }
@@ -126,8 +128,8 @@ public final class PermissionResolver {
         if (scoped != null) {
             for (Map.Entry<String, GradesConfig.UserScoped> entry : scoped.entrySet()) {
                 if (entry.getValue().grades.isEmpty() || !contexts.satisfies(entry.getKey())) continue;
-                offerGrades(own, NODES, grades, entry.getValue().grades, node, hasDefault ? defaultGrade : null,
-                        refused, contexts);
+                offerGrades(own, NODES, grades, Expiry.alive(entry.getValue().grades, entry.getValue().gradeExpiries), node,
+                        hasDefault ? defaultGrade : null, refused, contexts);
             }
         }
         if (own.value != null) return own.value;
@@ -212,8 +214,8 @@ public final class PermissionResolver {
         if (scoped != null) {
             for (Map.Entry<String, GradesConfig.UserScoped> entry : scoped.entrySet()) {
                 if (entry.getValue().grades.isEmpty() || !contexts.satisfies(entry.getKey())) continue;
-                collectGrades(found, grades, entry.getValue().grades, hasDefault ? defaultGrade : null, refused,
-                        suffix, now, contexts);
+                collectGrades(found, grades, Expiry.alive(entry.getValue().grades, entry.getValue().gradeExpiries),
+                        hasDefault ? defaultGrade : null, refused, suffix, now, contexts);
             }
         }
         // As for a node, the default grade speaks only when nothing the player carries does.
@@ -270,6 +272,7 @@ public final class PermissionResolver {
         for (Map.Entry<String, GradesConfig.UserScoped> entry : scoped.entrySet()) {
             List<String> here = entry.getValue().refused;
             if (here.isEmpty() || !contexts.satisfies(entry.getKey())) continue;
+            here = Expiry.alive(here, entry.getValue().refusedExpiries);
             if (merged == null) merged = refused == null ? new ArrayList<>() : new ArrayList<>(refused);
             merged.addAll(here);
         }
@@ -298,8 +301,10 @@ public final class PermissionResolver {
         if (grade.contexts.isEmpty() || contexts.isEmpty()) return;
         for (Map.Entry<String, GradesConfig.GradeScoped> entry : grade.contexts.entrySet()) {
             if (!contexts.satisfies(entry.getKey())) continue;
-            offerNode(into, specificity(entry.getValue().permissions, node),
-                    specificity(entry.getValue().deniedPermissions, node), rank, Contexts.size(entry.getKey()));
+            GradesConfig.GradeScoped scope = entry.getValue();
+            offerNode(into, specificity(scope.permissions, scope.permissionExpiries, node),
+                    specificity(scope.deniedPermissions, scope.deniedPermissionExpiries, node), rank,
+                    Contexts.size(entry.getKey()));
         }
     };
 
@@ -339,7 +344,10 @@ public final class PermissionResolver {
     /** Marks as seen the grades {@code grade} refuses in the contexts the player is in. */
     private static void refuseHere(GradesConfig.Grade grade, Contexts contexts, Set<String> seen) {
         for (Map.Entry<String, GradesConfig.GradeScoped> entry : grade.contexts.entrySet()) {
-            if (contexts.satisfies(entry.getKey())) seen.addAll(entry.getValue().refused);
+            if (!contexts.satisfies(entry.getKey())) continue;
+            for (String refused : entry.getValue().refused) {
+                if (Expiry.alive(entry.getValue().refusedExpiries, refused)) seen.add(refused);
+            }
         }
     }
 
@@ -349,7 +357,7 @@ public final class PermissionResolver {
         for (Map.Entry<String, GradesConfig.GradeScoped> entry : grade.contexts.entrySet()) {
             if (entry.getValue().parents.isEmpty() || !contexts.satisfies(entry.getKey())) continue;
             for (String parent : entry.getValue().parents) {
-                if (parent == null || !seen.add(parent)) continue;
+                if (parent == null || !Expiry.alive(entry.getValue().parentExpiries, parent) || !seen.add(parent)) continue;
                 GradesConfig.Grade inherited = grades.grades.get(parent);
                 if (inherited != null) next.add(inherited);
             }

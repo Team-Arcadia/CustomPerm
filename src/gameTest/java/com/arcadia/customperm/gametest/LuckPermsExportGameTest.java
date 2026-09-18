@@ -98,6 +98,9 @@ public class LuckPermsExportGameTest {
             GradesConfig.GradeScoped vipNether = new GradesConfig.GradeScoped();
             vipNether.refused.add(BASE);
             vipNether.prefixes.add(new GradesConfig.ChatEntry(30, "[Hot] ", 0));
+            vipNether.prefixes.add(new GradesConfig.ChatEntry(40, "[Warm] ", com.arcadia.customperm.perm.Expiry.now() + 3600));
+            vipNether.permissions.add("customperm.command.seed");
+            vipNether.permissionExpiries.put("customperm.command.seed", com.arcadia.customperm.perm.Expiry.now() + 3600);
             config.grades.get(VIP).contexts.put("world=minecraft:the_nether", vipNether);
             GradesConfig.UserScoped end = new GradesConfig.UserScoped();
             end.grades.add(BASE);
@@ -129,6 +132,10 @@ public class LuckPermsExportGameTest {
             expect(vip, "group." + BASE + "=true@expiring", "A temporary parent must arrive as a temporary inheritance node");
             expect(vip, "group." + BASE + "=false[world=the_nether]", "A refusal limited to a world must arrive in it");
             expect(vip, "prefix.30.[Hot] =true[world=the_nether]", "A prefix limited to a world must arrive in it");
+            expect(vip, "prefix.40.[Warm] =true[world=the_nether]@expiring",
+                    "A temporary prefix limited to a world must arrive in it, temporary");
+            expect(vip, "customperm.command.seed=true[world=the_nether]@expiring",
+                    "A temporary node limited to a world must arrive in it, temporary");
             expect(vip, "weight.42=true", "The weight must arrive on a group that had none");
             expect(vip, "customperm.command.fly=false", "Adding must keep LuckPerms' value");
             expect(vip, "customperm.command.kick=true", "Adding must keep what LuckPerms holds");

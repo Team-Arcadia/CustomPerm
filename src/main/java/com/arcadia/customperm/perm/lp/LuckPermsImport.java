@@ -103,7 +103,7 @@ public final class LuckPermsImport {
                     scoped, true, "group " + group.getName());
             plan.grade(new ImportPlan.Grade(group.getName(), group.getWeight().orElse(0),
                     List.copyOf(parents), List.copyOf(deniedParents), Set.copyOf(allow), Set.copyOf(deny),
-                    chat.grants(), Map.copyOf(expiries), List.copyOf(scoped)));
+                    chat.grants(), Map.copyOf(expiries), ScopedGrant.merged(scoped)));
         }
         return null;
     }
@@ -173,7 +173,7 @@ public final class LuckPermsImport {
                         && chat.grants().isEmpty() && scoped.isEmpty()) continue;
                 plan.player(new ImportPlan.Player(uuid.toString(), name(api, uuid), List.copyOf(grades),
                         List.copyOf(deniedGrades), Set.copyOf(allow), Set.copyOf(deny), chat.grants(),
-                        Map.copyOf(expiries), List.copyOf(scoped)));
+                        Map.copyOf(expiries), ScopedGrant.merged(scoped)));
             }
             return null;
         });
@@ -221,24 +221,21 @@ public final class LuckPermsImport {
                     + "another key is not, a node here would apply everywhere: " + holder + ".");
             return;
         }
-        if (at != null) {
-            plan.contextual();
-            plan.note("An entry limited to a world is permanent here: temporary ones limited to a world are not "
-                    + "imported: " + holder + ".");
-            return;
-        }
+        long expires = at == null ? 0 : at;
         if (node instanceof InheritanceNode inheritance) {
             // On a group, a parent or a refusal of its chain; on a player, a grade held or refused.
             String kind = !node.getValue() ? ScopedGrant.REFUSED : group ? ScopedGrant.PARENT : ScopedGrant.GRADE;
-            scoped.add(new ScopedGrant(context, kind, inheritance.getGroupName()));
+            scoped.add(new ScopedGrant(context, kind, inheritance.getGroupName(), expires));
             plan.imported(false);
             plan.world();
+            if (at != null) plan.timed();
             return;
         }
         if (node instanceof ChatMetaNode<?, ?> meta) {
-            if (chat.offer(meta, null, context)) {
+            if (chat.offer(meta, at, context)) {
                 plan.imported(false);
                 plan.world();
+                if (at != null) plan.timed();
             } else {
                 plan.other();
                 plan.note("One prefix and one suffix per priority on a holder: of two at the same priority, "
@@ -257,9 +254,10 @@ public final class LuckPermsImport {
             plan.note(FOREIGN);
             return;
         }
-        scoped.add(new ScopedGrant(context, node.getValue() ? ScopedGrant.ALLOW : ScopedGrant.DENY, translated));
+        scoped.add(new ScopedGrant(context, node.getValue() ? ScopedGrant.ALLOW : ScopedGrant.DENY, translated, expires));
         plan.imported(!translated.equals(node.getKey()));
         plan.world();
+        if (at != null) plan.timed();
         String command = ImportPlan.exposedCommand(node.getKey());
         if (exposeCommands && command != null && node.getValue()) plan.expose(command);
     }

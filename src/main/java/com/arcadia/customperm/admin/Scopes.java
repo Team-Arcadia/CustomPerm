@@ -40,9 +40,10 @@ final class Scopes {
                 + "world=the_nether or world=mymod:mining.");
     }
 
-    /** Durations and contexts do not combine yet: a temporary entry applies everywhere. */
-    static AdminResult timedAndScoped() {
-        return AdminResult.fail("An entry limited to a world is permanent: give a duration or a world, not both.");
+    /** Seconds left on the entry {@code kind:value} of {@code scope}, 0 for a permanent or absent one. */
+    static long remaining(GradesConfig.Scoped scope, String kind, String value) {
+        Long at = scope == null ? null : scope.expiries(kind).get(value);
+        return at == null ? 0 : Math.max(1, at - com.arcadia.customperm.perm.Expiry.now());
     }
 
     /** {@code " in the_nether"}, or nothing for an entry that applies everywhere: the tail of a confirmation. */
@@ -90,6 +91,7 @@ final class Scopes {
             GradesConfig.GradeScoped c = new GradesConfig.GradeScoped();
             copyInto(scope, c);
             c.parents.addAll(scope.parents);
+            c.parentExpiries.putAll(scope.parentExpiries);
             copy.put(context, c);
         });
         return copy;
@@ -101,6 +103,9 @@ final class Scopes {
         to.refused.addAll(from.refused);
         to.prefixes = GradesConfig.ChatEntry.copy(from.prefixes);
         to.suffixes = GradesConfig.ChatEntry.copy(from.suffixes);
+        to.permissionExpiries.putAll(from.permissionExpiries);
+        to.deniedPermissionExpiries.putAll(from.deniedPermissionExpiries);
+        to.refusedExpiries.putAll(from.refusedExpiries);
     }
 
     static Map<String, Map<String, GradesConfig.UserScoped>> copyUsers(
@@ -112,6 +117,7 @@ final class Scopes {
                 GradesConfig.UserScoped c = new GradesConfig.UserScoped();
                 copyInto(scope, c);
                 c.grades.addAll(scope.grades);
+                c.gradeExpiries.putAll(scope.gradeExpiries);
                 mine.put(context, c);
             });
             copy.put(uuid, mine);

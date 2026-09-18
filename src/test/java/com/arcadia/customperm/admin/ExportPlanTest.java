@@ -291,6 +291,39 @@ class ExportPlanTest {
                 com.arcadia.customperm.perm.Contexts.world("minecraft:the_nether")));
     }
 
+    @Test
+    void aTemporaryEntryLimitedToAWorldIsCarriedWithItsExpiryAndAnExpiredOneIsNot() {
+        GradesConfig config = new GradesConfig();
+        grade(config, "base", 0, List.of(), List.of(), Set.of(), Set.of());
+        grade(config, "vip", 0, List.of(), List.of(), Set.of(), Set.of());
+        long later = com.arcadia.customperm.perm.Expiry.now() + 3600;
+        GradesConfig.GradeScoped nether = new GradesConfig.GradeScoped();
+        nether.parents.add("base");
+        nether.parentExpiries.put("base", later);
+        nether.permissions.add("customperm.command.fly");
+        nether.permissionExpiries.put("customperm.command.fly", com.arcadia.customperm.perm.Expiry.now() - 1);
+        config.grades.get("vip").contexts.put("world=minecraft:the_nether", nether);
+
+        ExportPlan plan = ExportPlan.of(config, "");
+
+        assertEquals(List.of(new ScopedGrant("world=minecraft:the_nether", ScopedGrant.PARENT, "base", later)),
+                group(plan, "vip").scoped(), "the expired node is left out, the parent keeps its expiry");
+        GradesConfig back = plan.asConfig();
+        assertEquals(java.util.Map.of("base", later),
+                back.grades.get("vip").contexts.get("world=minecraft:the_nether").parentExpiries);
+    }
+
+    @Test
+    void theSameEntryReadTwiceKeepsThePermanentOneOrTheLongerOne() {
+        String nether = "world=minecraft:the_nether";
+        assertEquals(List.of(new ScopedGrant(nether, ScopedGrant.ALLOW, "a", 0),
+                        new ScopedGrant(nether, ScopedGrant.ALLOW, "b", 200)),
+                ScopedGrant.merged(List.of(new ScopedGrant(nether, ScopedGrant.ALLOW, "a", 100),
+                        new ScopedGrant(nether, ScopedGrant.ALLOW, "b", 100),
+                        new ScopedGrant(nether, ScopedGrant.ALLOW, "a", 0),
+                        new ScopedGrant(nether, ScopedGrant.ALLOW, "b", 200))));
+    }
+
     // --- tracks ---
 
     @Test

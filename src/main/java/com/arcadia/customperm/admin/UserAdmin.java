@@ -66,17 +66,19 @@ public final class UserAdmin {
         if (node == null) return AdminResult.fail("Invalid permission node '" + rawNode.trim() + "'.");
         String context = Scopes.parse(rawContext);
         if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
-        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         if (context != null) {
             GradesConfig.UserScoped scope = Scopes.of(grades(), uuid, context);
-            if (!(deny ? scope.deniedPermissions : scope.permissions).add(node)) {
+            boolean added = (deny ? scope.deniedPermissions : scope.permissions).add(node);
+            boolean timed = Expiries.apply(deny ? scope.deniedPermissionExpiries : scope.permissionExpiries, node, seconds);
+            if (!added && !timed) {
                 return AdminResult.ok(node + " is already " + (deny ? "denied to " : "granted to ") + displayName
                         + Scopes.span(context) + " — no change.");
             }
             String warning = ConfigAdmin.persist();
             GradeAdmin.resyncPlayer(server, uuid);
-            return AdminResult.ok((deny ? "Denied " : "Added ") + node + " -> " + displayName + Scopes.span(context))
-                    .warn(warning);
+            return AdminResult.ok(added ? (deny ? "Denied " : "Added ") + node + " -> " + displayName + Scopes.span(context)
+                    + Expiries.span(seconds) : node + " for " + displayName + Scopes.span(context) + " "
+                    + Expiries.became(seconds)).warn(warning);
         }
         Set<String> nodes = holder(deny).computeIfAbsent(uuid.toString(), key -> new LinkedHashSet<>());
         boolean added = nodes.add(node);
@@ -113,7 +115,6 @@ public final class UserAdmin {
         if (refusal != null) return refusal;
         String context = Scopes.parse(rawContext);
         if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
-        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         String problem = ChatEntries.problem(suffix, priority, text);
         if (problem != null) return AdminResult.fail(problem);
         Map<String, List<GradesConfig.ChatEntry>> byUser = suffix ? grades().userSuffixEntries : grades().userPrefixEntries;
@@ -214,6 +215,14 @@ public final class UserAdmin {
     }
 
     /**
+     * Seconds left on an entry one player holds in {@code context}, 0 for a permanent one. {@code kind} is
+     * one {@link #scoped} lists: {@code "allow"}, {@code "deny"}, {@code "grade"} or {@code "refused"}.
+     */
+    public static long remaining(UUID uuid, String context, String kind, String key) {
+        return Scopes.remaining(Scopes.find(grades(), uuid, context), kind, key);
+    }
+
+    /**
      * The prefixes or suffixes a player carries themselves, for a listing, highest priority first, then those
      * limited to a world with it.
      */
@@ -247,6 +256,7 @@ public final class UserAdmin {
                 return AdminResult.ok(node + " is not " + (deny ? "denied to " : "granted to ") + displayName
                         + Scopes.span(context) + " — no change.");
             }
+            (deny ? scope.deniedPermissionExpiries : scope.permissionExpiries).remove(node);
             Scopes.tidy(grades(), uuid);
             String warning = ConfigAdmin.persist();
             GradeAdmin.resyncPlayer(server, uuid);
@@ -289,7 +299,6 @@ public final class UserAdmin {
         if (refusal != null) return refusal;
         String context = Scopes.parse(rawContext);
         if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
-        if (context != null && seconds > 0) return Scopes.timedAndScoped();
         if (!grades().grades.containsKey(gradeName)) return AdminResult.fail("No such grade: " + gradeName);
         if (context != null) {
             GradesConfig.UserScoped scope = Scopes.find(grades(), uuid, context);
@@ -298,12 +307,21 @@ public final class UserAdmin {
                         + ": unassign it there instead of refusing it.");
             }
             if (scope != null && scope.refused.contains(gradeName)) {
-                return AdminResult.ok(displayName + " already refuses " + gradeName + Scopes.span(context) + " — no change.");
+                if (!Expiries.apply(scope.refusedExpiries, gradeName, seconds)) {
+                    return AdminResult.ok(displayName + " already refuses " + gradeName + Scopes.span(context) + " — no change.");
+                }
+                String warning = ConfigAdmin.persist();
+                GradeAdmin.resyncPlayer(server, uuid);
+                return AdminResult.ok("The refusal of " + gradeName + " by " + displayName + Scopes.span(context) + " "
+                        + Expiries.became(seconds)).warn(warning);
             }
-            Scopes.of(grades(), uuid, context).refused.add(gradeName);
+            GradesConfig.UserScoped target = Scopes.of(grades(), uuid, context);
+            target.refused.add(gradeName);
+            Expiries.apply(target.refusedExpiries, gradeName, seconds);
             String warning = ConfigAdmin.persist();
             GradeAdmin.resyncPlayer(server, uuid);
-            return AdminResult.ok(displayName + " now refuses " + gradeName + Scopes.span(context)).warn(warning)
+            return AdminResult.ok(displayName + " now refuses " + gradeName + Scopes.span(context) + Expiries.span(seconds))
+                    .warn(warning)
                     .note("Nothing they hold brings it back there, the default grade included.");
         }
         if (grades().userGrades.getOrDefault(uuid.toString(), List.of()).contains(gradeName)) {
@@ -344,6 +362,7 @@ public final class UserAdmin {
             if (scope == null || !scope.refused.remove(gradeName)) {
                 return AdminResult.ok(displayName + " does not refuse " + gradeName + Scopes.span(context) + " — no change.");
             }
+            scope.refusedExpiries.remove(gradeName);
             Scopes.tidy(grades(), uuid);
             String warning = ConfigAdmin.persist();
             GradeAdmin.resyncPlayer(server, uuid);
