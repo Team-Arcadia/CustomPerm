@@ -74,7 +74,7 @@ public final class GradesScreen extends AdminScreen {
     }
 
     /** Right-hand side of the page: what the selected grade is looked at through. */
-    private enum Tab { NODES, PARENTS, PLAYERS, CHAT }
+    private enum Tab { NODES, PARENTS, PLAYERS, CHAT, META }
 
     private GradesData data;
     private Tab tab = Tab.NODES;
@@ -90,6 +90,7 @@ public final class GradesScreen extends AdminScreen {
     private final CpEditBox playerField;
     private final CpEditBox weightField;
     private final ChatFields chat;
+    private final MetaFields meta;
     /** How long what is added lasts, shared by the node and player fields; empty for good. */
     private final CpEditBox durationField;
     /** The world what is added is limited to, shared like the duration; empty for everywhere. */
@@ -111,6 +112,7 @@ public final class GradesScreen extends AdminScreen {
                 .hint(Component.literal("weight"))
                 .onSubmit(this::applyWeight);
         this.chat = new ChatFields(this::rebuild);
+        this.meta = new MetaFields(this::rebuild);
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
                 .hint(Component.literal("for, e.g. 30d"));
         this.worldField = new CpEditBox(Component.literal("World"), 128)
@@ -251,6 +253,7 @@ public final class GradesScreen extends AdminScreen {
         // The box shows the weight in force, so submitting it unchanged is a no-op rather than a reset.
         weightField.setValue(grade == null ? "" : String.valueOf(grade.weight()));
         chat.fill(grade == null ? List.of() : grade.chat());
+        meta.fill(grade == null ? List.of() : grade.meta());
     }
 
     /** Shows the rest of the first known player name that starts with what was typed. */
@@ -331,10 +334,11 @@ public final class GradesScreen extends AdminScreen {
         String parentsTab = "Parents (" + (grade.parents().size() + grade.deniedParents().size()) + ")";
         String playersTab = "Players (" + (grade.members().size() + grade.refusers().size()) + ")";
         String chatTab = "Chat";
-        // Four tabs do not always fit. A bare name reads better than a count clipped to "Nodes (", so the
+        String metaTab = "Meta";
+        // Five tabs do not always fit. A bare name reads better than a count clipped to "Nodes (", so the
         // counts go before the width is shared; the icons go after, in placeButtonRow.
         if (font.width(nodesTab) + font.width(parentsTab) + font.width(playersTab) + font.width(chatTab)
-                + 4 * 16 + 12 > tabs.w()) {
+                + font.width(metaTab) + 5 * 16 + 16 > tabs.w()) {
             nodesTab = "Nodes";
             parentsTab = "Parents";
             playersTab = "Players";
@@ -347,7 +351,9 @@ public final class GradesScreen extends AdminScreen {
                 CpButton.ghost(Component.literal(playersTab), () -> setTab(Tab.PLAYERS))
                         .icon(Icon.USER).selected(tab == Tab.PLAYERS),
                 CpButton.ghost(Component.literal(chatTab), () -> setTab(Tab.CHAT))
-                        .icon(Icon.EDIT).selected(tab == Tab.CHAT)));
+                        .icon(Icon.EDIT).selected(tab == Tab.CHAT),
+                CpButton.ghost(Component.literal(metaTab), () -> setTab(Tab.META))
+                        .icon(Icon.EDIT).selected(tab == Tab.META)));
 
         Rect list = listArea();
         Rect fieldRow = new Rect(in.x(), list.bottom() + 4, in.w(), FIELD);
@@ -386,6 +392,19 @@ public final class GradesScreen extends AdminScreen {
                                     + "it from this chain only, never from another grade a player holds.")),
                     CpButton.neutral(Component.literal("Remove"), () -> removeParent(selected)).icon(Icon.MINUS)
                             .enabled(editable && selected != null)));
+        } else if (tab == Tab.META) {
+            addRenderableWidget(meta.list.at(list));
+            addRenderableWidget(meta.key.at(meta.keyRect(fieldRow)));
+            addRenderableWidget(meta.value.at(meta.valueRect(fieldRow)));
+            addRenderableWidget(meta.world.at(meta.worldRect(fieldRow)));
+            addRenderableWidget(meta.duration.at(meta.durationRect(fieldRow)));
+            meta.setEditable(editable);
+            placeButtonRow(buttonRow, 6, true, List.of(
+                    CpButton.accent(Component.literal("Set"), this::setMeta).icon(Icon.PLUS).enabled(editable)
+                            .tooltip(Component.literal("A mod that declares a number or text permission node reads the "
+                                    + "meta named after it. A player's own wins, then the heaviest grade's.")),
+                    CpButton.neutral(Component.literal("Remove"), this::removeMeta).icon(Icon.MINUS)
+                            .enabled(editable && meta.list.getSelected() != null)));
         } else if (tab == Tab.CHAT) {
             addRenderableWidget(chat.list.at(chat.listRect(list)));
             addRenderableWidget(chat.text.at(chat.textRect(fieldRow)));
@@ -486,6 +505,22 @@ public final class GradesScreen extends AdminScreen {
         act(GuiAction.GRADE_CHAT_ADD, grade.name(), suffix ? "suffix" : "prefix", String.valueOf(priority), text,
                 chat.duration.getValue().trim(), context(chat.world.getValue()));
         chat.clearTyped();
+    }
+
+    private void setMeta() {
+        GradesData.Grade grade = gradeList.getSelected();
+        String key = meta.key.getValue().trim();
+        if (grade == null || key.isEmpty() || meta.value.getValue().isEmpty()) return;
+        act(GuiAction.GRADE_META_SET, grade.name(), key, meta.value.getValue(), meta.duration.getValue().trim(),
+                context(meta.world.getValue()));
+        meta.clearTyped();
+    }
+
+    private void removeMeta() {
+        GradesData.Grade grade = gradeList.getSelected();
+        com.arcadia.customperm.network.gui.MetaLine line = meta.list.getSelected();
+        if (grade == null || line == null) return;
+        act(GuiAction.GRADE_META_UNSET, grade.name(), line.key(), line.context());
     }
 
     private void removeChat() {

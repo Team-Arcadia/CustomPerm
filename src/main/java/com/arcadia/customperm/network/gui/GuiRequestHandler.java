@@ -226,6 +226,17 @@ public final class GuiRequestHandler {
             case USER_CHAT_REMOVE -> chatKind(args.get(1)) == null || signed(args.get(2)) == null ? malformed(action)
                     : userChatByName(player, args.get(0), holder -> holder.remove(chatKind(args.get(1)), signed(args.get(2)),
                             args.get(3)));
+            case GRADE_META_SET -> duration(args.get(3)) < 0 ? badDuration(args.get(3))
+                    : com.arcadia.customperm.admin.MetaAdmin.setOnGrade(player.getServer(), args.get(0), args.get(1),
+                            args.get(2), duration(args.get(3)), args.get(4));
+            case GRADE_META_UNSET -> com.arcadia.customperm.admin.MetaAdmin.unsetOnGrade(player.getServer(), args.get(0),
+                    args.get(1), args.get(2));
+            case USER_META_SET -> duration(args.get(3)) < 0 ? badDuration(args.get(3))
+                    : userMetaByName(player, args.get(0), (uuid, name) -> com.arcadia.customperm.admin.MetaAdmin.setOnPlayer(
+                            player.getServer(), uuid, name, args.get(1), args.get(2), duration(args.get(3)), args.get(4)));
+            case USER_META_UNSET -> userMetaByName(player, args.get(0), (uuid, name) ->
+                    com.arcadia.customperm.admin.MetaAdmin.unsetOnPlayer(player.getServer(), uuid, name, args.get(1),
+                            args.get(2)));
             case NAMES_STACK -> !args.get(0).equals("highest") && !args.get(0).equals("stacked") ? malformed(action)
                     : com.arcadia.customperm.admin.NameAdmin.setStack(player.getServer(), "both",
                             args.get(0).equals("stacked"), null);
@@ -412,6 +423,17 @@ public final class GuiRequestHandler {
         return resolution.profile()
                 .map(profile -> edit.apply(com.arcadia.customperm.admin.ChatHolder.player(admin.getServer(),
                         profile.getId(), profile.getName())))
+                .orElseGet(() -> AdminResult.fail(resolution.problem()));
+    }
+
+    /** By name, like a prefix, so a player who holds nothing yet can get meta. */
+    private static AdminResult userMetaByName(ServerPlayer admin, String name,
+                                              java.util.function.BiFunction<java.util.UUID, String, AdminResult> edit) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
+        return resolution.profile()
+                .map(profile -> edit.apply(profile.getId(), profile.getName()))
                 .orElseGet(() -> AdminResult.fail(resolution.problem()));
     }
 

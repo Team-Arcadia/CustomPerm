@@ -73,6 +73,11 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
         public List<ScopedEntry> scoped() {
             return held.scoped();
         }
+
+        /** Their own meta, everywhere then by context. */
+        public List<MetaLine> meta() {
+            return held.meta();
+        }
     }
 
     /**
@@ -80,8 +85,8 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
      * prefixes and suffixes they carry themselves, and what they hold in one world only.
      */
     public record Held(List<String> grades, List<String> refused, List<ChatLine> chat,
-                       List<Remaining> timers, List<ScopedEntry> scoped) {
-        public static final Held NONE = new Held(List.of(), List.of(), List.of(), List.of(), List.of());
+                       List<Remaining> timers, List<ScopedEntry> scoped, List<MetaLine> meta) {
+        public static final Held NONE = new Held(List.of(), List.of(), List.of(), List.of(), List.of(), List.of());
 
         public static final StreamCodec<ByteBuf, Held> CODEC = StreamCodec.composite(
                 GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Held::grades,
@@ -89,7 +94,14 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
                 ChatLine.LIST, Held::chat,
                 Remaining.LIST, Held::timers,
                 ScopedEntry.LIST, Held::scoped,
+                MetaLine.LIST, Held::meta,
                 Held::new);
+
+        /** One without meta. */
+        public Held(List<String> grades, List<String> refused, List<ChatLine> chat, List<Remaining> timers,
+                    List<ScopedEntry> scoped) {
+            this(grades, refused, chat, timers, scoped, List.of());
+        }
     }
 
     public static final StreamCodec<ByteBuf, PlayersData> CODEC = StreamCodec.composite(

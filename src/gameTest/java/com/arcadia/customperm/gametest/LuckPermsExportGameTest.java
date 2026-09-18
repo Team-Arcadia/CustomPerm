@@ -105,6 +105,8 @@ public class LuckPermsExportGameTest {
             vipNether.permissions.add("customperm.command.seed");
             vipNether.permissionExpiries.put("customperm.command.seed", com.arcadia.customperm.perm.Expiry.now() + 3600);
             config.grades.get(VIP).contexts.put("world=minecraft:the_nether", vipNether);
+            config.grades.get(VIP).meta.put("rank", "gold");
+            vipNether.meta.put("rank", "fire");
             GradesConfig.UserScoped end = new GradesConfig.UserScoped();
             end.grades.add(BASE);
             config.userContexts.put(USER.toString(), new java.util.HashMap<>(java.util.Map.of("world=minecraft:the_end", end)));
@@ -142,6 +144,8 @@ public class LuckPermsExportGameTest {
             expect(vip, "customperm.command.seed=true[dimension-type=the_nether]@expiring",
                     "A temporary node limited to a world must arrive in it, temporary");
             expect(vip, "weight.42=true", "The weight must arrive on a group that had none");
+            expect(vip, "meta.rank.gold=true", "A grade's meta must arrive as a meta node");
+            expect(vip, "meta.rank.fire=true[dimension-type=the_nether]", "Meta limited to a world must arrive in it");
             expect(vip, "customperm.command.fly=false", "Adding must keep LuckPerms' value");
             expect(vip, "customperm.command.kick=true", "Adding must keep what LuckPerms holds");
             expect(vip, "prefix.10.[VIP]=true", "Adding must keep the prefix");

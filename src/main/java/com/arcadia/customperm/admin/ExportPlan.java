@@ -54,10 +54,11 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
      */
     public record Group(String name, int weight, List<String> parents, List<String> deniedParents,
                         Set<String> allow, Set<String> deny, List<ChatGrant> chat,
-                        Map<String, Long> expiries, List<ScopedGrant> scoped) {
+                        Map<String, Long> expiries, List<ScopedGrant> scoped, List<MetaGrant> meta) {
 
         int entries() {
-            return parents.size() + deniedParents.size() + allow.size() + deny.size() + scoped.size() + chat.size();
+            return parents.size() + deniedParents.size() + allow.size() + deny.size() + scoped.size() + chat.size()
+                    + meta.size();
         }
     }
 
@@ -68,10 +69,11 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
      */
     public record Player(String uuid, List<String> grades, List<String> deniedGrades,
                          Set<String> allow, Set<String> deny, List<ChatGrant> chat,
-                         Map<String, Long> expiries, List<ScopedGrant> scoped) {
+                         Map<String, Long> expiries, List<ScopedGrant> scoped, List<MetaGrant> meta) {
 
         int entries() {
-            return grades.size() + deniedGrades.size() + allow.size() + deny.size() + scoped.size() + chat.size();
+            return grades.size() + deniedGrades.size() + allow.size() + deny.size() + scoped.size() + chat.size()
+                    + meta.size();
         }
     }
 
@@ -127,7 +129,9 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                     live(grade.deniedPermissions, grade.deniedPermissionExpiries, "deny:", expiries, now),
                     chatWorldOnly(ChatGrant.of(grade.prefixes, grade.suffixes, grade.contexts, now), dropped, notes,
                             "grade " + name), Map.copyOf(expiries), worldOnly(ScopedGrant.of(grade.contexts, now),
-                    exported, config, dropped, notes, "grade " + name)));
+                    exported, config, dropped, notes, "grade " + name),
+                    metaExportable(MetaGrant.of(grade.meta, grade.metaExpiries, grade.contexts, now), dropped, notes,
+                            "grade " + name)));
         }
 
         Set<String> holders = new TreeSet<>();
@@ -138,6 +142,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
         holders.addAll(config.userPrefixEntries.keySet());
         holders.addAll(config.userSuffixEntries.keySet());
         holders.addAll(config.userContexts.keySet());
+        holders.addAll(config.userMeta.keySet());
         List<Player> players = new ArrayList<>();
         for (String uuid : holders) {
             if (!isUuid(uuid)) {
@@ -163,7 +168,9 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                             config.userContexts.get(uuid), now), dropped, notes, who),
                     Map.copyOf(expiries),
                     worldOnly(ScopedGrant.of(config.userContexts.getOrDefault(uuid, Map.of()), now), exported, config,
-                            dropped, notes, who));
+                            dropped, notes, who),
+                    metaExportable(MetaGrant.of(config.userMeta.get(uuid), config.userMetaExpiries.get(uuid),
+                            config.userContexts.get(uuid), now), dropped, notes, who));
             if (player.entries() > 0) players.add(player);
         }
 
@@ -244,6 +251,21 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                 dropped[0]++;
                 notes.add("Left out on " + holder + ": the " + (grant.suffix() ? "suffix " : "prefix ") + grant.text()
                         + " is limited to " + grant.context() + ", which this version does not read.");
+                continue;
+            }
+            kept.add(grant);
+        }
+        return List.copyOf(kept);
+    }
+
+    /** The meta that applies everywhere or in a context this version reads. */
+    private static List<MetaGrant> metaExportable(List<MetaGrant> grants, int[] dropped, List<String> notes, String holder) {
+        List<MetaGrant> kept = new ArrayList<>();
+        for (MetaGrant grant : grants) {
+            if (!grant.context().isEmpty() && !exportable(grant.context())) {
+                dropped[0]++;
+                notes.add("Left out on " + holder + ": the meta " + grant.key() + " is limited to " + grant.context()
+                        + ", which this version does not read.");
                 continue;
             }
             kept.add(grant);
@@ -343,6 +365,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                 else if (key.startsWith("refuse:")) grade.deniedParentExpiries.put(key.substring(7), at);
             });
             source.scoped().forEach(entry -> entry.addTo(Scopes.of(grade, entry.context())));
+            source.meta().forEach(meta -> meta.addTo(grade));
             config.grades.put(grade.name, grade);
         }
         for (Track track : tracks) config.tracks.put(track.name(), new ArrayList<>(track.groups()));
@@ -365,6 +388,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
             });
             UUID id = UUID.fromString(player.uuid());
             player.scoped().forEach(entry -> entry.addTo(Scopes.of(config, id, entry.context())));
+            player.meta().forEach(meta -> meta.addTo(config, id));
         }
         return config;
     }
@@ -395,7 +419,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
         if (!existing.isEmpty()) {
             lines.add("Already in LuckPerms: " + String.join(", ", existing) + ". Adding keeps what they hold; "
                     + "replacing clears their customperm nodes and parents first, and their prefix or suffix "
-                    + "only where the grade has one, never their meta or the nodes of other mods.");
+                    + "only where the grade has one, never the nodes of other mods. Meta is written by key: replacing "
+                    + "clears only the keys the grade sets.");
         }
         if (groups.stream().anyMatch(g -> !g.scoped().isEmpty()) || players.stream().anyMatch(p -> !p.scoped().isEmpty())) {
             lines.add("Entries limited to a world are written with LuckPerms' dimension-type context, which is "

@@ -123,6 +123,8 @@ public final class ImportAdmin {
                 target.weight = source.weight();
                 target.prefixes.clear();
                 target.suffixes.clear();
+                target.meta.clear();
+                target.metaExpiries.clear();
             } else {
                 // A grade that already exists keeps its weight: the number an admin set by hand here is
                 // a decision, and silently taking the one from LuckPerms would undo it.
@@ -142,6 +144,7 @@ public final class ImportAdmin {
             addTimed(target.deniedParents, target.deniedParentExpiries, source.deniedParents(), source.expiries(), "refuse:");
             // Adding keeps a prefix already set here at that priority, like the weight: it is what the admin chose.
             for (ChatGrant chat : source.chat()) chat.addTo(target);
+            for (MetaGrant meta : source.meta()) meta.addTo(target);
             gradesWritten++;
         }
 
@@ -159,6 +162,8 @@ public final class ImportAdmin {
                 grades().userPermissionExpiries.remove(source.uuid());
                 grades().userDeniedPermissionExpiries.remove(source.uuid());
                 grades().userContexts.remove(source.uuid());
+                grades().userMeta.remove(source.uuid());
+                grades().userMetaExpiries.remove(source.uuid());
             }
             String uuid = source.uuid();
             List<String> held = grades().userGrades.computeIfAbsent(uuid, k -> new ArrayList<>());
@@ -184,6 +189,7 @@ public final class ImportAdmin {
             java.util.UUID id = java.util.UUID.fromString(uuid);
             for (ScopedGrant entry : source.scoped()) entry.addTo(Scopes.of(grades(), id, entry.context()));
             for (ChatGrant chat : source.chat()) chat.addTo(grades(), id);
+            for (MetaGrant meta : source.meta()) meta.addTo(grades(), id);
             playersWritten++;
         }
         int tracksWritten = 0;

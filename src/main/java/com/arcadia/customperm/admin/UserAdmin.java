@@ -418,6 +418,7 @@ public final class UserAdmin {
         holders.addAll(grades().userPrefixEntries.keySet());
         holders.addAll(grades().userSuffixEntries.keySet());
         holders.addAll(grades().userContexts.keySet());
+        holders.addAll(grades().userMeta.keySet());
         return holders;
     }
 }

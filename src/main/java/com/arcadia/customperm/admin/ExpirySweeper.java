@@ -63,6 +63,8 @@ public final class ExpirySweeper {
                     parent -> removed.add(entry.getKey() + " no longer inherits " + parent));
             expire(grade.deniedParentExpiries, grade.deniedParents, now,
                     parent -> removed.add(entry.getKey() + " no longer refuses " + parent));
+            expire(grade.metaExpiries, grade.meta.keySet(), now,
+                    key -> removed.add(entry.getKey() + " no longer carries the meta " + key));
             expireChat(grade.prefixes, now, text -> removed.add(entry.getKey() + " no longer shows the prefix " + text));
             expireChat(grade.suffixes, now, text -> removed.add(entry.getKey() + " no longer shows the suffix " + text));
             if (grade.contexts.isEmpty()) continue;
@@ -82,6 +84,11 @@ public final class ExpirySweeper {
         expireUsers(server, config.userDeniedGradeExpiries, config.userDeniedGrades, now, removed,
                 (who, grade) -> who + " no longer refuses " + grade);
         expireUserChat(server, config.userPrefixEntries, now, removed, "prefix");
+        Map<String, java.util.Set<String>> metaKeys = new java.util.HashMap<>();
+        config.userMeta.forEach((uuid, values) -> metaKeys.put(uuid, values.keySet()));
+        expireUsers(server, config.userMetaExpiries, metaKeys, now, removed,
+                (who, key) -> who + " no longer carries the meta " + key);
+        config.userMeta.values().removeIf(Map::isEmpty);
         expireUserChat(server, config.userSuffixEntries, now, removed, "suffix");
         Iterator<Map.Entry<String, Map<String, GradesConfig.UserScoped>>> users = config.userContexts.entrySet().iterator();
         while (users.hasNext()) {
@@ -115,6 +122,7 @@ public final class ExpirySweeper {
         expire(scope.permissionExpiries, scope.permissions, now, node -> removed.add(who + " no longer grants " + node));
         expire(scope.deniedPermissionExpiries, scope.deniedPermissions, now, node -> removed.add(who + " no longer denies " + node));
         expire(scope.refusedExpiries, scope.refused, now, grade -> removed.add(who + " no longer refuses " + grade));
+        expire(scope.metaExpiries, scope.meta.keySet(), now, key -> removed.add(who + " no longer carries the meta " + key));
         expireChat(scope.prefixes, now, text -> removed.add(who + " no longer shows the prefix " + text));
         expireChat(scope.suffixes, now, text -> removed.add(who + " no longer shows the suffix " + text));
     }

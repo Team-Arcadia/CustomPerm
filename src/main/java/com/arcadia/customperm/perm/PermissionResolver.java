@@ -68,6 +68,11 @@ import java.util.function.BinaryOperator;
  * one, and the text that sorts first last of all, so the order never depends
  * on the order grades were assigned in. Refusals, expiries and the default grade apply as they do to a node.
  * Showing the first or several of them is the caller's choice ({@code chat/ChatStack}).</p>
+ *
+ * <p>Meta ({@link #meta}) is decided like a node, as one value: the player's own first, then the heaviest
+ * grade, then the nearest ancestor inside a chain, one limited to the player's context before the same
+ * holder's global one, and the value that sorts first between two left equal. Refusals, expiries and the
+ * default grade apply as they do to a node.</p>
  */
 public final class PermissionResolver {
 
@@ -138,6 +143,48 @@ public final class PermissionResolver {
         Ranked<Tristate> fallback = new Ranked<>(DENY_WINS);
         offerGrades(fallback, NODES, grades, List.of(defaultGrade), node, null, refused, contexts);
         return fallback.value == null ? Tristate.UNSET : fallback.value;
+    }
+
+    /**
+     * The value of meta {@code key} for {@code uuid} in {@code contexts}, or {@code null} when nothing they
+     * reach sets it. Asked by other mods through their number and text permission nodes, so it walks like a
+     * node check: a grade without parents allocates nothing.
+     */
+    public static String meta(GradesConfig grades, UUID uuid, String key, String defaultGrade, Contexts contexts) {
+        if (key == null || uuid == null) return null;
+        boolean hasDefault = defaultGrade != null && !defaultGrade.isEmpty();
+        String user = uuid.toString();
+        Map<String, GradesConfig.UserScoped> scoped = contexts.isEmpty() ? null : grades.userContexts.get(user);
+        List<String> refused = refused(grades, user, scoped, contexts);
+
+        Ranked<String> own = new Ranked<>(FIRST_SORTED);
+        Map<String, String> mine = grades.userMeta.get(user);
+        if (mine != null) {
+            String value = mine.get(key);
+            Map<String, Long> expiries = grades.userMetaExpiries.get(user);
+            if (value != null && Expiry.alive(expiries, key)) own.offer(EXACT, value, PLAYER_RANK, 0);
+        }
+        if (scoped != null) {
+            for (Map.Entry<String, GradesConfig.UserScoped> entry : scoped.entrySet()) {
+                String value = entry.getValue().meta.get(key);
+                if (value == null || !contexts.satisfies(entry.getKey())
+                        || !Expiry.alive(entry.getValue().metaExpiries, key)) continue;
+                own.offer(EXACT, value, PLAYER_RANK, Contexts.size(entry.getKey()));
+            }
+        }
+        List<String> assigned = Expiry.alive(grades.userGrades.get(user), grades.userGradeExpiries.get(user));
+        if (assigned != null) offerGrades(own, META, grades, assigned, key, hasDefault ? defaultGrade : null, refused, contexts);
+        if (scoped != null) {
+            for (Map.Entry<String, GradesConfig.UserScoped> entry : scoped.entrySet()) {
+                if (entry.getValue().grades.isEmpty() || !contexts.satisfies(entry.getKey())) continue;
+                offerGrades(own, META, grades, Expiry.alive(entry.getValue().grades, entry.getValue().gradeExpiries), key,
+                        hasDefault ? defaultGrade : null, refused, contexts);
+            }
+        }
+        if (own.value != null || !hasDefault) return own.value;
+        Ranked<String> fallback = new Ranked<>(FIRST_SORTED);
+        offerGrades(fallback, META, grades, List.of(defaultGrade), key, null, refused, contexts);
+        return fallback.value;
     }
 
     /** The chat prefix that shows first for {@code uuid}, or {@code null} when they reach none. */
@@ -307,6 +354,20 @@ public final class PermissionResolver {
                     Contexts.size(entry.getKey()));
         }
     };
+
+    private static final Reader<String> META = (into, grade, key, rank, contexts) -> {
+        String value = grade.meta.get(key);
+        if (value != null && Expiry.alive(grade.metaExpiries, key)) into.offer(EXACT, value, rank, 0);
+        if (grade.contexts.isEmpty() || contexts.isEmpty()) return;
+        for (Map.Entry<String, GradesConfig.GradeScoped> entry : grade.contexts.entrySet()) {
+            String here = entry.getValue().meta.get(key);
+            if (here == null || !contexts.satisfies(entry.getKey()) || !Expiry.alive(entry.getValue().metaExpiries, key)) continue;
+            into.offer(EXACT, here, rank, Contexts.size(entry.getKey()));
+        }
+    };
+
+    /** Two meta values left equal: the one that sorts first, so the answer never depends on assignment order. */
+    private static final BinaryOperator<String> FIRST_SORTED = (kept, offered) -> offered.compareTo(kept) < 0 ? offered : kept;
 
     /** Between equal ranks, a DENY wins over an ALLOW (INVARIANT-101). */
     private static final BinaryOperator<Tristate> DENY_WINS =

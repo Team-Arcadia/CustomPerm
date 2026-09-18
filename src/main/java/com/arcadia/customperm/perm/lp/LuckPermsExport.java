@@ -119,6 +119,7 @@ public final class LuckPermsExport {
                 addNodes(group, source.allow(), source.deny(), source.expiries(), kept);
                 addScoped(group, source.scoped(), kept);
                 addChat(group, source.chat(), replace, kept);
+                addMeta(group, source.meta(), replace, kept);
                 await(api.getGroupManager().saveGroup(group));
                 groups++;
                 progress.accept(groups);
@@ -148,6 +149,7 @@ public final class LuckPermsExport {
                 addNodes(user, source.allow(), source.deny(), source.expiries(), kept);
                 addScoped(user, source.scoped(), kept);
                 addChat(user, source.chat(), replace, kept);
+                addMeta(user, source.meta(), replace, kept);
                 await(api.getUserManager().saveUser(user));
                 user.getCachedData().invalidate();
                 players++;
@@ -251,6 +253,37 @@ public final class LuckPermsExport {
     }
 
     /**
+     * Writes meta, each key in its context. Adding keeps a value the holder already has for that key there, and
+     * counts it when it differs; replacing clears the holder's own values of the keys the grade sets first, so
+     * meta LuckPerms holds for other keys stays.
+     */
+    private static void addMeta(PermissionHolder holder, List<com.arcadia.customperm.admin.MetaGrant> meta,
+                                boolean replace, int[] kept) {
+        if (meta.isEmpty()) return;
+        if (replace) {
+            Set<String> carried = new java.util.HashSet<>();
+            for (var grant : meta) carried.add(grant.key() + "@" + contexts(grant.context()));
+            holder.getNodes().stream().filter(LuckPermsExport::decidedHere).filter(NodeType.META::matches)
+                    .map(NodeType.META::cast)
+                    .filter(node -> carried.contains(node.getMetaKey().toLowerCase(java.util.Locale.ROOT) + "@" + node.getContexts()))
+                    .toList().forEach(existing -> holder.data().remove(existing));
+        }
+        for (var grant : meta) {
+            net.luckperms.api.context.ImmutableContextSet where = contexts(grant.context());
+            var same = holder.getNodes().stream().filter(node -> !node.hasExpiry()).filter(NodeType.META::matches)
+                    .map(NodeType.META::cast)
+                    .filter(node -> node.getMetaKey().equalsIgnoreCase(grant.key()) && node.getContexts().equals(where))
+                    .findFirst().orElse(null);
+            if (same != null) {
+                if (!same.getMetaValue().equals(grant.value())) kept[0]++;
+                continue;
+            }
+            holder.data().add(timed(net.luckperms.api.node.types.MetaNode.builder(grant.key(), grant.value())
+                    .withContext(where), grant.expires() > 0 ? grant.expires() : null));
+        }
+    }
+
+    /**
      * Adds a permanent node unless the holder already sets that key in the same context. Set the same way,
      * there is nothing to do; set the other way, LuckPerms' value is kept and counted: adding never takes
      * away, and replacing has already cleared what it would conflict with.
@@ -267,7 +300,7 @@ public final class LuckPermsExport {
 
     /**
      * Clears what CustomPerm decides on a holder: its permanent parents and its {@code customperm.*} and
-     * {@code *} nodes, global or limited to contexts it writes. Its prefix, suffix, meta, weight aside, other
+     * {@code *} nodes, global or limited to contexts it writes. Its prefix, suffix, meta (see {@link #addMeta}), weight aside, other
      * contexts, temporary entries and the nodes other mods read stay, those being what LuckPerms is kept for. A player keeps the default group,
      * which LuckPerms would otherwise have to give back on their next login.
      */

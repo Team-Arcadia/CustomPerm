@@ -780,6 +780,8 @@ public final class GradeAdmin {
             g.contexts = Scopes.copy(grade.contexts);
             g.parentExpiries = new java.util.HashMap<>(grade.parentExpiries);
             g.deniedParentExpiries = new java.util.HashMap<>(grade.deniedParentExpiries);
+            g.meta = new java.util.TreeMap<>(grade.meta);
+            g.metaExpiries = new java.util.HashMap<>(grade.metaExpiries);
             copy.grades.put(name, g);
         });
         source.userGrades.forEach((uuid, list) -> copy.userGrades.put(uuid, new ArrayList<>(list)));
@@ -792,6 +794,8 @@ public final class GradeAdmin {
         copyExpiries(source.userDeniedPermissionExpiries, copy.userDeniedPermissionExpiries);
         copyExpiries(source.userGradeExpiries, copy.userGradeExpiries);
         copyExpiries(source.userDeniedGradeExpiries, copy.userDeniedGradeExpiries);
+        source.userMeta.forEach((uuid, values) -> copy.userMeta.put(uuid, new java.util.TreeMap<>(values)));
+        copyExpiries(source.userMetaExpiries, copy.userMetaExpiries);
         copy.userContexts = Scopes.copyUsers(source.userContexts);
         return copy;
     }
@@ -819,6 +823,10 @@ public final class GradeAdmin {
         target.userGradeExpiries.putAll(saved.userGradeExpiries);
         target.userDeniedGradeExpiries.clear();
         target.userDeniedGradeExpiries.putAll(saved.userDeniedGradeExpiries);
+        target.userMeta.clear();
+        target.userMeta.putAll(saved.userMeta);
+        target.userMetaExpiries.clear();
+        target.userMetaExpiries.putAll(saved.userMetaExpiries);
         target.userContexts.clear();
         target.userContexts.putAll(saved.userContexts);
     }

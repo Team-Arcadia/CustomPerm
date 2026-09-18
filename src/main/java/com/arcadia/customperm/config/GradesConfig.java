@@ -65,6 +65,14 @@ public class GradesConfig {
     public Map<String, Map<String, Long>> userDeniedGradeExpiries = new HashMap<>();
 
     /**
+     * UUID string -> meta key -> value carried by that player alone, like a meta node on a LuckPerms user. See
+     * {@link Grade#meta} for what meta is for.
+     */
+    public Map<String, Map<String, String>> userMeta = new HashMap<>();
+    /** UUID string -> meta key -> when it expires. */
+    public Map<String, Map<String, Long>> userMetaExpiries = new HashMap<>();
+
+    /**
      * UUID string -> context -> the nodes and grades that player holds in that context only, such as
      * {@code world=minecraft:the_nether}. See {@code perm/Contexts} for how a context is written.
      */
@@ -133,10 +141,14 @@ public class GradesConfig {
         public Map<String, Long> deniedPermissionExpiries = new HashMap<>();
         /** Refused grade -> when the refusal ends. */
         public Map<String, Long> refusedExpiries = new HashMap<>();
+        /** Meta key -> value in this context. */
+        public Map<String, String> meta = new java.util.TreeMap<>();
+        /** Meta key -> when it expires. */
+        public Map<String, Long> metaExpiries = new HashMap<>();
 
         public boolean isEmpty() {
             return permissions.isEmpty() && deniedPermissions.isEmpty() && refused.isEmpty()
-                    && prefixes.isEmpty() && suffixes.isEmpty();
+                    && prefixes.isEmpty() && suffixes.isEmpty() && meta.isEmpty();
         }
 
         /**
@@ -149,6 +161,7 @@ public class GradesConfig {
                 case "allow" -> permissionExpiries;
                 case "deny" -> deniedPermissionExpiries;
                 case "refused" -> refusedExpiries;
+                case "meta" -> metaExpiries;
                 default -> Map.of();
             };
         }
@@ -233,6 +246,15 @@ public class GradesConfig {
         public Map<String, Long> parentExpiries = new HashMap<>();
         /** Refused grade -> when this grade stops refusing it. */
         public Map<String, Long> deniedParentExpiries = new HashMap<>();
+        /**
+         * Meta key -> value, like LuckPerms meta: data a grade carries for other mods to read rather than a
+         * permission. A mod that declares a number or text permission node reads it here, the node's name
+         * being the key, the way LuckPerms answers those nodes. A player's own value wins, then the heaviest
+         * grade's, then the nearest ancestor's.
+         */
+        public Map<String, String> meta = new java.util.TreeMap<>();
+        /** Meta key -> when it expires. */
+        public Map<String, Long> metaExpiries = new HashMap<>();
     }
 
     public void normalize() {
@@ -267,6 +289,8 @@ public class GradesConfig {
             g.deniedPermissionExpiries = keepFor(g.deniedPermissionExpiries, g.deniedPermissions);
             g.parentExpiries = keepFor(g.parentExpiries, g.parents);
             g.deniedParentExpiries = keepFor(g.deniedParentExpiries, g.deniedParents);
+            g.meta = normalizeMeta(g.meta);
+            g.metaExpiries = keepFor(g.metaExpiries, g.meta.keySet());
             g.contexts = normalizeScopes(g.contexts, GradeScoped::new);
             // A grade inheriting or refusing itself in one world means nothing, as it does everywhere.
             g.contexts.values().forEach(scope -> {
@@ -292,6 +316,15 @@ public class GradesConfig {
         userDeniedPermissionExpiries = keepForUsers(userDeniedPermissionExpiries, userDeniedPermissions);
         userGradeExpiries = keepForUsers(userGradeExpiries, userGrades);
         userDeniedGradeExpiries = keepForUsers(userDeniedGradeExpiries, userDeniedGrades);
+        Map<String, Map<String, String>> meta = new HashMap<>();
+        if (userMeta != null) userMeta.forEach((uuid, values) -> {
+            Map<String, String> clean = normalizeMeta(values);
+            if (uuid != null && !clean.isEmpty()) meta.put(uuid, clean);
+        });
+        userMeta = meta;
+        Map<String, java.util.Set<String>> metaKeys = new HashMap<>();
+        userMeta.forEach((uuid, values) -> metaKeys.put(uuid, values.keySet()));
+        userMetaExpiries = keepForUsers(userMetaExpiries, metaKeys);
         if (userContexts == null) userContexts = new HashMap<>();
         userContexts.keySet().removeIf(java.util.Objects::isNull);
         userContexts.replaceAll((uuid, scopes) -> normalizeScopes(scopes, UserScoped::new));
@@ -328,6 +361,8 @@ public class GradesConfig {
             addExpiries(target.permissionExpiries, scope.permissionExpiries);
             addExpiries(target.deniedPermissionExpiries, scope.deniedPermissionExpiries);
             addExpiries(target.refusedExpiries, scope.refusedExpiries);
+            target.meta.putAll(normalizeMeta(scope.meta));
+            addExpiries(target.metaExpiries, scope.metaExpiries);
             if (scope instanceof UserScoped user) {
                 addNames(((UserScoped) target).grades, user.grades);
                 addExpiries(((UserScoped) target).gradeExpiries, user.gradeExpiries);
@@ -347,6 +382,7 @@ public class GradesConfig {
         scope.permissionExpiries = keepFor(scope.permissionExpiries, scope.permissions);
         scope.deniedPermissionExpiries = keepFor(scope.deniedPermissionExpiries, scope.deniedPermissions);
         scope.refusedExpiries = keepFor(scope.refusedExpiries, scope.refused);
+        scope.metaExpiries = keepFor(scope.metaExpiries, scope.meta.keySet());
         if (scope instanceof UserScoped user) user.gradeExpiries = keepFor(user.gradeExpiries, user.grades);
         if (scope instanceof GradeScoped grade) grade.parentExpiries = keepFor(grade.parentExpiries, grade.parents);
     }
@@ -357,6 +393,18 @@ public class GradesConfig {
         expiries.forEach((key, at) -> {
             if (key != null && at != null) into.merge(key, at, Math::max);
         });
+    }
+
+    /** Meta with its keys lowercased, as the permission nodes they answer are; an empty key or a null value is dropped. */
+    private static Map<String, String> normalizeMeta(Map<String, String> meta) {
+        Map<String, String> clean = new java.util.TreeMap<>();
+        if (meta == null) return clean;
+        meta.forEach((key, value) -> {
+            if (key == null || value == null) return;
+            String k = key.trim().toLowerCase(java.util.Locale.ROOT);
+            if (!k.isEmpty()) clean.put(k, value);
+        });
+        return clean;
     }
 
     private static void addNames(List<String> into, List<String> names) {

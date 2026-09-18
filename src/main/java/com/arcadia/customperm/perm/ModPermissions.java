@@ -96,6 +96,15 @@ public final class ModPermissions {
                 .toList();
     }
 
+    /** The number and text nodes other mods declared, by name: the meta keys they read. */
+    public static List<String> declaredMetaNodes() {
+        return PermissionAPI.getRegisteredNodes().stream()
+                .filter(node -> node.getType() == PermissionTypes.INTEGER || node.getType() == PermissionTypes.STRING)
+                .map(PermissionNode::getNodeName)
+                .sorted()
+                .toList();
+    }
+
     private static final class Handler implements IPermissionHandler {
         private final Set<PermissionNode<?>> nodes;
 
@@ -118,8 +127,31 @@ public final class ModPermissions {
             if (node.getType() == PermissionTypes.BOOLEAN) {
                 Tristate verdict = AdminAccess.explicit(player.createCommandSourceStack(), node.getNodeName());
                 if (verdict != Tristate.UNSET) return cast(verdict == Tristate.ALLOW);
+            } else if (CustomPerm.permissions instanceof InternalPermService service) {
+                T value = fromMeta(node, PermissionResolver.meta(CustomPerm.configManager.getGrades(), player.getUUID(),
+                        node.getNodeName(), CustomPerm.configManager.getSettings().defaultGrade, service.contexts(player)));
+                if (value != null) return value;
             }
             return node.getDefaultResolver().resolve(player, player.getUUID(), context);
+        }
+
+        /**
+         * A number or text node answered from the meta of the same name, the way LuckPerms answers them: a
+         * text node takes the value as it is, a number node the value read as a whole number. {@code null}
+         * leaves the node's default to answer: no such meta, a value that is not a number, or another type.
+         */
+        @SuppressWarnings("unchecked")
+        private static <T> T fromMeta(PermissionNode<T> node, String value) {
+            if (value == null) return null;
+            if (node.getType() == PermissionTypes.STRING) return (T) value;
+            if (node.getType() == PermissionTypes.INTEGER) {
+                try {
+                    return (T) Integer.valueOf(value.trim());
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            }
+            return null;
         }
 
         /**
@@ -132,6 +164,11 @@ public final class ModPermissions {
                 Tristate verdict = PermissionResolver.check(CustomPerm.configManager.getGrades(), player,
                         node.getNodeName(), CustomPerm.configManager.getSettings().defaultGrade);
                 if (verdict != Tristate.UNSET) return cast(verdict == Tristate.ALLOW);
+            } else if (CustomPerm.permissions instanceof InternalPermService) {
+                // Offline, no world is known: only meta without a context applies.
+                T value = fromMeta(node, PermissionResolver.meta(CustomPerm.configManager.getGrades(), player,
+                        node.getNodeName(), CustomPerm.configManager.getSettings().defaultGrade, Contexts.NONE));
+                if (value != null) return value;
             }
             return node.getDefaultResolver().resolve(null, player, context);
         }

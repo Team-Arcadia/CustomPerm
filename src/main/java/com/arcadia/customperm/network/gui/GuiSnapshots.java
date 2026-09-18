@@ -83,7 +83,9 @@ public final class GuiSnapshots {
                                     config.userContexts.get(rawUuid)),
                             timers(config.userPermissionExpiries.get(rawUuid),
                                     config.userDeniedPermissionExpiries.get(rawUuid)),
-                            userScoped(uuid)),
+                            userScoped(uuid),
+                            MetaLine.of(config.userMeta.get(rawUuid), config.userMetaExpiries.get(rawUuid),
+                                    config.userContexts.get(rawUuid))),
                     UserAdmin.nodes(uuid, false).stream().limit(PlayersData.NODES_MAX).toList(),
                     UserAdmin.nodes(uuid, true).stream().limit(PlayersData.NODES_MAX).toList()));
         }
@@ -130,7 +132,8 @@ public final class GuiSnapshots {
                     new TreeSet<>(grade.deniedPermissions).stream().limit(GradesData.NODES_MAX).toList(),
                     new GradesData.Members(assigned.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList(),
                             refusing.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList()),
-                    new GradesData.Details(gradeTimers(grade), gradeScoped(grade))));
+                    new GradesData.Details(gradeTimers(grade), gradeScoped(grade),
+                            MetaLine.of(grade.meta, grade.metaExpiries, grade.contexts))));
         }
         List<String> known = server == null ? List.of()
                 : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();

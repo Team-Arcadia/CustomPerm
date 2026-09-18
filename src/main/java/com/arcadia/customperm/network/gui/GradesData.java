@@ -106,16 +106,30 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
         public List<ScopedEntry> scoped() {
             return details.scoped();
         }
+
+        /** Its meta, everywhere then by context. */
+        public List<MetaLine> meta() {
+            return details.meta();
+        }
     }
 
-    /** What a grade's nodes carry beyond their name: the time a temporary one has left, the world of a contextual one. */
-    public record Details(List<Remaining> timers, List<ScopedEntry> scoped) {
-        public static final Details NONE = new Details(List.of(), List.of());
+    /**
+     * What a grade's nodes carry beyond their name: the time a temporary one has left, the world of a
+     * contextual one; and the grade's meta.
+     */
+    public record Details(List<Remaining> timers, List<ScopedEntry> scoped, List<MetaLine> meta) {
+        public static final Details NONE = new Details(List.of(), List.of(), List.of());
 
         public static final StreamCodec<ByteBuf, Details> CODEC = StreamCodec.composite(
                 Remaining.LIST, Details::timers,
                 ScopedEntry.LIST, Details::scoped,
+                MetaLine.LIST, Details::meta,
                 Details::new);
+
+        /** One without meta. */
+        public Details(List<Remaining> timers, List<ScopedEntry> scoped) {
+            this(timers, scoped, List.of());
+        }
     }
 
     /** A grade's own scalars: its name, its weight, and the prefixes and suffixes it gives. */

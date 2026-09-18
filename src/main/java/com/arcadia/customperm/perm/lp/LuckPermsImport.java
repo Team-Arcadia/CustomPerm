@@ -99,11 +99,12 @@ public final class LuckPermsImport {
             Chat chat = new Chat();
             Map<String, Long> expiries = new java.util.HashMap<>();
             List<ScopedGrant> scoped = new ArrayList<>();
+            Metas meta = new Metas();
             readNodes(group.getNodes(), plan, exposeCommands, parents, deniedParents, allow, deny, chat, expiries,
-                    scoped, true, "group " + group.getName());
+                    scoped, meta, true, "group " + group.getName());
             plan.grade(new ImportPlan.Grade(group.getName(), group.getWeight().orElse(0),
                     List.copyOf(parents), List.copyOf(deniedParents), Set.copyOf(allow), Set.copyOf(deny),
-                    chat.grants(), Map.copyOf(expiries), ScopedGrant.merged(scoped)));
+                    chat.grants(), Map.copyOf(expiries), ScopedGrant.merged(scoped), meta.grants()));
         }
         return null;
     }
@@ -130,6 +131,8 @@ public final class LuckPermsImport {
                 api.getUserManager().searchAll(NodeMatcher.type(NodeType.PREFIX));
         CompletableFuture<Map<UUID, Collection<ChatMetaNode<?, ?>>>> suffixes =
                 api.getUserManager().searchAll(NodeMatcher.type(NodeType.SUFFIX));
+        CompletableFuture<Map<UUID, Collection<net.luckperms.api.node.types.MetaNode>>> metas =
+                api.getUserManager().searchAll(NodeMatcher.type(NodeType.META));
         List<CompletableFuture<Map<UUID, Collection<Node>>>> permissions = new ArrayList<>(List.of(
                 api.getUserManager().searchAll(NodeMatcher.keyStartsWith("customperm.")),
                 api.getUserManager().searchAll(NodeMatcher.keyStartsWith("minecraft.command.")),
@@ -139,23 +142,25 @@ public final class LuckPermsImport {
             permissions.add(api.getUserManager().searchAll(NodeMatcher.keyStartsWith(namespace + ".")));
         }
 
-        CompletableFuture<?>[] all = new CompletableFuture<?>[permissions.size() + 3];
+        CompletableFuture<?>[] all = new CompletableFuture<?>[permissions.size() + 4];
         all[0] = inherited;
         all[1] = prefixes;
         all[2] = suffixes;
-        for (int i = 0; i < permissions.size(); i++) all[i + 3] = permissions.get(i);
+        all[3] = metas;
+        for (int i = 0; i < permissions.size(); i++) all[i + 4] = permissions.get(i);
 
         return CompletableFuture.allOf(all).thenApply(ignored -> {
             Map<UUID, List<Node>> byUser = new LinkedHashMap<>();
             inherited.join().forEach((uuid, nodes) -> byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
             prefixes.join().forEach((uuid, nodes) -> byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
             suffixes.join().forEach((uuid, nodes) -> byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
+            metas.join().forEach((uuid, nodes) -> byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
             for (CompletableFuture<Map<UUID, Collection<Node>>> search : permissions) {
                 search.join().forEach((uuid, nodes) ->
                         byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
             }
-            plan.note("On players, only what CustomPerm can read is looked at: their groups, their prefixes and "
-                    + "suffixes, their customperm, minecraft.command and * nodes, and the nodes other mods declared "
+            plan.note("On players, only what CustomPerm can read is looked at: their groups, their prefixes, "
+                    + "suffixes and meta, their customperm, minecraft.command and * nodes, and the nodes other mods declared "
                     + "to NeoForge.");
 
             for (Map.Entry<UUID, List<Node>> user : byUser.entrySet()) {
@@ -167,13 +172,14 @@ public final class LuckPermsImport {
                 Chat chat = new Chat();
                 Map<String, Long> expiries = new java.util.HashMap<>();
                 List<ScopedGrant> scoped = new ArrayList<>();
+                Metas meta = new Metas();
                 readNodes(user.getValue(), plan, exposeCommands, grades, deniedGrades, allow, deny, chat, expiries,
-                        scoped, false, "player " + uuid);
+                        scoped, meta, false, "player " + uuid);
                 if (grades.isEmpty() && deniedGrades.isEmpty() && allow.isEmpty() && deny.isEmpty()
-                        && chat.grants().isEmpty() && scoped.isEmpty()) continue;
+                        && chat.grants().isEmpty() && scoped.isEmpty() && meta.grants().isEmpty()) continue;
                 plan.player(new ImportPlan.Player(uuid.toString(), name(api, uuid), List.copyOf(grades),
                         List.copyOf(deniedGrades), Set.copyOf(allow), Set.copyOf(deny), chat.grants(),
-                        Map.copyOf(expiries), ScopedGrant.merged(scoped)));
+                        Map.copyOf(expiries), ScopedGrant.merged(scoped), meta.grants()));
             }
             return null;
         });
@@ -239,7 +245,7 @@ public final class LuckPermsImport {
 
     /** A node that carries a context: kept when this side reads that context the same way, left behind otherwise. */
     private static void readScoped(Node node, Long at, ImportPlan.Builder plan, boolean exposeCommands,
-                                   List<ScopedGrant> scoped, Chat chat, boolean group, String holder) {
+                                   List<ScopedGrant> scoped, Chat chat, Metas metas, boolean group, String holder) {
         Scope scope = context(node.getContexts());
         String context = scope.context();
         if (context == null) {
@@ -269,9 +275,14 @@ public final class LuckPermsImport {
             }
             return;
         }
+        if (node instanceof net.luckperms.api.node.types.MetaNode metaNode) {
+            readMeta(metaNode, at, context, metas, plan, holder);
+            if (at != null) plan.timed();
+            return;
+        }
         if (!NodeType.PERMISSION.matches(node)) {
-            plan.contextual();
-            plan.note("Meta limited to a world has no equivalent and is not imported: " + holder + ".");
+            plan.other();
+            plan.note("Display names have no equivalent and are not imported: " + holder + ".");
             return;
         }
         String translated = ImportPlan.translate(node.getKey(), declared);
@@ -286,6 +297,60 @@ public final class LuckPermsImport {
         if (at != null) plan.timed();
         String command = ImportPlan.exposedCommand(node.getKey());
         if (exposeCommands && command != null && node.getValue()) plan.expose(command);
+    }
+
+    /** One meta node: kept unless its key or value cannot be stored here, or another value of its key wins. */
+    private static void readMeta(net.luckperms.api.node.types.MetaNode node, Long at, String context, Metas meta,
+                                 ImportPlan.Builder plan, String holder) {
+        var grant = new com.arcadia.customperm.admin.MetaGrant(node.getMetaKey().toLowerCase(java.util.Locale.ROOT),
+                node.getMetaValue(), at == null ? 0 : at, context);
+        if (!grant.storable()) {
+            plan.other();
+            plan.note("Meta " + node.getMetaKey() + " is not imported: its key or value cannot be stored here "
+                    + "(lowercase letters, digits and _ . : - for a key, 256 characters for a value): " + holder + ".");
+            return;
+        }
+        if (meta.offer(grant)) {
+            plan.imported(false);
+            if (!context.isEmpty()) plan.world();
+        } else {
+            plan.other();
+            plan.note("One value per meta key on a holder: of two, the permanent one, then the one that sorts first, "
+                    + "is imported: " + holder + ".");
+        }
+    }
+
+    /**
+     * One holder's meta, one value per key and context: LuckPerms can hold several, and this side reads one.
+     * A permanent value wins over a temporary one; then the value that sorts first, so two reads agree.
+     */
+    private static final class Metas {
+        private final Map<String, com.arcadia.customperm.admin.MetaGrant> kept = new java.util.TreeMap<>();
+
+        /** False when the offered value is left behind, or displaced the one kept. */
+        boolean offer(com.arcadia.customperm.admin.MetaGrant offered) {
+            String slot = offered.key() + "@" + offered.context();
+            var existing = kept.get(slot);
+            if (existing == null) {
+                kept.put(slot, offered);
+                return true;
+            }
+            if (existing.value().equals(offered.value())) {
+                long longer = existing.expires() == 0 || offered.expires() == 0 ? 0
+                        : Math.max(existing.expires(), offered.expires());
+                kept.put(slot, new com.arcadia.customperm.admin.MetaGrant(offered.key(), offered.value(), longer,
+                        offered.context()));
+                return true;
+            }
+            boolean better = (offered.expires() == 0) != (existing.expires() == 0) ? offered.expires() == 0
+                    : offered.value().compareTo(existing.value()) < 0;
+            if (better) kept.put(slot, offered);
+            return false;
+        }
+
+        List<com.arcadia.customperm.admin.MetaGrant> grants() {
+            return List.copyOf(kept.values());
+        }
     }
 
     /**
@@ -349,7 +414,7 @@ public final class LuckPermsImport {
     private static void readNodes(Collection<? extends Node> nodes, ImportPlan.Builder plan,
                                   boolean exposeCommands, List<String> parents, List<String> deniedParents,
                                   Set<String> allow, Set<String> deny, Chat chat, Map<String, Long> expiries,
-                                  List<ScopedGrant> scoped, boolean group, String holder) {
+                                  List<ScopedGrant> scoped, Metas metas, boolean group, String holder) {
         Set<String> permanent = new java.util.HashSet<>();
         long now = com.arcadia.customperm.perm.Expiry.now();
         for (Node node : nodes) {
@@ -357,7 +422,7 @@ public final class LuckPermsImport {
             // Already over: LuckPerms drops it on its next pass, and so would the sweep here.
             if (at != null && at <= now) continue;
             if (!node.getContexts().isEmpty()) {
-                readScoped(node, at, plan, exposeCommands, scoped, chat, group, holder);
+                readScoped(node, at, plan, exposeCommands, scoped, chat, metas, group, holder);
                 continue;
             }
             if (node instanceof InheritanceNode inheritance) {
@@ -377,9 +442,14 @@ public final class LuckPermsImport {
                 }
                 continue;
             }
+            if (node instanceof net.luckperms.api.node.types.MetaNode metaNode) {
+                readMeta(metaNode, at, "", metas, plan, holder);
+                if (at != null) plan.timed();
+                continue;
+            }
             if (!NodeType.PERMISSION.matches(node)) {
                 plan.other();
-                plan.note("Meta and display names have no equivalent and are not imported.");
+                plan.note("Display names have no equivalent and are not imported.");
                 continue;
             }
             String translated = ImportPlan.translate(node.getKey(), declared);

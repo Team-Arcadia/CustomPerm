@@ -59,6 +59,9 @@ public class LuckPermsImportGameTest {
     private static final String NETHER = "world=minecraft:the_nether";
     private static final String TRACK = "cp_m_ladder";
     private static final String END = "world=minecraft:the_end";
+    /** Every node the import test sets on its user, whatever its context: LuckPerms keeps them across runs. */
+    private static final List<String> USER_NODES = List.of("group." + BASE, "group." + VIP, "minecraft.command.weather",
+            "customperm.command.seed", "customperm.command.time", "cptest.probe.open", "meta.homes.3");
 
     @GameTest(template = TEMPLATE, timeoutTicks = 400)
     public static void importBringsWhatItCanAndSaysWhatItCannot(GameTestHelper helper) {
@@ -70,7 +73,10 @@ public class LuckPermsImportGameTest {
         Set<String> holdersBefore = new HashSet<>(grades.userGrades.keySet());
         Set<String> nodeHoldersBefore = new HashSet<>(grades.userPermissions.keySet());
         try {
-            // A source with one of everything: what carries over, and one of each reason to leave a node.
+            // A source with one of everything: what carries over, and one of each reason to leave a node. The user
+            // is cleared first: LuckPerms refuses a second temporary node of one key, so a run cut short before its
+            // cleanup would leave the old expiry in place.
+            LuckPermsTestSupport.clearNodes(USER, USER_NODES);
             apply(LpEditOp.GROUP_CREATE, BASE);
             apply(LpEditOp.GROUP_CREATE, VIP);
             apply(LpEditOp.GROUP_PERM_ADD, BASE, "minecraft.command.gamemode", "true", "", "0");
@@ -84,6 +90,9 @@ public class LuckPermsImportGameTest {
             apply(LpEditOp.GROUP_PREFIX_SET, VIP, "10", "[VIP]", "");
             apply(LpEditOp.GROUP_PREFIX_SET, VIP, "5", "[Lesser]", "");
             apply(LpEditOp.GROUP_META_SET, VIP, "rank", "gold", "");
+            apply(LpEditOp.GROUP_META_SET, VIP, "rank", "fire", "dimension-type=the_nether");
+            apply(LpEditOp.GROUP_DISPLAYNAME_SET, VIP, "Very Important");
+            apply(LpEditOp.USER_META_SET, USER.toString(), "homes", "3", "");
             apply(LpEditOp.GROUP_PARENT_ADD, VIP, BASE, "");
             apply(LpEditOp.GROUP_PARENT_ADD, VIP, "default", "dimension-type=the_nether");
             apply(LpEditOp.GROUP_PERM_ADD, VIP, "group.default", "false", "dimension-type=the_end", "0");
@@ -172,7 +181,12 @@ public class LuckPermsImportGameTest {
             if (!base.scoped().equals(List.of(new ScopedGrant("gamemode=creative", ScopedGrant.ALLOW, "customperm.command.weather"))))
                 fail("A node limited to a game mode must arrive with it, one limited to LuckPerms' world (the save's name) not: "
                         + base.scoped());
-            if (plan.counts().worlds() != 8) fail("Every entry limited to a world must be counted: " + plan.counts());
+            if (!vip.meta().equals(List.of(new com.arcadia.customperm.admin.MetaGrant("rank", "gold", 0, ""),
+                    new com.arcadia.customperm.admin.MetaGrant("rank", "fire", 0, NETHER))))
+                fail("A group's meta must arrive, the one limited to a world with it: " + vip.meta());
+            if (!player.meta().equals(List.of(new com.arcadia.customperm.admin.MetaGrant("homes", "3", 0, ""))))
+                fail("A player's meta must be searched for and arrive: " + player.meta());
+            if (plan.counts().worlds() != 9) fail("Every entry limited to a world must be counted: " + plan.counts());
             if (!List.of(BASE, VIP).equals(plan.tracks().get(TRACK)))
                 fail("A track must arrive with its groups in order: " + plan.tracks());
 
@@ -191,6 +205,9 @@ public class LuckPermsImportGameTest {
             if (!result.success()) fail("Applying the plan failed: " + result.message());
             if (!grades.grades.containsKey(BASE) || !grades.grades.containsKey(VIP))
                 fail("The grades were not written.");
+            if (!"gold".equals(grades.grades.get(VIP).meta.get("rank"))
+                    || !"3".equals(grades.userMeta.getOrDefault(USER.toString(), java.util.Map.of()).get("homes")))
+                fail("The meta was not written: " + grades.grades.get(VIP).meta + " " + grades.userMeta);
             if (grades.grades.get(VIP).weight != 42 || !grades.grades.get(VIP).parents.contains(BASE))
                 fail("The weight and the parent were not written.");
             if (grades.grades.get(VIP).prefixes.size() != 2 || !"[VIP]".equals(grades.grades.get(VIP).prefixes.get(0).text))
@@ -233,6 +250,9 @@ public class LuckPermsImportGameTest {
             grades.userGradeExpiries.keySet().retainAll(holdersBefore);
             grades.userContexts.remove(USER.toString());
             grades.tracks.remove(TRACK);
+            // The user's own nodes stay in LuckPerms' storage across runs otherwise.
+            LuckPermsTestSupport.clearNodes(USER, USER_NODES);
+            grades.userMeta.remove(USER.toString());
             LuckPermsTestSupport.cleanup(List.of(BASE, VIP), List.of(TRACK));
         }
         helper.succeed();

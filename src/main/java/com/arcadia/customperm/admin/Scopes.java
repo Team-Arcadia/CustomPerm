@@ -118,6 +118,8 @@ final class Scopes {
         to.permissionExpiries.putAll(from.permissionExpiries);
         to.deniedPermissionExpiries.putAll(from.deniedPermissionExpiries);
         to.refusedExpiries.putAll(from.refusedExpiries);
+        to.meta.putAll(from.meta);
+        to.metaExpiries.putAll(from.metaExpiries);
     }
 
     static Map<String, Map<String, GradesConfig.UserScoped>> copyUsers(

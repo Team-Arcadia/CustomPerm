@@ -38,7 +38,13 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
      */
     public record Grade(String name, int weight, List<String> parents, List<String> deniedParents,
                         Set<String> allow, Set<String> deny, List<ChatGrant> chat,
-                        Map<String, Long> expiries, List<ScopedGrant> scoped) {
+                        Map<String, Long> expiries, List<ScopedGrant> scoped, List<MetaGrant> meta) {
+
+        /** One without meta. */
+        public Grade(String name, int weight, List<String> parents, List<String> deniedParents, Set<String> allow,
+                     Set<String> deny, List<ChatGrant> chat, Map<String, Long> expiries, List<ScopedGrant> scoped) {
+            this(name, weight, parents, deniedParents, allow, deny, chat, expiries, scoped, List.of());
+        }
     }
 
     /**
@@ -48,7 +54,13 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
      */
     public record Player(String uuid, String name, List<String> grades, List<String> deniedGrades,
                          Set<String> allow, Set<String> deny, List<ChatGrant> chat,
-                         Map<String, Long> expiries, List<ScopedGrant> scoped) {
+                         Map<String, Long> expiries, List<ScopedGrant> scoped, List<MetaGrant> meta) {
+
+        /** One without meta. */
+        public Player(String uuid, String name, List<String> grades, List<String> deniedGrades, Set<String> allow,
+                      Set<String> deny, List<ChatGrant> chat, Map<String, Long> expiries, List<ScopedGrant> scoped) {
+            this(uuid, name, grades, deniedGrades, allow, deny, chat, expiries, scoped, List.of());
+        }
     }
 
     /**
@@ -93,7 +105,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
         } else {
             lines.add(counts.skipped() + " entrie(s) are left behind: "
                     + counts.contextual + " in a context not read here, " + counts.foreign + " belonging to other mods, "
-                    + counts.other + " of a kind CustomPerm has no equivalent for (meta, display name).");
+                    + counts.other + " of a kind CustomPerm has no equivalent for (display name).");
         }
         lines.addAll(skipped);
         return lines;

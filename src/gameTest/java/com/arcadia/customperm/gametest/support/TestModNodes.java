@@ -30,15 +30,18 @@ public final class TestModNodes {
     /** Defaults to false: a grant can only come from CustomPerm. */
     public static final PermissionNode<Boolean> SHUT =
             new PermissionNode<>("cptest", "probe.shut", PermissionTypes.BOOLEAN, (player, uuid, context) -> false);
-    /** A number, which CustomPerm has no storage for: always its default. */
+    /** A number, answered from the meta of the same name, its default otherwise. */
     public static final PermissionNode<Integer> LIMIT =
             new PermissionNode<>("cptest", "probe.limit", PermissionTypes.INTEGER, (player, uuid, context) -> 7);
+    /** A text, answered from the meta of the same name. */
+    public static final PermissionNode<String> LABEL =
+            new PermissionNode<>("cptest", "probe.label", PermissionTypes.STRING, (player, uuid, context) -> "none");
 
     private TestModNodes() {
     }
 
     @SubscribeEvent
     public static void onGatherNodes(PermissionGatherEvent.Nodes event) {
-        event.addNodes(OPEN, SHUT, LIMIT);
+        event.addNodes(OPEN, SHUT, LIMIT, LABEL);
     }
 }

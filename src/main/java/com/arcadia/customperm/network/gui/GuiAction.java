@@ -129,6 +129,14 @@ public enum GuiAction {
     USER_CHAT_ADD(6, GuiArea.GRADES),
     /** {@code [playerName, "prefix"|"suffix", priority, context]} Removes one player's own at that priority. */
     USER_CHAT_REMOVE(4, GuiArea.GRADES),
+    /** {@code [grade, key, value, duration, context]} Sets a grade's meta; an empty duration is for good, an empty context everywhere. */
+    GRADE_META_SET(5, GuiArea.GRADES),
+    /** {@code [grade, key, context]} Removes a grade's meta of that key, in that context. */
+    GRADE_META_UNSET(3, GuiArea.GRADES),
+    /** {@code [playerName, key, value, duration, context]} One player's own meta; by name. */
+    USER_META_SET(5, GuiArea.GRADES),
+    /** {@code [playerName, key, context]} Removes one player's own meta of that key. */
+    USER_META_UNSET(3, GuiArea.GRADES),
     /** {@code ["highest"|"stacked"]} Shows one prefix and suffix, or several in a row, like {@code names stack both}. */
     NAMES_STACK(1, GuiArea.CONFIG),
     /** {@code ["true"|"false"]} Decorates names with their prefix and suffix, like {@code /customperm names}. */

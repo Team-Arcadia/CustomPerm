@@ -118,6 +118,8 @@ import java.util.stream.Collectors;
  * /customperm grade   prefix|suffix <grade> [in <world> | where "<context>"] [add <priority> <text> | addtemp <priority> <duration> <text>
  *                                           | remove <priority> | clear]   # & colour codes, highest priority shows
  * /customperm user    prefix|suffix <player> [...]     # the same, one player's own
+ * /customperm grade|user meta <holder> [set <key> <value> [duration] [context] | unset <key> [context]]
+ *                                                      # key -> value mods read through number/text nodes
  * /customperm names   [on|off|format <format>]         # decorate names with them, {prefix}{name}{suffix}
  *                     stack <prefix|suffix|both> <highest|stacked> [limit]  # one, or several in a row
  * /customperm test    <player> <node>                   # debug: report grant/deny + backend
@@ -453,6 +455,13 @@ public class CustomPermCommand {
                                 .executes(CustomPermCommand::gradeWeight))))
                     .then(gradeChat("prefix", false))
                     .then(gradeChat("suffix", true))
+                    .then(metaEdits(Commands.argument("grade", StringArgumentType.word()).suggests(SUGGEST_GRADES),
+                        ctx -> com.arcadia.customperm.admin.MetaAdmin.ofGrade(StringArgumentType.getString(ctx, "grade")),
+                        (ctx, key, value, qualified) -> report(ctx, com.arcadia.customperm.admin.MetaAdmin.setOnGrade(
+                            ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"), key, value,
+                            qualified.seconds(), qualified.context())),
+                        (ctx, key, context) -> report(ctx, com.arcadia.customperm.admin.MetaAdmin.unsetOnGrade(
+                            ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"), key, context))))
                     .then(Commands.literal("parent")
                         .then(Commands.literal("add").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                             .then(Commands.argument("grade", StringArgumentType.word())
@@ -523,6 +532,14 @@ public class CustomPermCommand {
                 .then(Commands.literal("user")
                     .then(userChat("prefix", false))
                     .then(userChat("suffix", true))
+                    .then(metaEdits(Commands.argument("player", StringArgumentType.word()).suggests(SUGGEST_KNOWN_PLAYERS),
+                        ctx -> withPlayer(ctx, (uuid, name) -> com.arcadia.customperm.admin.MetaAdmin.ofPlayer(uuid)),
+                        (ctx, key, value, qualified) -> withPlayerReport(ctx, (uuid, name) ->
+                            com.arcadia.customperm.admin.MetaAdmin.setOnPlayer(ctx.getSource().getServer(), uuid, name,
+                                key, value, qualified.seconds(), qualified.context())),
+                        (ctx, key, context) -> withPlayerReport(ctx, (uuid, name) ->
+                            com.arcadia.customperm.admin.MetaAdmin.unsetOnPlayer(ctx.getSource().getServer(), uuid, name,
+                                key, context))))
                     .then(Commands.literal("addperm").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
@@ -1165,6 +1182,82 @@ public class CustomPermCommand {
         // Unguarded, as a prefix changes what a player is called, never what they may do.
         return report(ctx, edit.apply(com.arcadia.customperm.admin.ChatHolder.grade(
             ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"))));
+    }
+
+    /** Sets one meta value once the holder, key, value and options are read. */
+    private interface MetaSet {
+        int run(CommandContext<CommandSourceStack> ctx, String key, String value, Qualified qualified);
+    }
+
+    private interface MetaUnset {
+        int run(CommandContext<CommandSourceStack> ctx, String key, String context);
+    }
+
+    /** Declared number and text nodes: the meta keys other mods read. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_META_KEYS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(com.arcadia.customperm.perm.ModPermissions.declaredMetaNodes()
+            .stream().map(key -> key.contains(":") ? "\"" + key + "\"" : key).toList(), builder);
+
+    /**
+     * {@code meta <holder>} lists, {@code set <key> <value> [duration] [context]} sets, {@code unset <key>
+     * [context]} removes. The key and value are quoted when they hold a space or a colon.
+     */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> metaEdits(
+            com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> holder,
+            java.util.function.Function<CommandContext<CommandSourceStack>, List<String>> list, MetaSet set, MetaUnset unset) {
+        return Commands.literal("meta").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+            .then(holder
+                .executes(ctx -> {
+                    AdminResult refusal = GradeAdmin.unavailable();
+                    if (refusal != null) return report(ctx, refusal);
+                    List<String> entries = list.apply(ctx);
+                    if (entries == null) return 0;
+                    ctx.getSource().sendSuccess(() -> Component.literal(entries.isEmpty() ? "No meta of its own."
+                        : "Meta: " + String.join(", ", entries)), false);
+                    return 1;
+                })
+                .then(Commands.literal("set")
+                    .then(Commands.argument("key", StringArgumentType.string()).suggests(SUGGEST_META_KEYS)
+                        .then(Commands.argument("value", StringArgumentType.string())
+                            .executes(ctx -> set.run(ctx, StringArgumentType.getString(ctx, "key"),
+                                StringArgumentType.getString(ctx, "value"), Qualified.of(null, false)))
+                            .then(Commands.argument("option", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_DURATIONS_AND_WORLDS)
+                                .executes(ctx -> {
+                                    Qualified qualified = Qualified.of(StringArgumentType.getString(ctx, "option"), false);
+                                    if (qualified.problem() != null) return report(ctx, AdminResult.fail(qualified.problem()));
+                                    return set.run(ctx, StringArgumentType.getString(ctx, "key"),
+                                        StringArgumentType.getString(ctx, "value"), qualified);
+                                })))))
+                .then(Commands.literal("unset")
+                    .then(Commands.argument("key", StringArgumentType.string()).suggests(SUGGEST_META_KEYS)
+                        .executes(ctx -> unset.run(ctx, StringArgumentType.getString(ctx, "key"), null))
+                        .then(Commands.argument("context", StringArgumentType.greedyString())
+                            .suggests(SUGGEST_WORLDS)
+                            .executes(ctx -> unset.run(ctx, StringArgumentType.getString(ctx, "key"),
+                                StringArgumentType.getString(ctx, "context")))))));
+    }
+
+    /** Runs {@code action} for the player named by the "player" argument, or reports why there is none. */
+    private static List<String> withPlayer(CommandContext<CommandSourceStack> ctx,
+                                           java.util.function.BiFunction<java.util.UUID, String, List<String>> action) {
+        var server = ctx.getSource().getServer();
+        if (server == null) return null;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
+        if (resolution.profile().isEmpty()) {
+            report(ctx, AdminResult.fail(resolution.problem()));
+            return null;
+        }
+        return action.apply(resolution.profile().get().getId(), resolution.profile().get().getName());
+    }
+
+    private static int withPlayerReport(CommandContext<CommandSourceStack> ctx,
+                                        java.util.function.BiFunction<java.util.UUID, String, AdminResult> action) {
+        var server = ctx.getSource().getServer();
+        if (server == null) return 0;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
+        if (resolution.profile().isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
+        return report(ctx, action.apply(resolution.profile().get().getId(), resolution.profile().get().getName()));
     }
 
     /** {@code prefix|suffix <player> ...}: see {@link #chatEdits}. */

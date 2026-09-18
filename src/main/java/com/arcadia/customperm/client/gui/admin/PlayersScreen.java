@@ -65,12 +65,13 @@ public final class PlayersScreen extends AdminScreen {
     private final CpList<NodeRow> nodeList;
     private final CpEditBox nodeField;
     private final ChatFields chat;
+    private final MetaFields meta;
     /** How long a node added lasts; empty for good. */
     private final CpEditBox durationField;
     /** The world a node added is limited to; empty for everywhere. */
     private final CpEditBox worldField;
     /** What the right-hand side shows for the selected player. */
-    private enum Tab { NODES, CHAT, TRACKS }
+    private enum Tab { NODES, CHAT, META, TRACKS }
 
     private Tab tab = Tab.NODES;
 
@@ -89,6 +90,7 @@ public final class PlayersScreen extends AdminScreen {
                 .hint(Component.literal("permission node"))
                 .onSubmit(() -> addNode(false));
         this.chat = new ChatFields(this::rebuild);
+        this.meta = new MetaFields(this::rebuild);
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
                 .hint(Component.literal("for, e.g. 30d"));
         this.worldField = new CpEditBox(Component.literal("World"), 128)
@@ -229,6 +231,7 @@ public final class PlayersScreen extends AdminScreen {
         }
         trackList.setItems(tracks);
         chat.fill(player == null ? List.of() : player.chat());
+        meta.fill(player == null ? List.of() : player.meta());
     }
 
     /** Shows the rest of the first known player name that starts with what was typed. */
@@ -293,6 +296,7 @@ public final class PlayersScreen extends AdminScreen {
                 CpButton.ghost(Component.literal("Nodes (" + (player.allow().size() + player.deny().size()) + ")"),
                         () -> setTab(Tab.NODES)).icon(Icon.LOCK).selected(tab == Tab.NODES),
                 CpButton.ghost(Component.literal("Chat"), () -> setTab(Tab.CHAT)).icon(Icon.EDIT).selected(tab == Tab.CHAT),
+                CpButton.ghost(Component.literal("Meta"), () -> setTab(Tab.META)).icon(Icon.EDIT).selected(tab == Tab.META),
                 CpButton.ghost(Component.literal("Tracks (" + data.tracks().size() + ")"), () -> setTab(Tab.TRACKS))
                         .icon(Icon.SHIELD).selected(tab == Tab.TRACKS)));
         Rect fieldRow = new Rect(in.x(), list.bottom() + 4, in.w(), FIELD);
@@ -309,6 +313,20 @@ public final class PlayersScreen extends AdminScreen {
                     CpButton.neutral(Component.literal("Demote"), () -> move(selected, false)).icon(Icon.MINUS)
                             .enabled(movable && selected.rung() >= 0)
                             .tooltip(Component.literal("One rung down; from the first rung, off the track."))));
+            return;
+        }
+        if (tab == Tab.META) {
+            addRenderableWidget(meta.list.at(list));
+            addRenderableWidget(meta.key.at(meta.keyRect(fieldRow)));
+            addRenderableWidget(meta.value.at(meta.valueRect(fieldRow)));
+            addRenderableWidget(meta.world.at(meta.worldRect(fieldRow)));
+            addRenderableWidget(meta.duration.at(meta.durationRect(fieldRow)));
+            meta.setEditable(editable);
+            placeButtonRow(buttonRow, 6, true, List.of(
+                    CpButton.accent(Component.literal("Set"), this::setMeta).icon(Icon.PLUS).enabled(editable)
+                            .tooltip(Component.literal("Their own, above any grade's value of the same key.")),
+                    CpButton.neutral(Component.literal("Remove"), this::removeMeta).icon(Icon.MINUS)
+                            .enabled(editable && meta.list.getSelected() != null)));
             return;
         }
         if (tab == Tab.CHAT) {
@@ -390,6 +408,23 @@ public final class PlayersScreen extends AdminScreen {
         act(GuiAction.USER_CHAT_ADD, player.name(), suffix ? "suffix" : "prefix", String.valueOf(priority), text,
                 chat.duration.getValue().trim(), GradesScreen.context(chat.world.getValue()));
         chat.clearTyped();
+    }
+
+    /** By name like a prefix, so a player who holds nothing yet can get meta. */
+    private void setMeta() {
+        PlayersData.Player player = playerList.getSelected();
+        String key = meta.key.getValue().trim();
+        if (player == null || key.isEmpty() || meta.value.getValue().isEmpty()) return;
+        act(GuiAction.USER_META_SET, player.name(), key, meta.value.getValue(), meta.duration.getValue().trim(),
+                GradesScreen.context(meta.world.getValue()));
+        meta.clearTyped();
+    }
+
+    private void removeMeta() {
+        PlayersData.Player player = playerList.getSelected();
+        com.arcadia.customperm.network.gui.MetaLine line = meta.list.getSelected();
+        if (player == null || line == null) return;
+        act(GuiAction.USER_META_UNSET, player.name(), line.key(), line.context());
     }
 
     private void removeChat() {

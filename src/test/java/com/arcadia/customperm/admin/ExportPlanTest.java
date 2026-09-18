@@ -314,6 +314,33 @@ class ExportPlanTest {
     }
 
     @Test
+    void metaIsCarriedWithItsContextAndExpiryAndReadBack() {
+        GradesConfig config = new GradesConfig();
+        grade(config, "vip", 0, List.of(), List.of(), Set.of(), Set.of());
+        long later = com.arcadia.customperm.perm.Expiry.now() + 3600;
+        config.grades.get("vip").meta.put("rank", "gold");
+        config.grades.get("vip").meta.put("gone", "x");
+        config.grades.get("vip").metaExpiries.put("gone", com.arcadia.customperm.perm.Expiry.now() - 1);
+        GradesConfig.GradeScoped nether = new GradesConfig.GradeScoped();
+        nether.meta.put("rank", "fire");
+        nether.metaExpiries.put("rank", later);
+        config.grades.get("vip").contexts.put("world=minecraft:the_nether", nether);
+        config.userMeta.put(PLAYER, new java.util.TreeMap<>(java.util.Map.of("homes", "3")));
+
+        ExportPlan plan = ExportPlan.of(config, "");
+
+        assertEquals(List.of(new MetaGrant("rank", "gold", 0, ""), new MetaGrant("rank", "fire", later, "world=minecraft:the_nether")),
+                group(plan, "vip").meta(), "an expired value is left out");
+        assertEquals(List.of(new MetaGrant("homes", "3", 0, "")), plan.players().get(0).meta(),
+                "a player holding only meta is exported");
+        GradesConfig back = plan.asConfig();
+        assertEquals(java.util.Map.of("rank", "gold"), back.grades.get("vip").meta);
+        assertEquals(java.util.Map.of("rank", later),
+                back.grades.get("vip").contexts.get("world=minecraft:the_nether").metaExpiries);
+        assertEquals(java.util.Map.of("homes", "3"), back.userMeta.get(PLAYER));
+    }
+
+    @Test
     void theSameEntryReadTwiceKeepsThePermanentOneOrTheLongerOne() {
         String nether = "world=minecraft:the_nether";
         assertEquals(List.of(new ScopedGrant(nether, ScopedGrant.ALLOW, "a", 0),
