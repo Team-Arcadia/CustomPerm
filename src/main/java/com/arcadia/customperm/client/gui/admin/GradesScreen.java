@@ -717,6 +717,14 @@ public final class GradesScreen extends AdminScreen {
         }
     }
 
+    /** The name shown for a grade of this page: its display name, or its name when it has none. */
+    private String shown(String name) {
+        for (GradesData.Grade grade : data.grades()) {
+            if (grade.name().equals(name)) return grade.shown();
+        }
+        return name;
+    }
+
     private void renderParent(GuiGraphics g, Font font, ParentRow row, Rect r, boolean hovered, boolean selected) {
         String label = row.refused() ? "REFUSED" : "INHERITS";
         int w = Skin.badge(g, font, label, r.x() + 4, r.centerY(), row.refused() ? Palette.DANGER : Palette.ACCENT);
@@ -726,7 +734,7 @@ public final class GradesScreen extends AdminScreen {
                 : grade == null ? "" : timeLeft(grade.remaining(row.refused() ? "refusedParent" : "parent", row.grade()));
         int lw = left.isEmpty() ? 0 : font.width(left) + 8;
         if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
-        Skin.text(g, font, row.grade(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4 - lw, Palette.TEXT);
+        Skin.text(g, font, shown(row.grade()), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4 - lw, Palette.TEXT);
     }
 
     private void renderNode(GuiGraphics g, Font font, NodeRow row, Rect r, boolean hovered, boolean selected) {
@@ -794,8 +802,8 @@ public final class GradesScreen extends AdminScreen {
         // Ordered by what is said nowhere else on the page: the weight has its own box and the counts are
         // on the tabs, so they go last, where a narrow panel clips them.
         String sub = (isDefault ? "every player, " : "")
-                + (grade.parents().isEmpty() ? "" : "inherits " + String.join(" ", grade.parents()) + ", ")
-                + (grade.deniedParents().isEmpty() ? "" : "refuses " + String.join(" ", grade.deniedParents()) + ", ")
+                + (grade.parents().isEmpty() ? "" : "inherits " + String.join(" ", grade.parents().stream().map(this::shown).toList()) + ", ")
+                + (grade.deniedParents().isEmpty() ? "" : "refuses " + String.join(" ", grade.deniedParents().stream().map(this::shown).toList()) + ", ")
                 + grade.allow().size() + " allow, " + grade.deny().size() + " deny"
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, headerW, Palette.TEXT_MUTE);

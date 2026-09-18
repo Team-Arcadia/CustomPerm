@@ -98,8 +98,13 @@ public final class GuiSnapshots {
                 .limit(GuiCodecs.SERVER_LIST_MAX)
                 .map(name -> new PlayersData.Track(name, com.arcadia.customperm.admin.TrackAdmin.rungs(name)))
                 .toList();
+        List<PlayersData.GradeName> gradeNames = new java.util.TreeMap<>(config.grades).entrySet().stream()
+                .filter(e -> e.getValue().displayName != null)
+                .limit(GuiCodecs.SERVER_LIST_MAX)
+                .map(e -> new PlayersData.GradeName(e.getKey(), e.getValue().displayName))
+                .toList();
         return new PlayersData(players, known, CustomPerm.configManager.getSettings().luckPermsFallbackMode,
-                nameSettings(), tracks);
+                nameSettings(), tracks, gradeNames);
     }
 
     static GradesData grades(MinecraftServer server) {

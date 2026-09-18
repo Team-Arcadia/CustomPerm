@@ -23,9 +23,32 @@ import java.util.List;
  * @param fallbackMode {@code settings.json} value, only to word the banner while LuckPerms is active
  * @param names        whether names carry their prefix, for the Chat tab's preview
  * @param tracks       every track with its rungs, lowest first, for the Tracks tab
+ * @param gradeNames   the grades that have a display name, so this page shows it rather than the name
  */
 public record PlayersData(List<Player> players, List<String> knownPlayers, String fallbackMode, NameSettings names,
-                          List<Track> tracks) implements GuiPageData {
+                          List<Track> tracks, List<GradeName> gradeNames) implements GuiPageData {
+
+    /** One without display names. */
+    public PlayersData(List<Player> players, List<String> knownPlayers, String fallbackMode, NameSettings names,
+                       List<Track> tracks) {
+        this(players, knownPlayers, fallbackMode, names, tracks, List.of());
+    }
+
+    /** A grade and the name shown for it. */
+    public record GradeName(String name, String displayName) {
+        public static final StreamCodec<ByteBuf, GradeName> CODEC = StreamCodec.composite(
+                GuiCodecs.TEXT, GradeName::name,
+                GuiCodecs.TEXT, GradeName::displayName,
+                GradeName::new);
+    }
+
+    /** The name this page shows for {@code grade}: its display name, or the grade's name when it has none. */
+    public String shown(String grade) {
+        for (GradeName entry : gradeNames) {
+            if (entry.name().equals(grade)) return entry.displayName();
+        }
+        return grade;
+    }
 
     /** A ladder of grades, lowest first. */
     public record Track(String name, List<String> grades) {
@@ -110,6 +133,7 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
             GuiCodecs.TEXT, PlayersData::fallbackMode,
             NameSettings.CODEC, PlayersData::names,
             GuiCodecs.list(Track.CODEC, GuiCodecs.SERVER_LIST_MAX), PlayersData::tracks,
+            GuiCodecs.list(GradeName.CODEC, GuiCodecs.SERVER_LIST_MAX), PlayersData::gradeNames,
             PlayersData::new);
 
     @Override

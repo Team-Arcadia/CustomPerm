@@ -124,7 +124,8 @@ public final class PlayersScreen extends AdminScreen {
                 });
         this.trackList = new CpList<TrackRow>(Component.literal("Tracks"), 14)
                 .renderer(this::renderTrack)
-                .label(t -> t.track().name() + ", " + (t.rung() < 0 ? "not on it" : "on " + t.track().grades().get(t.rung())))
+                .label(t -> t.track().name() + ", " + (t.rung() < 0 ? "not on it"
+                        : "on " + data.shown(t.track().grades().get(t.rung()))))
                 .identity(t -> t.track().name())
                 .emptyText("No track defined: create one with /customperm track create.")
                 .onSelect(t -> rebuild());
@@ -385,7 +386,7 @@ public final class PlayersScreen extends AdminScreen {
         Skin.text(g, font, name, r.x() + 4, y, nw, Palette.TEXT);
         List<String> rungs = new ArrayList<>();
         for (int i = 0; i < row.track().grades().size(); i++) {
-            String grade = row.track().grades().get(i);
+            String grade = data.shown(row.track().grades().get(i));
             rungs.add(i == row.rung() ? "[" + grade + "]" : grade);
         }
         String ladder = rungs.isEmpty() ? "no grade yet" : String.join(" > ", rungs);
@@ -520,12 +521,13 @@ public final class PlayersScreen extends AdminScreen {
         Skin.text(g, font, player.name(), in.x(), in.y(), in.w(), Palette.TEXT);
         // Grades and refusals first: they are said nowhere else on this page, while the node counts are the
         // list right below. A narrow panel then clips the counts rather than the refusals.
-        List<String> held = new ArrayList<>(player.grades());
+        // Under their display names: the grades are only read here, the Grades page shows both.
+        List<String> held = new ArrayList<>(player.grades().stream().map(data::shown).toList());
         player.scoped().stream().filter(e -> e.kind().equals("grade"))
-                .forEach(e -> held.add(e.value() + " (" + GradesScreen.label(e.context(), e.remaining()) + ")"));
-        List<String> refused = new ArrayList<>(player.refused());
+                .forEach(e -> held.add(data.shown(e.value()) + " (" + GradesScreen.label(e.context(), e.remaining()) + ")"));
+        List<String> refused = new ArrayList<>(player.refused().stream().map(data::shown).toList());
         player.scoped().stream().filter(e -> e.kind().equals("refused"))
-                .forEach(e -> refused.add(e.value() + " (" + GradesScreen.label(e.context(), e.remaining()) + ")"));
+                .forEach(e -> refused.add(data.shown(e.value()) + " (" + GradesScreen.label(e.context(), e.remaining()) + ")"));
         String sub = (held.isEmpty() ? "no grade" : "grades: " + String.join(", ", held))
                 + (refused.isEmpty() ? "" : "  |  refuses: " + String.join(", ", refused))
                 + "  |  " + player.allow().size() + " allow, " + player.deny().size() + " deny"
