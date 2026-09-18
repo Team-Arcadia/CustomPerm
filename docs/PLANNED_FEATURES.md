@@ -26,18 +26,17 @@ which would grant more than the source did.
 
 ## 2. Contextual entries (per world)
 
-**What it is.** An entry that applies in one world only. LuckPerms can key on far more than that; the demand
-here is worlds.
+**Done.** A node on a grade or a player, and a grade a player holds, can be limited to one world with
+`world=<dimension>` on the commands and a world box on the pages. It outranks the same holder's entry
+without a world at the same specificity, and a player's command tree is sent again when they change world.
+A context is stored as `key=value` pairs, so the `server=<name>` a cluster mode would add fits the same
+file and resolver. The import and the export carry entries limited to a single world both ways. An entry
+with no context keeps the path it had: the benchmark shows no change. See the changelog and the README.
 
-**What it will take.** A permission check takes a player and a node today. A context adds a dimension on a
-path called from a Brigadier `requires()` predicate, which runs for every player each time the command tree
-is built, and the tree is built per player rather than per world: a permission that changes with the world
-means resyncing that player when they change dimension. An entry with no context has to keep the path it has
-now, or every server pays for a feature few use.
-
-**Until then.** Every entry is global: a node granted is granted in every dimension. An import leaves
-contextual entries behind and counts them, since importing one as global would grant it everywhere and
-dropping it would take away something the source granted.
+**What is left.** A grade parent, a refusal and a prefix limited to a world, and an entry both limited to a
+world and temporary. Contexts other than one world (`server=`, several worlds, custom keys) are not read. An
+import leaves all of these behind and counts them, since importing one as global would grant it everywhere
+and dropping it would take away something the source granted.
 
 ---
 
@@ -50,8 +49,8 @@ event, never the message, so every message stays signed and reportable. The cost
 the prefix wherever the game shows it, not only in chat. The import and the export carry prefixes and
 suffixes both ways. See the changelog and the README.
 
-**What is left.** Meta (arbitrary key and value pairs other mods read), display names, per-world prefixes,
-which are contexts (section 2), and nicknames. Meta has the same problem as the nodes of other mods
+**What is left.** Meta (arbitrary key and value pairs other mods read), display names, per-world prefixes
+(section 2), and nicknames. Meta has the same problem as the nodes of other mods
 (section 5): storing it is pointless while nothing here reads it back.
 
 **Until then.** An import leaves meta and display names behind and counts them. A holder with several
@@ -115,19 +114,18 @@ importer comme permanents, ce qui accorderait plus que la source.
 
 ## 2. Entrées contextuelles (par monde)
 
-**De quoi il s'agit.** Une entrée qui ne s'applique que dans un monde. LuckPerms sait indexer sur bien plus
-que cela ; la demande ici porte sur les mondes.
+**Fait.** Un nœud sur un grade ou un joueur, et un grade tenu par un joueur, peuvent être limités à un monde
+avec `world=<dimension>` dans les commandes et une case monde dans les pages. À spécificité égale, l'entrée
+l'emporte sur celle sans monde du même détenteur, et l'arbre de commandes d'un joueur est renvoyé quand il
+change de monde. Un contexte est stocké en paires `clé=valeur`, donc le `server=<nom>` qu'ajouterait un mode
+cluster entre dans le même fichier et le même résolveur. L'import et l'export transportent dans les deux sens
+les entrées limitées à un seul monde. Une entrée sans contexte garde son chemin : le benchmark ne montre
+aucun écart. Voir le changelog et le README.
 
-**Ce qu'il faudra.** Un test de permission prend aujourd'hui un joueur et un nœud. Un contexte ajoute une
-dimension sur un chemin appelé depuis un prédicat `requires()` de Brigadier, exécuté pour chaque joueur à
-chaque construction de l'arbre de commandes, et cet arbre est construit par joueur et non par monde : une
-permission qui change avec le monde impose de resynchroniser ce joueur au changement de dimension. Une entrée
-sans contexte doit garder le chemin actuel, sinon tous les serveurs paient pour une fonctionnalité que peu
-utilisent.
-
-**En attendant.** Toutes les entrées sont globales : un nœud accordé l'est dans toutes les dimensions. Un
-import laisse les entrées contextuelles et les compte, puisque en importer une en global l'accorderait
-partout et la jeter retirerait ce que la source accordait.
+**Ce qui reste.** Un parent de grade, un refus et un préfixe limités à un monde, et une entrée à la fois
+limitée à un monde et temporaire. Les contextes autres qu'un monde (`server=`, plusieurs mondes, clés
+personnalisées) ne sont pas lus. Un import laisse tout cela de côté et le compte, puisque l'importer en
+global l'accorderait partout et le jeter retirerait ce que la source accordait.
 
 ---
 
@@ -141,7 +139,7 @@ que le nom porte le préfixe partout où le jeu l'affiche, pas seulement dans le
 transportent préfixes et suffixes dans les deux sens. Voir le changelog et le README.
 
 **Ce qui reste.** Les meta (paires clé et valeur arbitraires que lisent d'autres mods), les noms d'affichage,
-les préfixes par monde, qui sont des contextes (section 2), et les surnoms. Les meta posent le même problème
+les préfixes par monde (section 2), et les surnoms. Les meta posent le même problème
 que les nœuds des autres mods (section 5) : les stocker ne sert à rien tant que rien ici ne les relit.
 
 **En attendant.** Un import laisse les meta et les noms d'affichage de côté et les compte. Un détenteur qui
