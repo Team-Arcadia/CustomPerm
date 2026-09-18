@@ -29,8 +29,9 @@ with no context keeps the path it had: the benchmark shows no change. See the ch
 
 ## 3. Chat metadata beyond prefixes and suffixes
 
-**Done.** A grade and a player carry a chat prefix and a suffix, resolved like a node (the player's
-own, then the heaviest grade, then the nearest ancestor), and names can be decorated with them, from the
+**Done.** A grade and a player carry chat prefixes and suffixes, each with a priority and an optional
+expiry: the highest priority shows, or several in a row when stacking is on, and at equal priority the
+player's own, then the heaviest grade, then the nearest ancestor. Names can be decorated with them, from the
 grades or from LuckPerms. The written answer on signed chat: the name is decorated through NeoForge's name
 event, never the message, so every message stays signed and reportable. The cost is that the name carries
 the prefix wherever the game shows it, not only in chat. The import and the export carry prefixes and
@@ -88,8 +89,10 @@ aucun écart. Voir le changelog et le README.
 
 ## 3. Métadonnées de chat au-delà des préfixes et suffixes
 
-**Fait.** Un grade et un joueur portent un préfixe et un suffixe de chat, résolus comme un nœud (celui
-du joueur, puis le grade le plus lourd, puis l'ancêtre le plus proche), et les noms peuvent en être décorés,
+**Fait.** Un grade et un joueur portent des préfixes et des suffixes de chat, chacun avec une priorité et
+une expiration facultative : la priorité la plus haute s'affiche, ou plusieurs à la suite quand l'empilement
+est actif, et à priorité égale celui du joueur, puis le grade le plus lourd, puis l'ancêtre le plus proche.
+Les noms peuvent en être décorés,
 depuis les grades ou depuis LuckPerms. La réponse écrite sur le chat signé : le nom est décoré par
 l'événement de nom de NeoForge, jamais le message, donc chaque message reste signé et signalable. Le prix est
 que le nom porte le préfixe partout où le jeu l'affiche, pas seulement dans le chat. L'import et l'export
