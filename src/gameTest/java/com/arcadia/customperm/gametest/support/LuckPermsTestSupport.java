@@ -69,6 +69,14 @@ public final class LuckPermsTestSupport {
         user.getCachedData().invalidate();
     }
 
+    /** Removes every own node of a group with one of these keys, whatever its value. */
+    public static void clearGroupNodes(String group, Collection<String> nodes) {
+        await(api().getGroupManager().loadGroup(group)).ifPresent(loaded -> {
+            loaded.data().clear(node -> nodes.contains(node.getKey()));
+            await(api().getGroupManager().saveGroup(loaded));
+        });
+    }
+
     /** Own nodes of a group as {@code key=value[contexts]} with {@code @expiring} for temporary ones. */
     public static List<String> groupNodes(String group) {
         return await(api().getGroupManager().loadGroup(group)).map(LuckPermsTestSupport::describe).orElse(List.of());

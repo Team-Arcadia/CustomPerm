@@ -96,7 +96,8 @@ public class GuiPayloadCodecGameTest {
                         true, false, 30)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.LUCKPERMS, GuiArea.GRADES.bit(), 0, true),
-                new ImportData(true, true, false, List.of("2 group(s) become grades.", "Nothing is left behind."))));
+                new ImportData(true, true, false, List.of("2 group(s) become grades.", "Nothing is left behind."),
+                        new ImportData.Export(true, List.of("1 grade(s) become LuckPerms groups."), true, 3, 7))));
         expectRoundTrip(GuiRequestPayload.STREAM_CODEC, new GuiRequestPayload("dashboard"));
         expectRoundTrip(GuiActionPayload.STREAM_CODEC, new GuiActionPayload("RELOAD", List.of("a", "b c"), "dashboard"));
         expectRoundTrip(GuiActionResultPayload.STREAM_CODEC, GuiActionResultPayload.fail("You do not have x."));

@@ -97,6 +97,10 @@ public enum GuiAction {
     IMPORT_PREVIEW(1, GuiArea.GRADES),
     /** {@code ["merge"|"replace"]} Applies what this admin previewed, and only that. */
     IMPORT_APPLY(1, GuiArea.GRADES),
+    /** {@code []} Reads the grades and returns what an export to LuckPerms would write, writing nothing. */
+    EXPORT_PREVIEW(0, GuiArea.LUCKPERMS),
+    /** {@code ["merge"|"replace"]} Writes what this admin previewed into LuckPerms, in the background. */
+    EXPORT_APPLY(1, GuiArea.LUCKPERMS),
 
     /** {@code ["true"|"false"]} Records player commands, like {@code /customperm log record}. */
     LOG_PLAYERS(1, GuiArea.LOGS),

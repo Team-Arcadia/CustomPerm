@@ -144,12 +144,18 @@ public final class GuiSnapshots {
         });
     }
 
-    /** The import page: what was previewed, if anything. The plan itself never leaves the server. */
+    /** The import page, both ways: what was previewed, if anything. The plans never leave the server. */
     static ImportData importPage(ServerPlayer player) {
-        var plan = com.arcadia.customperm.admin.ImportAdmin.previewed(player.getUUID().toString());
+        String key = player.getUUID().toString();
+        var plan = com.arcadia.customperm.admin.ImportAdmin.previewed(key);
+        var export = com.arcadia.customperm.admin.ExportAdmin.previewed(key);
+        var progress = com.arcadia.customperm.admin.ExportAdmin.progress();
         return new ImportData(CustomPerm.isLuckPermsActive(), plan != null,
-                com.arcadia.customperm.admin.ImportAdmin.previewedWithCommands(player.getUUID().toString()),
-                plan == null ? List.of() : plan.report().stream().limit(ImportData.REPORT_MAX).toList());
+                com.arcadia.customperm.admin.ImportAdmin.previewedWithCommands(key),
+                plan == null ? List.of() : plan.report().stream().limit(ImportData.REPORT_MAX).toList(),
+                new ImportData.Export(export != null,
+                        export == null ? List.of() : export.report().stream().limit(ImportData.REPORT_MAX).toList(),
+                        progress.running(), progress.done(), progress.total()));
     }
 
     static LogsData logs() {

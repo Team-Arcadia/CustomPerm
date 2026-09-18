@@ -13,6 +13,8 @@ import com.arcadia.customperm.admin.AdminResult;
 import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
+import com.arcadia.customperm.admin.ExportAdmin;
+import com.arcadia.customperm.admin.ExportPlan;
 import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.admin.ImportAdmin;
 import com.arcadia.customperm.admin.ImportPlan;
@@ -195,6 +197,8 @@ public final class GuiRequestHandler {
             case IMPORT_PREVIEW -> bool(args.get(0)) == null ? malformed(action)
                     : importPreview(player, bool(args.get(0)));
             case IMPORT_APPLY -> importApply(player, args.get(0));
+            case EXPORT_PREVIEW -> exportPreview(player);
+            case EXPORT_APPLY -> exportApply(player, args.get(0));
             case LOG_PLAYERS -> bool(args.get(0)) == null ? malformed(action) : LogAdmin.setPlayerLog(bool(args.get(0)));
             case LOG_MASK -> bool(args.get(0)) == null ? malformed(action) : LogAdmin.setMasking(bool(args.get(0)));
         };
@@ -245,6 +249,61 @@ public final class GuiRequestHandler {
                     + " and " + GuiArea.LUCKPERMS.node() + ".");
         }
         return ImportAdmin.unavailable();
+    }
+
+    /**
+     * Reads the grades and refreshes the page with what an export would write. The grades are read here;
+     * LuckPerms is asked only which groups it already has, which is what makes it asynchronous.
+     */
+    private static AdminResult exportPreview(ServerPlayer admin) {
+        AdminResult refusal = exportRefusal(admin);
+        if (refusal != null) return refusal;
+        String key = admin.getUUID().toString();
+        ExportPlan plan = ExportAdmin.plan();
+        com.arcadia.customperm.perm.lp.LuckPermsExport.existingGroups()
+                .whenComplete((existing, error) -> admin.getServer().execute(() -> {
+                    ExportAdmin.remember(key, plan.withExisting(existing == null ? java.util.Set.of() : existing));
+                    sendPage(admin, GuiPage.IMPORT, false);
+                }));
+        return AdminResult.ok("Reading the grades, this changes nothing.");
+    }
+
+    /**
+     * Starts writing what this admin previewed. Answers at once: the page follows the progress, and the
+     * result arrives when it ends, recorded in the activity log like any other change.
+     */
+    private static AdminResult exportApply(ServerPlayer admin, String mode) {
+        AdminResult refusal = exportRefusal(admin);
+        if (refusal != null) return refusal;
+        if (!mode.equals("merge") && !mode.equals("replace")) return malformed(GuiAction.EXPORT_APPLY);
+        String key = admin.getUUID().toString();
+        ExportPlan plan = ExportAdmin.previewed(key);
+        if (plan == null) {
+            return AdminResult.fail("Read the grades first. A preview older than 10 minutes is read again "
+                    + "rather than trusted.");
+        }
+        boolean replace = mode.equals("replace");
+        AdminResult lockout = ExportAdmin.lockout(admin, plan, replace);
+        if (lockout != null) return lockout;
+        AdminResult started = ExportAdmin.start(admin.getServer(), plan, replace,
+                () -> sendPage(admin, GuiPage.IMPORT, false),
+                result -> {
+                    ActivityLog.admin(admin.createCommandSourceStack(), LogEntry.SOURCE_INTERFACE,
+                            GuiAction.EXPORT_APPLY.name() + " " + mode + " (finished)", result);
+                    send(admin, new GuiActionResultPayload(result.success() && result.warnings().isEmpty(),
+                            result.summary()));
+                    sendPage(admin, GuiPage.IMPORT, false);
+                });
+        if (started.success()) ExportAdmin.forget(key);
+        return started;
+    }
+
+    /** Exporting asks for the grades and LuckPerms nodes together, and for LuckPerms to write to. */
+    private static AdminResult exportRefusal(ServerPlayer admin) {
+        if (!GuiAccess.canExport(admin)) {
+            return AdminResult.fail("Exporting needs " + GuiArea.GRADES.node() + " and " + GuiArea.LUCKPERMS.node() + ".");
+        }
+        return ExportAdmin.unavailable();
     }
 
     /** Refuses a grade change that would lock this admin out of /customperm and the interface. */

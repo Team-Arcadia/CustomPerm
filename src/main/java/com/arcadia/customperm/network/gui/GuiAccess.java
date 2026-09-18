@@ -39,6 +39,14 @@ public final class GuiAccess {
                 && canEdit(player, GuiArea.LUCKPERMS);
     }
 
+    /**
+     * Exporting to LuckPerms reads the grades and writes LuckPerms. Commands stay as they are, LuckPerms
+     * reading the same nodes, so it asks for two nodes rather than the three of the import.
+     */
+    public static boolean canExport(ServerPlayer player) {
+        return canEdit(player, GuiArea.GRADES) && canEdit(player, GuiArea.LUCKPERMS);
+    }
+
     /** One bit per area this player may write to. */
     public static int editMask(ServerPlayer player) {
         int mask = 0;

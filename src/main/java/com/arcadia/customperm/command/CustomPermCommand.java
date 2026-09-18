@@ -13,6 +13,8 @@ import com.arcadia.customperm.admin.AdminResult;
 import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
+import com.arcadia.customperm.admin.ExportAdmin;
+import com.arcadia.customperm.admin.ExportPlan;
 import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.admin.ImportAdmin;
 import com.arcadia.customperm.admin.ImportPlan;
@@ -95,6 +97,8 @@ import java.util.stream.Collectors;
  *                     list                                 # show configured limits
  * /customperm import  preview [nocommands]             # what an import from LuckPerms would do
  *                     confirm [replace]                # applies what was previewed, nothing else
+ * /customperm export  preview                          # what an export to LuckPerms would write
+ *                     confirm [replace]                # writes what was previewed, in the background
  * /customperm test    <player> <node>                   # debug: report grant/deny + backend
  * /customperm reload
  * /customperm log admin|players [count]            # latest admin changes / player commands
@@ -289,6 +293,14 @@ public class CustomPermCommand {
             .and(AdminAccess.manage(PermissionNodes.MANAGE_COMMANDS))
             .and(AdminAccess.manage(PermissionNodes.MANAGE_LUCKPERMS));
 
+    /**
+     * Exporting reads the grades and writes LuckPerms, so it asks for both nodes. Commands are not touched:
+     * the ones exposed here stay exposed, LuckPerms reading the same customperm.command nodes.
+     */
+    private static final java.util.function.Predicate<CommandSourceStack> EXPORT_ACCESS =
+        AdminAccess.manage(PermissionNodes.MANAGE_GRADES)
+            .and(AdminAccess.manage(PermissionNodes.MANAGE_LUCKPERMS));
+
     /** Players online or who joined before: grades can be assigned to offline players. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_KNOWN_PLAYERS =
         (ctx, builder) -> {
@@ -453,6 +465,13 @@ public class CustomPermCommand {
                         .executes(ctx -> importApply(ctx, false))
                         .then(Commands.literal("replace")
                             .executes(ctx -> importApply(ctx, true)))))
+                .then(Commands.literal("export").requires(EXPORT_ACCESS)
+                    .then(Commands.literal("preview")
+                        .executes(CustomPermCommand::exportPreview))
+                    .then(Commands.literal("confirm")
+                        .executes(ctx -> exportApply(ctx, false))
+                        .then(Commands.literal("replace")
+                            .executes(ctx -> exportApply(ctx, true)))))
                 .then(Commands.literal("alias")
                     .then(Commands.literal("add").requires(AdminAccess.manage(PermissionNodes.MANAGE_ALIASES))
                         .then(Commands.argument("name", StringArgumentType.word())
@@ -978,6 +997,70 @@ public class CustomPermCommand {
     /** One preview per admin; the console is one of them. */
     private static String importKey(CommandSourceStack source) {
         return source.getEntity() instanceof ServerPlayer player ? player.getUUID().toString() : "console";
+    }
+
+    // ---------------- export ----------------
+
+    /**
+     * Prints what an export to LuckPerms would write. Changes nothing; the configuration is read here and
+     * LuckPerms only to say which groups it already has.
+     */
+    private static int exportPreview(CommandContext<CommandSourceStack> ctx) {
+        AdminResult refusal = ExportAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        var server = ctx.getSource().getServer();
+        if (server == null) return 0;
+        CommandSourceStack source = ctx.getSource();
+        String admin = importKey(source);
+        ExportPlan plan = ExportAdmin.plan();
+        com.arcadia.customperm.perm.lp.LuckPermsExport.existingGroups()
+            .whenComplete((existing, error) -> server.execute(() -> {
+                ExportPlan read = plan.withExisting(existing == null ? java.util.Set.of() : existing);
+                ExportAdmin.remember(admin, read);
+                read.report().forEach(line -> source.sendSuccess(() -> Component.literal(line), false));
+                source.sendSuccess(() -> Component.literal(read.isEmpty()
+                    ? "Nothing to export."
+                    : "Nothing was changed. Run /customperm export confirm to add this to LuckPerms, or "
+                        + "/customperm export confirm replace to clear the customperm nodes of what it writes first.")
+                    .withStyle(ChatFormatting.GRAY), false);
+            }));
+        return 1;
+    }
+
+    /** Writes what this admin previewed in the background, and reports back when it ends. */
+    private static int exportApply(CommandContext<CommandSourceStack> ctx, boolean replace) {
+        AdminResult refusal = ExportAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        CommandSourceStack source = ctx.getSource();
+        String admin = importKey(source);
+        ExportPlan plan = ExportAdmin.previewed(admin);
+        if (plan == null) {
+            return report(ctx, AdminResult.fail("Preview it first: /customperm export preview. A preview older "
+                + "than 10 minutes is read again rather than trusted."));
+        }
+        AdminResult lockout = ExportAdmin.lockout(source.getEntity() instanceof ServerPlayer p ? p : null, plan, replace);
+        if (lockout != null) return report(ctx, lockout);
+        String input = "/" + ctx.getInput();
+        AdminResult started = ExportAdmin.start(source.getServer(), plan, replace,
+            () -> {
+                ExportAdmin.Progress progress = ExportAdmin.progress();
+                source.sendSuccess(() -> Component.literal("Export: " + progress.done() + " of " + progress.total()
+                    + " written.").withStyle(ChatFormatting.GRAY), false);
+            },
+            result -> {
+                ActivityLog.admin(source, LogEntry.SOURCE_COMMAND, input, result);
+                result.warnings().forEach(warning -> source.sendFailure(Component.literal(warning)));
+                if (result.success()) {
+                    source.sendSuccess(() -> Component.literal(result.message()).withStyle(ChatFormatting.GREEN), true);
+                } else {
+                    source.sendFailure(Component.literal(result.message()));
+                }
+                result.notes().forEach(note ->
+                    source.sendSuccess(() -> Component.literal(note).withStyle(ChatFormatting.GRAY), false));
+            });
+        // Forgotten once started: confirming twice would write the same thing twice.
+        if (started.success()) ExportAdmin.forget(admin);
+        return report(ctx, started);
     }
 
     // ---------------- alias ----------------
