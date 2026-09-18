@@ -199,6 +199,38 @@ class ExportPlanTest {
                 "a refused grade is not in LuckPerms, so its denial is not either");
     }
 
+    // --- limited to a world ---
+
+    @Test
+    void entriesLimitedToAWorldAreCarriedAndReadBackTheSame() {
+        GradesConfig config = new GradesConfig();
+        grade(config, "base", 0, List.of(), List.of(), Set.of(), Set.of());
+        GradesConfig.Scoped nether = new GradesConfig.Scoped();
+        nether.deniedPermissions.add("customperm.command.home");
+        config.grades.get("base").contexts.put("world=minecraft:the_nether", nether);
+        GradesConfig.Scoped server = new GradesConfig.Scoped();
+        server.permissions.add("customperm.command.fly");
+        config.grades.get("base").contexts.put("server=lobby", server);
+        GradesConfig.UserScoped end = new GradesConfig.UserScoped();
+        end.grades.add("base");
+        end.grades.add("ghost");
+        config.userContexts.put(PLAYER, new java.util.HashMap<>(java.util.Map.of("world=minecraft:the_end", end)));
+
+        ExportPlan plan = ExportPlan.of(config, "");
+
+        assertEquals(List.of(new ScopedGrant("world=minecraft:the_nether", ScopedGrant.DENY, "customperm.command.home")),
+                group(plan, "base").scoped(), "a context that is not a single world has nothing to be written under");
+        assertEquals(List.of(new ScopedGrant("world=minecraft:the_end", ScopedGrant.GRADE, "base")),
+                plan.players().get(0).scoped(), "a grade that is not exported is not held anywhere");
+        assertEquals(2, plan.dropped());
+
+        GradesConfig back = plan.asConfig();
+        UUID player = UUID.fromString(PLAYER);
+        assertEquals(Tristate.DENY, PermissionResolver.check(back, player, "customperm.command.home", "base",
+                com.arcadia.customperm.perm.Contexts.world("minecraft:the_nether")));
+        assertTrue(back.userContexts.get(PLAYER).get("world=minecraft:the_end").grades.contains("base"));
+    }
+
     // --- helpers ---
 
     private static void grade(GradesConfig config, String name, int weight, List<String> parents,

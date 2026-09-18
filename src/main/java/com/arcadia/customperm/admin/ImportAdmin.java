@@ -115,6 +115,7 @@ public final class ImportAdmin {
                 target.deniedPermissions.clear();
                 target.permissionExpiries.clear();
                 target.deniedPermissionExpiries.clear();
+                target.contexts.clear();
                 target.parents.clear();
                 target.deniedParents.clear();
                 target.weight = source.weight();
@@ -134,6 +135,7 @@ public final class ImportAdmin {
                 Long at = source.expiries().get("deny:" + node);
                 if (target.deniedPermissions.add(node) && at != null) target.deniedPermissionExpiries.put(node, at);
             }
+            for (ScopedGrant entry : source.scoped()) entry.addTo(Scopes.of(target, entry.context()));
             addAll(target.parents, source.parents());
             addAll(target.deniedParents, source.deniedParents());
             // Adding keeps a prefix already set here, like the weight: it is what the admin chose.
@@ -155,6 +157,7 @@ public final class ImportAdmin {
                 grades().userDeniedGradeExpiries.remove(source.uuid());
                 grades().userPermissionExpiries.remove(source.uuid());
                 grades().userDeniedPermissionExpiries.remove(source.uuid());
+                grades().userContexts.remove(source.uuid());
             }
             String uuid = source.uuid();
             List<String> held = grades().userGrades.computeIfAbsent(uuid, k -> new ArrayList<>());
@@ -177,6 +180,8 @@ public final class ImportAdmin {
             for (String node : source.deny()) {
                 if (denied.add(node)) timed(grades().userDeniedPermissionExpiries, uuid, node, source.expiries().get("deny:" + node));
             }
+            java.util.UUID id = java.util.UUID.fromString(uuid);
+            for (ScopedGrant entry : source.scoped()) entry.addTo(Scopes.of(grades(), id, entry.context()));
             if (source.prefix() != null) grades().userPrefixes.putIfAbsent(source.uuid(), source.prefix());
             if (source.suffix() != null) grades().userSuffixes.putIfAbsent(source.uuid(), source.suffix());
             playersWritten++;

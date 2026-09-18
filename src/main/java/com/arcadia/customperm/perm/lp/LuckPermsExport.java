@@ -112,6 +112,7 @@ public final class LuckPermsExport {
                     add(group, InheritanceNode.builder(parent).value(false).build(), kept);
                 }
                 addNodes(group, source.allow(), source.deny(), source.expiries(), kept);
+                addScoped(group, source.scoped(), kept);
                 addChat(group, source.prefix(), source.suffix(), source.weight(), replace, kept);
                 await(api.getGroupManager().saveGroup(group));
                 groups++;
@@ -140,6 +141,7 @@ public final class LuckPermsExport {
                             kept);
                 }
                 addNodes(user, source.allow(), source.deny(), source.expiries(), kept);
+                addScoped(user, source.scoped(), kept);
                 addChat(user, source.prefix(), source.suffix(), ExportPlan.PLAYER_PRIORITY, replace, kept);
                 await(api.getUserManager().saveUser(user));
                 user.getCachedData().invalidate();
@@ -160,6 +162,21 @@ public final class LuckPermsExport {
         for (String key : deny) add(holder, timed(Node.builder(key).value(false), expiries.get("deny:" + key)), kept);
     }
 
+    /** Entries limited to a world, written with LuckPerms' {@code world} context. */
+    private static void addScoped(PermissionHolder holder, List<com.arcadia.customperm.admin.ScopedGrant> scoped,
+                                  int[] kept) {
+        for (var entry : scoped) {
+            String world = com.arcadia.customperm.perm.Contexts.luckPermsWorld(
+                    com.arcadia.customperm.perm.Contexts.worldOf(entry.context()));
+            net.luckperms.api.node.NodeBuilder<?, ?> builder = switch (entry.kind()) {
+                case com.arcadia.customperm.admin.ScopedGrant.GRADE -> InheritanceNode.builder(entry.value());
+                case com.arcadia.customperm.admin.ScopedGrant.DENY -> Node.builder(entry.value()).value(false);
+                default -> Node.builder(entry.value()).value(true);
+            };
+            add(holder, builder.withContext(com.arcadia.customperm.perm.Contexts.WORLD, world).build(), kept);
+        }
+    }
+
     /** The node, temporary until {@code at} when it has an expiry here, as LuckPerms stores one. */
     private static Node timed(net.luckperms.api.node.NodeBuilder<?, ?> builder, Long at) {
         if (at != null) builder.expiry(java.time.Instant.ofEpochSecond(at));
@@ -178,7 +195,7 @@ public final class LuckPermsExport {
     }
 
     private static void chat(PermissionHolder holder, NodeType<?> type, Node node, boolean replace, int[] kept) {
-        List<Node> own = holder.getNodes().stream().filter(LuckPermsExport::decidedHere).filter(type::matches).toList();
+        List<Node> own = holder.getNodes().stream().filter(LuckPermsExport::global).filter(type::matches).toList();
         if (replace) {
             own.forEach(existing -> holder.data().remove(existing));
         } else if (!own.isEmpty()) {
@@ -189,13 +206,14 @@ public final class LuckPermsExport {
     }
 
     /**
-     * Adds a global, permanent node unless the holder already sets that key there. Set the same way, there
-     * is nothing to do; set the other way, LuckPerms' value is kept and counted: adding never takes away,
-     * and replacing has already cleared what it would conflict with.
+     * Adds a permanent node unless the holder already sets that key in the same context. Set the same way,
+     * there is nothing to do; set the other way, LuckPerms' value is kept and counted: adding never takes
+     * away, and replacing has already cleared what it would conflict with.
      */
     private static void add(PermissionHolder holder, Node node, int[] kept) {
         for (Node existing : holder.getNodes()) {
-            if (!decidedHere(existing) || !existing.getKey().equalsIgnoreCase(node.getKey())) continue;
+            if (!decidedHere(existing) || !existing.getKey().equalsIgnoreCase(node.getKey())
+                    || !existing.getContexts().equals(node.getContexts())) continue;
             if (existing.getValue() != node.getValue()) kept[0]++;
             return;
         }
@@ -203,9 +221,9 @@ public final class LuckPermsExport {
     }
 
     /**
-     * Clears what CustomPerm decides on a holder: its global, permanent parents and its {@code customperm.*}
-     * and {@code *} nodes. Its prefix, suffix, meta, weight aside, contextual and temporary entries and the
-     * nodes other mods read stay, those being what LuckPerms is kept for. A player keeps the default group,
+     * Clears what CustomPerm decides on a holder: its permanent parents and its {@code customperm.*} and
+     * {@code *} nodes, global or limited to a single world. Its prefix, suffix, meta, weight aside, other
+     * contexts, temporary entries and the nodes other mods read stay, those being what LuckPerms is kept for. A player keeps the default group,
      * which LuckPerms would otherwise have to give back on their next login.
      */
     private static void clearDecided(PermissionHolder holder, boolean group) {
@@ -222,9 +240,17 @@ public final class LuckPermsExport {
         for (Node node : doomed) holder.data().remove(node);
     }
 
-    /** A node CustomPerm could have written: no context, no expiry. */
-    private static boolean decidedHere(Node node) {
+    /** A prefix or suffix CustomPerm could have written: permanent and global, a grade's prefix having no world. */
+    private static boolean global(Node node) {
         return node.getContexts().isEmpty() && !node.hasExpiry();
+    }
+
+    /** A node CustomPerm could have written: no expiry, and no context or a single world. */
+    private static boolean decidedHere(Node node) {
+        if (node.hasExpiry()) return false;
+        var contexts = node.getContexts();
+        return contexts.isEmpty() || (contexts.size() == 1
+                && contexts.containsKey(com.arcadia.customperm.perm.Contexts.WORLD));
     }
 
     private static <T> T await(CompletableFuture<T> future) throws Exception {

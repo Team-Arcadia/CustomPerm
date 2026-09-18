@@ -81,11 +81,14 @@ class ImportPlanTest {
     void theReportCountsWhatIsImportedAndWhatIsLeftBehind() {
         ImportPlan.Builder builder = new ImportPlan.Builder();
         builder.grade(new ImportPlan.Grade("vip", 10, List.of("default"), List.of(),
-                Set.of("customperm.command.tp"), Set.of(), "&6[VIP] ", null, java.util.Map.of()));
+                Set.of("customperm.command.tp"), Set.of(), "&6[VIP] ", null, java.util.Map.of(),
+                List.of(new ScopedGrant("world=minecraft:the_nether", ScopedGrant.DENY, "customperm.command.tp"))));
         builder.player(new ImportPlan.Player("00000000-0000-0000-0000-000000000001", "Alex",
-                List.of("vip"), List.of(), Set.of(), Set.of(), null, null, java.util.Map.of()));
+                List.of("vip"), List.of(), Set.of(), Set.of(), null, null, java.util.Map.of(), List.of()));
         builder.imported(false);
         builder.imported(true);
+        builder.imported(false);
+        builder.world();
         builder.expose("tp");
         builder.temporary();
         builder.contextual();
@@ -95,7 +98,8 @@ class ImportPlanTest {
         ImportPlan plan = builder.build();
         assertEquals(1, plan.counts().groups());
         assertEquals(1, plan.counts().players());
-        assertEquals(2, plan.counts().nodes());
+        assertEquals(3, plan.counts().nodes());
+        assertEquals(1, plan.counts().worlds());
         assertEquals(1, plan.counts().translated());
         assertEquals(1, plan.counts().commands());
         assertEquals(4, plan.counts().skipped());
@@ -103,7 +107,8 @@ class ImportPlanTest {
 
         String report = String.join("\n", plan.report());
         assertTrue(report.contains("1 group(s) become grades"), report);
-        assertTrue(report.contains("2 node(s) imported, 1 of them translated"), report);
+        assertTrue(report.contains("3 node(s) imported, 1 of them translated"), report);
+        assertTrue(report.contains("1 limited to a world, carried with it."), report);
         assertTrue(report.contains("4 entrie(s) are left behind"), report);
         assertTrue(report.contains("tp"), "the exposed command is named: " + report);
     }

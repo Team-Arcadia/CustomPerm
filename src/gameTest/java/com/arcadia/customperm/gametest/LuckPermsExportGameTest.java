@@ -88,6 +88,12 @@ public class LuckPermsExportGameTest {
             config.userGrades.put(USER.toString(), new ArrayList<>(List.of(VIP)));
             config.userPermissions.put(USER.toString(), new LinkedHashSet<>(Set.of("customperm.command.home")));
             config.userPrefixes.put(USER.toString(), "[Me] ");
+            GradesConfig.Scoped nether = new GradesConfig.Scoped();
+            nether.deniedPermissions.add("customperm.command.time");
+            config.grades.get(BASE).contexts.put("world=minecraft:the_nether", nether);
+            GradesConfig.UserScoped end = new GradesConfig.UserScoped();
+            end.grades.add(BASE);
+            config.userContexts.put(USER.toString(), new java.util.HashMap<>(java.util.Map.of("world=minecraft:the_end", end)));
 
             ExportPlan plan = ExportPlan.of(config, BASE)
                     .withExisting(LuckPermsTestSupport.await(LuckPermsExport.existingGroups()));
@@ -105,6 +111,8 @@ public class LuckPermsExportGameTest {
             expect(base, "customperm.command.ban=false", "A denied node must arrive set to false");
             expect(base, "prefix.0.&7[Base] =true", "A grade's prefix must arrive at its weight");
             expect(base, "customperm.command.list=true@expiring", "A temporary node must arrive temporary");
+            expect(base, "customperm.command.time=false[world=the_nether]",
+                    "A node limited to a world must arrive with LuckPerms' world context");
             if (base.stream().anyMatch(node -> node.startsWith("customperm.command.dead")))
                 fail("A node that has already expired must not be exported: " + base);
             List<String> vip = LuckPermsTestSupport.groupNodes(VIP);
@@ -118,6 +126,7 @@ public class LuckPermsExportGameTest {
             List<String> user = LuckPermsTestSupport.userNodes(USER);
             expect(user, "group." + VIP + "=true", "The player's grade must arrive as a parent");
             expect(user, "customperm.command.home=true", "The player's own node must arrive");
+            expect(user, "group." + BASE + "=true[world=the_end]", "A grade held in one world must arrive there");
             expect(user, "prefix." + ExportPlan.PLAYER_PRIORITY + ".[Me] =true",
                     "The player's own prefix must arrive above every grade's");
             if (LuckPermsTestSupport.groupExists("cp_x_bad")) fail("A refused grade must not be written under another name.");
@@ -134,7 +143,7 @@ public class LuckPermsExportGameTest {
                     "Replacing must leave a player in the default group");
         } finally {
             LuckPermsTestSupport.clearGroupNodes(ExportPlan.LP_DEFAULT, List.of("group." + BASE));
-            LuckPermsTestSupport.clearNodes(USER, List.of("group." + VIP, "customperm.command.home",
+            LuckPermsTestSupport.clearNodes(USER, List.of("group." + VIP, "group." + BASE, "customperm.command.home",
                     "prefix." + ExportPlan.PLAYER_PRIORITY + ".[Me] "));
             LuckPermsTestSupport.cleanup(List.of(BASE, VIP), List.of());
         }

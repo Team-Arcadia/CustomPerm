@@ -32,30 +32,31 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
     /**
      * One LuckPerms group as the grade it would become; {@code prefix} and {@code suffix} are null for none.
      * {@code expiries} holds the temporary nodes, keyed {@code allow:<node>} or {@code deny:<node>}, in epoch
-     * seconds.
+     * seconds, and {@code scoped} the nodes limited to a world.
      */
     public record Grade(String name, int weight, List<String> parents, List<String> deniedParents,
                         Set<String> allow, Set<String> deny, String prefix, String suffix,
-                        Map<String, Long> expiries) {
+                        Map<String, Long> expiries, List<ScopedGrant> scoped) {
     }
 
     /**
      * One LuckPerms user as what they would hold; {@code name} is display only, the UUID is the key.
-     * {@code expiries} is keyed {@code allow:}, {@code deny:}, {@code grade:} or {@code refuse:}.
+     * {@code expiries} is keyed {@code allow:}, {@code deny:}, {@code grade:} or {@code refuse:}, and
+     * {@code scoped} holds the nodes and grades limited to a world.
      */
     public record Player(String uuid, String name, List<String> grades, List<String> deniedGrades,
                          Set<String> allow, Set<String> deny, String prefix, String suffix,
-                         Map<String, Long> expiries) {
+                         Map<String, Long> expiries, List<ScopedGrant> scoped) {
     }
 
     /**
      * What the report counts. The skipped ones matter as much as the imported ones: a permission that
      * silently disappears in a migration is how a server ends up open or locked without anyone knowing.
      */
-    public record Counts(int groups, int players, int nodes, int translated, int timed, int commands,
+    public record Counts(int groups, int players, int nodes, int translated, int timed, int worlds, int commands,
                          int temporary, int contextual, int foreign, int other) {
 
-        public static final Counts NONE = new Counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        public static final Counts NONE = new Counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
         public int skipped() {
             return temporary + contextual + foreign + other;
@@ -75,7 +76,8 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
         lines.add(counts.groups + " group(s) become grades, " + counts.players + " player(s) keep what they hold.");
         lines.add(counts.nodes + " node(s) imported, " + counts.translated + " of them translated from "
                 + "minecraft.command to customperm.command"
-                + (counts.timed == 0 ? "." : ", " + counts.timed + " temporary, carried with their expiry."));
+                + (counts.timed == 0 ? "" : ", " + counts.timed + " temporary, carried with their expiry")
+                + (counts.worlds == 0 ? "." : ", " + counts.worlds + " limited to a world, carried with it."));
         if (!exposeCommands.isEmpty()) {
             lines.add(exposeCommands.size() + " command(s) also exposed, without which those nodes would grant "
                     + "nothing: " + String.join(", ", exposeCommands) + ".");
@@ -85,7 +87,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
         } else {
             lines.add(counts.skipped() + " entrie(s) are left behind: " + counts.temporary + " temporary parent or "
                     + "prefix, "
-                    + counts.contextual + " contextual, " + counts.foreign + " belonging to other mods, "
+                    + counts.contextual + " contextual beyond one world, " + counts.foreign + " belonging to other mods, "
                     + counts.other + " of a kind CustomPerm has no equivalent for (meta, display name, "
                     + "tracks).");
         }
@@ -130,6 +132,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
         private int nodes;
         private int translated;
         private int timed;
+        private int worlds;
         private int temporary;
         private int contextual;
         private int foreign;
@@ -157,6 +160,11 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
             timed++;
         }
 
+        /** An entry limited to a world that is imported with it. */
+        public void world() {
+            worlds++;
+        }
+
         public void temporary() {
             temporary++;
         }
@@ -181,7 +189,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
         public ImportPlan build() {
             return new ImportPlan(List.copyOf(grades), List.copyOf(players), Set.copyOf(commands),
                     List.copyOf(skipped),
-                    new Counts(grades.size(), players.size(), nodes, translated, timed, commands.size(),
+                    new Counts(grades.size(), players.size(), nodes, translated, timed, worlds, commands.size(),
                             temporary, contextual, foreign, other));
         }
     }

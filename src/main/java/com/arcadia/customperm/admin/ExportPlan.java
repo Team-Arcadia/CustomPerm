@@ -47,28 +47,30 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
 
     /**
      * One grade as the group it would become; {@code prefix} and {@code suffix} are null for none, and
-     * {@code expiries} holds its temporary nodes keyed {@code allow:<node>} or {@code deny:<node>}.
+     * {@code expiries} holds its temporary nodes keyed {@code allow:<node>} or {@code deny:<node>}, and
+     * {@code scoped} its nodes limited to a world, written with LuckPerms' {@code world} context.
      */
     public record Group(String name, int weight, List<String> parents, List<String> deniedParents,
                         Set<String> allow, Set<String> deny, String prefix, String suffix,
-                        Map<String, Long> expiries) {
+                        Map<String, Long> expiries, List<ScopedGrant> scoped) {
 
         int entries() {
-            return parents.size() + deniedParents.size() + allow.size() + deny.size()
+            return parents.size() + deniedParents.size() + allow.size() + deny.size() + scoped.size()
                     + (prefix == null ? 0 : 1) + (suffix == null ? 0 : 1);
         }
     }
 
     /**
      * One player as the LuckPerms user they would become, keyed by UUID; {@code expiries} is keyed
-     * {@code allow:}, {@code deny:}, {@code grade:} or {@code refuse:}.
+     * {@code allow:}, {@code deny:}, {@code grade:} or {@code refuse:}; {@code scoped} holds the nodes and
+     * grades limited to a world.
      */
     public record Player(String uuid, List<String> grades, List<String> deniedGrades,
                          Set<String> allow, Set<String> deny, String prefix, String suffix,
-                         Map<String, Long> expiries) {
+                         Map<String, Long> expiries, List<ScopedGrant> scoped) {
 
         int entries() {
-            return grades.size() + deniedGrades.size() + allow.size() + deny.size()
+            return grades.size() + deniedGrades.size() + allow.size() + deny.size() + scoped.size()
                     + (prefix == null ? 0 : 1) + (suffix == null ? 0 : 1);
         }
     }
@@ -124,7 +126,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
                     kept(grade.deniedParents, exported, config, dropped, notes, "grade " + name),
                     live(grade.permissions, grade.permissionExpiries, "allow:", expiries, now),
                     live(grade.deniedPermissions, grade.deniedPermissionExpiries, "deny:", expiries, now),
-                    grade.prefix, grade.suffix, Map.copyOf(expiries)));
+                    grade.prefix, grade.suffix, Map.copyOf(expiries), worldOnly(ScopedGrant.of(grade.contexts),
+                    exported, config, dropped, notes, "grade " + name)));
         }
 
         Set<String> holders = new TreeSet<>();
@@ -134,6 +137,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
         holders.addAll(config.userDeniedPermissions.keySet());
         holders.addAll(config.userPrefixes.keySet());
         holders.addAll(config.userSuffixes.keySet());
+        holders.addAll(config.userContexts.keySet());
         List<Player> players = new ArrayList<>();
         for (String uuid : holders) {
             if (!isUuid(uuid)) {
@@ -155,7 +159,9 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
                             "allow:", expiries, now),
                     live(config.userDeniedPermissions.getOrDefault(uuid, Set.of()),
                             config.userDeniedPermissionExpiries.get(uuid), "deny:", expiries, now),
-                    config.userPrefixes.get(uuid), config.userSuffixes.get(uuid), Map.copyOf(expiries));
+                    config.userPrefixes.get(uuid), config.userSuffixes.get(uuid), Map.copyOf(expiries),
+                    worldOnly(ScopedGrant.of(config.userContexts.getOrDefault(uuid, Map.of())), exported, config,
+                            dropped, notes, who));
             if (player.entries() > 0) players.add(player);
         }
 
@@ -189,6 +195,31 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
             notes.add(config.grades.containsKey(name)
                     ? "Left out on " + holder + ": " + name + " is not exported."
                     : "Left out on " + holder + ": " + name + " is not a grade, so it grants nothing here either.");
+        }
+        return List.copyOf(kept);
+    }
+
+    /**
+     * The contextual entries LuckPerms can hold: one limited to a single world, and a grade held there only
+     * when that grade is exported. Any other context was written by hand for a newer version and has no
+     * {@code world} to write it under.
+     */
+    private static List<ScopedGrant> worldOnly(List<ScopedGrant> entries, Set<String> exported, GradesConfig config,
+                                               int[] dropped, List<String> notes, String holder) {
+        List<ScopedGrant> kept = new ArrayList<>();
+        for (ScopedGrant entry : entries) {
+            String context = com.arcadia.customperm.perm.Contexts.parse(entry.context());
+            if (context == null || com.arcadia.customperm.perm.Contexts.size(context) != 1
+                    || com.arcadia.customperm.perm.Contexts.worldOf(context) == null) {
+                dropped[0]++;
+                notes.add("Left out on " + holder + ": " + entry.value() + " is limited to " + entry.context()
+                        + ", which is not a single world.");
+                continue;
+            }
+            if (entry.kind().equals(ScopedGrant.GRADE)) {
+                if (kept(List.of(entry.value()), exported, config, dropped, notes, holder).isEmpty()) continue;
+            }
+            kept.add(entry);
         }
         return List.copyOf(kept);
     }
@@ -275,6 +306,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
                 if (key.startsWith("allow:")) grade.permissionExpiries.put(key.substring(6), at);
                 else if (key.startsWith("deny:")) grade.deniedPermissionExpiries.put(key.substring(5), at);
             });
+            source.scoped().forEach(entry -> entry.addTo(Scopes.of(grade, entry.context())));
             config.grades.put(grade.name, grade);
         }
         for (Player player : players) {
@@ -294,6 +326,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
                 };
                 byUser.computeIfAbsent(player.uuid(), k -> new HashMap<>()).put(key.substring(colon + 1), at);
             });
+            UUID id = UUID.fromString(player.uuid());
+            player.scoped().forEach(entry -> entry.addTo(Scopes.of(config, id, entry.context())));
         }
         return config;
     }
@@ -321,6 +355,10 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
             lines.add("Already in LuckPerms: " + String.join(", ", existing) + ". Adding keeps what they hold; "
                     + "replacing clears their customperm nodes and parents first, and their prefix or suffix "
                     + "only where the grade has one, never their meta or the nodes of other mods.");
+        }
+        if (groups.stream().anyMatch(g -> !g.scoped().isEmpty()) || players.stream().anyMatch(p -> !p.scoped().isEmpty())) {
+            lines.add("Entries limited to a world are written with LuckPerms' world context: the_nether for a "
+                    + "vanilla world, the full id for a modded one.");
         }
         if (groups.stream().anyMatch(g -> g.prefix() != null || g.suffix() != null)
                 || players.stream().anyMatch(p -> p.prefix() != null || p.suffix() != null)) {

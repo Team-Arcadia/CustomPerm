@@ -9,6 +9,7 @@
 package com.arcadia.customperm.perm.lp;
 
 import com.arcadia.customperm.admin.ImportPlan;
+import com.arcadia.customperm.admin.ScopedGrant;
 import net.luckperms.api.LuckPerms;
 import net.luckperms.api.LuckPermsProvider;
 import net.luckperms.api.model.group.Group;
@@ -87,11 +88,12 @@ public final class LuckPermsImport {
             Set<String> deny = new LinkedHashSet<>();
             Chat chat = new Chat();
             Map<String, Long> expiries = new java.util.HashMap<>();
+            List<ScopedGrant> scoped = new ArrayList<>();
             readNodes(group.getNodes(), plan, exposeCommands, parents, deniedParents, allow, deny, chat, expiries,
-                    true, "group " + group.getName());
+                    scoped, true, "group " + group.getName());
             plan.grade(new ImportPlan.Grade(group.getName(), group.getWeight().orElse(0),
                     List.copyOf(parents), List.copyOf(deniedParents), Set.copyOf(allow), Set.copyOf(deny),
-                    chat.prefix, chat.suffix, Map.copyOf(expiries)));
+                    chat.prefix, chat.suffix, Map.copyOf(expiries), List.copyOf(scoped)));
         }
         return null;
     }
@@ -141,13 +143,14 @@ public final class LuckPermsImport {
                 Set<String> deny = new LinkedHashSet<>();
                 Chat chat = new Chat();
                 Map<String, Long> expiries = new java.util.HashMap<>();
+                List<ScopedGrant> scoped = new ArrayList<>();
                 readNodes(user.getValue(), plan, exposeCommands, grades, deniedGrades, allow, deny, chat, expiries,
-                        false, "player " + uuid);
+                        scoped, false, "player " + uuid);
                 if (grades.isEmpty() && deniedGrades.isEmpty() && allow.isEmpty() && deny.isEmpty()
-                        && chat.prefix == null && chat.suffix == null) continue;
+                        && chat.prefix == null && chat.suffix == null && scoped.isEmpty()) continue;
                 plan.player(new ImportPlan.Player(uuid.toString(), name(api, uuid), List.copyOf(grades),
                         List.copyOf(deniedGrades), Set.copyOf(allow), Set.copyOf(deny), chat.prefix, chat.suffix,
-                        Map.copyOf(expiries)));
+                        Map.copyOf(expiries), List.copyOf(scoped)));
             }
             return null;
         });
@@ -161,6 +164,65 @@ public final class LuckPermsImport {
     }
 
     // ------------------------------------------------------------------ nodes
+
+    /**
+     * The context CustomPerm stores for a LuckPerms context set, or {@code null} when it has none: a single
+     * {@code world} with a single value is the only one read here.
+     */
+    private static String context(net.luckperms.api.context.ContextSet contexts) {
+        if (contexts.size() != 1) return null;
+        var context = contexts.iterator().next();
+        if (!context.getKey().equalsIgnoreCase(com.arcadia.customperm.perm.Contexts.WORLD)) return null;
+        return com.arcadia.customperm.perm.Contexts.parse(
+                com.arcadia.customperm.perm.Contexts.WORLD + "=" + context.getValue());
+    }
+
+    /** A node that carries a context: kept when it is limited to one world and nothing else, left behind otherwise. */
+    private static void readScoped(Node node, Long at, ImportPlan.Builder plan, boolean exposeCommands,
+                                   List<ScopedGrant> scoped, boolean group, String holder) {
+        String context = context(node.getContexts());
+        if (context == null) {
+            plan.contextual();
+            plan.note("Only entries limited to a single world are imported: a server context, several worlds or "
+                    + "another key is not, a node here would apply everywhere: " + holder + ".");
+            return;
+        }
+        if (at != null) {
+            plan.contextual();
+            plan.note("An entry limited to a world is permanent here: temporary ones limited to a world are not "
+                    + "imported: " + holder + ".");
+            return;
+        }
+        if (node instanceof InheritanceNode inheritance) {
+            if (group || !node.getValue()) {
+                plan.contextual();
+                plan.note("Only a player's grades can be limited to a world here, not a group's parents or a "
+                        + "refusal: " + holder + ".");
+                return;
+            }
+            scoped.add(new ScopedGrant(context, ScopedGrant.GRADE, inheritance.getGroupName()));
+            plan.imported(false);
+            plan.world();
+            return;
+        }
+        if (!NodeType.PERMISSION.matches(node)) {
+            plan.contextual();
+            plan.note("Prefixes, suffixes and meta limited to a world have no equivalent and are not imported: "
+                    + holder + ".");
+            return;
+        }
+        String translated = ImportPlan.translate(node.getKey());
+        if (translated == null) {
+            plan.foreign();
+            plan.note("Nodes other mods read are not imported, CustomPerm would not read them back.");
+            return;
+        }
+        scoped.add(new ScopedGrant(context, node.getValue() ? ScopedGrant.ALLOW : ScopedGrant.DENY, translated));
+        plan.imported(!translated.equals(node.getKey()));
+        plan.world();
+        String command = ImportPlan.exposedCommand(node.getKey());
+        if (exposeCommands && command != null && node.getValue()) plan.expose(command);
+    }
 
     /**
      * Records the expiry of an imported entry. LuckPerms can hold the same entry both for good and for a
@@ -212,23 +274,22 @@ public final class LuckPermsImport {
      * Sorts one holder's nodes into what CustomPerm keeps and what it leaves behind. A node is left
      * behind when it would not mean here what it means there: a temporary node imported as permanent
      * would over-grant, a contextual one imported as global would grant everywhere, and a node another
-     * mod reads would sit in the file granting nothing.
+     * mod reads would sit in the file granting nothing. A node limited to one world is carried with it.
      */
     private static void readNodes(Collection<? extends Node> nodes, ImportPlan.Builder plan,
                                   boolean exposeCommands, List<String> parents, List<String> deniedParents,
                                   Set<String> allow, Set<String> deny, Chat chat, Map<String, Long> expiries,
-                                  boolean group, String holder) {
+                                  List<ScopedGrant> scoped, boolean group, String holder) {
         Set<String> permanent = new java.util.HashSet<>();
         long now = com.arcadia.customperm.perm.Expiry.now();
         for (Node node : nodes) {
-            if (!node.getContexts().isEmpty()) {
-                plan.contextual();
-                plan.note("Contextual entries are not imported, a node here applies everywhere: " + holder + ".");
-                continue;
-            }
             Long at = node.getExpiry() == null ? null : node.getExpiry().getEpochSecond();
             // Already over: LuckPerms drops it on its next pass, and so would the sweep here.
             if (at != null && at <= now) continue;
+            if (!node.getContexts().isEmpty()) {
+                readScoped(node, at, plan, exposeCommands, scoped, group, holder);
+                continue;
+            }
             if (node instanceof InheritanceNode inheritance) {
                 if (at != null && group) {
                     plan.temporary();
