@@ -60,14 +60,13 @@ prefixes in LuckPerms arrives with the one LuckPerms shows first, and the report
 
 ## 4. Tracks (promotion ladders)
 
-**What it is.** An ordered list of grades, so promote and demote move a player one rung at a time.
+**Done.** A track is an ordered list of grades, kept in `grades.json` beside the grades it names;
+`/customperm track` builds it and promotes or demotes a player one rung, as does the Tracks tab of the
+Players page. The import and the export carry tracks both ways. See the changelog and the README.
 
-**What it will take.** A `tracks.json`, the commands and an interface section. Small, and it buys
-convenience rather than capability: a track grants nothing by itself, and assigning a grade already does the
-work in one command. It is worth doing because a server coming from LuckPerms has tracks and expects to find
-them.
-
-**Until then.** Assign and unassign grades directly. An import leaves tracks behind and counts them.
+**What is left.** Promoting within a world, which LuckPerms allows with a context: a rung here is a grade
+held everywhere. And a permission per track, where LuckPerms can let a moderator promote on one ladder
+only: here moving a player needs `customperm.manage.grades`, like assigning a grade.
 
 ---
 
@@ -149,15 +148,14 @@ a plusieurs préfixes dans LuckPerms arrive avec celui que LuckPerms affiche en 
 
 ## 4. Tracks (échelles de promotion)
 
-**De quoi il s'agit.** Une liste ordonnée de grades, pour que promote et demote fassent monter ou descendre
-un joueur d'un cran.
+**Fait.** Un track est une liste ordonnée de grades, rangée dans `grades.json` à côté des grades qu'il
+nomme ; `/customperm track` le construit et promeut ou rétrograde un joueur d'un cran, comme l'onglet Tracks
+de la page Joueurs. L'import et l'export transportent les tracks dans les deux sens. Voir le changelog et le
+README.
 
-**Ce qu'il faudra.** Un `tracks.json`, les commandes et une section d'interface. Petit, et cela achète du
-confort plutôt qu'une capacité : un track n'accorde rien par lui-même, et assigner un grade fait déjà le
-travail en une commande. Cela vaut d'être fait parce qu'un serveur qui vient de LuckPerms a des tracks et
-s'attend à les retrouver.
-
-**En attendant.** Assigner et désassigner les grades directement. Un import laisse les tracks et les compte.
+**Ce qui reste.** Promouvoir dans un monde, ce que LuckPerms permet avec un contexte : un cran ici est un
+grade détenu partout. Et une permission par track, là où LuckPerms peut laisser un modérateur promouvoir
+sur une seule échelle : ici déplacer un joueur demande `customperm.manage.grades`, comme assigner un grade.
 
 ---
 
