@@ -147,8 +147,8 @@ L'interface est dessinée nativement (sans bibliothèque d'interface) et remplac
 | Alias | Tous les alias avec recherche, badges pour les commandes masquées et les limites ; créer un alias avec sa première étape ; par alias : ajouter, remplacer, monter ou descendre et retirer des étapes, supprimer l'alias (avec confirmation) |
 | Limites d'exécution | Toutes les règles avec leurs valeurs et badges (désactivée, cible ni exposée ni alias) ; ajouter une limite, changer usages et fenêtre, activer ou désactiver, choisir quand l'historique est écrit (sauvegarde du monde ou à chaque usage), supprimer (avec confirmation) ; les commandes exposées et alias sans limite sont listés et remplissent le formulaire en un clic |
 | LuckPerms | Uniquement quand LuckPerms est installé : pas d'entrée de navigation sinon, et `/customperm gui luckperms` explique pourquoi. Installé mais pas démarré (solo, échec au démarrage), la page affiche une bannière au lieu de l'éditeur. **Groupes** : créer, supprimer, nœuds de permission allow/deny avec contextes et durée, parents, poids, nom affiché, préfixe, suffixe, meta. **Joueurs** : joueurs connectés et tout joueur trouvé par pseudo exact, leurs nœuds, groupes avec durée, groupe principal, promotion et rétrogradation sur un track, préfixe, suffixe, meta. **Tracks** : créer, supprimer, ajouter, insérer à une position, retirer un groupe. Les écritures passent par l'API LuckPerms côté serveur, protégées par `customperm.manage.luckperms` |
-| Grades | Toujours accessible, pour pouvoir lire le repli quand LuckPerms fonctionne ou tombe. Une bannière indique quand les grades ne décident pas des permissions ; avec LuckPerms actif la page est en lecture seule, comme les commandes de grade : grades avec recherche et création, triés par poids ; par grade, trois onglets : nœuds ALLOW et DENY, grades dont il hérite et ceux qu'il refuse, et les joueurs qui le détiennent à côté de ceux qui le refusent, avec leur état en ligne, attribués par pseudo avec complétion, y compris hors ligne s'ils sont déjà venus sur le serveur ; suppression d'un grade (avec confirmation). Un quatrième onglet, **Chat**, liste les préfixes et suffixes du grade avec leur priorité et leur temps restant, en ajoute un avec un texte, une priorité et une durée facultative, retire celui sélectionné, montre un aperçu de la ligne de chat, et porte les interrupteurs de décoration des noms et d'empilement (`customperm.manage.config`). Une case de durée à côté des champs nœud et joueur accorde pour un temps limité, et les lignes affichent le temps restant. Une case monde à côté limite un nœud ou une attribution à un monde (`the_nether`), affiché sur la ligne ; les onglets Parents et Chat en ont une aussi |
-| Joueurs | Nœuds portés par un joueur plutôt que par un grade : tous les joueurs qui détiennent quelque chose en propre plus tous ceux connectés, avec recherche ; par joueur, ses nœuds ALLOW et DENY et les grades qu'il détient, en lecture seule ici. Un joueur qui ne détient encore rien s'atteint en tapant son pseudo. Écrire demande `customperm.manage.grades`, comme la page Grades. Un onglet **Chat** règle de la même façon les préfixes et suffixes que le joueur porte lui-même. Un onglet **Tracks** montre chaque track avec le cran du joueur et le promeut ou le rétrograde d'un cran. Le champ nœud accepte aussi une durée et un monde, et les grades tenus dans un seul monde sont listés avec lui |
+| Grades | Toujours accessible, pour pouvoir lire le repli quand LuckPerms fonctionne ou tombe. Une bannière indique quand les grades ne décident pas des permissions ; avec LuckPerms actif la page est en lecture seule, comme les commandes de grade : grades avec recherche et création, triés par poids ; par grade, trois onglets : nœuds ALLOW et DENY, grades dont il hérite et ceux qu'il refuse, et les joueurs qui le détiennent à côté de ceux qui le refusent, avec leur état en ligne, attribués par pseudo avec complétion, y compris hors ligne s'ils sont déjà venus sur le serveur ; suppression d'un grade (avec confirmation). Un quatrième onglet, **Chat**, liste les préfixes et suffixes du grade avec leur priorité et leur temps restant, en ajoute un avec un texte, une priorité et une durée facultative, retire celui sélectionné, montre un aperçu de la ligne de chat, et porte les interrupteurs de décoration des noms et d'empilement (`customperm.manage.config`). Une case de durée à côté des champs nœud et joueur accorde pour un temps limité, et les lignes affichent le temps restant. Une case monde à côté limite un nœud ou une attribution à un monde (`the_nether`), affiché sur la ligne ; les onglets Parents et Chat en ont une aussi. Un cinquième onglet, **Meta**, liste et fixe la meta du grade, avec une durée et un contexte |
+| Joueurs | Nœuds portés par un joueur plutôt que par un grade : tous les joueurs qui détiennent quelque chose en propre plus tous ceux connectés, avec recherche ; par joueur, ses nœuds ALLOW et DENY et les grades qu'il détient, en lecture seule ici. Un joueur qui ne détient encore rien s'atteint en tapant son pseudo. Écrire demande `customperm.manage.grades`, comme la page Grades. Un onglet **Chat** règle de la même façon les préfixes et suffixes que le joueur porte lui-même. Un onglet **Meta** fixe la meta que le joueur porte lui-même. Un onglet **Tracks** montre chaque track avec le cran du joueur et le promeut ou le rétrograde d'un cran. Le champ nœud accepte aussi une durée et un monde, et les grades tenus dans un seul monde sont listés avec lui |
 | Import | Uniquement quand LuckPerms est installé : récupère ses groupes, joueurs et nœuds, en deux temps. Read LuckPerms répond par le rapport et ne change rien, Import applique ce rapport et rien d'autre, après une sauvegarde. Deux options : exposer les commandes dont les nœuds traduits ont besoin, et ajouter aux grades de même nom ou les remplacer. Demande les trois nœuds d'écriture ensemble. Un second onglet, **To LuckPerms**, exporte les grades dans l'autre sens : Read the grades, puis Export, qui reste désactivé tant que l'admin n'a pas indiqué que LuckPerms est sauvegardé ; la page suit la progression pendant l'écriture. Demande `customperm.manage.grades` et `customperm.manage.luckperms` |
 | Journaux | Deux onglets, du plus récent au plus ancien, avec recherche. **Admin** : chaque modification faite par les commandes `/customperm`, l'interface et l'éditeur LuckPerms, et les modifications que LuckPerms enregistre lui-même (`/lp`, éditeur web) : quand, qui, d'où, quoi, et le résultat ou le refus. **Joueurs** : chaque commande tapée par les joueurs, seulement quand l'enregistrement est actif (désactivé par défaut) ; arguments des commandes de message privé et de mot de passe masqués sauf si le masquage est désactivé. Changer l'enregistrement et le masquage demande `customperm.manage.logs` |
 
@@ -368,6 +368,31 @@ qui détient deux grades du même track est refusé plutôt que deviné : désas
 quitté emporte son expiration, et celui reçu est permanent. Supprimer un grade le retire de tous les tracks.
 Un grade peut figurer sur plusieurs tracks.
 
+### Meta
+
+La meta est une donnée qu'un grade ou un joueur porte pour que d'autres mods la lisent, clé vers valeur,
+comme la meta de LuckPerms. Un mod qui déclare via NeoForge un nœud de permission nombre ou texte (une limite
+de homes, un libellé de rang) lit la meta qui porte le nom de ce nœud, comme LuckPerms répond à ces nœuds : un
+nœud nombre prend la valeur lue comme un nombre entier, et sa valeur par défaut s'il n'y en a pas ou si ce
+n'est pas un nombre ; un nœud texte prend la valeur telle quelle. La valeur propre du joueur l'emporte, puis
+celle du grade le plus lourd, puis celle de l'ancêtre le plus proche ; une valeur limitée à un contexte passe
+avant la valeur globale du même détenteur, et refus, durées et grade par défaut s'appliquent comme pour un
+nœud. Les clés s'écrivent comme des nœuds de permission (minuscules, avec des points) ; une valeur tient en 256
+caractères, entre guillemets si elle contient un espace.
+
+| Commande | Description |
+|---|---|
+| `/customperm grade meta <grade>` | Liste la meta du grade, avec le temps restant et le contexte de chaque valeur. |
+| `/customperm grade meta <grade> set <clé> <valeur> [durée] [contexte]` | Fixe une valeur, en remplaçant celle de cette clé à cet endroit. |
+| `/customperm grade meta <grade> unset <clé> [contexte]` | La retire. |
+| `/customperm user meta <joueur> ...` | La même chose pour la meta propre d'un joueur. |
+
+La complétion propose les nœuds nombre et texte déclarés par les mods. Les pages Grades et Joueurs ont un
+onglet **Meta** avec les mêmes cases. La meta n'est répondue d'ici que tant que CustomPerm est le handler de
+permissions de NeoForge (voir [Mods qui testent les permissions via
+NeoForge](#mods-qui-testent-les-permissions-via-neoforge)) ; avec LuckPerms, LuckPerms répond depuis sa propre
+meta.
+
 ### Préfixes et suffixes de chat
 
 | Commande | Description |
@@ -431,7 +456,7 @@ dit.
 
 Les entrées temporaires passent avec leur expiration : un nœud, un groupe d'un joueur, un parent de groupe, un refus. Les entrées
 limitées à un contexte passent avec lui, les temporaires avec leur expiration : un nœud sur un groupe ou un
-joueur, un groupe d'un joueur, un parent de groupe, un refus, et un préfixe ou suffixe. Sur NeoForge,
+joueur, un groupe d'un joueur, un parent de groupe, un refus, un préfixe ou suffixe, et la meta. Sur NeoForge,
 LuckPerms nomme la dimension `dimension-type`, qui devient `world=` ici ; `gamemode` reste tel quel, et une
 autre clé passe quand un contexte statique la fixe ici.
 Les tracks passent avec leurs groupes dans l'ordre ; ajouter garde tel quel un track qui existe déjà ici,
@@ -439,7 +464,7 @@ remplacer prend l'ordre de LuckPerms.
 
 Ce qui est laissé derrière, et dit dans le rapport plutôt qu'abandonné en silence : le contexte `world` de LuckPerms, qui
 sur NeoForge est le nom de la sauvegarde et pas une dimension, un contexte `server=`, et une clé qu'aucun
-contexte statique ne fixe ici ; meta, noms affichés, et les nœuds que d'autres mods lisent sans les déclarer à
+contexte statique ne fixe ici ; noms affichés, et les nœuds que d'autres mods lisent sans les déclarer à
 NeoForge, que plus rien ici ne lirait. Les nœuds déclarés par les mods sont importés tels quels, sur les
 groupes et les joueurs, puisque CustomPerm y répond. Sur les
 joueurs, seul ce que CustomPerm sait lire est regardé : leurs groupes, leurs préfixes et suffixes, leurs
@@ -476,8 +501,10 @@ le nom (il accepte minuscules, chiffres, `_`, `.` et `-`, 36 au plus), et chaque
 grade par défaut qui le nomme. Ajouter garde ce que LuckPerms contient déjà, poids compris ; là où il pose
 un nœud dans l'autre sens, sa valeur est gardée et comptée. Préfixes et suffixes sont écrits avec leur propre
 priorité, les temporaires temporaires, et ajouter garde celui que LuckPerms a déjà à la même priorité.
-Remplacer ne touche aux préfixes ou aux suffixes que là où le grade en définit, et jamais une meta, une entrée temporaire, un contexte autre
-qu'un monde, ni les nœuds des autres mods. Une entrée temporaire est écrite temporaire, et une entrée déjà
+Remplacer ne touche aux préfixes ou aux suffixes que là où le grade en définit, et jamais une entrée temporaire, un contexte qu'il n'écrit
+pas, ni les nœuds des autres mods. La meta est écrite par clé, dans son contexte et avec son expiration ;
+ajouter garde une valeur que LuckPerms a déjà pour cette clé, et remplacer ne vide que les clés que le grade
+définit. Une entrée temporaire est écrite temporaire, et une entrée déjà
 expirée n'est pas écrite. Une entrée limitée à un monde est écrite avec le contexte `dimension-type` de
 LuckPerms, la dimension sur NeoForge (`the_nether` pour un monde vanilla, l'identifiant complet pour un monde
 moddé) ; un mode de jeu et un contexte statique passent tels quels. Remplacer vide les nœuds customperm et
@@ -1136,8 +1163,8 @@ complétion liste les nœuds déclarés par les mods.
 
 Ce qui est répondu : un nœud oui/non vaut `true` pour un ALLOW explicite, `false` pour un DENY, et quand rien
 ici ne le mentionne, la valeur par défaut que son mod lui a donnée (souvent un test d'opérateur), jamais un
-refus. Un nœud qui porte un nombre ou un texte n'a pas de stockage ici et répond toujours sa valeur par
-défaut. Un joueur hors ligne est résolu depuis les grades lui aussi.
+refus. Un nœud qui porte un nombre ou un texte reçoit la meta du même nom (voir
+[Meta](#meta)), et sa valeur par défaut s'il n'y en a pas. Un joueur hors ligne est résolu depuis les grades lui aussi.
 
 ### Mods qui modifient le dispatcher dynamiquement
 
