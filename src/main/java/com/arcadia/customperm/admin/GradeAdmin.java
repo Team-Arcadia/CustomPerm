@@ -56,7 +56,7 @@ public final class GradeAdmin {
     public static AdminResult create(String name) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
-        if (!NAME.matcher(name).matches()) {
+        if (!validName(name)) {
             return AdminResult.fail("Invalid grade name '" + name + "': use 1 to 64 letters, digits, _ - . or +.");
         }
         if (grades().grades.containsKey(name)) return AdminResult.fail("Grade already exists: " + name);
@@ -431,6 +431,11 @@ public final class GradeAdmin {
         if (online != null) return online.getGameProfile().getName();
         String known = UsernameCache.getLastKnownUsername(uuid);
         return known != null ? known : uuid.toString();
+    }
+
+    /** Whether a grade could be called this. Shared with {@link ImportAdmin}, which reads names from elsewhere. */
+    static boolean validName(String name) {
+        return name != null && NAME.matcher(name).matches();
     }
 
     /** The node as it is stored, or {@code null} when it cannot be one. Shared with {@link UserAdmin}. */

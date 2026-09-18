@@ -252,6 +252,14 @@ public class ConfigManager {
     }
 
     /**
+     * Takes a backup now, before a change that rewrites many entries at once. The usual backup is written
+     * after a successful load, which is too late for an import: what it would preserve is the result.
+     */
+    public void backupNow() {
+        writeBackup();
+    }
+
+    /**
      * Écrit une backup horodatée des fichiers de config dans {@code backup/}.
      * Non-fatale : un échec logge un WARN mais ne remet pas en cause le chargement.
      * Appelée uniquement après un {@link #load()} réussi.

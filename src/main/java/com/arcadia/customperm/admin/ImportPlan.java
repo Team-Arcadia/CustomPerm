@@ -1,0 +1,170 @@
+/*
+ * CustomPerm - Copyright (C) 2026 THEFricadelle. All rights reserved.
+ * SPDX-License-Identifier: LicenseRef-CustomPerm-ARR
+ *
+ * Proprietary, source-available software. Public visibility of this source
+ * grants no right to copy, reuse, redistribute, or create derivative works.
+ * See LICENSE and CONTRIBUTING.md at the repository root.
+ */
+package com.arcadia.customperm.admin;
+
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * What an import from LuckPerms would write, and what it would leave behind. Plain Java with no
+ * {@code net.luckperms.api} type: {@code perm/lp/LuckPermsImport} builds one of these, this package
+ * applies it, and the interface shows its report. Reading and writing are separated on purpose, so the
+ * admin sees the whole thing before anything is written.
+ *
+ * <p>A plan is a description, never a promise: applying it can still refuse, for instance when the
+ * change would take away the admin's own access to the grades.
+ */
+public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> exposeCommands,
+                         List<String> skipped, Counts counts) {
+
+    public static final ImportPlan EMPTY =
+            new ImportPlan(List.of(), List.of(), Set.of(), List.of(), Counts.NONE);
+
+    /** One LuckPerms group as the grade it would become. */
+    public record Grade(String name, int weight, List<String> parents, List<String> deniedParents,
+                        Set<String> allow, Set<String> deny) {
+    }
+
+    /** One LuckPerms user as what they would hold; {@code name} is display only, the UUID is the key. */
+    public record Player(String uuid, String name, List<String> grades, List<String> deniedGrades,
+                         Set<String> allow, Set<String> deny) {
+    }
+
+    /**
+     * What the report counts. The skipped ones matter as much as the imported ones: a permission that
+     * silently disappears in a migration is how a server ends up open or locked without anyone knowing.
+     */
+    public record Counts(int groups, int players, int nodes, int translated, int commands,
+                         int temporary, int contextual, int foreign, int other) {
+
+        public static final Counts NONE = new Counts(0, 0, 0, 0, 0, 0, 0, 0, 0);
+
+        public int skipped() {
+            return temporary + contextual + foreign + other;
+        }
+    }
+
+    public boolean isEmpty() {
+        return grades.isEmpty() && players.isEmpty();
+    }
+
+    /**
+     * The report, as the lines the admin reads before confirming. Written as sentences rather than a
+     * table: the interface shows them as they are and so does the console.
+     */
+    public List<String> report() {
+        List<String> lines = new ArrayList<>();
+        lines.add(counts.groups + " group(s) become grades, " + counts.players + " player(s) keep what they hold.");
+        lines.add(counts.nodes + " node(s) imported, " + counts.translated + " of them translated from "
+                + "minecraft.command to customperm.command.");
+        if (!exposeCommands.isEmpty()) {
+            lines.add(exposeCommands.size() + " command(s) also exposed, without which those nodes would grant "
+                    + "nothing: " + String.join(", ", exposeCommands) + ".");
+        }
+        if (counts.skipped() == 0) {
+            lines.add("Nothing is left behind.");
+        } else {
+            lines.add(counts.skipped() + " entrie(s) are left behind: " + counts.temporary + " temporary, "
+                    + counts.contextual + " contextual, " + counts.foreign + " belonging to other mods, "
+                    + counts.other + " of a kind CustomPerm has no equivalent for (prefix, suffix, meta, "
+                    + "display name, tracks).");
+        }
+        lines.addAll(skipped);
+        return lines;
+    }
+
+    /**
+     * The node CustomPerm would store for a LuckPerms permission key, or {@code null} when it governs
+     * nothing here. {@code customperm.*} keys carry over as they are, {@code minecraft.command.<x>}
+     * becomes {@code customperm.command.<x>}, the global wildcard stays itself, and a node another mod
+     * reads is not stored: once LuckPerms is gone nothing would read it.
+     */
+    public static String translate(String key) {
+        if (key == null) return null;
+        String node = key.trim();
+        if (node.isEmpty()) return null;
+        if (node.equals("*") || node.startsWith("customperm.")) return node;
+        if (node.startsWith("minecraft.command.")) {
+            return "customperm.command." + node.substring("minecraft.command.".length());
+        }
+        return null;
+    }
+
+    /**
+     * The command a key opens, or {@code null} when it names none. A node on a command that is not
+     * exposed grants nothing, so an import that does not expose it imports a permission that does nothing.
+     */
+    public static String exposedCommand(String key) {
+        String node = translate(key);
+        if (node == null || !node.startsWith("customperm.command.")) return null;
+        String command = node.substring("customperm.command.".length());
+        return command.isEmpty() || command.contains("*") ? null : command;
+    }
+
+    /** A mutable builder, since the reader fills a plan group by group and user by user. */
+    public static final class Builder {
+        private final List<Grade> grades = new ArrayList<>();
+        private final List<Player> players = new ArrayList<>();
+        private final Set<String> commands = new LinkedHashSet<>();
+        private final List<String> skipped = new ArrayList<>();
+        private int nodes;
+        private int translated;
+        private int temporary;
+        private int contextual;
+        private int foreign;
+        private int other;
+
+        public void grade(Grade grade) {
+            grades.add(grade);
+        }
+
+        public void player(Player player) {
+            players.add(player);
+        }
+
+        public void expose(String command) {
+            commands.add(command);
+        }
+
+        public void imported(boolean wasTranslated) {
+            nodes++;
+            if (wasTranslated) translated++;
+        }
+
+        public void temporary() {
+            temporary++;
+        }
+
+        public void contextual() {
+            contextual++;
+        }
+
+        public void foreign() {
+            foreign++;
+        }
+
+        public void other() {
+            other++;
+        }
+
+        /** A line for the report; the same one is not repeated, a migration being read, not scrolled. */
+        public void note(String line) {
+            if (!skipped.contains(line)) skipped.add(line);
+        }
+
+        public ImportPlan build() {
+            return new ImportPlan(List.copyOf(grades), List.copyOf(players), Set.copyOf(commands),
+                    List.copyOf(skipped),
+                    new Counts(grades.size(), players.size(), nodes, translated, commands.size(),
+                            temporary, contextual, foreign, other));
+        }
+    }
+}
