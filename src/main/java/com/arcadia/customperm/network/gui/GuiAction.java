@@ -102,6 +102,13 @@ public enum GuiAction {
     /** {@code ["merge"|"replace"]} Writes what this admin previewed into LuckPerms, in the background. */
     EXPORT_APPLY(1, GuiArea.LUCKPERMS),
 
+    /** {@code [grade, "prefix"|"suffix", text]} Sets a grade's prefix or suffix; an empty text clears it. */
+    GRADE_CHAT_SET(3, GuiArea.GRADES),
+    /** {@code [playerName, "prefix"|"suffix", text]} Sets one player's own; by name, like adding a node. */
+    USER_CHAT_SET(3, GuiArea.GRADES),
+    /** {@code ["true"|"false"]} Decorates names with their prefix and suffix, like {@code /customperm names}. */
+    NAMES_DECORATE(1, GuiArea.CONFIG),
+
     /** {@code ["true"|"false"]} Records player commands, like {@code /customperm log record}. */
     LOG_PLAYERS(1, GuiArea.LOGS),
     /** {@code ["true"|"false"]} Masks the arguments of sensitive commands, like {@code /customperm log mask}. */

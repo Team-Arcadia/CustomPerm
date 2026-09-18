@@ -21,8 +21,9 @@ import java.util.List;
  * @param players      players carrying a node or a grade of their own, plus everyone online
  * @param knownPlayers every name the server has seen, for the completion of the add field
  * @param fallbackMode {@code settings.json} value, only to word the banner while LuckPerms is active
+ * @param names        whether names carry their prefix, for the Chat tab's preview
  */
-public record PlayersData(List<Player> players, List<String> knownPlayers, String fallbackMode)
+public record PlayersData(List<Player> players, List<String> knownPlayers, String fallbackMode, NameSettings names)
         implements GuiPageData {
 
     /** Most nodes carried per player, per kind. */
@@ -48,13 +49,28 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
         public List<String> refused() {
             return held.refused();
         }
+
+        public String prefix() {
+            return held.prefix();
+        }
+
+        public String suffix() {
+            return held.suffix();
+        }
     }
 
-    /** The grades a player holds, and the ones they refuse wherever a grade of theirs would bring them. */
-    public record Held(List<String> grades, List<String> refused) {
+    /**
+     * The grades a player holds, the ones they refuse wherever a grade of theirs would bring them, and the
+     * prefix and suffix they carry themselves, empty for none.
+     */
+    public record Held(List<String> grades, List<String> refused, String prefix, String suffix) {
+        public static final Held NONE = new Held(List.of(), List.of(), "", "");
+
         public static final StreamCodec<ByteBuf, Held> CODEC = StreamCodec.composite(
                 GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Held::grades,
                 GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Held::refused,
+                GuiCodecs.TEXT, Held::prefix,
+                GuiCodecs.TEXT, Held::suffix,
                 Held::new);
     }
 
@@ -62,6 +78,7 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
             GuiCodecs.list(Player.CODEC, GuiCodecs.SERVER_LIST_MAX), PlayersData::players,
             GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), PlayersData::knownPlayers,
             GuiCodecs.TEXT, PlayersData::fallbackMode,
+            NameSettings.CODEC, PlayersData::names,
             PlayersData::new);
 
     @Override

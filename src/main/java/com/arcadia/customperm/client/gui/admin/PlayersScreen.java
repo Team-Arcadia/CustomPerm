@@ -63,6 +63,9 @@ public final class PlayersScreen extends AdminScreen {
     private final CpEditBox newPlayer;
     private final CpList<NodeRow> nodeList;
     private final CpEditBox nodeField;
+    private final ChatFields chat;
+    /** Whether the right-hand side shows the chat prefix and suffix rather than the nodes. */
+    private boolean chatTab;
     /** Name typed in the field below the list, shown as a row while that player holds nothing. */
     private String pendingPlayer;
 
@@ -72,6 +75,7 @@ public final class PlayersScreen extends AdminScreen {
         this.nodeField = new CpEditBox(Component.literal("Permission node"), GuiCodecs.CLIENT_ARG_MAX)
                 .hint(Component.literal("permission node"))
                 .onSubmit(() -> addNode(false));
+        this.chat = new ChatFields(this::saveChat);
         this.search = new CpEditBox(Component.literal("Search players"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
                 .onChange(text -> refilter());
@@ -158,7 +162,7 @@ public final class PlayersScreen extends AdminScreen {
         List<PlayersData.Player> rows = new ArrayList<>();
         if (pendingPlayer != null) {
             rows.add(new PlayersData.Player("", pendingPlayer, false,
-                    new PlayersData.Held(List.of(), List.of()), List.of(), List.of()));
+                    PlayersData.Held.NONE, List.of(), List.of()));
         }
         rows.addAll(data.players());
         return rows;
@@ -185,6 +189,7 @@ public final class PlayersScreen extends AdminScreen {
             player.allow().forEach(n -> nodes.add(new NodeRow(n, false)));
         }
         nodeList.setItems(nodes);
+        chat.fill(player == null ? "" : player.prefix(), player == null ? "" : player.suffix());
     }
 
     /** Shows the rest of the first known player name that starts with what was typed. */
@@ -214,9 +219,14 @@ public final class PlayersScreen extends AdminScreen {
         return layout.content().afterLeft(left().w() + GAP).inset(8);
     }
 
+    private Rect tabRow() {
+        Rect in = inner();
+        return new Rect(in.x(), in.y() + 24, in.w(), FIELD);
+    }
+
     private Rect listArea() {
         Rect in = inner();
-        int top = in.y() + 24;
+        int top = in.y() + 24 + FIELD + 4;
         int bottom = in.bottom() - (FIELD + 4 + BUTTON + 4);
         return new Rect(in.x(), top, in.w(), bottom - top);
     }
@@ -240,13 +250,28 @@ public final class PlayersScreen extends AdminScreen {
         if (player == null) return;
         Rect in = inner();
         Rect list = listArea();
-        addRenderableWidget(nodeList.at(list));
-
+        placeButtonRow(tabRow(), 8, false, List.of(
+                CpButton.ghost(Component.literal("Nodes (" + (player.allow().size() + player.deny().size()) + ")"),
+                        () -> setChatTab(false)).icon(Icon.LOCK).selected(!chatTab),
+                CpButton.ghost(Component.literal("Chat"), () -> setChatTab(true)).icon(Icon.EDIT).selected(chatTab)));
         Rect fieldRow = new Rect(in.x(), list.bottom() + 4, in.w(), FIELD);
+        Rect buttonRow = new Rect(in.x(), fieldRow.bottom() + 4, in.w(), BUTTON);
+        if (chatTab) {
+            addRenderableWidget(chat.prefix.at(chat.prefixRect(fieldRow)));
+            addRenderableWidget(chat.suffix.at(chat.suffixRect(fieldRow)));
+            chat.setEditable(editable);
+            placeButtonRow(buttonRow, 6, true, List.of(
+                    CpButton.accent(Component.literal("Save"), this::saveChat).icon(Icon.CHECK).enabled(editable)
+                            .tooltip(Component.literal("A player's own prefix wins over every grade they hold.")),
+                    CpButton.neutral(Component.literal("Clear"), this::clearChat).icon(Icon.MINUS)
+                            .enabled(editable && (!player.prefix().isEmpty() || !player.suffix().isEmpty()))
+                            .tooltip(Component.literal("Their grades' prefix shows again."))));
+            return;
+        }
+        addRenderableWidget(nodeList.at(list));
         addRenderableWidget(nodeField.at(fieldRow));
         nodeField.setEditable(editable);
 
-        Rect buttonRow = new Rect(in.x(), fieldRow.bottom() + 4, in.w(), BUTTON);
         NodeRow selected = nodeList.getSelected();
         placeButtonRow(buttonRow, 6, true, List.of(
                 CpButton.good(Component.literal("Allow"), () -> addNode(false)).icon(Icon.CHECK).enabled(editable),
@@ -257,7 +282,27 @@ public final class PlayersScreen extends AdminScreen {
                         .enabled(editable && selected != null && !player.uuid().isEmpty())));
     }
 
+    private void setChatTab(boolean wanted) {
+        chatTab = wanted;
+        rebuild();
+    }
+
     // ------------------------------------------------------------------ actions
+
+    /** Sends what changed; by name like a node, so a player who holds nothing yet can get a prefix. */
+    private void saveChat() {
+        PlayersData.Player player = playerList.getSelected();
+        if (player == null) return;
+        if (chat.prefixChanged()) act(GuiAction.USER_CHAT_SET, player.name(), "prefix", chat.prefix.getValue());
+        if (chat.suffixChanged()) act(GuiAction.USER_CHAT_SET, player.name(), "suffix", chat.suffix.getValue());
+    }
+
+    private void clearChat() {
+        PlayersData.Player player = playerList.getSelected();
+        if (player == null) return;
+        if (!player.prefix().isEmpty()) act(GuiAction.USER_CHAT_SET, player.name(), "prefix", "");
+        if (!player.suffix().isEmpty()) act(GuiAction.USER_CHAT_SET, player.name(), "suffix", "");
+    }
 
     /** Selects a player by name, adding a local row when the server does not know them yet. */
     private void track() {
@@ -337,5 +382,6 @@ public final class PlayersScreen extends AdminScreen {
                 + "  |  " + player.allow().size() + " allow, " + player.deny().size() + " deny"
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, in.w(), Palette.TEXT_MUTE);
+        if (chatTab) chat.renderPreview(g, font, listArea(), player.name(), data.names());
     }
 }

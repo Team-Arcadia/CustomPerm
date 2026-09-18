@@ -21,6 +21,11 @@ import com.arcadia.customperm.config.SettingsConfig;
 import com.arcadia.customperm.gametest.support.LuckPermsTestSupport;
 import com.arcadia.customperm.gametest.support.Modes;
 import com.arcadia.customperm.gametest.support.TestPlayer;
+import com.arcadia.customperm.network.gui.GuiAction;
+import com.arcadia.customperm.network.gui.GuiActionPayload;
+import com.arcadia.customperm.network.gui.GuiActionResultPayload;
+import com.arcadia.customperm.network.gui.GuiPage;
+import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.network.lp.LpEditOp;
 import net.minecraft.ChatFormatting;
 import net.minecraft.gametest.framework.GameTest;
@@ -149,6 +154,61 @@ public class NameDecorationGameTest {
             }
         }
         helper.succeed();
+    }
+
+    // ------------------------------------------------------------------ interface
+
+    /** The Chat tabs: a grade's and a player's prefix written from the interface, and the switch behind its node. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100, batch = "customperm_names_page")
+    public static void chatTabsWriteThroughTheInterface(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        SettingsConfig settings = CustomPerm.configManager.getSettings();
+        boolean decorateBefore = settings.decorateNames;
+        String targetUuid = null;
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_n_owner", 4);
+             TestPlayer reader = TestPlayer.reader(helper.getLevel(), "cp_n_reader", 2);
+             TestPlayer target = TestPlayer.join(helper.getLevel(), "cp_n_target", 0)) {
+            targetUuid = target.uuid().toString();
+            ok(GradeAdmin.create(VIP));
+
+            act(owner, GuiAction.GRADE_CHAT_SET, GuiPage.GRADES, VIP, "prefix", "&6[VIP] ");
+            expect(owner, "OK: Prefix of " + VIP + " set");
+            equal("&6[VIP] ", grades.grades.get(VIP).prefix, "the grade prefix was not written");
+            act(owner, GuiAction.GRADE_CHAT_SET, GuiPage.GRADES, VIP, "colour", "x");
+            expect(owner, "FAIL: Malformed request for GRADE_CHAT_SET.");
+            act(owner, GuiAction.GRADE_CHAT_SET, GuiPage.GRADES, VIP, "prefix", "");
+            expect(owner, "OK: Prefix of " + VIP + " cleared.");
+            check(grades.grades.get(VIP).prefix == null, "an empty text must clear the prefix");
+
+            act(owner, GuiAction.USER_CHAT_SET, GuiPage.PLAYERS, "cp_n_target", "suffix", " &7*");
+            expect(owner, "OK: Suffix of cp_n_target set");
+            equal(" &7*", grades.userSuffixes.get(targetUuid), "the player's suffix was not written");
+
+            act(reader, GuiAction.NAMES_DECORATE, GuiPage.GRADES, "true");
+            expect(reader, "FAIL: You do not have customperm.manage.config.");
+            act(owner, GuiAction.NAMES_DECORATE, GuiPage.GRADES, "true");
+            expect(owner, "OK: Names now carry");
+            equal("cp_n_target *", target.player().getDisplayName().getString(), "the switch applies at once");
+        } finally {
+            settings.decorateNames = decorateBefore;
+            grades.grades.remove(VIP);
+            if (targetUuid != null) grades.userSuffixes.remove(targetUuid);
+        }
+        helper.succeed();
+    }
+
+    private static void act(TestPlayer player, GuiAction action, GuiPage page, String... args) {
+        player.clearReceived();
+        GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), page.id()),
+                player.payloadContext());
+    }
+
+    private static void expect(TestPlayer player, String prefix) {
+        List<String> results = player.payloads(GuiActionResultPayload.class).stream()
+                .map(r -> (r.success() ? "OK: " : "FAIL: ") + r.message()).toList();
+        if (results.size() != 1 || !results.get(0).startsWith(prefix))
+            throw new GameTestAssertException("Expected one result starting with '" + prefix + "', got " + results);
     }
 
     // ------------------------------------------------------------------ live, LuckPerms

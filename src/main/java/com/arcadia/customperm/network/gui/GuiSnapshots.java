@@ -78,7 +78,9 @@ public final class GuiSnapshots {
             String name = server == null ? rawUuid : GradeAdmin.displayName(server, uuid);
             players.add(new PlayersData.Player(rawUuid, name, online,
                     new PlayersData.Held(List.copyOf(config.userGrades.getOrDefault(rawUuid, List.of())),
-                            List.copyOf(config.userDeniedGrades.getOrDefault(rawUuid, List.of()))),
+                            List.copyOf(config.userDeniedGrades.getOrDefault(rawUuid, List.of())),
+                            config.userPrefixes.getOrDefault(rawUuid, ""),
+                            config.userSuffixes.getOrDefault(rawUuid, "")),
                     UserAdmin.nodes(uuid, false).stream().limit(PlayersData.NODES_MAX).toList(),
                     UserAdmin.nodes(uuid, true).stream().limit(PlayersData.NODES_MAX).toList()));
         }
@@ -87,7 +89,8 @@ public final class GuiSnapshots {
 
         List<String> known = server == null ? List.of()
                 : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
-        return new PlayersData(players, known, CustomPerm.configManager.getSettings().luckPermsFallbackMode);
+        return new PlayersData(players, known, CustomPerm.configManager.getSettings().luckPermsFallbackMode,
+                nameSettings());
     }
 
     static GradesData grades(MinecraftServer server) {
@@ -111,7 +114,8 @@ public final class GuiSnapshots {
             assigned.sort(java.util.Comparator.comparing(GradesData.Member::name, String.CASE_INSENSITIVE_ORDER));
             List<GradesData.Member> refusing = refusers.getOrDefault(name, new ArrayList<>());
             refusing.sort(java.util.Comparator.comparing(GradesData.Member::name, String.CASE_INSENSITIVE_ORDER));
-            grades.add(new GradesData.Grade(name, grade.weight,
+            grades.add(new GradesData.Grade(new GradesData.Header(name, grade.weight,
+                    grade.prefix == null ? "" : grade.prefix, grade.suffix == null ? "" : grade.suffix),
                     new GradesData.Inheritance(List.copyOf(grade.parents), List.copyOf(grade.deniedParents)),
                     new TreeSet<>(grade.permissions).stream().limit(GradesData.NODES_MAX).toList(),
                     new TreeSet<>(grade.deniedPermissions).stream().limit(GradesData.NODES_MAX).toList(),
@@ -122,7 +126,12 @@ public final class GuiSnapshots {
                 : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
         var settings = CustomPerm.configManager.getSettings();
         return new GradesData(grades, known, settings.luckPermsFallbackMode, settings.defaultGrade,
-                CustomPerm.gatesAllCommands());
+                CustomPerm.gatesAllCommands(), nameSettings());
+    }
+
+    static NameSettings nameSettings() {
+        var settings = CustomPerm.configManager.getSettings();
+        return new NameSettings(settings.decorateNames, settings.nameFormat);
     }
 
     /** Turns a UUID-to-grade-names map inside out: one entry per grade, with the players resolved. */

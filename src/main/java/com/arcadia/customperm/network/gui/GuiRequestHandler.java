@@ -197,6 +197,12 @@ public final class GuiRequestHandler {
             case IMPORT_PREVIEW -> bool(args.get(0)) == null ? malformed(action)
                     : importPreview(player, bool(args.get(0)));
             case IMPORT_APPLY -> importApply(player, args.get(0));
+            case GRADE_CHAT_SET -> chatKind(args.get(1)) == null ? malformed(action)
+                    : GradeAdmin.setChat(player.getServer(), args.get(0), chatKind(args.get(1)), args.get(2));
+            case USER_CHAT_SET -> chatKind(args.get(1)) == null ? malformed(action)
+                    : userChatByName(player, args.get(0), chatKind(args.get(1)), args.get(2));
+            case NAMES_DECORATE -> bool(args.get(0)) == null ? malformed(action)
+                    : com.arcadia.customperm.admin.NameAdmin.setEnabled(player.getServer(), bool(args.get(0)));
             case EXPORT_PREVIEW -> exportPreview(player);
             case EXPORT_APPLY -> exportApply(player, args.get(0));
             case LOG_PLAYERS -> bool(args.get(0)) == null ? malformed(action) : LogAdmin.setPlayerLog(bool(args.get(0)));
@@ -343,6 +349,25 @@ public final class GuiRequestHandler {
         return resolution.profile()
                 .map(profile -> UserAdmin.addNode(admin.getServer(), profile.getId(), profile.getName(), node, deny))
                 .orElseGet(() -> AdminResult.fail(resolution.problem()));
+    }
+
+    /** By name, like adding a node: a player picked in the field has no row, so no UUID, yet. */
+    private static AdminResult userChatByName(ServerPlayer admin, String name, boolean suffix, String text) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
+        return resolution.profile()
+                .map(profile -> UserAdmin.setChat(admin.getServer(), profile.getId(), profile.getName(), suffix, text))
+                .orElseGet(() -> AdminResult.fail(resolution.problem()));
+    }
+
+    /** {@code "suffix"} is true, {@code "prefix"} false, anything else malformed. */
+    private static Boolean chatKind(String raw) {
+        return switch (raw) {
+            case "prefix" -> false;
+            case "suffix" -> true;
+            default -> null;
+        };
     }
 
     /** Removing addresses the player by UUID: the row always carries one, a resolvable name it may not. */

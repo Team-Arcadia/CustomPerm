@@ -33,9 +33,10 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Internal grade editor. Left: grades and creation. Right: the selected grade, on three tabs: its
- * permission nodes (ALLOW or DENY, the most specific entry winning), the grades it inherits, and its
- * players, who can be assigned while offline as long as they joined the server before. One grade can be
+ * Internal grade editor. Left: grades and creation. Right: the selected grade, on four tabs: its
+ * permission nodes (ALLOW or DENY, the most specific entry winning), the grades it inherits, its
+ * players, who can be assigned while offline as long as they joined the server before, and the chat
+ * prefix and suffix it gives them. One grade can be
  * the default grade, applied to every player below their own grades, and it can inherit other grades,
  * whose entries apply where it says nothing as precise. The header carries the weight, which breaks a tie between two grades covering a node
  * just as specifically; the list is ordered by it.
@@ -66,7 +67,7 @@ public final class GradesScreen extends AdminScreen {
     }
 
     /** Right-hand side of the page: what the selected grade is looked at through. */
-    private enum Tab { NODES, PARENTS, PLAYERS }
+    private enum Tab { NODES, PARENTS, PLAYERS, CHAT }
 
     private GradesData data;
     private Tab tab = Tab.NODES;
@@ -81,6 +82,7 @@ public final class GradesScreen extends AdminScreen {
     private final CpList<MemberRow> memberList;
     private final CpEditBox playerField;
     private final CpEditBox weightField;
+    private final ChatFields chat;
     /** Grade to select once the next refresh lands, after creating it. */
     private String pendingGrade;
 
@@ -97,6 +99,7 @@ public final class GradesScreen extends AdminScreen {
         this.weightField = new CpEditBox(Component.literal("Grade weight"), 7)
                 .hint(Component.literal("weight"))
                 .onSubmit(this::applyWeight);
+        this.chat = new ChatFields(this::saveChat);
         this.search = new CpEditBox(Component.literal("Search grades"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
                 .onChange(text -> refilter());
@@ -228,6 +231,7 @@ public final class GradesScreen extends AdminScreen {
         memberList.setItems(members);
         // The box shows the weight in force, so submitting it unchanged is a no-op rather than a reset.
         weightField.setValue(grade == null ? "" : String.valueOf(grade.weight()));
+        chat.fill(grade == null ? "" : grade.prefix(), grade == null ? "" : grade.suffix());
     }
 
     /** Shows the rest of the first known player name that starts with what was typed. */
@@ -307,9 +311,11 @@ public final class GradesScreen extends AdminScreen {
         String nodesTab = "Nodes (" + (grade.allow().size() + grade.deny().size()) + ")";
         String parentsTab = "Parents (" + (grade.parents().size() + grade.deniedParents().size()) + ")";
         String playersTab = "Players (" + (grade.members().size() + grade.refusers().size()) + ")";
-        // Three tabs do not always fit. A bare name reads better than a count clipped to "Nodes (", so the
+        String chatTab = "Chat";
+        // Four tabs do not always fit. A bare name reads better than a count clipped to "Nodes (", so the
         // counts go before the width is shared; the icons go after, in placeButtonRow.
-        if (font.width(nodesTab) + font.width(parentsTab) + font.width(playersTab) + 3 * 16 + 8 > tabs.w()) {
+        if (font.width(nodesTab) + font.width(parentsTab) + font.width(playersTab) + font.width(chatTab)
+                + 4 * 16 + 12 > tabs.w()) {
             nodesTab = "Nodes";
             parentsTab = "Parents";
             playersTab = "Players";
@@ -320,7 +326,9 @@ public final class GradesScreen extends AdminScreen {
                 CpButton.ghost(Component.literal(parentsTab), () -> setTab(Tab.PARENTS))
                         .icon(Icon.SHIELD).selected(tab == Tab.PARENTS),
                 CpButton.ghost(Component.literal(playersTab), () -> setTab(Tab.PLAYERS))
-                        .icon(Icon.USER).selected(tab == Tab.PLAYERS)));
+                        .icon(Icon.USER).selected(tab == Tab.PLAYERS),
+                CpButton.ghost(Component.literal(chatTab), () -> setTab(Tab.CHAT))
+                        .icon(Icon.EDIT).selected(tab == Tab.CHAT)));
 
         Rect list = listArea();
         Rect fieldRow = new Rect(in.x(), list.bottom() + 4, in.w(), FIELD);
@@ -351,6 +359,24 @@ public final class GradesScreen extends AdminScreen {
                                     + "it from this chain only, never from another grade a player holds.")),
                     CpButton.neutral(Component.literal("Remove"), () -> removeParent(selected)).icon(Icon.MINUS)
                             .enabled(editable && selected != null)));
+        } else if (tab == Tab.CHAT) {
+            addRenderableWidget(chat.prefix.at(chat.prefixRect(fieldRow)));
+            addRenderableWidget(chat.suffix.at(chat.suffixRect(fieldRow)));
+            chat.setEditable(editable);
+            boolean decorate = data.names().decorate();
+            placeButtonRow(buttonRow, 6, true, List.of(
+                    CpButton.accent(Component.literal("Save"), this::saveChat).icon(Icon.CHECK).enabled(editable)
+                            .tooltip(Component.literal("Among a player's grades the heaviest one's prefix shows; their "
+                                    + "own prefix, on the Players page, wins over every grade.")),
+                    CpButton.neutral(Component.literal("Clear"), this::clearChat).icon(Icon.MINUS)
+                            .enabled(editable && (!grade.prefix().isEmpty() || !grade.suffix().isEmpty())),
+                    CpButton.ghost(Component.literal(decorate ? "Names decorated" : "Names plain"),
+                                    () -> act(GuiAction.NAMES_DECORATE, String.valueOf(!decorate)))
+                            .icon(decorate ? Icon.CHECK : Icon.CROSS).selected(decorate)
+                            .enabled(canEdit(GuiArea.CONFIG))
+                            .tooltip(Component.literal("Puts prefixes and suffixes around player names, in chat and "
+                                    + "wherever the game shows them. Messages stay signed. Needs "
+                                    + GuiArea.CONFIG.node() + "."))));
         } else {
             addRenderableWidget(memberList.at(list));
             addRenderableWidget(playerField.at(fieldRow));
@@ -401,6 +427,21 @@ public final class GradesScreen extends AdminScreen {
                 "Every player follows it below their own grades, operators included.",
                 "Set as default",
                 () -> act(GuiAction.GRADE_DEFAULT, grade.name()));
+    }
+
+    /** Sends what changed in the two boxes; an emptied box clears it. */
+    private void saveChat() {
+        GradesData.Grade grade = gradeList.getSelected();
+        if (grade == null) return;
+        if (chat.prefixChanged()) act(GuiAction.GRADE_CHAT_SET, grade.name(), "prefix", chat.prefix.getValue());
+        if (chat.suffixChanged()) act(GuiAction.GRADE_CHAT_SET, grade.name(), "suffix", chat.suffix.getValue());
+    }
+
+    private void clearChat() {
+        GradesData.Grade grade = gradeList.getSelected();
+        if (grade == null) return;
+        if (!grade.prefix().isEmpty()) act(GuiAction.GRADE_CHAT_SET, grade.name(), "prefix", "");
+        if (!grade.suffix().isEmpty()) act(GuiAction.GRADE_CHAT_SET, grade.name(), "suffix", "");
     }
 
     /** Submits the weight box. A grade that weighs nothing is the norm, so a blank box means 0. */
@@ -583,5 +624,11 @@ public final class GradesScreen extends AdminScreen {
                 + grade.allow().size() + " allow, " + grade.deny().size() + " deny"
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, headerW, Palette.TEXT_MUTE);
+        if (tab == Tab.CHAT) chat.renderPreview(g, font, listArea(), previewName(), data.names());
+    }
+
+    /** The admin's own name in the preview: it reads as a real line rather than a template. */
+    private String previewName() {
+        return minecraft != null && minecraft.player != null ? minecraft.player.getGameProfile().getName() : "Steve";
     }
 }

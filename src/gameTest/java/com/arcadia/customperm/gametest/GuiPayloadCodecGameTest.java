@@ -22,6 +22,7 @@ import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
 import com.arcadia.customperm.network.gui.ImportData;
+import com.arcadia.customperm.network.gui.NameSettings;
 import com.arcadia.customperm.network.gui.LogsData;
 import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.network.gui.PlayersData;
@@ -73,19 +74,20 @@ public class GuiPayloadCodecGameTest {
                         List.of("heal", "tp"))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0, true), new GradesData(List.of(
-                        new GradesData.Grade("vip", -5,
+                        new GradesData.Grade(new GradesData.Header("vip", -5, "&6[VIP] ", " &7*"),
                                 new GradesData.Inheritance(List.of("base", "extra"), List.of("locked")),
                                 List.of("customperm.command.fly"), List.of("customperm.command.op"),
                                 new GradesData.Members(
                                         List.of(new GradesData.Member("00000000-0000-0000-0000-000000000001", "Alex", true)),
                                         List.of(new GradesData.Member("00000000-0000-0000-0000-000000000003", "Sam", false))))),
-                        List.of("Alex", "Steve"), "internal", "vip", true)));
+                        List.of("Alex", "Steve"), "internal", "vip", true,
+                        new NameSettings(true, "{prefix}{name}{suffix}"))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0, false), new PlayersData(List.of(
                         new PlayersData.Player("00000000-0000-0000-0000-000000000002", "Steve", false,
-                                new PlayersData.Held(List.of("staff"), List.of("vip")),
+                                new PlayersData.Held(List.of("staff"), List.of("vip"), "&d[Me] ", ""),
                                 List.of("customperm.command.weather"), List.of("customperm.command.time"))),
-                        List.of("Alex", "Steve"), "deny")));
+                        List.of("Alex", "Steve"), "deny", new NameSettings(false, "{prefix}&8| {name}"))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.LUCKPERMS, GuiArea.LUCKPERMS.bit(), 0, true), new LuckPermsData(LuckPermsData.TRACKS)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,

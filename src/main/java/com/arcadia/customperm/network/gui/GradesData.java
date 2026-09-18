@@ -23,9 +23,10 @@ import java.util.List;
  * @param fallbackMode {@code luckPermsFallbackMode}: whether grades take over when LuckPerms fails
  * @param defaultGrade grade applied to every player, empty for none
  * @param gateAll      whether every command reads its node ({@code gateAllCommands} in effect)
+ * @param names        whether names carry their prefix, for the Chat tab's preview
  */
 public record GradesData(List<Grade> grades, List<String> knownPlayers, String fallbackMode, String defaultGrade,
-                         boolean gateAll) implements GuiPageData {
+                         boolean gateAll, NameSettings names) implements GuiPageData {
 
     /** Most nodes carried per grade, per kind. */
     public static final int NODES_MAX = 1024;
@@ -47,16 +48,32 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
      * <p>Two records rather than one wider one: the codec composes at most six components, and inheritance
      * and refusal read as two lists everywhere else too.
      */
-    public record Grade(String name, int weight, Inheritance inheritance, List<String> allow, List<String> deny,
+    public record Grade(Header header, Inheritance inheritance, List<String> allow, List<String> deny,
                         Members players) {
         public static final StreamCodec<ByteBuf, Grade> CODEC = StreamCodec.composite(
-                GuiCodecs.TEXT, Grade::name,
-                ByteBufCodecs.VAR_INT, Grade::weight,
+                Header.CODEC, Grade::header,
                 Inheritance.CODEC, Grade::inheritance,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Grade::allow,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Grade::deny,
                 Members.CODEC, Grade::players,
                 Grade::new);
+
+        public String name() {
+            return header.name();
+        }
+
+        public int weight() {
+            return header.weight();
+        }
+
+        /** Raw text with its codes, empty for none. */
+        public String prefix() {
+            return header.prefix();
+        }
+
+        public String suffix() {
+            return header.suffix();
+        }
 
         public List<String> parents() {
             return inheritance.parents();
@@ -73,6 +90,16 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
         public List<Member> refusers() {
             return players.refusing();
         }
+    }
+
+    /** A grade's own scalars: its name, its weight, and the prefix and suffix it gives, empty for none. */
+    public record Header(String name, int weight, String prefix, String suffix) {
+        public static final StreamCodec<ByteBuf, Header> CODEC = StreamCodec.composite(
+                GuiCodecs.TEXT, Header::name,
+                ByteBufCodecs.VAR_INT, Header::weight,
+                GuiCodecs.TEXT, Header::prefix,
+                GuiCodecs.TEXT, Header::suffix,
+                Header::new);
     }
 
     /** What a grade inherits, and what it refuses to inherit. */
@@ -97,6 +124,7 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
             GuiCodecs.TEXT, GradesData::fallbackMode,
             GuiCodecs.TEXT, GradesData::defaultGrade,
             ByteBufCodecs.BOOL, GradesData::gateAll,
+            NameSettings.CODEC, GradesData::names,
             GradesData::new);
 
     @Override
