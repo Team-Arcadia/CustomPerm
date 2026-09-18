@@ -1248,7 +1248,12 @@ Ce qui reste possible sans LuckPerms, quand un tel mod retombe sur le niveau d'o
 |---|---|
 | Qui peut lancer une de ses commandes | L'exposer avec `/customperm command add <commande>` et donner `customperm.command.<commande>` dans un grade : la vérification de CustomPerm remplace celle du mod. |
 | Si la commande s'exécute ensuite (vérifié à l'intérieur) | Un alias : ses étapes tournent au niveau d'opérateur 4, pour les seuls joueurs qui ont `customperm.alias.<nom>`. |
-| Une action en jeu, hors de toute commande (construire, casser, utiliser un objet ou un sort à un endroit) | Rien qu'un mod de permissions puisse répondre. Chercher dans la config du mod un réglage de niveau ou « tout le monde », ou protéger la zone avec [ArcadiaGuard](https://github.com/Team-Arcadia/ArcadiaGuard), un mod de protection de zones pour NeoForge 1.21.1 qui bloque ces actions par zone, celles des autres mods comprises. |
+| Une fonction en jeu, hors de toute commande (une limite, un objet, une capacité) | Rien qu'un mod de permissions puisse répondre. Chercher dans la config du mod un réglage de niveau ou « tout le monde », demander à son auteur de passer par l'API de permissions de NeoForge, ou installer LuckPerms. |
+
+Si le besoin est seulement d'interdire des actions à un endroit (construire, casser, utiliser des objets ou les
+sorts d'autres mods), c'est de la protection de zone, pas des permissions :
+[ArcadiaGuard](https://github.com/Team-Arcadia/ArcadiaGuard) le fait seul, avec ses propres membres de zone et un
+bypass pour les opérateurs, avec ou sans LuckPerms.
 
 ### Mods qui modifient le dispatcher dynamiquement
 

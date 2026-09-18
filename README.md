@@ -1225,7 +1225,11 @@ What can still be done without LuckPerms, when such a mod falls back to the oper
 |---|---|
 | Who may run one of its commands | Expose it with `/customperm command add <command>` and grant `customperm.command.<command>` in a grade: CustomPerm's check replaces the mod's. |
 | Whether the command then runs (checked inside it) | An alias: its steps run at operator level 4, for the players holding `customperm.alias.<name>` only. |
-| An action in game, outside any command (building, breaking, using an item or a spell in a place) | Nothing a permission mod can answer. Look in the mod's config for a level or an allow-all setting, or protect the area with [ArcadiaGuard](https://github.com/Team-Arcadia/ArcadiaGuard), a zone protection mod for NeoForge 1.21.1 that blocks those actions per zone, other mods' included. |
+| A feature in game, outside any command (a limit, an item, an ability) | Nothing a permission mod can answer. Look in the mod's config for a level or an allow-all setting, ask its author to use NeoForge's permission API, or install LuckPerms. |
+
+If what you need is only to forbid actions in a place (building, breaking, using items or other mods' spells
+there), that is zone protection rather than permissions: [ArcadiaGuard](https://github.com/Team-Arcadia/ArcadiaGuard)
+does it on its own, with its own zone members and an operator bypass, with or without LuckPerms.
 
 ### Mods that mutate the dispatcher dynamically
 
