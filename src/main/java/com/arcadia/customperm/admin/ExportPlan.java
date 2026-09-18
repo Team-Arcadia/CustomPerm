@@ -43,23 +43,32 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
      */
     private static final Pattern LP_NAME = Pattern.compile("[a-z0-9_.\\-]{1,36}");
 
-    /** One grade as the group it would become. */
+    /** One grade as the group it would become; {@code prefix} and {@code suffix} are null for none. */
     public record Group(String name, int weight, List<String> parents, List<String> deniedParents,
-                        Set<String> allow, Set<String> deny) {
+                        Set<String> allow, Set<String> deny, String prefix, String suffix) {
 
         int entries() {
-            return parents.size() + deniedParents.size() + allow.size() + deny.size();
+            return parents.size() + deniedParents.size() + allow.size() + deny.size()
+                    + (prefix == null ? 0 : 1) + (suffix == null ? 0 : 1);
         }
     }
 
     /** One player as the LuckPerms user they would become, keyed by UUID. */
     public record Player(String uuid, List<String> grades, List<String> deniedGrades,
-                         Set<String> allow, Set<String> deny) {
+                         Set<String> allow, Set<String> deny, String prefix, String suffix) {
 
         int entries() {
-            return grades.size() + deniedGrades.size() + allow.size() + deny.size();
+            return grades.size() + deniedGrades.size() + allow.size() + deny.size()
+                    + (prefix == null ? 0 : 1) + (suffix == null ? 0 : 1);
         }
     }
+
+    /**
+     * The priority a player's own prefix is written with. LuckPerms shows the highest priority it finds,
+     * own or inherited, where CustomPerm puts a player's own above every grade: this is above any weight a
+     * grade is likely to carry, and a grade's prefix is written at its weight.
+     */
+    public static final int PLAYER_PRIORITY = 1_000_000;
 
     /**
      * How a write ended. {@code stoppedAt} is {@code null} when everything was written; otherwise it names
@@ -101,7 +110,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
             groups.add(new Group(name, grade.weight,
                     kept(grade.parents, exported, config, dropped, notes, "grade " + name),
                     kept(grade.deniedParents, exported, config, dropped, notes, "grade " + name),
-                    Set.copyOf(grade.permissions), Set.copyOf(grade.deniedPermissions)));
+                    Set.copyOf(grade.permissions), Set.copyOf(grade.deniedPermissions), grade.prefix, grade.suffix));
         }
 
         Set<String> holders = new TreeSet<>();
@@ -109,6 +118,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
         holders.addAll(config.userDeniedGrades.keySet());
         holders.addAll(config.userPermissions.keySet());
         holders.addAll(config.userDeniedPermissions.keySet());
+        holders.addAll(config.userPrefixes.keySet());
+        holders.addAll(config.userSuffixes.keySet());
         List<Player> players = new ArrayList<>();
         for (String uuid : holders) {
             if (!isUuid(uuid)) {
@@ -121,7 +132,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
                     kept(config.userGrades.getOrDefault(uuid, List.of()), exported, config, dropped, notes, who),
                     kept(config.userDeniedGrades.getOrDefault(uuid, List.of()), exported, config, dropped, notes, who),
                     Set.copyOf(config.userPermissions.getOrDefault(uuid, Set.of())),
-                    Set.copyOf(config.userDeniedPermissions.getOrDefault(uuid, Set.of())));
+                    Set.copyOf(config.userDeniedPermissions.getOrDefault(uuid, Set.of())),
+                    config.userPrefixes.get(uuid), config.userSuffixes.get(uuid));
             if (player.entries() > 0) players.add(player);
         }
 
@@ -214,6 +226,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
             grade.deniedParents = new ArrayList<>(source.deniedParents());
             grade.permissions = new HashSet<>(source.allow());
             grade.deniedPermissions = new HashSet<>(source.deny());
+            grade.prefix = source.prefix();
+            grade.suffix = source.suffix();
             config.grades.put(grade.name, grade);
         }
         for (Player player : players) {
@@ -248,8 +262,13 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
         }
         if (!existing.isEmpty()) {
             lines.add("Already in LuckPerms: " + String.join(", ", existing) + ". Adding keeps what they hold; "
-                    + "replacing clears their customperm nodes and parents first, never their prefix, suffix, "
-                    + "meta or the nodes of other mods.");
+                    + "replacing clears their customperm nodes and parents first, and their prefix or suffix "
+                    + "only where the grade has one, never their meta or the nodes of other mods.");
+        }
+        if (groups.stream().anyMatch(g -> g.prefix() != null || g.suffix() != null)
+                || players.stream().anyMatch(p -> p.prefix() != null || p.suffix() != null)) {
+            lines.add("Prefixes and suffixes are written with the grade weight as their priority, and a player's "
+                    + "own above every grade's.");
         }
         lines.addAll(refusedLines());
         if (dropped > 0) lines.add(dropped + " entrie(s) left out, each named below.");

@@ -17,6 +17,8 @@ import net.luckperms.api.model.user.User;
 import net.luckperms.api.node.Node;
 import net.luckperms.api.node.NodeType;
 import net.luckperms.api.node.types.InheritanceNode;
+import net.luckperms.api.node.types.PrefixNode;
+import net.luckperms.api.node.types.SuffixNode;
 import net.luckperms.api.node.types.WeightNode;
 
 import java.util.List;
@@ -110,6 +112,7 @@ public final class LuckPermsExport {
                     add(group, InheritanceNode.builder(parent).value(false).build(), kept);
                 }
                 addNodes(group, source.allow(), source.deny(), kept);
+                addChat(group, source.prefix(), source.suffix(), source.weight(), replace, kept);
                 await(api.getGroupManager().saveGroup(group));
                 groups++;
                 progress.accept(groups);
@@ -134,6 +137,7 @@ public final class LuckPermsExport {
                     add(user, InheritanceNode.builder(grade).value(false).build(), kept);
                 }
                 addNodes(user, source.allow(), source.deny(), kept);
+                addChat(user, source.prefix(), source.suffix(), ExportPlan.PLAYER_PRIORITY, replace, kept);
                 await(api.getUserManager().saveUser(user));
                 user.getCachedData().invalidate();
                 players++;
@@ -150,6 +154,28 @@ public final class LuckPermsExport {
     private static void addNodes(PermissionHolder holder, Set<String> allow, Set<String> deny, int[] kept) {
         for (String key : allow) add(holder, Node.builder(key).value(true).build(), kept);
         for (String key : deny) add(holder, Node.builder(key).value(false).build(), kept);
+    }
+
+    /**
+     * Writes a prefix and a suffix. Adding writes one only where the holder has none of its own, and counts
+     * one it keeps instead; replacing clears the holder's own first, but only for what the grade sets, so a
+     * group given a prefix in LuckPerms keeps it when the grade has none.
+     */
+    private static void addChat(PermissionHolder holder, String prefix, String suffix, int priority, boolean replace,
+                                int[] kept) {
+        if (prefix != null) chat(holder, NodeType.PREFIX, PrefixNode.builder(prefix, priority).build(), replace, kept);
+        if (suffix != null) chat(holder, NodeType.SUFFIX, SuffixNode.builder(suffix, priority).build(), replace, kept);
+    }
+
+    private static void chat(PermissionHolder holder, NodeType<?> type, Node node, boolean replace, int[] kept) {
+        List<Node> own = holder.getNodes().stream().filter(LuckPermsExport::decidedHere).filter(type::matches).toList();
+        if (replace) {
+            own.forEach(existing -> holder.data().remove(existing));
+        } else if (!own.isEmpty()) {
+            if (own.stream().noneMatch(existing -> existing.getKey().equals(node.getKey()))) kept[0]++;
+            return;
+        }
+        holder.data().add(node);
     }
 
     /**

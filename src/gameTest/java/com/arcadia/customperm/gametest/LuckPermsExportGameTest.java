@@ -76,10 +76,12 @@ public class LuckPermsExportGameTest {
 
             GradesConfig config = new GradesConfig();
             grade(config, BASE, 0, List.of(), Set.of("customperm.command.time"), Set.of("customperm.command.ban"));
+            config.grades.get(BASE).prefix = "&7[Base] ";
             grade(config, VIP, 42, List.of(BASE), Set.of("customperm.command.fly"), Set.of());
             grade(config, "cp_X_Bad", 0, List.of(), Set.of(), Set.of());
             config.userGrades.put(USER.toString(), new ArrayList<>(List.of(VIP)));
             config.userPermissions.put(USER.toString(), new LinkedHashSet<>(Set.of("customperm.command.home")));
+            config.userPrefixes.put(USER.toString(), "[Me] ");
 
             ExportPlan plan = ExportPlan.of(config, BASE)
                     .withExisting(LuckPermsTestSupport.await(LuckPermsExport.existingGroups()));
@@ -95,6 +97,7 @@ public class LuckPermsExportGameTest {
             List<String> base = LuckPermsTestSupport.groupNodes(BASE);
             expect(base, "customperm.command.time=true", "A grade's node must arrive as it is");
             expect(base, "customperm.command.ban=false", "A denied node must arrive set to false");
+            expect(base, "prefix.0.&7[Base] =true", "A grade's prefix must arrive at its weight");
             List<String> vip = LuckPermsTestSupport.groupNodes(VIP);
             expect(vip, "group." + BASE + "=true", "A parent must arrive as an inheritance node");
             expect(vip, "weight.42=true", "The weight must arrive on a group that had none");
@@ -106,6 +109,8 @@ public class LuckPermsExportGameTest {
             List<String> user = LuckPermsTestSupport.userNodes(USER);
             expect(user, "group." + VIP + "=true", "The player's grade must arrive as a parent");
             expect(user, "customperm.command.home=true", "The player's own node must arrive");
+            expect(user, "prefix." + ExportPlan.PLAYER_PRIORITY + ".[Me] =true",
+                    "The player's own prefix must arrive above every grade's");
             if (LuckPermsTestSupport.groupExists("cp_x_bad")) fail("A refused grade must not be written under another name.");
 
             ExportPlan.Outcome replaced = LuckPermsTestSupport.await(LuckPermsExport.write(plan, true, written -> { }));
@@ -114,13 +119,14 @@ public class LuckPermsExportGameTest {
             expect(vip, "customperm.command.fly=true", "Replacing must write the grade's value");
             if (vip.contains("customperm.command.kick=true")) fail("Replacing must clear the customperm nodes: " + vip);
             expect(vip, "essentials.fly=true", "Replacing must keep the nodes of other mods");
-            expect(vip, "prefix.10.[VIP]=true", "Replacing must keep the prefix");
+            expect(vip, "prefix.10.[VIP]=true", "Replacing must keep a prefix the grade does not set");
             expect(vip, "group." + BASE + "=true", "Replacing must write the parent back");
             expect(LuckPermsTestSupport.userNodes(USER), "group.default=true",
                     "Replacing must leave a player in the default group");
         } finally {
             LuckPermsTestSupport.clearGroupNodes(ExportPlan.LP_DEFAULT, List.of("group." + BASE));
-            LuckPermsTestSupport.clearNodes(USER, List.of("group." + VIP, "customperm.command.home"));
+            LuckPermsTestSupport.clearNodes(USER, List.of("group." + VIP, "customperm.command.home",
+                    "prefix." + ExportPlan.PLAYER_PRIORITY + ".[Me] "));
             LuckPermsTestSupport.cleanup(List.of(BASE, VIP), List.of());
         }
         helper.succeed();

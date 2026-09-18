@@ -76,6 +76,8 @@ public class LuckPermsImportGameTest {
             apply(LpEditOp.GROUP_PERM_ADD, VIP, "customperm.command.kick", "true", "", "3600");
             apply(LpEditOp.GROUP_PERM_ADD, VIP, "customperm.command.seed", "true", "world=nether", "0");
             apply(LpEditOp.GROUP_PREFIX_SET, VIP, "10", "[VIP]", "");
+            apply(LpEditOp.GROUP_PREFIX_SET, VIP, "5", "[Lesser]", "");
+            apply(LpEditOp.GROUP_META_SET, VIP, "rank", "gold", "");
             apply(LpEditOp.GROUP_PARENT_ADD, VIP, BASE, "");
             apply(LpEditOp.GROUP_WEIGHT_SET, VIP, "42");
             apply(LpEditOp.USER_PARENT_ADD, USER.toString(), VIP, "", "0");
@@ -98,6 +100,8 @@ public class LuckPermsImportGameTest {
             if (!vip.parents().equals(List.of(BASE))) fail("The group parent must arrive as a grade parent: " + vip);
             if (!vip.allow().isEmpty())
                 fail("A temporary and a contextual node must both be left behind: " + vip);
+            if (!"[VIP]".equals(vip.prefix()))
+                fail("The prefix LuckPerms shows first, the highest priority, must arrive: " + vip.prefix());
 
             if (!plan.exposeCommands().contains("gamemode") || !plan.exposeCommands().contains("weather"))
                 fail("A translated node must expose its command, or it grants nothing: " + plan.exposeCommands());
@@ -125,6 +129,7 @@ public class LuckPermsImportGameTest {
                 fail("The grades were not written.");
             if (grades.grades.get(VIP).weight != 42 || !grades.grades.get(VIP).parents.contains(BASE))
                 fail("The weight and the parent were not written.");
+            if (!"[VIP]".equals(grades.grades.get(VIP).prefix)) fail("The prefix was not written.");
             if (!grades.grades.get(BASE).deniedPermissions.contains("customperm.command.ban"))
                 fail("The denial was not written.");
             if (!grades.userGrades.getOrDefault(USER.toString(), List.of()).contains(VIP))

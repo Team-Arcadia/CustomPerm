@@ -15,7 +15,9 @@ import net.luckperms.api.model.group.Group;
 import net.luckperms.api.node.Node;
 import net.luckperms.api.node.NodeType;
 import net.luckperms.api.node.matcher.NodeMatcher;
+import net.luckperms.api.node.types.ChatMetaNode;
 import net.luckperms.api.node.types.InheritanceNode;
+import net.luckperms.api.node.types.PrefixNode;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -83,10 +85,12 @@ public final class LuckPermsImport {
             List<String> deniedParents = new ArrayList<>();
             Set<String> allow = new LinkedHashSet<>();
             Set<String> deny = new LinkedHashSet<>();
-            readNodes(group.getNodes(), plan, exposeCommands, parents, deniedParents, allow, deny,
+            Chat chat = new Chat();
+            readNodes(group.getNodes(), plan, exposeCommands, parents, deniedParents, allow, deny, chat,
                     "group " + group.getName());
             plan.grade(new ImportPlan.Grade(group.getName(), group.getWeight().orElse(0),
-                    List.copyOf(parents), List.copyOf(deniedParents), Set.copyOf(allow), Set.copyOf(deny)));
+                    List.copyOf(parents), List.copyOf(deniedParents), Set.copyOf(allow), Set.copyOf(deny),
+                    chat.prefix, chat.suffix));
         }
         return null;
     }
@@ -101,24 +105,32 @@ public final class LuckPermsImport {
         // can be imported are named instead: what is left is what CustomPerm would not have read anyway.
         CompletableFuture<Map<UUID, Collection<InheritanceNode>>> inherited =
                 api.getUserManager().searchAll(NodeMatcher.type(NodeType.INHERITANCE));
+        CompletableFuture<Map<UUID, Collection<ChatMetaNode<?, ?>>>> prefixes =
+                api.getUserManager().searchAll(NodeMatcher.type(NodeType.PREFIX));
+        CompletableFuture<Map<UUID, Collection<ChatMetaNode<?, ?>>>> suffixes =
+                api.getUserManager().searchAll(NodeMatcher.type(NodeType.SUFFIX));
         List<CompletableFuture<Map<UUID, Collection<Node>>>> permissions = List.of(
                 api.getUserManager().searchAll(NodeMatcher.keyStartsWith("customperm.")),
                 api.getUserManager().searchAll(NodeMatcher.keyStartsWith("minecraft.command.")),
                 api.getUserManager().searchAll(NodeMatcher.key("*")));
 
-        CompletableFuture<?>[] all = new CompletableFuture<?>[permissions.size() + 1];
+        CompletableFuture<?>[] all = new CompletableFuture<?>[permissions.size() + 3];
         all[0] = inherited;
-        for (int i = 0; i < permissions.size(); i++) all[i + 1] = permissions.get(i);
+        all[1] = prefixes;
+        all[2] = suffixes;
+        for (int i = 0; i < permissions.size(); i++) all[i + 3] = permissions.get(i);
 
         return CompletableFuture.allOf(all).thenApply(ignored -> {
             Map<UUID, List<Node>> byUser = new LinkedHashMap<>();
             inherited.join().forEach((uuid, nodes) -> byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
+            prefixes.join().forEach((uuid, nodes) -> byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
+            suffixes.join().forEach((uuid, nodes) -> byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
             for (CompletableFuture<Map<UUID, Collection<Node>>> search : permissions) {
                 search.join().forEach((uuid, nodes) ->
                         byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
             }
-            plan.note("On players, only what CustomPerm can read is looked at: their groups and their "
-                    + "customperm, minecraft.command and * nodes.");
+            plan.note("On players, only what CustomPerm can read is looked at: their groups, their prefix and "
+                    + "suffix, and their customperm, minecraft.command and * nodes.");
 
             for (Map.Entry<UUID, List<Node>> user : byUser.entrySet()) {
                 UUID uuid = user.getKey();
@@ -126,11 +138,13 @@ public final class LuckPermsImport {
                 List<String> deniedGrades = new ArrayList<>();
                 Set<String> allow = new LinkedHashSet<>();
                 Set<String> deny = new LinkedHashSet<>();
-                readNodes(user.getValue(), plan, exposeCommands, grades, deniedGrades, allow, deny,
+                Chat chat = new Chat();
+                readNodes(user.getValue(), plan, exposeCommands, grades, deniedGrades, allow, deny, chat,
                         "player " + uuid);
-                if (grades.isEmpty() && deniedGrades.isEmpty() && allow.isEmpty() && deny.isEmpty()) continue;
+                if (grades.isEmpty() && deniedGrades.isEmpty() && allow.isEmpty() && deny.isEmpty()
+                        && chat.prefix == null && chat.suffix == null) continue;
                 plan.player(new ImportPlan.Player(uuid.toString(), name(api, uuid), List.copyOf(grades),
-                        List.copyOf(deniedGrades), Set.copyOf(allow), Set.copyOf(deny)));
+                        List.copyOf(deniedGrades), Set.copyOf(allow), Set.copyOf(deny), chat.prefix, chat.suffix));
             }
             return null;
         });
@@ -146,6 +160,37 @@ public final class LuckPermsImport {
     // ------------------------------------------------------------------ nodes
 
     /**
+     * The prefix and suffix one holder keeps: a grade or a player carries one of each, so of several the
+     * one LuckPerms would show first, the highest priority, is the one imported. Ties go to the text that
+     * sorts first, so two reads of the same data import the same thing.
+     */
+    private static final class Chat {
+        private String prefix;
+        private int prefixPriority = Integer.MIN_VALUE;
+        private String suffix;
+        private int suffixPriority = Integer.MIN_VALUE;
+
+        /** Keeps the node when it beats the one kept so far; false when it does not, and is left behind. */
+        boolean offer(ChatMetaNode<?, ?> node) {
+            boolean isPrefix = node instanceof PrefixNode;
+            String kept = isPrefix ? prefix : suffix;
+            int keptPriority = isPrefix ? prefixPriority : suffixPriority;
+            if (kept != null && (node.getPriority() < keptPriority
+                    || (node.getPriority() == keptPriority && node.getMetaValue().compareTo(kept) >= 0))) {
+                return false;
+            }
+            if (isPrefix) {
+                prefix = node.getMetaValue();
+                prefixPriority = node.getPriority();
+            } else {
+                suffix = node.getMetaValue();
+                suffixPriority = node.getPriority();
+            }
+            return kept == null;
+        }
+    }
+
+    /**
      * Sorts one holder's nodes into what CustomPerm keeps and what it leaves behind. A node is left
      * behind when it would not mean here what it means there: a temporary node imported as permanent
      * would over-grant, a contextual one imported as global would grant everywhere, and a node another
@@ -153,7 +198,7 @@ public final class LuckPermsImport {
      */
     private static void readNodes(Collection<? extends Node> nodes, ImportPlan.Builder plan,
                                   boolean exposeCommands, List<String> parents, List<String> deniedParents,
-                                  Set<String> allow, Set<String> deny, String holder) {
+                                  Set<String> allow, Set<String> deny, Chat chat, String holder) {
         for (Node node : nodes) {
             if (node.getExpiry() != null) {
                 plan.temporary();
@@ -170,9 +215,19 @@ public final class LuckPermsImport {
                 plan.imported(false);
                 continue;
             }
+            if (node instanceof ChatMetaNode<?, ?> meta) {
+                if (chat.offer(meta)) {
+                    plan.imported(false);
+                } else {
+                    plan.other();
+                    plan.note("One prefix and one suffix per holder: the one with the highest priority is "
+                            + "imported, the others are not.");
+                }
+                continue;
+            }
             if (!NodeType.PERMISSION.matches(node)) {
                 plan.other();
-                plan.note("Prefixes, suffixes, meta and display names have no equivalent and are not imported.");
+                plan.note("Meta and display names have no equivalent and are not imported.");
                 continue;
             }
             String translated = ImportPlan.translate(node.getKey());

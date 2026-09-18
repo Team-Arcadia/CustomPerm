@@ -116,6 +116,8 @@ public final class ImportAdmin {
                 target.parents.clear();
                 target.deniedParents.clear();
                 target.weight = source.weight();
+                target.prefix = null;
+                target.suffix = null;
             } else {
                 // A grade that already exists keeps its weight: the number an admin set by hand here is
                 // a decision, and silently taking the one from LuckPerms would undo it.
@@ -125,6 +127,9 @@ public final class ImportAdmin {
             target.deniedPermissions.addAll(source.deny());
             addAll(target.parents, source.parents());
             addAll(target.deniedParents, source.deniedParents());
+            // Adding keeps a prefix already set here, like the weight: it is what the admin chose.
+            if (target.prefix == null) target.prefix = source.prefix();
+            if (target.suffix == null) target.suffix = source.suffix();
             gradesWritten++;
         }
 
@@ -135,6 +140,8 @@ public final class ImportAdmin {
                 grades().userDeniedGrades.remove(source.uuid());
                 grades().userPermissions.remove(source.uuid());
                 grades().userDeniedPermissions.remove(source.uuid());
+                grades().userPrefixes.remove(source.uuid());
+                grades().userSuffixes.remove(source.uuid());
             }
             addAll(grades().userGrades.computeIfAbsent(source.uuid(), k -> new ArrayList<>()), source.grades());
             addAll(grades().userDeniedGrades.computeIfAbsent(source.uuid(), k -> new ArrayList<>()),
@@ -143,6 +150,8 @@ public final class ImportAdmin {
                     .addAll(source.allow());
             grades().userDeniedPermissions.computeIfAbsent(source.uuid(), k -> new LinkedHashSet<>())
                     .addAll(source.deny());
+            if (source.prefix() != null) grades().userPrefixes.putIfAbsent(source.uuid(), source.prefix());
+            if (source.suffix() != null) grades().userSuffixes.putIfAbsent(source.uuid(), source.suffix());
             playersWritten++;
         }
         // An entry left empty by a player who only carried entries that were not imported would show them

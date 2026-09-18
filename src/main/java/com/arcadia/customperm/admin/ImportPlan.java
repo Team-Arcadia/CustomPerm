@@ -28,14 +28,14 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
     public static final ImportPlan EMPTY =
             new ImportPlan(List.of(), List.of(), Set.of(), List.of(), Counts.NONE);
 
-    /** One LuckPerms group as the grade it would become. */
+    /** One LuckPerms group as the grade it would become; {@code prefix} and {@code suffix} are null for none. */
     public record Grade(String name, int weight, List<String> parents, List<String> deniedParents,
-                        Set<String> allow, Set<String> deny) {
+                        Set<String> allow, Set<String> deny, String prefix, String suffix) {
     }
 
     /** One LuckPerms user as what they would hold; {@code name} is display only, the UUID is the key. */
     public record Player(String uuid, String name, List<String> grades, List<String> deniedGrades,
-                         Set<String> allow, Set<String> deny) {
+                         Set<String> allow, Set<String> deny, String prefix, String suffix) {
     }
 
     /**
@@ -74,8 +74,8 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
         } else {
             lines.add(counts.skipped() + " entrie(s) are left behind: " + counts.temporary + " temporary, "
                     + counts.contextual + " contextual, " + counts.foreign + " belonging to other mods, "
-                    + counts.other + " of a kind CustomPerm has no equivalent for (prefix, suffix, meta, "
-                    + "display name, tracks).");
+                    + counts.other + " of a kind CustomPerm has no equivalent for (meta, display name, "
+                    + "tracks).");
         }
         lines.addAll(skipped);
         return lines;
