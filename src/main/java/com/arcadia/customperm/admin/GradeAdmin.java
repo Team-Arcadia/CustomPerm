@@ -366,12 +366,16 @@ public final class GradeAdmin {
             g.weight = grade.weight;
             g.parents = new ArrayList<>(grade.parents);
             g.deniedParents = new ArrayList<>(grade.deniedParents);
+            g.prefix = grade.prefix;
+            g.suffix = grade.suffix;
             copy.grades.put(name, g);
         });
         source.userGrades.forEach((uuid, list) -> copy.userGrades.put(uuid, new ArrayList<>(list)));
         source.userDeniedGrades.forEach((uuid, list) -> copy.userDeniedGrades.put(uuid, new ArrayList<>(list)));
         source.userPermissions.forEach((uuid, nodes) -> copy.userPermissions.put(uuid, new HashSet<>(nodes)));
         source.userDeniedPermissions.forEach((uuid, nodes) -> copy.userDeniedPermissions.put(uuid, new HashSet<>(nodes)));
+        copy.userPrefixes.putAll(source.userPrefixes);
+        copy.userSuffixes.putAll(source.userSuffixes);
         return copy;
     }
 
@@ -386,6 +390,10 @@ public final class GradeAdmin {
         target.userPermissions.putAll(saved.userPermissions);
         target.userDeniedPermissions.clear();
         target.userDeniedPermissions.putAll(saved.userDeniedPermissions);
+        target.userPrefixes.clear();
+        target.userPrefixes.putAll(saved.userPrefixes);
+        target.userSuffixes.clear();
+        target.userSuffixes.putAll(saved.userSuffixes);
     }
 
     /** Outcome of resolving a player name: the profile, or why there is none. */

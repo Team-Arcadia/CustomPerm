@@ -34,6 +34,13 @@ public class GradesConfig {
     public Map<String, Set<String>> userPermissions = new HashMap<>();
     /** UUID string -> DENY nodes carried by that player alone. */
     public Map<String, Set<String>> userDeniedPermissions = new HashMap<>();
+    /**
+     * UUID string -> chat prefix carried by that player alone, above whatever their grades give, like a
+     * prefix set on a LuckPerms user. Colour codes use {@code &}; see {@code chat/NameDecoration}.
+     */
+    public Map<String, String> userPrefixes = new HashMap<>();
+    /** UUID string -> chat suffix carried by that player alone. */
+    public Map<String, String> userSuffixes = new HashMap<>();
 
     public static class Grade {
         public String name;
@@ -59,6 +66,14 @@ public class GradesConfig {
          * predates the field.
          */
         public int weight = 0;
+        /**
+         * Shown before the name of the players who hold this grade, in chat and wherever the game shows
+         * their name, when name decoration is on. Among several grades the heaviest decides, as for a node;
+         * absent from a file, it is null, which is no prefix.
+         */
+        public String prefix;
+        /** Shown after the name, resolved like {@link #prefix}. */
+        public String suffix;
     }
 
     public void normalize() {
@@ -85,6 +100,8 @@ public class GradesConfig {
             g.deniedParents.removeIf(parent -> parent.equals(g.name));
             java.util.Set<String> denied = new java.util.LinkedHashSet<>(g.deniedParents);
             if (denied.size() != g.deniedParents.size()) g.deniedParents = new ArrayList<>(denied);
+            g.prefix = emptyToNull(g.prefix);
+            g.suffix = emptyToNull(g.suffix);
         }
         normalizeUserGrades(userGrades);
         if (userDeniedGrades == null) userDeniedGrades = new HashMap<>();
@@ -93,6 +110,20 @@ public class GradesConfig {
         if (userDeniedPermissions == null) userDeniedPermissions = new HashMap<>();
         normalizeUserNodes(userPermissions);
         normalizeUserNodes(userDeniedPermissions);
+        if (userPrefixes == null) userPrefixes = new HashMap<>();
+        if (userSuffixes == null) userSuffixes = new HashMap<>();
+        normalizeUserTexts(userPrefixes);
+        normalizeUserTexts(userSuffixes);
+    }
+
+    /** An empty prefix is no prefix, stored as absent so the file does not carry it. */
+    private static String emptyToNull(String text) {
+        return text == null || text.isEmpty() ? null : text;
+    }
+
+    private static void normalizeUserTexts(Map<String, String> texts) {
+        texts.keySet().removeIf(java.util.Objects::isNull);
+        texts.values().removeIf(text -> text == null || text.isEmpty());
     }
 
     private static void normalizeUserGrades(Map<String, List<String>> assignments) {

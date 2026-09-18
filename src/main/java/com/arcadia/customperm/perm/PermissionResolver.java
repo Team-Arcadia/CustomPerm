@@ -14,7 +14,9 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.Map;
 import java.util.UUID;
+import java.util.function.BinaryOperator;
 
 /**
  * Multi-grade resolution, pure Java with no Minecraft or NeoForge import (AR8, AC6).
@@ -48,6 +50,12 @@ import java.util.UUID;
  *   <li>Nothing matching at all is {@link Tristate#UNSET}: the caller decides, usually from the
  *       operator level.</li>
  * </ol>
+ *
+ * <p>A chat prefix or suffix ({@link #prefix}, {@link #suffix}) is resolved by the same ranking with the
+ * specificity step dropped, there being no specificity between two prefixes: the player's own above every
+ * grade, then the heaviest grade, then the nearest ancestor inside a chain, refusals and the default grade
+ * applying as they do to a node. Between two grades of equal weight the text that sorts first wins, so the
+ * answer never depends on the order grades were assigned in.</p>
  */
 public final class PermissionResolver {
 
@@ -78,19 +86,49 @@ public final class PermissionResolver {
 
         List<String> refused = grades.userDeniedGrades.get(user);
 
-        Ranked own = new Ranked();
-        own.offer(specificity(grades.userPermissions.get(user), node),
+        Ranked<Tristate> own = new Ranked<>(DENY_WINS);
+        offerNode(own, specificity(grades.userPermissions.get(user), node),
                 specificity(grades.userDeniedPermissions.get(user), node), PLAYER_RANK);
         List<String> assigned = grades.userGrades.get(user);
         if (assigned != null) {
-            offerGrades(own, grades, assigned, node, hasDefault ? defaultGrade : null, refused);
+            offerGrades(own, NODES, grades, assigned, node, hasDefault ? defaultGrade : null, refused);
         }
-        if (own.verdict != Tristate.UNSET) return own.verdict;
+        if (own.value != null) return own.value;
 
         if (!hasDefault) return Tristate.UNSET;
-        Ranked fallback = new Ranked();
-        offerGrades(fallback, grades, List.of(defaultGrade), node, null, refused);
-        return fallback.verdict;
+        Ranked<Tristate> fallback = new Ranked<>(DENY_WINS);
+        offerGrades(fallback, NODES, grades, List.of(defaultGrade), node, null, refused);
+        return fallback.value == null ? Tristate.UNSET : fallback.value;
+    }
+
+    /** The chat prefix of {@code uuid}, or {@code null} when neither they nor any grade of theirs has one. */
+    public static String prefix(GradesConfig grades, UUID uuid, String defaultGrade) {
+        return meta(grades, uuid, defaultGrade, grades.userPrefixes, PREFIX);
+    }
+
+    /** The chat suffix of {@code uuid}, or {@code null} when neither they nor any grade of theirs has one. */
+    public static String suffix(GradesConfig grades, UUID uuid, String defaultGrade) {
+        return meta(grades, uuid, defaultGrade, grades.userSuffixes, SUFFIX);
+    }
+
+    private static String meta(GradesConfig grades, UUID uuid, String defaultGrade, Map<String, String> own,
+                               Reader<String> reader) {
+        if (uuid == null) return null;
+        boolean hasDefault = defaultGrade != null && !defaultGrade.isEmpty();
+        String user = uuid.toString();
+        String mine = own.get(user);
+        if (mine != null && !mine.isEmpty()) return mine;
+
+        List<String> refused = grades.userDeniedGrades.get(user);
+        Ranked<String> held = new Ranked<>(FIRST_SORTED);
+        List<String> assigned = grades.userGrades.get(user);
+        if (assigned != null) {
+            offerGrades(held, reader, grades, assigned, null, hasDefault ? defaultGrade : null, refused);
+        }
+        if (held.value != null || !hasDefault) return held.value;
+        Ranked<String> fallback = new Ranked<>(FIRST_SORTED);
+        offerGrades(fallback, reader, grades, List.of(defaultGrade), null, null, refused);
+        return fallback.value;
     }
 
     /** True only for an explicit ALLOW from the assigned grades, ignoring any default grade. */
@@ -98,8 +136,41 @@ public final class PermissionResolver {
         return check(grades, uuid, node, null) == Tristate.ALLOW;
     }
 
-    private static void offerGrades(Ranked best, GradesConfig grades, List<String> gradeNames, String node,
-                                    String skip, List<String> refused) {
+    /**
+     * What one grade says about the thing being resolved, offered at {@code rank}. The key is the node
+     * for a permission and unused for a prefix; it is passed rather than captured so the readers stay
+     * constants and a permission check allocates nothing for them.
+     */
+    @FunctionalInterface
+    private interface Reader<T> {
+        void read(Ranked<T> into, GradesConfig.Grade grade, String key, long rank);
+    }
+
+    private static final Reader<Tristate> NODES = (into, grade, node, rank) ->
+            offerNode(into, specificity(grade.permissions, node), specificity(grade.deniedPermissions, node), rank);
+    private static final Reader<String> PREFIX = (into, grade, key, rank) -> offerText(into, grade.prefix, rank);
+    private static final Reader<String> SUFFIX = (into, grade, key, rank) -> offerText(into, grade.suffix, rank);
+
+    /** Between equal ranks, a DENY wins over an ALLOW (INVARIANT-101). */
+    private static final BinaryOperator<Tristate> DENY_WINS =
+            (kept, offered) -> offered == Tristate.DENY ? Tristate.DENY : kept;
+    /** Between equal ranks, the text that sorts first: any fixed rule would do, as long as it ignores order. */
+    private static final BinaryOperator<String> FIRST_SORTED =
+            (kept, offered) -> offered.compareTo(kept) < 0 ? offered : kept;
+
+    /** Inside one holder the same rule applies, DENY included: allowing and denying at one level refuses. */
+    private static void offerNode(Ranked<Tristate> into, int allow, int deny, long rank) {
+        if (allow == NONE && deny == NONE) return;
+        into.offer(Math.max(allow, deny), deny >= allow ? Tristate.DENY : Tristate.ALLOW, rank);
+    }
+
+    /** A prefix has no specificity: every one is offered at the same reach, so only the rank decides. */
+    private static void offerText(Ranked<String> into, String text, long rank) {
+        if (text != null && !text.isEmpty()) into.offer(EXACT, text, rank);
+    }
+
+    private static <T> void offerGrades(Ranked<T> best, Reader<T> reader, GradesConfig grades,
+                                        List<String> gradeNames, String node, String skip, List<String> refused) {
         for (String gradeName : gradeNames) {
             if (gradeName == null || gradeName.equals(skip)) continue;
             if (refused != null && refused.contains(gradeName)) continue;
@@ -107,14 +178,13 @@ public final class PermissionResolver {
             if (grade == null) continue;
             if (grade.parents.isEmpty()) {
                 // The overwhelming case, and the one that must stay free of the walk's allocations.
-                best.offer(specificity(grade.permissions, node), specificity(grade.deniedPermissions, node),
-                        grade.weight);
+                reader.read(best, grade, node, grade.weight);
                 continue;
             }
             // A chain answers with one verdict, which then competes with the other grades at the weight of
             // the grade the player actually holds: what a parent says arrives through its child.
-            Ranked chain = new Ranked();
-            walkChain(chain, grades, gradeName, grade, node, refused);
+            Ranked<T> chain = new Ranked<>(best.onTie);
+            walkChain(chain, reader, grades, gradeName, grade, node, refused);
             best.merge(chain, grade.weight);
         }
     }
@@ -125,8 +195,8 @@ public final class PermissionResolver {
      * a child override what it inherits. A grade already seen is not walked again, so a cycle stops at the
      * grade it comes back to instead of recursing, and {@link #MAX_INHERITANCE_DEPTH} bounds the rest.
      */
-    private static void walkChain(Ranked chain, GradesConfig grades, String rootName, GradesConfig.Grade root,
-                                  String node, List<String> refused) {
+    private static <T> void walkChain(Ranked<T> chain, Reader<T> reader, GradesConfig grades, String rootName,
+                                      GradesConfig.Grade root, String node, List<String> refused) {
         // Grades are followed by the key they are stored under, never by their name field: a hand-edited
         // file can disagree on the two, and the key is what a parent entry names.
         Set<String> seen = new HashSet<>();
@@ -138,7 +208,7 @@ public final class PermissionResolver {
         for (int depth = 0; depth <= MAX_INHERITANCE_DEPTH && !level.isEmpty(); depth++) {
             List<GradesConfig.Grade> next = new ArrayList<>();
             for (GradesConfig.Grade grade : level) {
-                chain.offer(specificity(grade.permissions, node), specificity(grade.deniedPermissions, node), -depth);
+                reader.read(chain, grade, node, -depth);
                 // Read where it is declared: a grade nearer to the holder has already been walked, so its
                 // refusal closes a farther one, never the other way round.
                 seen.addAll(grade.deniedParents);
@@ -154,38 +224,37 @@ public final class PermissionResolver {
 
     /**
      * The best entry seen so far in one layer: the most specific wins, the highest rank breaks a tie on
-     * specificity, and a DENY breaks a tie on rank. A rank is a grade weight, or {@link #PLAYER_RANK} for
-     * the nodes the player carries themselves. Written so the outcome does not depend on the order things
-     * are offered in, which is the order grades were assigned in and carries no meaning.
+     * specificity, and {@code onTie} breaks a tie on rank. A rank is a grade weight, or {@link #PLAYER_RANK}
+     * for what the player carries themselves. Written so the outcome does not depend on the order things
+     * are offered in, which is the order grades were assigned in and carries no meaning. Permissions and
+     * prefixes are both resolved here, so the two can never rank holders differently.
      */
-    private static final class Ranked {
+    private static final class Ranked<T> {
+        private final BinaryOperator<T> onTie;
         private int specificity = NONE;
         private long rank;
-        private Tristate verdict = Tristate.UNSET;
+        private T value;
 
-        void offer(int allow, int deny, long rank) {
-            if (allow == NONE && deny == NONE) return;
-            // Inside one holder the same rule applies, DENY included: a grade that both allows and denies
-            // a node at the same level refuses it.
-            offer(Math.max(allow, deny), deny >= allow ? Tristate.DENY : Tristate.ALLOW, rank);
+        Ranked(BinaryOperator<T> onTie) {
+            this.onTie = onTie;
         }
 
-        /** Takes the verdict of a resolved inheritance chain as one entry, at the rank of the grade held. */
-        void merge(Ranked chain, long rank) {
-            if (chain.verdict != Tristate.UNSET) offer(chain.specificity, chain.verdict, rank);
+        /** Takes the answer of a resolved inheritance chain as one entry, at the rank of the grade held. */
+        void merge(Ranked<T> chain, long rank) {
+            if (chain.value != null) offer(chain.specificity, chain.value, rank);
         }
 
-        private void offer(int reach, Tristate candidate, long rank) {
+        void offer(int reach, T candidate, long rank) {
             if (reach > specificity) {
                 specificity = reach;
                 this.rank = rank;
-                verdict = candidate;
+                value = candidate;
             } else if (reach == specificity) {
                 if (rank > this.rank) {
                     this.rank = rank;
-                    verdict = candidate;
-                } else if (rank == this.rank && candidate == Tristate.DENY) {
-                    verdict = Tristate.DENY;
+                    value = candidate;
+                } else if (rank == this.rank) {
+                    value = onTie.apply(value, candidate);
                 }
             }
         }
