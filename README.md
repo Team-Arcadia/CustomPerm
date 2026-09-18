@@ -323,6 +323,24 @@ as a global one; a prefix limited to a world shows there before the same holder'
 priority, and names are rebuilt on a world change. `parent remove|removedeny` and `undenygrade` take the same
 `world=` to name the one limited to it, and the prefix `remove` and `clear` the same `in <world>`.
 
+**Other contexts.** `world=` is one context among several, joined with a comma after the node, grade or
+parent: `gamemode=creative` (`survival`, `creative`, `adventure`, `spectator`), and any key a static context
+sets for the whole server, like LuckPerms' `static-contexts` (`region=eu`). Two values of one key are either
+one: `world=the_nether,world=the_end` applies in both; two keys must both hold:
+`world=the_nether,gamemode=creative`. At the same specificity and holder, an entry naming more keys outranks
+one naming fewer. A key nothing on this server sets is refused, since the entry would apply nowhere; `server=`
+waits for cluster mode. The command tree and names follow a change of game mode as they follow a change of
+world. For prefixes, `in <world>` stays, and any other context goes quoted after `where`:
+`/customperm grade prefix vip where "gamemode=creative" add 5 [Builder] `. The world box of the pages takes
+the same text (`the_nether,gamemode=creative`).
+
+| Command | Description |
+|---|---|
+| `/customperm contexts` | Lists the static contexts, true for every player here. |
+| `/customperm contexts <player>` | What holds for that player now: world, game mode and the static contexts. |
+| `/customperm contexts set <key> <value>` | Sets a static context (`region eu`); `world`, `gamemode` and `server` cannot be set. |
+| `/customperm contexts unset <key>` | Removes it; entries limited to it apply nowhere until it is set again. |
+
 ### Tracks
 
 A track is a ladder of grades, lowest first, like a LuckPerms track. It grants nothing by itself: promoting
@@ -403,12 +421,15 @@ node would grant nothing.
 Prefixes and suffixes carry over with their priority and expiry. Of two at the same priority on one holder,
 which CustomPerm cannot hold, the text that sorts first is imported and the report says so.
 
-Temporary entries carry over with their expiry: a node, a player's group, a group's parent, a refusal. Entries limited to one
-world carry over with it, temporary ones with their expiry: a node on a group or a player, a player's group,
-a group's parent, a refusal, and a prefix or suffix. Tracks carry over with their
+Temporary entries carry over with their expiry: a node, a player's group, a group's parent, a refusal. Entries limited to a
+context carry over with it, temporary ones with their expiry: a node on a group or a player, a player's group,
+a group's parent, a refusal, and a prefix or suffix. On NeoForge LuckPerms names the dimension
+`dimension-type`, which becomes `world=` here; `gamemode` stays as it is, and another key comes over when a
+static context sets it here. Tracks carry over with their
 groups in order; adding keeps a track that already exists here as it is, replacing takes LuckPerms' order.
 
-What is left behind, and said in the report rather than dropped in silence: any other context (`server=`, several worlds); meta,
+What is left behind, and said in the report rather than dropped in silence: LuckPerms' `world` context, which on NeoForge is the save's name and not a dimension, a `server=` context,
+and a key no static context sets here; meta,
 display names, and the nodes other mods read without declaring them to NeoForge, which nothing here would
 read back. Nodes mods declared are imported as they are, on groups and players, since CustomPerm answers them. On players, only
 what CustomPerm can read is looked at at all: their groups, their prefixes and suffixes, their `customperm`,
@@ -446,8 +467,9 @@ ones temporary, and adding keeps one LuckPerms already has at the same priority.
 suffixes only where the grade sets some,
 and never meta, a temporary entry, a context other than one world, or the nodes of other mods. A temporary
 entry is written temporary, and one that has already run out is not written. An entry limited to a world is
-written with LuckPerms' `world` context (`the_nether` for a vanilla world, the full id for a modded one),
-and replacing clears the customperm nodes and parents limited to one world along with the global ones.
+written with LuckPerms' `dimension-type` context, the dimension on NeoForge (`the_nether` for a vanilla
+world, the full id for a modded one); a game mode and a static context go as they are. Replacing clears the
+customperm nodes and parents limited to such contexts along with the global ones.
 
 It runs in the background, groups before players, one load and one save per holder, and reports where it
 stopped if it fails. One export runs at a time. An export that would take away your own `customperm.admin`
@@ -989,7 +1011,7 @@ Performance benchmarks can be run with:
 | LuckPerms selection | Internal backend when LP is absent, version parsing, minimum version gate, stable backend selection. |
 | GameTests, both modes | Command exposure and removal with a non-op player, operator preservation, `/customperm` refused to non-ops, reconnection, aliases run with op-4 elevation by node holders only and unable to reach `/customperm`, step editing, recursion and shadowing guards, reload of hand-edited `aliases.json`, rate limits (refusal message, shared counter per root, per-player isolation, console exemption, window expiry, reconnection, repeated reloads, rule removal, aliases), all-or-nothing reload, concurrent reload refusal, unsaved changes after a failed reload, `null` entries, command-tree repush on reload, admin alerts in operators' chat, GUI and editor packets refused to non-operators, diagnostics output, tab-completion of every `/customperm` argument and no suggestions for non-operators, operators refused an exposed command, an alias, `/customperm` or an interface area by an explicit DENY while the console keeps access, a denied `*` blocking everything but explicit allows, admin changes from commands and the interface recorded with refusals, player commands recorded only when on and masked by default, files on disk, reload from disk skipping unreadable lines, retention, Logs page switches gated by their node, `/lp` changes recorded (LuckPerms mode), operators without the nodes refused `/customperm` and the interface while the console keeps access, each area needing its own `customperm.manage` node for the command and the page alike, the nodes alone opening nothing to a non-operator, the upgrade notice announced once for a configuration written before 1.1.0 and the configuration stamped afterwards. |
 | GameTests, internal mode | Grade commands, union of grades, most specific entry wins, grade weight breaking a tie, nodes carried by a player, the Players page and its lockout guard, grade parents with inheritance applied live and cycles refused, refusals applied live and contradictions answered, every wildcard form, editor without LuckPerms, `gateAllCommands` and an allowed `*`, a default grade restricting an accidental operator, refused self-lockout by command and interface. Chat prefixes: `&` codes and the name format, the name chat binds decorated from the grades with the heaviest grade and the player's own winning at equal priority and a higher priority winning over both, stacking, removal by priority, the commands with their listing, a temporary prefix expiring and swept, the tab list, the switch and the format applied at once, and the Chat tabs through the interface with priority and time left. Temporary entries: durations read and refused, a grant expiring before any sweep, the sweep tidying the file, logging and resending the tree, a held grade and a refusal expiring, a grade parent and a grade's refusal expiring and swept, and durations through the interface with the time left read back. Entries limited to a world: contexts read and refused, a node granted in the Nether only, the command tree resent and the verdict changing as a real player teleports between worlds, a grade and a player's own DENY held in one world, removal by world, a deleted grade leaving no world assignment behind, and a parent, a player's refusal and a prefix limited to the Nether followed as the player moves, the name included. Tracks: building one, a real player promoted and demoted along it with the command tree following, a temporary rung given up with its expiry, several rungs and a refused grade refused, a deleted grade leaving the ladder, and promote and demote from the Players page. Permissions of other mods: CustomPerm selected as handler, nodes declared under a foreign namespace answered with their default, an exact DENY, a wildcard ALLOW, a number node and an offline check. |
-| GameTests, LuckPerms mode | Import from a source with one of everything: what carries over, what is left behind with its reason, reading writing nothing, what lands in the configuration, the three nodes asked together, and a spent preview refused. Export into a real LuckPerms: groups, weight, parents, denials, the default group and a player's nodes written, a renamed grade refused, adding keeping LuckPerms' own values and prefix, replacing clearing only the customperm nodes, progress per holder, the two nodes asked together, the lockout guard, and a spent preview refused. In-game editor against a real LuckPerms: groups, nodes with contexts and expiry, inheritance, meta, prefix and suffix, weight, display name, player groups and primary group, tracks, promote and demote, write gating by node and level, edit and sync rate limits; command tree resent after a LuckPerms change; `deny` and `internal` fallback when LuckPerms becomes unavailable. A LuckPerms prefix reaching the name without a reconnect; several prefixes carried by the import with their priority, and exported with theirs, a temporary one temporary. Temporary nodes, groups and group parents imported with their expiry and exported temporary. Nodes, a player's grade and refusal, a group's parent and refusal, and a prefix limited to a world imported and exported with LuckPerms' `world` context, a `server=` node left behind unexposed. A track imported and exported with its groups in order. A node another mod declared imported from a group and a player, an undeclared one left behind, and LuckPerms keeping the permission handler. |
+| GameTests, LuckPerms mode | Import from a source with one of everything: what carries over, what is left behind with its reason, reading writing nothing, what lands in the configuration, the three nodes asked together, and a spent preview refused. Export into a real LuckPerms: groups, weight, parents, denials, the default group and a player's nodes written, a renamed grade refused, adding keeping LuckPerms' own values and prefix, replacing clearing only the customperm nodes, progress per holder, the two nodes asked together, the lockout guard, and a spent preview refused. In-game editor against a real LuckPerms: groups, nodes with contexts and expiry, inheritance, meta, prefix and suffix, weight, display name, player groups and primary group, tracks, promote and demote, write gating by node and level, edit and sync rate limits; command tree resent after a LuckPerms change; `deny` and `internal` fallback when LuckPerms becomes unavailable. A LuckPerms prefix reaching the name without a reconnect; several prefixes carried by the import with their priority, and exported with theirs, a temporary one temporary. Temporary nodes, groups and group parents imported with their expiry and exported temporary. Nodes, a player's grade and refusal, a group's parent and refusal, and a prefix limited to a world imported and exported with LuckPerms' `dimension-type` context, a node limited to a game mode, LuckPerms' `world` context (the save's name) left behind, a `server=` node left behind unexposed. A track imported and exported with its groups in order. A node another mod declared imported from a group and a player, an undeclared one left behind, and LuckPerms keeping the permission handler. |
 | Performance | `PermissionResolver.resolve()` and concurrent config snapshot reads via JMH, including a check made from a world with no entry limited to one (the path every server takes) and one a world node decides. |
 
 ### Continuous integration
