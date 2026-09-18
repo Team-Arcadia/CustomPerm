@@ -51,7 +51,7 @@ final class ChatFields {
                 .hint(Component.literal("priority"));
         this.duration = new CpEditBox(Component.literal("Duration"), 16)
                 .hint(Component.literal("for, e.g. 30d"));
-        this.world = new CpEditBox(Component.literal("World"), 64)
+        this.world = new CpEditBox(Component.literal("World"), 128)
                 .hint(Component.literal("in, e.g. the_nether"));
         this.list = new CpList<ChatLine>(Component.literal("Prefixes and suffixes"), 14)
                 .renderer(this::renderLine)
@@ -61,7 +61,7 @@ final class ChatFields {
                 .onSelect(line -> {
                     text.setValue(line.text());
                     priority.setValue(String.valueOf(line.priority()));
-                    world.setValue(com.arcadia.customperm.perm.Contexts.describe(line.context()));
+                    world.setValue(com.arcadia.customperm.perm.Contexts.typed(line.context()));
                     onRebuild.run();
                 });
     }

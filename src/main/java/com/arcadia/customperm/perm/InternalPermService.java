@@ -13,6 +13,7 @@ import com.arcadia.customperm.config.ConfigManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.level.Level;
 
 import java.util.Map;
@@ -20,8 +21,13 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class InternalPermService implements PermissionService {
     private final ConfigManager config;
-    /** One per dimension, built once: a permission check must not build a string per call. */
-    private final Map<ResourceKey<Level>, Contexts> byWorld = new ConcurrentHashMap<>();
+    /**
+     * One per dimension and game mode, built once: a permission check must not build a string per call. The
+     * array is indexed by the game mode's id.
+     */
+    private final Map<ResourceKey<Level>, Contexts[]> byWorld = new ConcurrentHashMap<>();
+    /** The static contexts the cache was built from; the settings replace the map whole when they change. */
+    private volatile Map<String, String> builtFrom;
 
     public InternalPermService(ConfigManager config) {
         this.config = config;
@@ -34,10 +40,25 @@ public class InternalPermService implements PermissionService {
                 contexts(player));
     }
 
-    /** Where the player stands, not where the command runs: {@code execute in} does not change what they hold. */
-    Contexts contexts(ServerPlayer player) {
-        return byWorld.computeIfAbsent(player.level().dimension(),
-                key -> Contexts.world(key.location().toString()));
+    /**
+     * Where the player stands, not where the command runs: {@code execute in} does not change what they hold.
+     * Their dimension, their game mode, and the server's static contexts.
+     */
+    public Contexts contexts(ServerPlayer player) {
+        Map<String, String> statics = config.getSettings().staticContexts;
+        if (statics != builtFrom) {
+            byWorld.clear();
+            builtFrom = statics;
+        }
+        ResourceKey<Level> world = player.level().dimension();
+        Contexts[] modes = byWorld.computeIfAbsent(world, key -> new Contexts[GameType.values().length]);
+        GameType mode = player.gameMode.getGameModeForPlayer();
+        Contexts built = modes[mode.getId()];
+        if (built == null) {
+            built = Contexts.of(world.location().toString(), mode.getName(), statics);
+            modes[mode.getId()] = built;
+        }
+        return built;
     }
 
     @Override

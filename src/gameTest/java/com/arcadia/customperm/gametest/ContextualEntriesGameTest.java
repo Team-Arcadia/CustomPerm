@@ -304,6 +304,90 @@ public class ContextualEntriesGameTest {
         helper.succeed();
     }
 
+    /** A game mode, a static context and several worlds, read the way the player stands. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "customperm_contextual")
+    public static void aGameModeAStaticContextAndSeveralWorlds(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        var settings = CustomPerm.configManager.getSettings();
+        java.util.Map<String, String> staticsBefore = settings.staticContexts;
+        String uuid = null;
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_c_modes", 0);
+             CommandExposureGameTest.Exposure ignored = CommandExposureGameTest.Exposure.of(server, COMMAND)) {
+            uuid = player.uuid().toString();
+            grades.grades.remove(GRADE);
+            ServerCommands.run(server, "customperm grade create " + GRADE);
+            ServerCommands.run(server, "customperm grade assign cp_c_modes " + GRADE);
+            teleport(server, player, Level.OVERWORLD);
+            player.player().setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+
+            expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " gamemode=creative"),
+                    "Added " + NODE + " -> " + GRADE + " in creative");
+            check(!player.canUse(COMMAND), "a node limited to creative must not apply in survival");
+            player.player().setGameMode(net.minecraft.world.level.GameType.CREATIVE);
+            check(player.canUse(COMMAND), "it must apply once the player is in creative");
+            expect(ServerCommands.run(server, "customperm contexts cp_c_modes"), "gamemode=creative");
+            ServerCommands.run(server, "customperm grade removeperm " + GRADE + " " + NODE + " gamemode=creative");
+
+            expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " gamemode=flying"),
+                    "Invalid context");
+            expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " region=eu"),
+                    "Nothing on this server sets 'region'");
+            expect(ServerCommands.run(server, "customperm contexts set world nether"), "cannot be a static context");
+            expect(ServerCommands.run(server, "customperm contexts set region EU"),
+                    "region=eu now holds for every player on this server");
+            expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " region=eu"),
+                    "Added " + NODE + " -> " + GRADE + " in region=eu");
+            check(player.canUse(COMMAND), "a node limited to a static context that holds must apply");
+            expect(ServerCommands.run(server, "customperm contexts unset region"), "region no longer holds here");
+            check(!player.canUse(COMMAND), "and stop once it no longer holds");
+            ServerCommands.run(server, "customperm grade removeperm " + GRADE + " " + NODE + " region=eu");
+
+            expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " world=the_end,world=the_nether"),
+                    "Added " + NODE + " -> " + GRADE + " in the_end or the_nether");
+            check(!player.canUse(COMMAND), "two worlds must not include the overworld");
+            teleport(server, player, Level.NETHER);
+            check(player.canUse(COMMAND), "either world must do");
+            expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " world=the_nether gamemode=creative"),
+                    "One context at most");
+        } finally {
+            settings.staticContexts = staticsBefore;
+            grades.grades.remove(GRADE);
+            if (uuid != null) grades.userGrades.remove(uuid);
+            ConfigAdmin.persist();
+        }
+        helper.succeed();
+    }
+
+    /**
+     * What an export writes must be what LuckPerms reads: on NeoForge it names the dimension {@code dimension-type},
+     * and its {@code world} is the save's name, the same in every dimension.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "customperm_contextual")
+    public static void luckPermsNamesTheDimensionDimensionType(GameTestHelper helper) {
+        if (!Modes.luckPermsOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        java.util.UUID uuid = null;
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_c_lpdim", 0);
+             CommandExposureGameTest.Exposure ignored = CommandExposureGameTest.Exposure.of(server, COMMAND)) {
+            uuid = player.uuid();
+            com.arcadia.customperm.gametest.support.LuckPermsTestSupport.setContextNode(uuid, NODE, true,
+                    "dimension-type", "the_nether");
+            teleport(server, player, Level.OVERWORLD);
+            check(!player.canUse(COMMAND), "a node limited to the Nether must not apply in the overworld");
+            teleport(server, player, Level.NETHER);
+            check(player.canUse(COMMAND), "LuckPerms must read dimension-type=the_nether as the Nether");
+            com.arcadia.customperm.gametest.support.LuckPermsTestSupport.clearNodes(uuid, List.of(NODE));
+            com.arcadia.customperm.gametest.support.LuckPermsTestSupport.setContextNode(uuid, NODE, true,
+                    "world", "the_nether");
+            check(!player.canUse(COMMAND), "LuckPerms' world context is not the dimension");
+        } finally {
+            if (uuid != null) com.arcadia.customperm.gametest.support.LuckPermsTestSupport.clearNodes(uuid, List.of(NODE));
+        }
+        helper.succeed();
+    }
+
     private static void expect(List<String> lines, String fragment) {
         check(lines.stream().anyMatch(line -> line.contains(fragment)), "expected '" + fragment + "' in " + lines);
     }

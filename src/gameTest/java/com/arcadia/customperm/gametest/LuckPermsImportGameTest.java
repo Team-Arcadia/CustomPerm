@@ -79,23 +79,25 @@ public class LuckPermsImportGameTest {
             apply(LpEditOp.GROUP_PERM_ADD, BASE, "essentials.fly", "true", "", "0");
             apply(LpEditOp.GROUP_PERM_ADD, BASE, "cptest.probe.shut", "true", "", "0");
             apply(LpEditOp.GROUP_PERM_ADD, VIP, "customperm.command.kick", "true", "", "3600");
-            apply(LpEditOp.GROUP_PERM_ADD, VIP, "customperm.command.seed", "true", "world=the_nether", "0");
+            apply(LpEditOp.GROUP_PERM_ADD, VIP, "customperm.command.seed", "true", "dimension-type=the_nether", "0");
             apply(LpEditOp.GROUP_PERM_ADD, VIP, "customperm.command.difficulty", "true", "server=lobby", "0");
             apply(LpEditOp.GROUP_PREFIX_SET, VIP, "10", "[VIP]", "");
             apply(LpEditOp.GROUP_PREFIX_SET, VIP, "5", "[Lesser]", "");
             apply(LpEditOp.GROUP_META_SET, VIP, "rank", "gold", "");
             apply(LpEditOp.GROUP_PARENT_ADD, VIP, BASE, "");
-            apply(LpEditOp.GROUP_PARENT_ADD, VIP, "default", "world=the_nether");
-            apply(LpEditOp.GROUP_PERM_ADD, VIP, "group.default", "false", "world=the_end", "0");
-            apply(LpEditOp.GROUP_PREFIX_SET, VIP, "20", "[Hot]", "world=the_nether");
-            apply(LpEditOp.USER_PERM_ADD, USER.toString(), "group." + BASE, "false", "world=the_end", "0");
+            apply(LpEditOp.GROUP_PARENT_ADD, VIP, "default", "dimension-type=the_nether");
+            apply(LpEditOp.GROUP_PERM_ADD, VIP, "group.default", "false", "dimension-type=the_end", "0");
+            apply(LpEditOp.GROUP_PREFIX_SET, VIP, "20", "[Hot]", "dimension-type=the_nether");
+            apply(LpEditOp.USER_PERM_ADD, USER.toString(), "group." + BASE, "false", "dimension-type=the_end", "0");
             apply(LpEditOp.GROUP_WEIGHT_SET, VIP, "42");
             apply(LpEditOp.USER_PARENT_ADD, USER.toString(), VIP, "", "0");
             apply(LpEditOp.USER_PARENT_ADD, USER.toString(), BASE, "", "7200");
             LuckPermsTestSupport.addTemporaryParent(BASE, "default", 3600);
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "minecraft.command.weather", "true", "", "0");
-            apply(LpEditOp.USER_PERM_ADD, USER.toString(), "customperm.command.seed", "false", "world=the_end", "0");
-            apply(LpEditOp.USER_PERM_ADD, USER.toString(), "customperm.command.time", "true", "world=the_nether", "3600");
+            apply(LpEditOp.USER_PERM_ADD, USER.toString(), "customperm.command.seed", "false", "dimension-type=the_end", "0");
+            apply(LpEditOp.USER_PERM_ADD, USER.toString(), "customperm.command.time", "true", "dimension-type=the_nether", "3600");
+            apply(LpEditOp.GROUP_PERM_ADD, BASE, "customperm.command.weather", "true", "gamemode=creative", "0");
+            apply(LpEditOp.GROUP_PERM_ADD, BASE, "customperm.command.list", "true", "world=world", "0");
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "cptest.probe.open", "false", "", "0");
             apply(LpEditOp.TRACK_CREATE, TRACK);
             apply(LpEditOp.TRACK_APPEND, TRACK, BASE);
@@ -167,7 +169,10 @@ public class LuckPermsImportGameTest {
                     .mapToLong(ScopedGrant::expires).findFirst().orElse(0);
             if (Math.abs(timeAt - (com.arcadia.customperm.perm.Expiry.now() + 3600)) > 30)
                 fail("A temporary node limited to a world must arrive with its expiry: " + player.scoped());
-            if (plan.counts().worlds() != 7) fail("Every entry limited to a world must be counted: " + plan.counts());
+            if (!base.scoped().equals(List.of(new ScopedGrant("gamemode=creative", ScopedGrant.ALLOW, "customperm.command.weather"))))
+                fail("A node limited to a game mode must arrive with it, one limited to LuckPerms' world (the save's name) not: "
+                        + base.scoped());
+            if (plan.counts().worlds() != 8) fail("Every entry limited to a world must be counted: " + plan.counts());
             if (!List.of(BASE, VIP).equals(plan.tracks().get(TRACK)))
                 fail("A track must arrive with its groups in order: " + plan.tracks());
 
@@ -177,6 +182,7 @@ public class LuckPermsImportGameTest {
                 fail("Each reason to leave a node behind must be counted: " + plan.counts());
             String report = String.join(" | ", plan.report());
             if (!report.contains("left behind")) fail("The report must say what it leaves behind: " + report);
+            if (!report.contains("save's name")) fail("The report must say why LuckPerms' world context is left: " + report);
 
             // Nothing is written until it is applied.
             if (grades.grades.containsKey(BASE)) fail("Reading must not write anything.");

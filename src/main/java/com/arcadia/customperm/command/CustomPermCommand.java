@@ -113,7 +113,9 @@ import java.util.stream.Collectors;
  *                     append <track> <grade> | insert <track> <grade> <position> | remove <track> <grade>
  *                     promote|demote <player> <track>   # one rung up or down
  *                     list [track]
- * /customperm grade   prefix|suffix <grade> [in <world>] [add <priority> <text> | addtemp <priority> <duration> <text>
+ * /customperm contexts [player]                      # the static contexts, or what holds for a player now
+ *             contexts set <key> <value> | unset <key>  # a context every player here is in (region=eu)
+ * /customperm grade   prefix|suffix <grade> [in <world> | where "<context>"] [add <priority> <text> | addtemp <priority> <duration> <text>
  *                                           | remove <priority> | clear]   # & colour codes, highest priority shows
  * /customperm user    prefix|suffix <player> [...]     # the same, one player's own
  * /customperm names   [on|off|format <format>]         # decorate names with them, {prefix}{name}{suffix}
@@ -168,17 +170,22 @@ public class CustomPermCommand {
         (ctx, builder) -> SharedSuggestionProvider.suggest(ctx.getSource().getServer() == null ? List.of()
             : ctx.getSource().getServer().levelKeys().stream().map(key -> key.location().toString()).toList(), builder);
 
-    /** One of this server's worlds, for removing a grade held there. */
+    /** A context, for removing an entry limited to one. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_WORLDS =
         (ctx, builder) -> SharedSuggestionProvider.suggest(worldContexts(ctx.getSource().getServer()), builder);
 
-    /** {@code world=the_nether} and the like, one per loaded dimension, written as the commands take them. */
+    /**
+     * {@code world=the_nether} and the like, one per loaded dimension, then the game modes and the static
+     * contexts, written as the commands take them.
+     */
     private static List<String> worldContexts(net.minecraft.server.MinecraftServer server) {
         if (server == null) return List.of();
         List<String> worlds = new java.util.ArrayList<>();
         for (var level : server.getAllLevels()) {
             worlds.add("world=" + com.arcadia.customperm.perm.Contexts.luckPermsWorld(level.dimension().location().toString()));
         }
+        com.arcadia.customperm.perm.Contexts.GAMEMODES.forEach(mode -> worlds.add("gamemode=" + mode));
+        worlds.addAll(com.arcadia.customperm.admin.ContextAdmin.describe());
         return worlds;
     }
 
@@ -613,6 +620,22 @@ public class CustomPermCommand {
                         .executes(ctx -> importApply(ctx, false))
                         .then(Commands.literal("replace")
                             .executes(ctx -> importApply(ctx, true)))))
+                .then(Commands.literal("contexts").requires(AdminAccess.manage(PermissionNodes.MANAGE_CONFIG))
+                    .executes(CustomPermCommand::listContexts)
+                    .then(Commands.literal("set")
+                        .then(Commands.argument("key", StringArgumentType.word())
+                            .then(Commands.argument("value", StringArgumentType.greedyString())
+                                .executes(ctx -> report(ctx, com.arcadia.customperm.admin.ContextAdmin.set(
+                                    ctx.getSource().getServer(), StringArgumentType.getString(ctx, "key"),
+                                    StringArgumentType.getString(ctx, "value")))))))
+                    .then(Commands.literal("unset")
+                        .then(Commands.argument("key", StringArgumentType.word())
+                            .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
+                                CustomPerm.configManager.getSettings().staticContexts.keySet(), builder))
+                            .executes(ctx -> report(ctx, com.arcadia.customperm.admin.ContextAdmin.unset(
+                                ctx.getSource().getServer(), StringArgumentType.getString(ctx, "key"))))))
+                    .then(Commands.argument("player", net.minecraft.commands.arguments.EntityArgument.player())
+                        .executes(CustomPermCommand::listPlayerContexts)))
                 .then(Commands.literal("names").requires(AdminAccess.manage(PermissionNodes.MANAGE_CONFIG))
                     .executes(ctx -> {
                         ctx.getSource().sendSuccess(() -> Component.literal(NameAdmin.describe()), false);
@@ -954,7 +977,9 @@ public class CustomPermCommand {
             for (int i = first; i < parts.length; i++) {
                 String option = parts[i];
                 if (option.contains("=")) {
-                    if (context != null) return fail("One world at most: an entry is limited to one world or applies everywhere.");
+                    if (context != null) {
+                        return fail("One context at most: join several with a comma, such as world=the_nether,gamemode=creative.");
+                    }
                     context = option;
                     continue;
                 }
@@ -1082,13 +1107,38 @@ public class CustomPermCommand {
                 .executes(ctx -> run.apply(ctx, h -> h.clear(suffix, optionalContext(ctx)))));
     }
 
-    /** The world a chat edit was limited to, as a context, or null when none was typed. */
+    /** The world or context a chat edit was limited to, as a context, or null when none was typed. */
     private static String optionalContext(CommandContext<CommandSourceStack> ctx) {
         try {
             return "world=" + net.minecraft.commands.arguments.ResourceLocationArgument.getId(ctx, "world");
         } catch (IllegalArgumentException e) {
+            // not "in <world>": perhaps where "<context>"
+        }
+        try {
+            return StringArgumentType.getString(ctx, "context");
+        } catch (IllegalArgumentException e) {
             return null;
         }
+    }
+
+    private static int listContexts(CommandContext<CommandSourceStack> ctx) {
+        List<String> statics = com.arcadia.customperm.admin.ContextAdmin.describe();
+        ctx.getSource().sendSuccess(() -> Component.literal(statics.isEmpty()
+            ? "No static context: entries can be limited to a world and a game mode (world=the_nether,gamemode=creative)."
+            : "Static contexts, true for every player here: " + String.join(", ", statics)), false);
+        return 1;
+    }
+
+    private static int listPlayerContexts(CommandContext<CommandSourceStack> ctx)
+            throws com.mojang.brigadier.exceptions.CommandSyntaxException {
+        var player = net.minecraft.commands.arguments.EntityArgument.getPlayer(ctx, "player");
+        if (CustomPerm.isLuckPermsActive()) {
+            return report(ctx, AdminResult.ok("LuckPerms decides contexts now: /lp user "
+                + player.getGameProfile().getName() + " info lists them."));
+        }
+        ctx.getSource().sendSuccess(() -> Component.literal(player.getGameProfile().getName() + " is in: "
+            + String.join(", ", com.arcadia.customperm.admin.ContextAdmin.of(player))), false);
+        return 1;
     }
 
     /** {@code prefix|suffix <grade> ...}: see {@link #chatEdits}. */
@@ -1104,7 +1154,11 @@ public class CustomPermCommand {
                 // "=" of world=, and the text that follows forbids a greedy one.
                 .then(Commands.literal("in")
                     .then(chatEdits(Commands.argument("world", net.minecraft.commands.arguments.ResourceLocationArgument.id())
-                        .suggests(SUGGEST_WORLD_IDS), suffix, CustomPermCommand::gradeChat))));
+                        .suggests(SUGGEST_WORLD_IDS), suffix, CustomPermCommand::gradeChat)))
+                // Any other context, quoted since it holds "=": where "gamemode=creative".
+                .then(Commands.literal("where")
+                    .then(chatEdits(Commands.argument("context", StringArgumentType.string()), suffix,
+                        CustomPermCommand::gradeChat))));
     }
 
     private static int gradeChat(CommandContext<CommandSourceStack> ctx, ChatEdit edit) {
@@ -1123,7 +1177,10 @@ public class CustomPermCommand {
                 suffix, (ctx, edit) -> userChat(ctx, edit, suffix))
                 .then(Commands.literal("in")
                     .then(chatEdits(Commands.argument("world", net.minecraft.commands.arguments.ResourceLocationArgument.id())
-                        .suggests(SUGGEST_WORLD_IDS), suffix, (ctx, edit) -> userChat(ctx, edit, suffix)))));
+                        .suggests(SUGGEST_WORLD_IDS), suffix, (ctx, edit) -> userChat(ctx, edit, suffix))))
+                .then(Commands.literal("where")
+                    .then(chatEdits(Commands.argument("context", StringArgumentType.string()), suffix,
+                        (ctx, edit) -> userChat(ctx, edit, suffix)))));
     }
 
     /** Applies {@code edit} to the player named, or lists their own prefixes or suffixes when it is null. */

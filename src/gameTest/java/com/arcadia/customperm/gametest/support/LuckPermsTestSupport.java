@@ -61,6 +61,14 @@ public final class LuckPermsTestSupport {
         user.getCachedData().invalidate();
     }
 
+    /** Sets one node on the user, limited to one LuckPerms context such as {@code dimension-type=the_nether}. */
+    public static void setContextNode(UUID uuid, String node, boolean value, String key, String contextValue) {
+        User user = await(api().getUserManager().loadUser(uuid));
+        user.data().add(Node.builder(node).value(value).withContext(key, contextValue).build());
+        await(api().getUserManager().saveUser(user));
+        user.getCachedData().invalidate();
+    }
+
     /** Removes every own node with one of these keys, whatever its value. */
     public static void clearNodes(UUID uuid, Collection<String> nodes) {
         User user = await(api().getUserManager().loadUser(uuid));

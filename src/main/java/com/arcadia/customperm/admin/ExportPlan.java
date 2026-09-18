@@ -50,7 +50,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
      * One grade as the group it would become; {@code chat} holds its prefixes and suffixes, and
      * {@code expiries} holds its temporary entries keyed {@code allow:<node>}, {@code deny:<node>},
      * {@code grade:<parent>} or {@code refuse:<parent>}, and
-     * {@code scoped} its nodes limited to a world, written with LuckPerms' {@code world} context.
+     * {@code scoped} its entries limited to a context, written with LuckPerms' contexts.
      */
     public record Group(String name, int weight, List<String> parents, List<String> deniedParents,
                         Set<String> allow, Set<String> deny, List<ChatGrant> chat,
@@ -214,20 +214,18 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
     }
 
     /**
-     * The contextual entries LuckPerms can hold: one limited to a single world, and a grade held there only
-     * when that grade is exported. Any other context was written by hand for a newer version and has no
-     * {@code world} to write it under.
+     * The contextual entries LuckPerms can hold: one limited to a context this version reads, and a grade
+     * held there only when that grade is exported. Any other context was written by hand for a newer version
+     * and has no LuckPerms form here.
      */
     private static List<ScopedGrant> worldOnly(List<ScopedGrant> entries, Set<String> exported, GradesConfig config,
                                                int[] dropped, List<String> notes, String holder) {
         List<ScopedGrant> kept = new ArrayList<>();
         for (ScopedGrant entry : entries) {
-            String context = com.arcadia.customperm.perm.Contexts.parse(entry.context());
-            if (context == null || com.arcadia.customperm.perm.Contexts.size(context) != 1
-                    || com.arcadia.customperm.perm.Contexts.worldOf(context) == null) {
+            if (!exportable(entry.context())) {
                 dropped[0]++;
                 notes.add("Left out on " + holder + ": " + entry.value() + " is limited to " + entry.context()
-                        + ", which is not a single world.");
+                        + ", which this version does not read.");
                 continue;
             }
             if (entry.namesGrade()) {
@@ -238,14 +236,14 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
         return List.copyOf(kept);
     }
 
-    /** The prefixes that apply everywhere or in a single world; one limited otherwise has no LuckPerms form here. */
+    /** The prefixes that apply everywhere or in a context this version reads; one limited otherwise has no LuckPerms form here. */
     private static List<ChatGrant> chatWorldOnly(List<ChatGrant> grants, int[] dropped, List<String> notes, String holder) {
         List<ChatGrant> kept = new ArrayList<>();
         for (ChatGrant grant : grants) {
-            if (!grant.context().isEmpty() && !singleWorld(grant.context())) {
+            if (!grant.context().isEmpty() && !exportable(grant.context())) {
                 dropped[0]++;
                 notes.add("Left out on " + holder + ": the " + (grant.suffix() ? "suffix " : "prefix ") + grant.text()
-                        + " is limited to " + grant.context() + ", which is not a single world.");
+                        + " is limited to " + grant.context() + ", which this version does not read.");
                 continue;
             }
             kept.add(grant);
@@ -253,10 +251,12 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
         return List.copyOf(kept);
     }
 
-    private static boolean singleWorld(String raw) {
-        String context = com.arcadia.customperm.perm.Contexts.parse(raw);
-        return context != null && com.arcadia.customperm.perm.Contexts.size(context) == 1
-                && com.arcadia.customperm.perm.Contexts.worldOf(context) != null;
+    /**
+     * Whether a stored context has a LuckPerms form: one this version reads. A key written by hand for a newer
+     * version, {@code server} until cluster mode, has none and matches nothing here either.
+     */
+    private static boolean exportable(String raw) {
+        return com.arcadia.customperm.perm.Contexts.parse(raw) != null;
     }
 
     /**
@@ -398,8 +398,9 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                     + "only where the grade has one, never their meta or the nodes of other mods.");
         }
         if (groups.stream().anyMatch(g -> !g.scoped().isEmpty()) || players.stream().anyMatch(p -> !p.scoped().isEmpty())) {
-            lines.add("Entries limited to a world are written with LuckPerms' world context: the_nether for a "
-                    + "vanilla world, the full id for a modded one.");
+            lines.add("Entries limited to a world are written with LuckPerms' dimension-type context, which is "
+                    + "the dimension on NeoForge (its world context is the save's name): the_nether for a vanilla "
+                    + "world, the full id for a modded one. A game mode and a static context go as they are.");
         }
         if (groups.stream().anyMatch(g -> !g.chat().isEmpty()) || players.stream().anyMatch(p -> !p.chat().isEmpty())) {
             lines.add("Prefixes and suffixes are written with their own priority, temporary ones temporary. Adding "

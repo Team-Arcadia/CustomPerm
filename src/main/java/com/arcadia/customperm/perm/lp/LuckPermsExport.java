@@ -188,12 +188,10 @@ public final class LuckPermsExport {
         for (String key : deny) add(holder, timed(Node.builder(key).value(false), expiries.get("deny:" + key)), kept);
     }
 
-    /** Entries limited to a world, written with LuckPerms' {@code world} context, a temporary one with its expiry. */
+    /** Entries limited to a context, written with LuckPerms' contexts (see {@link #contexts}), a temporary one with its expiry. */
     private static void addScoped(PermissionHolder holder, List<com.arcadia.customperm.admin.ScopedGrant> scoped,
                                   int[] kept) {
         for (var entry : scoped) {
-            String world = com.arcadia.customperm.perm.Contexts.luckPermsWorld(
-                    com.arcadia.customperm.perm.Contexts.worldOf(entry.context()));
             net.luckperms.api.node.NodeBuilder<?, ?> builder = switch (entry.kind()) {
                 case com.arcadia.customperm.admin.ScopedGrant.GRADE, com.arcadia.customperm.admin.ScopedGrant.PARENT ->
                         InheritanceNode.builder(entry.value());
@@ -201,7 +199,7 @@ public final class LuckPermsExport {
                 case com.arcadia.customperm.admin.ScopedGrant.DENY -> Node.builder(entry.value()).value(false);
                 default -> Node.builder(entry.value()).value(true);
             };
-            add(holder, timed(builder.withContext(com.arcadia.customperm.perm.Contexts.WORLD, world),
+            add(holder, timed(builder.withContext(contexts(entry.context())),
                     entry.expires() > 0 ? entry.expires() : null), kept);
         }
     }
@@ -269,7 +267,7 @@ public final class LuckPermsExport {
 
     /**
      * Clears what CustomPerm decides on a holder: its permanent parents and its {@code customperm.*} and
-     * {@code *} nodes, global or limited to a single world. Its prefix, suffix, meta, weight aside, other
+     * {@code *} nodes, global or limited to contexts it writes. Its prefix, suffix, meta, weight aside, other
      * contexts, temporary entries and the nodes other mods read stay, those being what LuckPerms is kept for. A player keeps the default group,
      * which LuckPerms would otherwise have to give back on their next login.
      */
@@ -287,21 +285,42 @@ public final class LuckPermsExport {
         for (Node node : doomed) holder.data().remove(node);
     }
 
-    /** The LuckPerms contexts a prefix limited to {@code grant}'s world is written with; empty for everywhere. */
+    /** The LuckPerms contexts a prefix limited to {@code grant}'s context is written with; empty for everywhere. */
     private static net.luckperms.api.context.ImmutableContextSet where(com.arcadia.customperm.admin.ChatGrant grant) {
-        return grant.context().isEmpty()
-                ? net.luckperms.api.context.ImmutableContextSet.empty()
-                : net.luckperms.api.context.ImmutableContextSet.of(com.arcadia.customperm.perm.Contexts.WORLD,
-                        com.arcadia.customperm.perm.Contexts.luckPermsWorld(
-                                com.arcadia.customperm.perm.Contexts.worldOf(grant.context())));
+        return contexts(grant.context());
     }
 
-    /** A node CustomPerm could have written: no expiry, and no context or a single world. */
+    /**
+     * A stored context as LuckPerms' contexts: {@code world} becomes {@code dimension-type}, the key LuckPerms
+     * gives the dimension on NeoForge, written the way it writes it; every other key goes as it is. Two
+     * values of one key stay two values, which LuckPerms reads as either, as this side does.
+     */
+    static net.luckperms.api.context.ImmutableContextSet contexts(String context) {
+        var builder = net.luckperms.api.context.ImmutableContextSet.builder();
+        for (String[] pair : com.arcadia.customperm.perm.Contexts.split(context)) {
+            if (pair[0].equals(com.arcadia.customperm.perm.Contexts.WORLD)) {
+                builder.add(com.arcadia.customperm.perm.Contexts.DIMENSION_TYPE,
+                        com.arcadia.customperm.perm.Contexts.luckPermsWorld(pair[1]));
+            } else {
+                builder.add(pair[0], pair[1]);
+            }
+        }
+        return builder.build();
+    }
+
+    /**
+     * A node CustomPerm could have written: no expiry, and no context or only contexts it writes, which are
+     * never LuckPerms' {@code world} (the save's name) nor {@code server}.
+     */
     private static boolean decidedHere(Node node) {
         if (node.hasExpiry()) return false;
-        var contexts = node.getContexts();
-        return contexts.isEmpty() || (contexts.size() == 1
-                && contexts.containsKey(com.arcadia.customperm.perm.Contexts.WORLD));
+        for (var context : node.getContexts()) {
+            String key = context.getKey().toLowerCase(java.util.Locale.ROOT);
+            if (key.equals(com.arcadia.customperm.perm.Contexts.WORLD) || key.equals(com.arcadia.customperm.perm.Contexts.SERVER)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static <T> T await(CompletableFuture<T> future) throws Exception {

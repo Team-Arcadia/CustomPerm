@@ -28,16 +28,28 @@ final class Scopes {
     private Scopes() {
     }
 
-    /** The stored form of {@code raw}, {@code null} for everywhere, {@link #INVALID} when it is not a context. */
+    /**
+     * The stored form of {@code raw}, {@code null} for everywhere, {@link #INVALID} when it is not a context
+     * or names a key nothing on this server sets, which would make the entry apply nowhere.
+     */
     static String parse(String raw) {
         if (raw == null || raw.isBlank()) return null;
         String parsed = Contexts.parse(raw);
-        return parsed == null ? INVALID : parsed;
+        if (parsed == null) return INVALID;
+        return Contexts.undeclared(parsed, com.arcadia.customperm.CustomPerm.configManager.getSettings().staticContexts) == null
+                ? parsed : INVALID;
     }
 
     static AdminResult invalid(String raw) {
-        return AdminResult.fail("Invalid context '" + raw.trim() + "': use world=<dimension>, such as "
-                + "world=the_nether or world=mymod:mining.");
+        String parsed = Contexts.parse(raw);
+        if (parsed != null) {
+            String key = Contexts.undeclared(parsed, com.arcadia.customperm.CustomPerm.configManager.getSettings().staticContexts);
+            return AdminResult.fail("Nothing on this server sets '" + key + "': an entry limited to it would apply "
+                    + "nowhere. Set it first with /customperm contexts set " + key + " <value>.");
+        }
+        return AdminResult.fail("Invalid context '" + raw.trim() + "': use world=<dimension>, gamemode=<mode> or a "
+                + "static context, several joined with a comma, such as world=the_nether,gamemode=creative; two "
+                + "values of one key are either one (world=the_nether,world=the_end).");
     }
 
     /** Seconds left on the entry {@code kind:value} of {@code scope}, 0 for a permanent or absent one. */

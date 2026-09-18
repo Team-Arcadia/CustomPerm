@@ -200,25 +200,51 @@ public final class LuckPermsImport {
     // ------------------------------------------------------------------ nodes
 
     /**
-     * The context CustomPerm stores for a LuckPerms context set, or {@code null} when it has none: a single
-     * {@code world} with a single value is the only one read here.
+     * The context CustomPerm stores for a LuckPerms context set, or why there is none. On NeoForge LuckPerms
+     * names the dimension {@code dimension-type}, read here as {@code world}; its own {@code world} is the
+     * save's name, the same in every dimension, which nothing here matches. {@code gamemode} reads as it is,
+     * and another key only when a static context sets it here, or the entry would apply nowhere.
      */
-    private static String context(net.luckperms.api.context.ContextSet contexts) {
-        if (contexts.size() != 1) return null;
-        var context = contexts.iterator().next();
-        if (!context.getKey().equalsIgnoreCase(com.arcadia.customperm.perm.Contexts.WORLD)) return null;
-        return com.arcadia.customperm.perm.Contexts.parse(
-                com.arcadia.customperm.perm.Contexts.WORLD + "=" + context.getValue());
+    private static Scope context(net.luckperms.api.context.ContextSet contexts) {
+        StringBuilder raw = new StringBuilder();
+        for (var context : contexts) {
+            String key = context.getKey().toLowerCase(java.util.Locale.ROOT);
+            if (key.equals(com.arcadia.customperm.perm.Contexts.WORLD)) {
+                return Scope.left("LuckPerms' world context is the save's name on NeoForge, not a dimension "
+                        + "(that one is dimension-type): nothing here would match it");
+            }
+            if (key.equals(com.arcadia.customperm.perm.Contexts.SERVER)) {
+                return Scope.left("A server context waits for cluster mode");
+            }
+            if (!raw.isEmpty()) raw.append(',');
+            raw.append(key).append('=').append(context.getValue());
+        }
+        String parsed = com.arcadia.customperm.perm.Contexts.parse(raw.toString());
+        if (parsed == null) return Scope.left("A context this version cannot read (" + raw + ")");
+        String undeclared = com.arcadia.customperm.perm.Contexts.undeclared(parsed,
+                com.arcadia.customperm.CustomPerm.configManager.getSettings().staticContexts);
+        if (undeclared != null) {
+            return Scope.left("No static context sets '" + undeclared + "' here (/customperm contexts set), so "
+                    + "an entry limited to it would apply nowhere");
+        }
+        return new Scope(parsed, null);
     }
 
-    /** A node that carries a context: kept when it is limited to one world and nothing else, left behind otherwise. */
+    /** A context read from LuckPerms, or the reason it is left behind. */
+    private record Scope(String context, String problem) {
+        static Scope left(String problem) {
+            return new Scope(null, problem);
+        }
+    }
+
+    /** A node that carries a context: kept when this side reads that context the same way, left behind otherwise. */
     private static void readScoped(Node node, Long at, ImportPlan.Builder plan, boolean exposeCommands,
                                    List<ScopedGrant> scoped, Chat chat, boolean group, String holder) {
-        String context = context(node.getContexts());
+        Scope scope = context(node.getContexts());
+        String context = scope.context();
         if (context == null) {
             plan.contextual();
-            plan.note("Only entries limited to a single world are imported: a server context, several worlds or "
-                    + "another key is not, a node here would apply everywhere: " + holder + ".");
+            plan.note(scope.problem() + ": " + holder + ".");
             return;
         }
         long expires = at == null ? 0 : at;

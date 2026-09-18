@@ -91,7 +91,7 @@ public final class PlayersScreen extends AdminScreen {
         this.chat = new ChatFields(this::rebuild);
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
                 .hint(Component.literal("for, e.g. 30d"));
-        this.worldField = new CpEditBox(Component.literal("World"), 64)
+        this.worldField = new CpEditBox(Component.literal("World"), 128)
                 .hint(Component.literal("in, e.g. the_nether"));
         this.search = new CpEditBox(Component.literal("Search players"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))

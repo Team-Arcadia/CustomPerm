@@ -100,6 +100,7 @@ public class CustomPerm {
         NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStopped);
         NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.admin.ExpirySweeper::onServerTick);
         NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.admin.WorldChangeResync::onChangedDimension);
+        NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.admin.WorldChangeResync::onChangedGameMode);
         NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.perm.ModPermissions::onGatherHandler);
         NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.perm.ModPermissions::onServerStarted);
         NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.chat.NameDecoration::onNameFormat);

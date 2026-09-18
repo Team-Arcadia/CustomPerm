@@ -12,6 +12,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
+import java.util.TreeMap;
 
 public class SettingsConfig {
 
@@ -142,6 +144,14 @@ public class SettingsConfig {
     /** Days the activity log files are kept, 0 for no limit. */
     public int logRetentionDays = DEFAULT_LOG_RETENTION_DAYS;
 
+    /**
+     * Contexts that hold for every player on this server, key to value, like LuckPerms' {@code static-contexts}:
+     * {@code "region": "eu"} makes an entry limited to {@code region=eu} apply here. The game's own keys
+     * ({@code world}, {@code gamemode}) and {@code server}, kept for cluster mode, cannot be set here. Replaced
+     * whole on a change, never edited in place: the permission service caches what it built from it.
+     */
+    public Map<String, String> staticContexts = new TreeMap<>();
+
     public void normalize() {
         defaultGrade = defaultGrade == null ? "" : defaultGrade.trim();
         if (maskedCommands == null) maskedCommands = new ArrayList<>(DEFAULT_MASKED_COMMANDS);
@@ -162,6 +172,16 @@ public class SettingsConfig {
         if (suffixStack == null) suffixStack = new ChatStack();
         prefixStack.normalize();
         suffixStack.normalize();
+        TreeMap<String, String> statics = new TreeMap<>();
+        if (staticContexts != null) staticContexts.forEach((key, value) -> {
+            if (key == null || value == null) return;
+            String k = key.trim().toLowerCase(Locale.ROOT);
+            String v = value.trim().toLowerCase(Locale.ROOT);
+            if (com.arcadia.customperm.perm.Contexts.staticKey(k) && com.arcadia.customperm.perm.Contexts.staticValue(v)) {
+                statics.put(k, v);
+            }
+        });
+        staticContexts = statics;
         if (luckPermsFallbackMode == null) {
             luckPermsFallbackMode = LUCKPERMS_FALLBACK_DENY;
             return;

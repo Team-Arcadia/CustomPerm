@@ -92,7 +92,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
             lines.add("Nothing is left behind.");
         } else {
             lines.add(counts.skipped() + " entrie(s) are left behind: "
-                    + counts.contextual + " contextual beyond one world, " + counts.foreign + " belonging to other mods, "
+                    + counts.contextual + " in a context not read here, " + counts.foreign + " belonging to other mods, "
                     + counts.other + " of a kind CustomPerm has no equivalent for (meta, display name).");
         }
         lines.addAll(skipped);

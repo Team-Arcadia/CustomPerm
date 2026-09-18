@@ -52,8 +52,57 @@ class ContextsTest {
         assertNull(Contexts.parse("=the_nether"));
         assertNull(Contexts.parse("world="));
         assertNull(Contexts.parse("world=bad name"));
-        assertNull(Contexts.parse("server=lobby"), "only world is read until cluster mode adds server");
-        assertNull(Contexts.parse("world=a,world=b"), "one value per key");
+        assertNull(Contexts.parse("server=lobby"), "server waits for cluster mode");
+        assertNull(Contexts.parse("gamemode=flying"));
+        assertNull(Contexts.parse("bad key=x"));
+    }
+
+    @Test
+    void parse_readsGameModesStaticKeysSeveralValuesAndLuckPermsDimensionType() {
+        assertEquals("gamemode=creative,world=minecraft:the_nether", Contexts.parse("world=the_nether, GameMode=Creative"));
+        assertEquals("world=minecraft:the_end,world=minecraft:the_nether",
+                Contexts.parse("world=the_nether,world=the_end,world=minecraft:the_nether"),
+                "values sorted, a pair named twice counted once");
+        assertEquals(NETHER, Contexts.parse("dimension-type=the_nether"), "LuckPerms' name for the dimension");
+        assertEquals("region=eu", Contexts.parse("region=EU"));
+        assertEquals("region", Contexts.undeclared("region=eu", java.util.Map.of()));
+        assertNull(Contexts.undeclared("gamemode=creative,region=eu,world=minecraft:the_end", java.util.Map.of("region", "eu")));
+    }
+
+    @Test
+    void satisfies_needsEveryKeyWithOneOfItsValues() {
+        Contexts here = Contexts.of("minecraft:the_nether", "creative", java.util.Map.of("region", "eu"));
+        assertTrue(here.satisfies("world=minecraft:the_end,world=minecraft:the_nether"), "either world");
+        assertTrue(here.satisfies("world=minecraft:the_nether,world=minecraft:the_end"));
+        assertFalse(here.satisfies("world=minecraft:the_end,world=minecraft:overworld"));
+        assertTrue(here.satisfies("gamemode=creative,region=eu,world=minecraft:the_nether"));
+        assertFalse(here.satisfies("gamemode=survival,world=minecraft:the_nether"), "every key must hold");
+        assertTrue(here.satisfies("gamemode=adventure,gamemode=creative"));
+        assertFalse(here.satisfies("region=us"));
+        assertFalse(here.satisfies("gamemode=creative,world=minecraft:the_end,world=minecraft:overworld"),
+                "a key failing after one that holds");
+    }
+
+    @Test
+    void size_countsKeysNotValues() {
+        assertEquals(1, Contexts.size("world=minecraft:the_end,world=minecraft:the_nether"));
+        assertEquals(2, Contexts.size("gamemode=creative,world=minecraft:the_end,world=minecraft:the_nether"));
+        assertEquals("the_end or the_nether, creative",
+                Contexts.describe("world=minecraft:the_end,world=minecraft:the_nether,gamemode=creative"));
+        assertEquals("the_nether,gamemode=creative,region=eu",
+                Contexts.typed("world=minecraft:the_nether,gamemode=creative,region=eu"));
+    }
+
+    @Test
+    void anEntryNamingMoreKeysOutranksOneNamingFewer() {
+        GradesConfig.Grade member = grade("member", 0);
+        scope(member, NETHER).permissions.add("customperm.command.home");
+        scope(member, "gamemode=creative," + NETHER).deniedPermissions.add("customperm.command.home");
+        grades.userGrades.put(player.toString(), new java.util.ArrayList<>(java.util.List.of("member")));
+        assertEquals(Tristate.DENY, PermissionResolver.check(grades, player, "customperm.command.home", null,
+                Contexts.of("minecraft:the_nether", "creative", java.util.Map.of())));
+        assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.home", null,
+                Contexts.of("minecraft:the_nether", "survival", java.util.Map.of())));
     }
 
     @Test

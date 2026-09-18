@@ -113,7 +113,7 @@ public final class GradesScreen extends AdminScreen {
         this.chat = new ChatFields(this::rebuild);
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
                 .hint(Component.literal("for, e.g. 30d"));
-        this.worldField = new CpEditBox(Component.literal("World"), 64)
+        this.worldField = new CpEditBox(Component.literal("World"), 128)
                 .hint(Component.literal("in, e.g. the_nether"));
         this.search = new CpEditBox(Component.literal("Search grades"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
@@ -613,10 +613,19 @@ public final class GradesScreen extends AdminScreen {
         }
     }
 
-    /** What the world box holds, as a context: {@code the_nether} is {@code world=the_nether}, empty is everywhere. */
+    /**
+     * What the world box holds, as a context: {@code the_nether} is {@code world=the_nether}, a part without
+     * {@code =} a world ({@code the_nether,gamemode=creative}), empty is everywhere.
+     */
     static String context(String typed) {
-        String world = typed.trim();
-        return world.isEmpty() || world.contains("=") ? world : "world=" + world;
+        StringBuilder out = new StringBuilder();
+        for (String part : typed.trim().split(",")) {
+            String clean = part.trim();
+            if (clean.isEmpty()) continue;
+            if (!out.isEmpty()) out.append(',');
+            out.append(clean.contains("=") ? clean : "world=" + clean);
+        }
+        return out.toString();
     }
 
     // ------------------------------------------------------------------ rendering

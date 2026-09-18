@@ -95,6 +95,9 @@ public class LuckPermsExportGameTest {
             GradesConfig.GradeScoped nether = new GradesConfig.GradeScoped();
             nether.deniedPermissions.add("customperm.command.time");
             config.grades.get(BASE).contexts.put("world=minecraft:the_nether", nether);
+            GradesConfig.GradeScoped creative = new GradesConfig.GradeScoped();
+            creative.permissions.add("customperm.command.weather");
+            config.grades.get(BASE).contexts.put("gamemode=creative", creative);
             GradesConfig.GradeScoped vipNether = new GradesConfig.GradeScoped();
             vipNether.refused.add(BASE);
             vipNether.prefixes.add(new GradesConfig.ChatEntry(30, "[Hot] ", 0));
@@ -124,17 +127,19 @@ public class LuckPermsExportGameTest {
             expect(base, "prefix.0.&7[Base] =true", "A grade's prefix must arrive at its priority");
             expect(base, "prefix.20.[Temp] =true@expiring", "A temporary prefix must arrive temporary");
             expect(base, "customperm.command.list=true@expiring", "A temporary node must arrive temporary");
-            expect(base, "customperm.command.time=false[world=the_nether]",
-                    "A node limited to a world must arrive with LuckPerms' world context");
+            expect(base, "customperm.command.weather=true[gamemode=creative]",
+                    "A node limited to a game mode must arrive with LuckPerms' gamemode context");
+            expect(base, "customperm.command.time=false[dimension-type=the_nether]",
+                    "A node limited to a world must arrive with LuckPerms' dimension-type context, the dimension on NeoForge");
             if (base.stream().anyMatch(node -> node.startsWith("customperm.command.dead")))
                 fail("A node that has already expired must not be exported: " + base);
             List<String> vip = LuckPermsTestSupport.groupNodes(VIP);
             expect(vip, "group." + BASE + "=true@expiring", "A temporary parent must arrive as a temporary inheritance node");
-            expect(vip, "group." + BASE + "=false[world=the_nether]", "A refusal limited to a world must arrive in it");
-            expect(vip, "prefix.30.[Hot] =true[world=the_nether]", "A prefix limited to a world must arrive in it");
-            expect(vip, "prefix.40.[Warm] =true[world=the_nether]@expiring",
+            expect(vip, "group." + BASE + "=false[dimension-type=the_nether]", "A refusal limited to a world must arrive in it");
+            expect(vip, "prefix.30.[Hot] =true[dimension-type=the_nether]", "A prefix limited to a world must arrive in it");
+            expect(vip, "prefix.40.[Warm] =true[dimension-type=the_nether]@expiring",
                     "A temporary prefix limited to a world must arrive in it, temporary");
-            expect(vip, "customperm.command.seed=true[world=the_nether]@expiring",
+            expect(vip, "customperm.command.seed=true[dimension-type=the_nether]@expiring",
                     "A temporary node limited to a world must arrive in it, temporary");
             expect(vip, "weight.42=true", "The weight must arrive on a group that had none");
             expect(vip, "customperm.command.fly=false", "Adding must keep LuckPerms' value");
@@ -145,7 +150,7 @@ public class LuckPermsExportGameTest {
             List<String> user = LuckPermsTestSupport.userNodes(USER);
             expect(user, "group." + VIP + "=true", "The player's grade must arrive as a parent");
             expect(user, "customperm.command.home=true", "The player's own node must arrive");
-            expect(user, "group." + BASE + "=true[world=the_end]", "A grade held in one world must arrive there");
+            expect(user, "group." + BASE + "=true[dimension-type=the_end]", "A grade held in one world must arrive there");
             expect(user, "prefix.100.[Me] =true", "The player's own prefix must arrive at its priority");
             if (LuckPermsTestSupport.groupExists("cp_x_bad")) fail("A refused grade must not be written under another name.");
             if (!LuckPermsTestSupport.trackGroups(TRACK).equals(List.of(BASE, VIP)))
