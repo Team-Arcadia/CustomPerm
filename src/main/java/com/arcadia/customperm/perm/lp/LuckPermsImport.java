@@ -51,6 +51,12 @@ public final class LuckPermsImport {
     private LuckPermsImport() {
     }
 
+    private static final String FOREIGN = "Nodes other mods read without declaring them to NeoForge's permission "
+            + "API are not imported, CustomPerm would not read them back; declared ones are.";
+
+    /** The boolean nodes other mods declared, which the import carries since CustomPerm answers them. */
+    private static List<String> declared = List.of();
+
     /**
      * Builds the plan. Never completes exceptionally: a failure to reach LuckPerms yields an empty plan
      * carrying the reason, which the admin reads instead of a stack trace.
@@ -61,6 +67,8 @@ public final class LuckPermsImport {
         try {
             LuckPerms api = LuckPermsProvider.get();
             ImportPlan.Builder plan = new ImportPlan.Builder();
+            // Read once, on the calling thread: what the rest reads on LuckPerms' threads never changes.
+            declared = List.copyOf(com.arcadia.customperm.perm.ModPermissions.declaredNodes());
             return api.getGroupManager().loadAllGroups()
                     .thenApply(ignored -> readGroups(api, plan, exposeCommands))
                     .thenCompose(ignored -> api.getTrackManager().loadAllTracks())
@@ -122,10 +130,14 @@ public final class LuckPermsImport {
                 api.getUserManager().searchAll(NodeMatcher.type(NodeType.PREFIX));
         CompletableFuture<Map<UUID, Collection<ChatMetaNode<?, ?>>>> suffixes =
                 api.getUserManager().searchAll(NodeMatcher.type(NodeType.SUFFIX));
-        List<CompletableFuture<Map<UUID, Collection<Node>>>> permissions = List.of(
+        List<CompletableFuture<Map<UUID, Collection<Node>>>> permissions = new ArrayList<>(List.of(
                 api.getUserManager().searchAll(NodeMatcher.keyStartsWith("customperm.")),
                 api.getUserManager().searchAll(NodeMatcher.keyStartsWith("minecraft.command.")),
-                api.getUserManager().searchAll(NodeMatcher.key("*")));
+                api.getUserManager().searchAll(NodeMatcher.key("*"))));
+        // One search per mod that declared nodes, by the namespace they start with, not one per node.
+        for (String namespace : namespaces()) {
+            permissions.add(api.getUserManager().searchAll(NodeMatcher.keyStartsWith(namespace + ".")));
+        }
 
         CompletableFuture<?>[] all = new CompletableFuture<?>[permissions.size() + 3];
         all[0] = inherited;
@@ -143,7 +155,8 @@ public final class LuckPermsImport {
                         byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
             }
             plan.note("On players, only what CustomPerm can read is looked at: their groups, their prefix and "
-                    + "suffix, and their customperm, minecraft.command and * nodes.");
+                    + "suffix, their customperm, minecraft.command and * nodes, and the nodes other mods declared "
+                    + "to NeoForge.");
 
             for (Map.Entry<UUID, List<Node>> user : byUser.entrySet()) {
                 UUID uuid = user.getKey();
@@ -164,6 +177,17 @@ public final class LuckPermsImport {
             }
             return null;
         });
+    }
+
+    /** The first segment of every declared node, other than the ones already searched. */
+    private static java.util.Set<String> namespaces() {
+        java.util.Set<String> namespaces = new java.util.TreeSet<>();
+        for (String name : declared) {
+            int dot = name.indexOf('.');
+            String namespace = dot < 0 ? name : name.substring(0, dot);
+            if (!namespace.equals("customperm") && !namespace.equals("minecraft")) namespaces.add(namespace);
+        }
+        return namespaces;
     }
 
     /** The username LuckPerms knows, or the UUID: this is a label for the report, never a key. */
@@ -221,10 +245,10 @@ public final class LuckPermsImport {
                     + holder + ".");
             return;
         }
-        String translated = ImportPlan.translate(node.getKey());
+        String translated = ImportPlan.translate(node.getKey(), declared);
         if (translated == null) {
             plan.foreign();
-            plan.note("Nodes other mods read are not imported, CustomPerm would not read them back.");
+            plan.note(FOREIGN);
             return;
         }
         scoped.add(new ScopedGrant(context, node.getValue() ? ScopedGrant.ALLOW : ScopedGrant.DENY, translated));
@@ -333,10 +357,10 @@ public final class LuckPermsImport {
                 plan.note("Meta and display names have no equivalent and are not imported.");
                 continue;
             }
-            String translated = ImportPlan.translate(node.getKey());
+            String translated = ImportPlan.translate(node.getKey(), declared);
             if (translated == null) {
                 plan.foreign();
-                plan.note("Nodes other mods read are not imported, CustomPerm would not read them back.");
+                plan.note(FOREIGN);
                 continue;
             }
             (node.getValue() ? allow : deny).add(translated);

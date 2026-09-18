@@ -117,6 +117,27 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
     }
 
     /**
+     * {@link #translate(String)}, also keeping a node another mod declared through NeoForge's permission API,
+     * which CustomPerm answers, and a wildcard over such nodes ({@code somemod.*}). A node no mod declared stays
+     * out: once LuckPerms is gone nothing would read it.
+     *
+     * @param declared the names of the boolean nodes mods declared
+     */
+    public static String translate(String key, java.util.Collection<String> declared) {
+        String node = translate(key);
+        if (node != null || key == null) return node;
+        String clean = key.trim();
+        if (declared.contains(clean)) return clean;
+        if (clean.endsWith(".*") && clean.length() > 2) {
+            String prefix = clean.substring(0, clean.length() - 1);
+            for (String name : declared) {
+                if (name.startsWith(prefix)) return clean;
+            }
+        }
+        return null;
+    }
+
+    /**
      * The command a key opens, or {@code null} when it names none. A node on a command that is not
      * exposed grants nothing, so an import that does not expose it imports a permission that does nothing.
      */

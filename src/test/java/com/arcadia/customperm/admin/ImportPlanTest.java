@@ -117,6 +117,18 @@ class ImportPlanTest {
     }
 
     @Test
+    void aNodeAnotherModDeclaredIsKept() {
+        List<String> declared = List.of("ftbchunks.claim", "ftbchunks.admin.bypass");
+        assertEquals("ftbchunks.claim", ImportPlan.translate("ftbchunks.claim", declared));
+        assertEquals("ftbchunks.*", ImportPlan.translate("ftbchunks.*", declared), "a wildcard over declared nodes");
+        assertEquals("ftbchunks.admin.*", ImportPlan.translate("ftbchunks.admin.*", declared));
+        assertNull(ImportPlan.translate("essentials.fly", declared), "a node no mod declared stays out");
+        assertNull(ImportPlan.translate("ftbquests.*", declared));
+        assertEquals("customperm.command.tp", ImportPlan.translate("minecraft.command.tp", declared),
+                "the translations of CustomPerm's own nodes still apply");
+    }
+
+    @Test
     void theSameReasonIsSaidOnce() {
         ImportPlan.Builder builder = new ImportPlan.Builder();
         builder.note("Temporary entries are not imported.");

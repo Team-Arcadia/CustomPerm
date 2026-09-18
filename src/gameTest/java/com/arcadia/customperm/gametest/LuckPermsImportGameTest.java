@@ -77,6 +77,7 @@ public class LuckPermsImportGameTest {
             apply(LpEditOp.GROUP_PERM_ADD, BASE, "customperm.command.time", "true", "", "0");
             apply(LpEditOp.GROUP_PERM_ADD, BASE, "customperm.command.ban", "false", "", "0");
             apply(LpEditOp.GROUP_PERM_ADD, BASE, "essentials.fly", "true", "", "0");
+            apply(LpEditOp.GROUP_PERM_ADD, BASE, "cptest.probe.shut", "true", "", "0");
             apply(LpEditOp.GROUP_PERM_ADD, VIP, "customperm.command.kick", "true", "", "3600");
             apply(LpEditOp.GROUP_PERM_ADD, VIP, "customperm.command.seed", "true", "world=the_nether", "0");
             apply(LpEditOp.GROUP_PERM_ADD, VIP, "customperm.command.difficulty", "true", "server=lobby", "0");
@@ -90,6 +91,7 @@ public class LuckPermsImportGameTest {
             LuckPermsTestSupport.addTemporaryParent(BASE, "default", 3600);
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "minecraft.command.weather", "true", "", "0");
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "customperm.command.seed", "false", "world=the_end", "0");
+            apply(LpEditOp.USER_PERM_ADD, USER.toString(), "cptest.probe.open", "false", "", "0");
             apply(LpEditOp.TRACK_CREATE, TRACK);
             apply(LpEditOp.TRACK_APPEND, TRACK, BASE);
             apply(LpEditOp.TRACK_APPEND, TRACK, VIP);
@@ -104,7 +106,9 @@ public class LuckPermsImportGameTest {
             if (!base.deny().contains("customperm.command.ban"))
                 fail("A node set to false must arrive as a denial: " + base);
             if (base.allow().contains("essentials.fly") || base.allow().contains("customperm.command.fly"))
-                fail("A node another mod reads must not be imported: " + base);
+                fail("A node another mod reads without declaring it must not be imported: " + base);
+            if (!base.allow().contains("cptest.probe.shut"))
+                fail("A node another mod declared to NeoForge must be imported as it is: " + base);
 
             ImportPlan.Grade vip = grade(plan, VIP);
             if (vip.weight() != 42) fail("The group weight must arrive as the grade weight: " + vip);
@@ -138,6 +142,8 @@ public class LuckPermsImportGameTest {
             if (!player.grades().contains(BASE) || !player.expiries().containsKey("grade:" + BASE)
                     || player.expiries().containsKey("grade:" + VIP))
                 fail("A temporary group of a player must arrive with its expiry, a permanent one without: " + player);
+            if (!player.deny().contains("cptest.probe.open"))
+                fail("A player's node another mod declared must be searched for and imported: " + player);
             if (!player.scoped().equals(List.of(new ScopedGrant(END, ScopedGrant.DENY, "customperm.command.seed"))))
                 fail("A player's node limited to a world must arrive with it: " + player.scoped());
             if (plan.counts().worlds() != 2) fail("Both entries limited to a world must be counted: " + plan.counts());
