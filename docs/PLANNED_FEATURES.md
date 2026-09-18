@@ -1,188 +1,185 @@
 # Planned features
 
-Ideas that are not implemented, with the reason and what implementing them would take. Most are deliberate
-refusals; one that was refused is now planned and says so, with the date. Nothing here is a commitment or a
-schedule. What is actually being worked on lives in the changelog.
+What CustomPerm does not do yet, what it will take, and what happens to it meanwhile. These were listed here
+as deliberate refusals until 2026-09-18; they were asked for, so they are now work to do. Nothing here is a
+schedule, and a feature is only real once it is in the changelog.
+
+The page exists mostly for one question: a server importing from LuckPerms wants to know what becomes of the
+parts CustomPerm has no equivalent for. The import names them in its report rather than dropping them in
+silence, and this is where the reasons are.
 
 **Français :** [Fonctionnalités envisagées](#fonctionnalités-envisagées)
 
 ---
 
-## Context
+## 1. Temporary entries (expiry)
 
-CustomPerm governs command permissions. LuckPerms governs permissions, chat metadata, promotion ladders
-and contextual rules. The items below are the part of that surface CustomPerm does not cover, listed
-because a server coming from LuckPerms will ask what happens to them.
+**What it is.** An expiry on a node, on a grade a player holds, or on a refusal: a donor rank for thirty
+days, a trial moderator for a week. LuckPerms has it, CustomPerm does not.
 
----
+**What it will take.** A timestamp beside each entry rather than a richer node type, so a file written
+before the field stays valid and reads as permanent. The resolver ignores an entry whose time has passed, so
+an expiry is right even if nothing swept; a periodic sweep then tidies the file and resyncs the command tree
+of the players concerned, or their client keeps offering a command that now refuses.
 
-## 1. Temporary nodes (expiry)
-
-**What it is.** LuckPerms can attach an expiry date to a node or to a group membership: a donor rank for
-thirty days, a trial moderator for a week.
-
-**Why it is not implemented.** An internal grade holds plain node strings in a set. Adding an expiry turns
-every node into a node plus metadata, which reaches the config format, the admin commands, the interface
-and the resolver at once, and adds a scheduled sweep plus a command-tree resync when an entry lapses.
-
-**What it would take.** A per-entry timestamp, a periodic sweep on the server thread, a resync of the
-command tree of the affected players, and the migration of existing files whose entries have no timestamp.
-
-**Until then.** Nothing expires. An entry stays until it is removed by hand.
+**Until then.** Nothing expires: an entry stays until it is removed by hand. An import leaves temporary
+entries behind and counts them, rather than importing them as permanent, which would grant more than the
+source did.
 
 ---
 
-## 2. Contextual permissions (per world, per server)
+## 2. Contextual entries (per world)
 
-**What it is.** In LuckPerms a node can apply only in one world, on one server of a network, or under any
-other context an admin defines.
+**What it is.** An entry that applies in one world only. LuckPerms can key on far more than that; the demand
+here is worlds.
 
-**Why it is not implemented.** A permission check here takes a player and a node, nothing else. Contexts
-would add a dimension to every check on a path called from a Brigadier `requires()` predicate, which runs
-for every player when the command tree is built and re-sent. The cost is real and the demand, for a single
-server governing commands, is low.
+**What it will take.** A permission check takes a player and a node today. A context adds a dimension on a
+path called from a Brigadier `requires()` predicate, which runs for every player each time the command tree
+is built, and the tree is built per player rather than per world: a permission that changes with the world
+means resyncing that player when they change dimension. An entry with no context has to keep the path it has
+now, or every server pays for a feature few use.
 
-**What it would take.** A context on each entry, a context resolved at check time, and a resolution rule
-saying how a contextual entry ranks against a global one.
-
-**Until then.** Every entry is global. A node granted is granted in every dimension.
+**Until then.** Every entry is global: a node granted is granted in every dimension. An import leaves
+contextual entries behind and counts them, since importing one as global would grant it everywhere and
+dropping it would take away something the source granted.
 
 ---
 
-## 3. Chat metadata: prefix, suffix, meta, display name
+## 3. Chat prefixes and suffixes
 
-**What it is.** LuckPerms carries the prefix and suffix shown in chat, arbitrary meta key-value pairs, and a
-display name per group.
+**What it is.** A prefix and a suffix shown in chat, carried by a grade or by a player. LuckPerms stores
+them; on NeoForge nothing renders them by itself.
 
-**Status.** Planned since 2026-09-18. This entry used to say the opposite, that rendering chat was out of
-scope rather than postponed; it was asked for, so it is now work to do.
+**What it will take.** The ranking that already decides between grades decides between prefixes too, minus
+the specificity step, since there is no such thing between two prefixes. The part that needs an answer first
+is not the resolution: chat messages are signed, so rewriting one breaks the signature chain, and the usual
+workaround, sending a system message instead, loses reporting and the secure chat indicator. That trade-off
+gets a written answer before any of it is built.
 
-**What it would take.** A prefix and a suffix on a grade and on a player, resolved by the ranking that
-already decides between grades. The part that needs deciding first is not the resolution: chat messages are
-signed, so rewriting one breaks the signature chain, and the usual workaround, sending a system message
-instead, loses reporting and the secure chat indicator. That trade-off gets an answer in writing before any
-of it is built.
-
-**Until then.** Use a chat mod for it, or keep LuckPerms, which CustomPerm integrates with rather than
-replaces. Note that on NeoForge LuckPerms stores a prefix but renders nothing by itself.
+**Until then.** Use a chat mod, or keep LuckPerms and a mod that renders its metadata. An import leaves
+prefixes, suffixes and meta behind and counts them.
 
 ---
 
 ## 4. Tracks (promotion ladders)
 
-**What it is.** An ordered list of groups, so `promote` and `demote` move a player one rung at a time.
+**What it is.** An ordered list of grades, so promote and demote move a player one rung at a time.
 
-**Why it is not implemented.** A track is an admin convenience built on top of group assignment. It grants
-nothing on its own, and assigning a grade already does the work in one command.
+**What it will take.** A `tracks.json`, the commands and an interface section. Small, and it buys
+convenience rather than capability: a track grants nothing by itself, and assigning a grade already does the
+work in one command. It is worth doing because a server coming from LuckPerms has tracks and expects to find
+them.
 
-**What it would take.** A `tracks.json`, the two commands and an interface section. Small, but it buys
-convenience, not capability.
+**Until then.** Assign and unassign grades directly. An import leaves tracks behind and counts them.
 
 ---
 
-## 5. Permission nodes belonging to other mods
+## 5. Answering the permission checks of other mods
 
-**What it is.** A LuckPerms setup usually carries nodes read by other mods, not by CustomPerm.
+**What it is.** A LuckPerms setup usually carries nodes that other mods read. CustomPerm does not answer
+those checks, so storing such a node would store a string nothing reads.
 
-**Why it is not implemented.** CustomPerm's internal backend answers permission checks for its own nodes and
-for the commands it governs. It is not a general-purpose permission provider for other mods, so storing
-their nodes would store strings nothing reads.
+**What it will take.** NeoForge has the mechanism: a mod can register the handler that answers
+`PermissionAPI` checks, and mods declare their nodes through the same API. Registering as that handler is
+what turns those nodes from dead strings into permissions CustomPerm decides. One handler is registered for
+the server and LuckPerms registers one, so which one answers, and what happens to a node neither knows, is
+settled before any of it is written.
 
-**Until then.** Mods that read permissions through LuckPerms need LuckPerms. CustomPerm runs alongside it.
+**Until then.** Mods that read permissions through LuckPerms need LuckPerms; CustomPerm runs alongside it.
+An import leaves those nodes behind and counts them on groups, and does not even read them on players.
 
 ---
 
 # Fonctionnalités envisagées
 
-Idées non implémentées, avec la raison et ce que leur implémentation demanderait. La plupart sont des refus
-assumés ; l'une d'elles, refusée puis demandée, est désormais envisagée et le dit, avec la date. Rien ici
-n'est un engagement ni un calendrier. Ce qui est réellement en cours est dans le changelog.
+Ce que CustomPerm ne fait pas encore, ce qu'il faudra pour le faire, et ce qui se passe en attendant. Ces
+points étaient listés ici comme des refus assumés jusqu'au 2026-09-18 ; ils ont été demandés, ce sont donc
+désormais des travaux à faire. Rien ici n'est un calendrier, et une fonctionnalité n'est réelle qu'une fois
+dans le changelog.
+
+Cette page existe surtout pour une question : un serveur qui importe depuis LuckPerms veut savoir ce que
+deviennent les parties dont CustomPerm n'a pas l'équivalent. L'import les nomme dans son rapport au lieu de
+les abandonner en silence, et c'est ici que se trouvent les raisons.
 
 ---
 
-## Contexte
+## 1. Entrées temporaires (expiration)
 
-CustomPerm gère les permissions de commandes. LuckPerms gère les permissions, les métadonnées de chat, les
-échelles de promotion et les règles contextuelles. Les points ci-dessous sont la part de cette surface que
-CustomPerm ne couvre pas, listée parce qu'un serveur qui vient de LuckPerms demandera ce qu'elle devient.
+**De quoi il s'agit.** Une expiration sur un nœud, sur un grade détenu par un joueur, ou sur un refus : un
+rang de donateur pour trente jours, un modérateur à l'essai pour une semaine. LuckPerms l'a, CustomPerm non.
 
----
+**Ce qu'il faudra.** Un horodatage à côté de chaque entrée plutôt qu'un type de nœud plus riche, pour qu'un
+fichier écrit avant le champ reste valide et se lise comme permanent. Le résolveur ignore une entrée dont
+l'heure est passée, donc une expiration est juste même si rien n'a balayé ; un balayage périodique range
+ensuite le fichier et resynchronise l'arbre de commandes des joueurs concernés, sinon leur client continue de
+proposer une commande qui refuse désormais.
 
-## 1. Nœuds temporaires (expiration)
-
-**De quoi il s'agit.** LuckPerms peut attacher une date d'expiration à un nœud ou à une appartenance de
-groupe : un rang de donateur pour trente jours, un modérateur à l'essai pour une semaine.
-
-**Pourquoi ce n'est pas fait.** Un grade interne contient des chaînes de nœuds dans un ensemble. Ajouter une
-expiration transforme chaque nœud en nœud plus métadonnées, ce qui touche d'un coup le format de config, les
-commandes d'administration, l'interface et le résolveur, et ajoute un balayage périodique plus une
-resynchronisation de l'arbre de commandes quand une entrée arrive à terme.
-
-**Ce qu'il faudrait.** Un horodatage par entrée, un balayage périodique sur le thread serveur, une
-resynchronisation de l'arbre de commandes des joueurs concernés, et la migration des fichiers existants dont
-les entrées n'ont pas d'horodatage.
-
-**En attendant.** Rien n'expire. Une entrée reste jusqu'à ce qu'elle soit retirée à la main.
+**En attendant.** Rien n'expire : une entrée reste jusqu'à ce qu'elle soit retirée à la main. Un import
+laisse les entrées temporaires et les compte, plutôt que de les importer comme permanentes, ce qui
+accorderait plus que la source.
 
 ---
 
-## 2. Permissions contextuelles (par monde, par serveur)
+## 2. Entrées contextuelles (par monde)
 
-**De quoi il s'agit.** Dans LuckPerms, un nœud peut ne s'appliquer que dans un monde, sur un serveur d'un
-réseau, ou sous n'importe quel autre contexte défini par l'admin.
+**De quoi il s'agit.** Une entrée qui ne s'applique que dans un monde. LuckPerms sait indexer sur bien plus
+que cela ; la demande ici porte sur les mondes.
 
-**Pourquoi ce n'est pas fait.** Un test de permission ici prend un joueur et un nœud, rien d'autre. Les
-contextes ajouteraient une dimension à chaque test, sur un chemin appelé depuis un prédicat `requires()` de
-Brigadier, exécuté pour chaque joueur à la construction et au renvoi de l'arbre de commandes. Le coût est
-réel et la demande, pour un serveur unique qui gère des commandes, est faible.
+**Ce qu'il faudra.** Un test de permission prend aujourd'hui un joueur et un nœud. Un contexte ajoute une
+dimension sur un chemin appelé depuis un prédicat `requires()` de Brigadier, exécuté pour chaque joueur à
+chaque construction de l'arbre de commandes, et cet arbre est construit par joueur et non par monde : une
+permission qui change avec le monde impose de resynchroniser ce joueur au changement de dimension. Une entrée
+sans contexte doit garder le chemin actuel, sinon tous les serveurs paient pour une fonctionnalité que peu
+utilisent.
 
-**Ce qu'il faudrait.** Un contexte sur chaque entrée, un contexte résolu au moment du test, et une règle de
-résolution disant comment une entrée contextuelle se classe face à une entrée globale.
-
-**En attendant.** Toutes les entrées sont globales. Un nœud accordé l'est dans toutes les dimensions.
+**En attendant.** Toutes les entrées sont globales : un nœud accordé l'est dans toutes les dimensions. Un
+import laisse les entrées contextuelles et les compte, puisque en importer une en global l'accorderait
+partout et la jeter retirerait ce que la source accordait.
 
 ---
 
-## 3. Métadonnées de chat : préfixe, suffixe, meta, nom d'affichage
+## 3. Préfixes et suffixes de chat
 
-**De quoi il s'agit.** LuckPerms porte le préfixe et le suffixe affichés dans le chat, des paires clé-valeur
-arbitraires, et un nom d'affichage par groupe.
+**De quoi il s'agit.** Un préfixe et un suffixe affichés dans le chat, portés par un grade ou par un joueur.
+LuckPerms les stocke ; sur NeoForge, rien ne les affiche de lui-même.
 
-**Statut.** Envisagé depuis le 2026-09-18. Cette entrée disait l'inverse, que l'affichage du chat était hors
-périmètre plutôt que reporté ; cela a été demandé, c'est donc devenu du travail à faire.
+**Ce qu'il faudra.** Le classement qui départage déjà les grades départage aussi les préfixes, sans l'étape
+de spécificité, qui n'a pas de sens entre deux préfixes. Ce qui demande une réponse d'abord n'est pas la
+résolution : les messages de chat sont signés, donc en réécrire un casse la chaîne de signature, et le
+contournement habituel, envoyer un message système à la place, perd le signalement et l'indicateur de chat
+sécurisé. Cet arbitrage reçoit une réponse écrite avant qu'on en construise quoi que ce soit.
 
-**Ce qu'il faudrait.** Un préfixe et un suffixe sur un grade et sur un joueur, résolus par le classement qui
-départage déjà les grades. Ce qui demande une décision n'est pas la résolution : les messages de chat sont
-signés, donc en réécrire un casse la chaîne de signature, et le contournement habituel, envoyer un message
-système à la place, perd le signalement et l'indicateur de chat sécurisé. Cet arbitrage reçoit une réponse
-écrite avant qu'on en construise quoi que ce soit.
-
-**En attendant.** Utiliser un mod de chat, ou garder LuckPerms, avec lequel CustomPerm s'intègre au lieu de
-le remplacer. À noter que sur NeoForge, LuckPerms stocke un préfixe mais n'affiche rien de lui-même.
+**En attendant.** Utiliser un mod de chat, ou garder LuckPerms avec un mod qui affiche ses métadonnées. Un
+import laisse préfixes, suffixes et meta, et les compte.
 
 ---
 
 ## 4. Tracks (échelles de promotion)
 
-**De quoi il s'agit.** Une liste ordonnée de groupes, pour que `promote` et `demote` fassent monter ou
-descendre un joueur d'un cran.
+**De quoi il s'agit.** Une liste ordonnée de grades, pour que promote et demote fassent monter ou descendre
+un joueur d'un cran.
 
-**Pourquoi ce n'est pas fait.** Un track est un confort d'administration posé sur l'assignation de groupe. Il
-n'accorde rien par lui-même, et assigner un grade fait déjà le travail en une commande.
+**Ce qu'il faudra.** Un `tracks.json`, les commandes et une section d'interface. Petit, et cela achète du
+confort plutôt qu'une capacité : un track n'accorde rien par lui-même, et assigner un grade fait déjà le
+travail en une commande. Cela vaut d'être fait parce qu'un serveur qui vient de LuckPerms a des tracks et
+s'attend à les retrouver.
 
-**Ce qu'il faudrait.** Un `tracks.json`, les deux commandes et une section d'interface. Petit, mais cela
-achète du confort, pas une capacité.
+**En attendant.** Assigner et désassigner les grades directement. Un import laisse les tracks et les compte.
 
 ---
 
-## 5. Nœuds de permission appartenant à d'autres mods
+## 5. Répondre aux tests de permission des autres mods
 
-**De quoi il s'agit.** Une installation LuckPerms porte en général des nœuds lus par d'autres mods, pas par
-CustomPerm.
+**De quoi il s'agit.** Une installation LuckPerms porte en général des nœuds que d'autres mods lisent.
+CustomPerm ne répond pas à ces tests, donc stocker un tel nœud reviendrait à stocker une chaîne que rien ne
+lit.
 
-**Pourquoi ce n'est pas fait.** Le backend interne de CustomPerm répond aux tests de permission pour ses
-propres nœuds et pour les commandes qu'il gère. Ce n'est pas un fournisseur de permissions généraliste pour
-les autres mods : stocker leurs nœuds reviendrait à stocker des chaînes que rien ne lit.
+**Ce qu'il faudra.** NeoForge a le mécanisme : un mod peut enregistrer le handler qui répond aux tests de
+`PermissionAPI`, et les mods déclarent leurs nœuds via la même API. S'enregistrer comme ce handler est ce qui
+transforme ces nœuds de chaînes mortes en permissions que CustomPerm décide. Un seul handler est enregistré
+pour le serveur et LuckPerms en enregistre un : lequel répond, et ce qu'il advient d'un nœud qu'aucun des
+deux ne connaît, se tranche avant d'écrire quoi que ce soit.
 
-**En attendant.** Les mods qui lisent les permissions via LuckPerms ont besoin de LuckPerms. CustomPerm
-fonctionne à côté.
+**En attendant.** Les mods qui lisent les permissions via LuckPerms ont besoin de LuckPerms ; CustomPerm
+fonctionne à côté. Un import laisse ces nœuds et les compte sur les groupes, et ne les lit même pas sur les
+joueurs.
