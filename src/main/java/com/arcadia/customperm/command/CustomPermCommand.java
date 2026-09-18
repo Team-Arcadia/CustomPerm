@@ -108,6 +108,10 @@ import java.util.stream.Collectors;
  * /customperm user    addperm|adddeny <player> <node> [duration|world=<dim>]
  *                     removeperm|removedeny <player> <node> [world=<dim>]
  *                     denygrade <player> <grade> [duration]
+ * /customperm track   create|delete <track>             # a ladder of grades, lowest first
+ *                     append <track> <grade> | insert <track> <grade> <position> | remove <track> <grade>
+ *                     promote|demote <player> <track>   # one rung up or down
+ *                     list [track]
  * /customperm grade   prefix|suffix <grade> [text]     # chat prefix/suffix of a grade, & colour codes
  * /customperm user    prefix|suffix <player> [text]    # one player's own, above their grades
  * /customperm names   [on|off|format <format>]         # decorate names with them, {prefix}{name}{suffix}
@@ -160,6 +164,23 @@ public class CustomPermCommand {
         }
         return worlds;
     }
+
+    /** Existing tracks. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_TRACKS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(com.arcadia.customperm.admin.TrackAdmin.names(), builder);
+
+    /** Grades on the track named by the "track" argument (for remove). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_TRACK_RUNGS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(
+            com.arcadia.customperm.admin.TrackAdmin.rungs(StringArgumentType.getString(ctx, "track")), builder);
+
+    /** Grades not yet on the track named by the "track" argument (for append and insert). */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_TRACK_CANDIDATES =
+        (ctx, builder) -> {
+            List<String> rungs = com.arcadia.customperm.admin.TrackAdmin.rungs(StringArgumentType.getString(ctx, "track"));
+            return SharedSuggestionProvider.suggest(CustomPerm.configManager.getGrades().grades.keySet().stream()
+                .filter(name -> !rungs.contains(name)).toList(), builder);
+        };
 
     /** Alias existants. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_ALIASES =
@@ -508,6 +529,46 @@ public class CustomPermCommand {
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
                             .executes(CustomPermCommand::userList))))
+                .then(Commands.literal("track")
+                    .then(Commands.literal("create").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("track", StringArgumentType.word())
+                            .executes(ctx -> report(ctx, com.arcadia.customperm.admin.TrackAdmin.create(
+                                StringArgumentType.getString(ctx, "track"))))))
+                    .then(Commands.literal("delete").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("track", StringArgumentType.word())
+                            .suggests(SUGGEST_TRACKS)
+                            .executes(ctx -> report(ctx, com.arcadia.customperm.admin.TrackAdmin.delete(
+                                StringArgumentType.getString(ctx, "track"))))))
+                    .then(Commands.literal("append").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("track", StringArgumentType.word())
+                            .suggests(SUGGEST_TRACKS)
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_TRACK_CANDIDATES)
+                                .executes(ctx -> report(ctx, com.arcadia.customperm.admin.TrackAdmin.append(
+                                    StringArgumentType.getString(ctx, "track"), StringArgumentType.getString(ctx, "grade")))))))
+                    .then(Commands.literal("insert").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("track", StringArgumentType.word())
+                            .suggests(SUGGEST_TRACKS)
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_TRACK_CANDIDATES)
+                                .then(Commands.argument("position", IntegerArgumentType.integer(1))
+                                    .executes(ctx -> report(ctx, com.arcadia.customperm.admin.TrackAdmin.insert(
+                                        StringArgumentType.getString(ctx, "track"), StringArgumentType.getString(ctx, "grade"),
+                                        IntegerArgumentType.getInteger(ctx, "position"))))))))
+                    .then(Commands.literal("remove").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("track", StringArgumentType.word())
+                            .suggests(SUGGEST_TRACKS)
+                            .then(Commands.argument("grade", StringArgumentType.word())
+                                .suggests(SUGGEST_TRACK_RUNGS)
+                                .executes(ctx -> report(ctx, com.arcadia.customperm.admin.TrackAdmin.remove(
+                                    StringArgumentType.getString(ctx, "track"), StringArgumentType.getString(ctx, "grade")))))))
+                    .then(trackMove("promote", true))
+                    .then(trackMove("demote", false))
+                    .then(Commands.literal("list")
+                        .executes(ctx -> trackList(ctx, null))
+                        .then(Commands.argument("track", StringArgumentType.word())
+                            .suggests(SUGGEST_TRACKS)
+                            .executes(ctx -> trackList(ctx, StringArgumentType.getString(ctx, "track"))))))
                 .then(Commands.literal("import").requires(IMPORT_ACCESS)
                     .then(Commands.literal("preview")
                         .executes(ctx -> importPreview(ctx, true))
@@ -1135,6 +1196,50 @@ public class CustomPermCommand {
 
     private static String join(List<String> values) {
         return values.isEmpty() ? "none" : String.join(", ", values);
+    }
+
+    // ---------------- track ----------------
+
+    /** {@code promote|demote <player> <track>}: one rung, through the lockout guard like any grade change. */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> trackMove(String literal,
+                                                                                                  boolean up) {
+        return Commands.literal(literal).requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+            .then(Commands.argument("player", StringArgumentType.word())
+                .suggests(SUGGEST_KNOWN_PLAYERS)
+                .then(Commands.argument("track", StringArgumentType.word())
+                    .suggests(SUGGEST_TRACKS)
+                    .executes(ctx -> trackMove(ctx, up))));
+    }
+
+    private static int trackMove(CommandContext<CommandSourceStack> ctx, boolean up) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        var server = ctx.getSource().getServer();
+        if (server == null) return 0;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
+        var profile = resolution.profile();
+        if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
+        return report(ctx, guarded(ctx, () -> com.arcadia.customperm.admin.TrackAdmin.move(server, profile.get(),
+            StringArgumentType.getString(ctx, "track"), up)));
+    }
+
+    /** Every track with its rungs, or one track. */
+    private static int trackList(CommandContext<CommandSourceStack> ctx, String track) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        List<String> names = track == null ? com.arcadia.customperm.admin.TrackAdmin.names() : List.of(track);
+        if (track != null && !CustomPerm.configManager.getGrades().tracks.containsKey(track)) {
+            return report(ctx, AdminResult.fail("No such track: " + track));
+        }
+        if (names.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal("No tracks defined. Use /customperm track create <name>."), false);
+            return 1;
+        }
+        for (String name : names) {
+            String rungs = com.arcadia.customperm.admin.TrackAdmin.describe(com.arcadia.customperm.admin.TrackAdmin.rungs(name));
+            ctx.getSource().sendSuccess(() -> Component.literal(name + ": " + rungs), false);
+        }
+        return 1;
     }
 
     // ---------------- import ----------------

@@ -90,9 +90,16 @@ public final class GradeAdmin {
             scopes.values().removeIf(GradesConfig.Scoped::isEmpty);
         });
         grades().userContexts.values().removeIf(Map::isEmpty);
+        List<String> onTracks = new ArrayList<>();
+        grades().tracks.forEach((track, rungs) -> {
+            if (rungs.remove(name)) onTracks.add(track);
+        });
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
         AdminResult result = AdminResult.ok("Deleted grade " + name).warn(warning);
+        if (!onTracks.isEmpty()) {
+            result = result.note("Taken off track(s) " + String.join(", ", onTracks) + ": the rungs around it now follow on.");
+        }
         return wasDefault ? result.note("It was the default grade: no grade applies to every player any more.") : result;
     }
 

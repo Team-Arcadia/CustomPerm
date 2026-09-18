@@ -64,6 +64,12 @@ public class GradesConfig {
     public Map<String, Map<String, UserScoped>> userContexts = new HashMap<>();
 
     /**
+     * Track name -> its grades, lowest rung first, like a LuckPerms track. A track grants nothing: it is the
+     * ladder promote and demote move a player along, one rung at a time. A grade may sit on several tracks.
+     */
+    public Map<String, List<String>> tracks = new HashMap<>();
+
+    /**
      * Nodes that apply in one context only. At the same specificity and from the same holder, one of these
      * outranks the same node without a context, like a contextual node in LuckPerms.
      */
@@ -175,6 +181,11 @@ public class GradesConfig {
         userContexts.keySet().removeIf(java.util.Objects::isNull);
         userContexts.replaceAll((uuid, scopes) -> normalizeScopes(scopes, UserScoped::new));
         userContexts.values().removeIf(Map::isEmpty);
+        if (tracks == null) tracks = new HashMap<>();
+        tracks.keySet().removeIf(java.util.Objects::isNull);
+        // An empty track is kept: it is one being built. A grade named twice would make its rung ambiguous.
+        tracks.replaceAll((name, rungs) -> rungs == null ? new ArrayList<>()
+                : new ArrayList<>(new java.util.LinkedHashSet<>(rungs.stream().filter(java.util.Objects::nonNull).toList())));
     }
 
     /**
