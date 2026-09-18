@@ -57,6 +57,35 @@ public class GradesConfig {
     /** UUID string -> grade refused -> when the refusal ends. */
     public Map<String, Map<String, Long>> userDeniedGradeExpiries = new HashMap<>();
 
+    /**
+     * UUID string -> context -> the nodes and grades that player holds in that context only, such as
+     * {@code world=minecraft:the_nether}. See {@code perm/Contexts} for how a context is written.
+     */
+    public Map<String, Map<String, UserScoped>> userContexts = new HashMap<>();
+
+    /**
+     * Nodes that apply in one context only. At the same specificity and from the same holder, one of these
+     * outranks the same node without a context, like a contextual node in LuckPerms.
+     */
+    public static class Scoped {
+        public Set<String> permissions = new HashSet<>();
+        public Set<String> deniedPermissions = new HashSet<>();
+
+        public boolean isEmpty() {
+            return permissions.isEmpty() && deniedPermissions.isEmpty();
+        }
+    }
+
+    /** What one player holds in one context: nodes, and grades that apply to them only there. */
+    public static class UserScoped extends Scoped {
+        public List<String> grades = new ArrayList<>();
+
+        @Override
+        public boolean isEmpty() {
+            return super.isEmpty() && grades.isEmpty();
+        }
+    }
+
     public static class Grade {
         public String name;
         public Set<String> permissions = new HashSet<>();        // ALLOW nodes
@@ -93,6 +122,8 @@ public class GradesConfig {
         public Map<String, Long> permissionExpiries = new HashMap<>();
         /** DENY node -> when it expires. */
         public Map<String, Long> deniedPermissionExpiries = new HashMap<>();
+        /** Context -> the nodes this grade gives in that context only. */
+        public Map<String, Scoped> contexts = new HashMap<>();
     }
 
     public void normalize() {
@@ -123,6 +154,7 @@ public class GradesConfig {
             g.suffix = emptyToNull(g.suffix);
             g.permissionExpiries = keepFor(g.permissionExpiries, g.permissions);
             g.deniedPermissionExpiries = keepFor(g.deniedPermissionExpiries, g.deniedPermissions);
+            g.contexts = normalizeScopes(g.contexts, Scoped::new);
         }
         normalizeUserGrades(userGrades);
         if (userDeniedGrades == null) userDeniedGrades = new HashMap<>();
@@ -139,6 +171,49 @@ public class GradesConfig {
         userDeniedPermissionExpiries = keepForUsers(userDeniedPermissionExpiries, userDeniedPermissions);
         userGradeExpiries = keepForUsers(userGradeExpiries, userGrades);
         userDeniedGradeExpiries = keepForUsers(userDeniedGradeExpiries, userDeniedGrades);
+        if (userContexts == null) userContexts = new HashMap<>();
+        userContexts.keySet().removeIf(java.util.Objects::isNull);
+        userContexts.replaceAll((uuid, scopes) -> normalizeScopes(scopes, UserScoped::new));
+        userContexts.values().removeIf(Map::isEmpty);
+    }
+
+    /**
+     * Scopes keyed by their stored form, so {@code world=the_nether} and {@code world=minecraft:the_nether}
+     * written by hand end up as one entry. A key that does not parse is kept as it is: it may be one a newer
+     * version reads, and it matches nothing here. Empty scopes are dropped.
+     */
+    private static <S extends Scoped> Map<String, S> normalizeScopes(Map<String, S> scopes,
+                                                                     java.util.function.Supplier<S> blank) {
+        Map<String, S> clean = new HashMap<>();
+        if (scopes == null) return clean;
+        scopes.forEach((raw, scope) -> {
+            if (raw == null || scope == null) return;
+            String parsed = com.arcadia.customperm.perm.Contexts.parse(raw);
+            S target = clean.computeIfAbsent(parsed == null ? raw : parsed, k -> blank.get());
+            if (scope.permissions != null) scope.permissions.forEach(node -> {
+                if (node != null) target.permissions.add(node);
+            });
+            if (scope.deniedPermissions != null) scope.deniedPermissions.forEach(node -> {
+                if (node != null) target.deniedPermissions.add(node);
+            });
+            if (scope instanceof UserScoped user && user.grades != null) {
+                List<String> grades = ((UserScoped) target).grades;
+                user.grades.forEach(grade -> {
+                    if (grade != null && !grades.contains(grade)) grades.add(grade);
+                });
+            }
+        });
+        clean.values().removeIf(Scoped::isEmpty);
+        return clean;
+    }
+
+    /** Whether any grade or player holds an entry limited to a context: the only case worth a resync on a world change. */
+    public boolean hasContextualEntries() {
+        if (!userContexts.isEmpty()) return true;
+        for (Grade grade : grades.values()) {
+            if (!grade.contexts.isEmpty()) return true;
+        }
+        return false;
     }
 
     /**

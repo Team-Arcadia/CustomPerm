@@ -42,6 +42,13 @@ import java.util.function.BinaryOperator;
  *       {@link GradesConfig#userDeniedPermissions}) rank above every grade at the same specificity,
  *       whatever its weight, like a node set on a LuckPerms user rather than on one of their groups.
  *       They do not beat a more specific grade node either: the rule above comes first.</li>
+ *   <li>An entry limited to a context the player is in ({@link GradesConfig.Grade#contexts},
+ *       {@link GradesConfig#userContexts}, see {@link Contexts}) outranks the same holder's entry without
+ *       one at the same specificity, like a contextual node in LuckPerms: a grade allowing a node
+ *       everywhere and denying it in the Nether refuses it there. It ranks below the holder, never above:
+ *       a heavier grade, or the player's own node, still decides over a lighter grade's contextual one.
+ *       An entry limited to a context the player is not in does not exist for this check. A grade held in
+ *       a context only is read like a grade held everywhere, while the player is there.</li>
  *   <li>Between equal ranks, a DENY wins over an ALLOW, whichever grades they come from
  *       (INVARIANT-101). Every weight left at 0, which is what a file written before the field
  *       deserializes to, makes this the only tie-break, as it was.</li>
@@ -80,6 +87,15 @@ public final class PermissionResolver {
      * @param defaultGrade grade applied to every player, or {@code null} / empty for none
      */
     public static Tristate check(GradesConfig grades, UUID uuid, String node, String defaultGrade) {
+        return check(grades, uuid, node, defaultGrade, Contexts.NONE);
+    }
+
+    /**
+     * {@link #check(GradesConfig, UUID, String, String)} for a player in {@code contexts}: entries limited
+     * to a context apply when the player is in it.
+     */
+    public static Tristate check(GradesConfig grades, UUID uuid, String node, String defaultGrade,
+                                 Contexts contexts) {
         if (node == null || uuid == null) return Tristate.UNSET;
         boolean hasDefault = defaultGrade != null && !defaultGrade.isEmpty();
         String user = uuid.toString();
@@ -89,16 +105,32 @@ public final class PermissionResolver {
         Ranked<Tristate> own = new Ranked<>(DENY_WINS);
         offerNode(own, specificity(grades.userPermissions.get(user), grades.userPermissionExpiries.get(user), node),
                 specificity(grades.userDeniedPermissions.get(user), grades.userDeniedPermissionExpiries.get(user), node),
-                PLAYER_RANK);
+                PLAYER_RANK, 0);
+        Map<String, GradesConfig.UserScoped> scoped = contexts.isEmpty() ? null : grades.userContexts.get(user);
+        if (scoped != null) {
+            for (Map.Entry<String, GradesConfig.UserScoped> entry : scoped.entrySet()) {
+                if (!contexts.satisfies(entry.getKey())) continue;
+                offerNode(own, specificity(entry.getValue().permissions, node),
+                        specificity(entry.getValue().deniedPermissions, node), PLAYER_RANK,
+                        Contexts.size(entry.getKey()));
+            }
+        }
         List<String> assigned = Expiry.alive(grades.userGrades.get(user), grades.userGradeExpiries.get(user));
         if (assigned != null) {
-            offerGrades(own, NODES, grades, assigned, node, hasDefault ? defaultGrade : null, refused);
+            offerGrades(own, NODES, grades, assigned, node, hasDefault ? defaultGrade : null, refused, contexts);
+        }
+        if (scoped != null) {
+            for (Map.Entry<String, GradesConfig.UserScoped> entry : scoped.entrySet()) {
+                if (entry.getValue().grades.isEmpty() || !contexts.satisfies(entry.getKey())) continue;
+                offerGrades(own, NODES, grades, entry.getValue().grades, node, hasDefault ? defaultGrade : null,
+                        refused, contexts);
+            }
         }
         if (own.value != null) return own.value;
 
         if (!hasDefault) return Tristate.UNSET;
         Ranked<Tristate> fallback = new Ranked<>(DENY_WINS);
-        offerGrades(fallback, NODES, grades, List.of(defaultGrade), node, null, refused);
+        offerGrades(fallback, NODES, grades, List.of(defaultGrade), node, null, refused, contexts);
         return fallback.value == null ? Tristate.UNSET : fallback.value;
     }
 
@@ -124,11 +156,11 @@ public final class PermissionResolver {
         Ranked<String> held = new Ranked<>(FIRST_SORTED);
         List<String> assigned = Expiry.alive(grades.userGrades.get(user), grades.userGradeExpiries.get(user));
         if (assigned != null) {
-            offerGrades(held, reader, grades, assigned, null, hasDefault ? defaultGrade : null, refused);
+            offerGrades(held, reader, grades, assigned, null, hasDefault ? defaultGrade : null, refused, Contexts.NONE);
         }
         if (held.value != null || !hasDefault) return held.value;
         Ranked<String> fallback = new Ranked<>(FIRST_SORTED);
-        offerGrades(fallback, reader, grades, List.of(defaultGrade), null, null, refused);
+        offerGrades(fallback, reader, grades, List.of(defaultGrade), null, null, refused, Contexts.NONE);
         return fallback.value;
     }
 
@@ -144,14 +176,24 @@ public final class PermissionResolver {
      */
     @FunctionalInterface
     private interface Reader<T> {
-        void read(Ranked<T> into, GradesConfig.Grade grade, String key, long rank);
+        void read(Ranked<T> into, GradesConfig.Grade grade, String key, long rank, Contexts contexts);
     }
 
-    private static final Reader<Tristate> NODES = (into, grade, node, rank) ->
-            offerNode(into, specificity(grade.permissions, grade.permissionExpiries, node),
-                    specificity(grade.deniedPermissions, grade.deniedPermissionExpiries, node), rank);
-    private static final Reader<String> PREFIX = (into, grade, key, rank) -> offerText(into, grade.prefix, rank);
-    private static final Reader<String> SUFFIX = (into, grade, key, rank) -> offerText(into, grade.suffix, rank);
+    private static final Reader<Tristate> NODES = (into, grade, node, rank, contexts) -> {
+        offerNode(into, specificity(grade.permissions, grade.permissionExpiries, node),
+                specificity(grade.deniedPermissions, grade.deniedPermissionExpiries, node), rank, 0);
+        // Checked for emptiness first: a grade without contextual nodes, the usual one, pays nothing more.
+        if (grade.contexts.isEmpty() || contexts.isEmpty()) return;
+        for (Map.Entry<String, GradesConfig.Scoped> entry : grade.contexts.entrySet()) {
+            if (!contexts.satisfies(entry.getKey())) continue;
+            offerNode(into, specificity(entry.getValue().permissions, node),
+                    specificity(entry.getValue().deniedPermissions, node), rank, Contexts.size(entry.getKey()));
+        }
+    };
+    private static final Reader<String> PREFIX =
+            (into, grade, key, rank, contexts) -> offerText(into, grade.prefix, rank);
+    private static final Reader<String> SUFFIX =
+            (into, grade, key, rank, contexts) -> offerText(into, grade.suffix, rank);
 
     /** Between equal ranks, a DENY wins over an ALLOW (INVARIANT-101). */
     private static final BinaryOperator<Tristate> DENY_WINS =
@@ -161,18 +203,19 @@ public final class PermissionResolver {
             (kept, offered) -> offered.compareTo(kept) < 0 ? offered : kept;
 
     /** Inside one holder the same rule applies, DENY included: allowing and denying at one level refuses. */
-    private static void offerNode(Ranked<Tristate> into, int allow, int deny, long rank) {
+    private static void offerNode(Ranked<Tristate> into, int allow, int deny, long rank, int context) {
         if (allow == NONE && deny == NONE) return;
-        into.offer(Math.max(allow, deny), deny >= allow ? Tristate.DENY : Tristate.ALLOW, rank);
+        into.offer(Math.max(allow, deny), deny >= allow ? Tristate.DENY : Tristate.ALLOW, rank, context);
     }
 
     /** A prefix has no specificity: every one is offered at the same reach, so only the rank decides. */
     private static void offerText(Ranked<String> into, String text, long rank) {
-        if (text != null && !text.isEmpty()) into.offer(EXACT, text, rank);
+        if (text != null && !text.isEmpty()) into.offer(EXACT, text, rank, 0);
     }
 
     private static <T> void offerGrades(Ranked<T> best, Reader<T> reader, GradesConfig grades,
-                                        List<String> gradeNames, String node, String skip, List<String> refused) {
+                                        List<String> gradeNames, String node, String skip, List<String> refused,
+                                        Contexts contexts) {
         for (String gradeName : gradeNames) {
             if (gradeName == null || gradeName.equals(skip)) continue;
             if (refused != null && refused.contains(gradeName)) continue;
@@ -180,13 +223,13 @@ public final class PermissionResolver {
             if (grade == null) continue;
             if (grade.parents.isEmpty()) {
                 // The overwhelming case, and the one that must stay free of the walk's allocations.
-                reader.read(best, grade, node, grade.weight);
+                reader.read(best, grade, node, grade.weight, contexts);
                 continue;
             }
             // A chain answers with one verdict, which then competes with the other grades at the weight of
             // the grade the player actually holds: what a parent says arrives through its child.
             Ranked<T> chain = new Ranked<>(best.onTie);
-            walkChain(chain, reader, grades, gradeName, grade, node, refused);
+            walkChain(chain, reader, grades, gradeName, grade, node, refused, contexts);
             best.merge(chain, grade.weight);
         }
     }
@@ -198,7 +241,8 @@ public final class PermissionResolver {
      * grade it comes back to instead of recursing, and {@link #MAX_INHERITANCE_DEPTH} bounds the rest.
      */
     private static <T> void walkChain(Ranked<T> chain, Reader<T> reader, GradesConfig grades, String rootName,
-                                      GradesConfig.Grade root, String node, List<String> refused) {
+                                      GradesConfig.Grade root, String node, List<String> refused,
+                                      Contexts contexts) {
         // Grades are followed by the key they are stored under, never by their name field: a hand-edited
         // file can disagree on the two, and the key is what a parent entry names.
         Set<String> seen = new HashSet<>();
@@ -210,7 +254,7 @@ public final class PermissionResolver {
         for (int depth = 0; depth <= MAX_INHERITANCE_DEPTH && !level.isEmpty(); depth++) {
             List<GradesConfig.Grade> next = new ArrayList<>();
             for (GradesConfig.Grade grade : level) {
-                reader.read(chain, grade, node, -depth);
+                reader.read(chain, grade, node, -depth, contexts);
                 // Read where it is declared: a grade nearer to the holder has already been walked, so its
                 // refusal closes a farther one, never the other way round.
                 seen.addAll(grade.deniedParents);
@@ -226,7 +270,7 @@ public final class PermissionResolver {
 
     /**
      * The best entry seen so far in one layer: the most specific wins, the highest rank breaks a tie on
-     * specificity, and {@code onTie} breaks a tie on rank. A rank is a grade weight, or {@link #PLAYER_RANK}
+     * specificity, the entry naming more contexts breaks a tie on rank, and {@code onTie} breaks the rest. A rank is a grade weight, or {@link #PLAYER_RANK}
      * for what the player carries themselves. Written so the outcome does not depend on the order things
      * are offered in, which is the order grades were assigned in and carries no meaning. Permissions and
      * prefixes are both resolved here, so the two can never rank holders differently.
@@ -235,6 +279,8 @@ public final class PermissionResolver {
         private final BinaryOperator<T> onTie;
         private int specificity = NONE;
         private long rank;
+        /** How many context pairs the kept entry names, 0 for one that applies everywhere. */
+        private int context;
         private T value;
 
         Ranked(BinaryOperator<T> onTie) {
@@ -243,21 +289,18 @@ public final class PermissionResolver {
 
         /** Takes the answer of a resolved inheritance chain as one entry, at the rank of the grade held. */
         void merge(Ranked<T> chain, long rank) {
-            if (chain.value != null) offer(chain.specificity, chain.value, rank);
+            if (chain.value != null) offer(chain.specificity, chain.value, rank, chain.context);
         }
 
-        void offer(int reach, T candidate, long rank) {
-            if (reach > specificity) {
+        void offer(int reach, T candidate, long rank, int context) {
+            if (reach > specificity
+                    || (reach == specificity && (rank > this.rank || (rank == this.rank && context > this.context)))) {
                 specificity = reach;
                 this.rank = rank;
+                this.context = context;
                 value = candidate;
-            } else if (reach == specificity) {
-                if (rank > this.rank) {
-                    this.rank = rank;
-                    value = candidate;
-                } else if (rank == this.rank) {
-                    value = onTie.apply(value, candidate);
-                }
+            } else if (reach == specificity && rank == this.rank && context == this.context) {
+                value = onTie.apply(value, candidate);
             }
         }
     }

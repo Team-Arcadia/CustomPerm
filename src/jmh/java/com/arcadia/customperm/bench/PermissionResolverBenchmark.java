@@ -10,7 +10,9 @@
 package com.arcadia.customperm.bench;
 
 import com.arcadia.customperm.config.GradesConfig;
+import com.arcadia.customperm.perm.Contexts;
 import com.arcadia.customperm.perm.PermissionResolver;
+import com.arcadia.customperm.perm.Tristate;
 import org.openjdk.jmh.annotations.*;
 
 import java.util.LinkedHashMap;
@@ -39,6 +41,10 @@ public class PermissionResolverBenchmark {
     private UUID         uuid;
     /** Holds a single grade at the end of a three-deep inheritance chain. */
     private UUID         heir;
+    /** Holds one grade that also carries nodes limited to the Nether. */
+    private UUID         traveller;
+
+    private static final Contexts IN_NETHER = Contexts.world("minecraft:the_nether");
 
     private static final String ALLOWED_NODE = "customperm.command.fly";
     private static final String DENIED_NODE  = "customperm.command.ban";
@@ -91,6 +97,19 @@ public class PermissionResolverBenchmark {
         }
         grades.grades.get("chain_base").permissions.add(ALLOWED_NODE);
         grades.userGrades.put(heir.toString(), List.of("chain_leaf"));
+
+        // Contextual: a grade with 10 global ALLOW and 10 more limited to the Nether, one overriding a global one.
+        traveller = UUID.randomUUID();
+        GradesConfig.Grade explorer = new GradesConfig.Grade();
+        explorer.name = "explorer";
+        for (int i = 0; i < 10; i++) explorer.permissions.add("customperm.explorer.perm" + i);
+        explorer.permissions.add(ALLOWED_NODE);
+        GradesConfig.Scoped nether = new GradesConfig.Scoped();
+        for (int i = 0; i < 10; i++) nether.permissions.add("customperm.nether.perm" + i);
+        nether.deniedPermissions.add(ALLOWED_NODE);
+        explorer.contexts.put("world=minecraft:the_nether", nether);
+        grades.grades.put("explorer", explorer);
+        grades.userGrades.put(traveller.toString(), List.of("explorer"));
     }
 
     /**
@@ -129,5 +148,20 @@ public class PermissionResolverBenchmark {
     @Benchmark
     public boolean resolveAbsent() {
         return PermissionResolver.resolve(grades, uuid, ABSENT_NODE);
+    }
+
+    /**
+     * The path a server takes on every check since world contexts: the player's world is passed, but no
+     * entry is limited to one. Must match {@link #resolveAllow}.
+     */
+    @Benchmark
+    public Tristate resolveAllowInWorld() {
+        return PermissionResolver.check(grades, uuid, ALLOWED_NODE, null, IN_NETHER);
+    }
+
+    /** A grade with nodes limited to the Nether, read from the Nether: the contextual DENY decides. */
+    @Benchmark
+    public Tristate resolveContextual() {
+        return PermissionResolver.check(grades, traveller, ALLOWED_NODE, null, IN_NETHER);
     }
 }
