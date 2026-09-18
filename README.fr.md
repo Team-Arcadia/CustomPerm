@@ -399,9 +399,9 @@ d'un groupe et les préfixes temporaires, qui sont posés pour de bon ici ; tout
 plusieurs mondes), une entrée temporaire limitée à un monde, et les parents d'un groupe, un refus ou un
 préfixe limités à un monde ; meta, noms affichés, et les nœuds que d'autres mods lisent sans les déclarer à
 NeoForge, que plus rien ici ne lirait. Les nœuds déclarés par les mods sont importés tels quels, sur les
-groupes et les joueurs, puisque CustomPerm y répond. Les raisons sont dans [docs/PLANNED_FEATURES.md](docs/PLANNED_FEATURES.md). Sur les
-joueurs, seul ce que CustomPerm sait lire est regardé : leurs groupes, leur préfixe et leur suffixe, et leurs
-nœuds `customperm`, `minecraft.command` et `*`.
+groupes et les joueurs, puisque CustomPerm y répond. Sur les
+joueurs, seul ce que CustomPerm sait lire est regardé : leurs groupes, leur préfixe et leur suffixe, leurs
+nœuds `customperm`, `minecraft.command` et `*`, et les nœuds déclarés par les mods.
 
 **Tant que LuckPerms est installé, c'est lui qui décide des permissions**, donc ce qui est importé attend :
 c'est lisible sur la page Grades, et cela prend le relais le jour où LuckPerms est retiré.

@@ -392,9 +392,9 @@ What is left behind, and said in the report rather than dropped in silence: a gr
 temporary prefixes, which are set for good here; any other context (`server=`, several worlds), a
 temporary entry limited to a world, and a group's parents, a refusal or a prefix limited to a world; meta,
 display names, and the nodes other mods read without declaring them to NeoForge, which nothing here would
-read back. Nodes mods declared are imported as they are, on groups and players, since CustomPerm answers them. The reasons are in [docs/PLANNED_FEATURES.md](docs/PLANNED_FEATURES.md). On players, only
-what CustomPerm can read is looked at at all: their groups, their prefix and suffix, and their `customperm`,
-`minecraft.command` and `*` nodes.
+read back. Nodes mods declared are imported as they are, on groups and players, since CustomPerm answers them. On players, only
+what CustomPerm can read is looked at at all: their groups, their prefix and suffix, their `customperm`,
+`minecraft.command` and `*` nodes, and the nodes mods declared.
 
 **While LuckPerms is installed it still decides permissions**, so what is imported waits: it is readable on
 the Grades page, and takes over the day LuckPerms is removed.
