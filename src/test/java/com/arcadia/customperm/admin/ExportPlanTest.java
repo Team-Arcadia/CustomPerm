@@ -231,6 +231,26 @@ class ExportPlanTest {
         assertTrue(back.userContexts.get(PLAYER).get("world=minecraft:the_end").grades.contains("base"));
     }
 
+    // --- tracks ---
+
+    @Test
+    void aTrackKeepsItsExportedRungsInOrder() {
+        GradesConfig config = new GradesConfig();
+        grade(config, "member", 0, List.of(), List.of(), Set.of(), Set.of());
+        grade(config, "vip", 0, List.of(), List.of(), Set.of(), Set.of());
+        grade(config, "Staff", 0, List.of(), List.of(), Set.of(), Set.of());
+        config.tracks.put("ladder", new ArrayList<>(List.of("member", "Staff", "vip")));
+        config.tracks.put("Bad", new ArrayList<>(List.of("member")));
+
+        ExportPlan plan = ExportPlan.of(config, "");
+
+        assertEquals(List.of(new ExportPlan.Track("ladder", List.of("member", "vip"))), plan.tracks(),
+                "a grade that is not exported leaves the ladder, the rest keeps its order");
+        assertEquals(2, plan.dropped(), "the refused rung and the refused track name are both counted");
+        assertEquals(List.of("member", "vip"), plan.asConfig().tracks.get("ladder"));
+        assertTrue(String.join("\n", plan.report()).contains("1 track(s) written"), plan.report().toString());
+    }
+
     // --- helpers ---
 
     private static void grade(GradesConfig config, String name, int weight, List<String> parents,

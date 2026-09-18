@@ -63,6 +63,8 @@ public final class LuckPermsImport {
             ImportPlan.Builder plan = new ImportPlan.Builder();
             return api.getGroupManager().loadAllGroups()
                     .thenApply(ignored -> readGroups(api, plan, exposeCommands))
+                    .thenCompose(ignored -> api.getTrackManager().loadAllTracks())
+                    .thenApply(ignored -> readTracks(api, plan))
                     .thenCompose(ignored -> readUsers(api, plan, exposeCommands))
                     .thenApply(ignored -> plan.build())
                     .exceptionally(error -> failed(error.getMessage()));
@@ -94,6 +96,14 @@ public final class LuckPermsImport {
             plan.grade(new ImportPlan.Grade(group.getName(), group.getWeight().orElse(0),
                     List.copyOf(parents), List.copyOf(deniedParents), Set.copyOf(allow), Set.copyOf(deny),
                     chat.prefix, chat.suffix, Map.copyOf(expiries), List.copyOf(scoped)));
+        }
+        return null;
+    }
+
+    /** Every track with its groups, lowest first, which become the same ladder of grades. */
+    private static Void readTracks(LuckPerms api, ImportPlan.Builder plan) {
+        for (net.luckperms.api.track.Track track : api.getTrackManager().getLoadedTracks()) {
+            plan.track(track.getName(), track.getGroups());
         }
         return null;
     }

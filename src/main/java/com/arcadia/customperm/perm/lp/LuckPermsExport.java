@@ -20,6 +20,7 @@ import net.luckperms.api.node.types.InheritanceNode;
 import net.luckperms.api.node.types.PrefixNode;
 import net.luckperms.api.node.types.SuffixNode;
 import net.luckperms.api.node.types.WeightNode;
+import net.luckperms.api.track.Track;
 
 import java.util.List;
 import java.util.Set;
@@ -127,7 +128,7 @@ public final class LuckPermsExport {
                 await(api.getGroupManager().saveGroup(fallback));
                 progress.accept(groups + 1);
             }
-            int before = plan.holders() - plan.players().size();
+            int before = plan.groups().size() + (plan.carriesDefault() ? 1 : 0);
 
             for (ExportPlan.Player source : plan.players()) {
                 holder = "player " + source.uuid();
@@ -147,6 +148,27 @@ public final class LuckPermsExport {
                 user.getCachedData().invalidate();
                 players++;
                 progress.accept(before + players);
+            }
+            int written = before + players;
+            for (ExportPlan.Track source : plan.tracks()) {
+                holder = "track " + source.name();
+                Track track = await(api.getTrackManager().loadTrack(source.name())).orElse(null);
+                boolean created = track == null;
+                if (created) track = await(api.getTrackManager().createAndLoadTrack(source.name()));
+                if (!created && !replace) {
+                    // Adding never reorders a ladder LuckPerms already has: that order is a decision there.
+                    if (!track.getGroups().equals(source.groups())) kept[0]++;
+                } else {
+                    track.clearGroups();
+                    for (String name : source.groups()) {
+                        Group group = api.getGroupManager().getGroup(name);
+                        if (group == null) group = await(api.getGroupManager().loadGroup(name)).orElse(null);
+                        if (group == null) throw new IllegalStateException("LuckPerms has no group " + name);
+                        track.appendGroup(group);
+                    }
+                    await(api.getTrackManager().saveTrack(track));
+                }
+                progress.accept(++written);
             }
             return new ExportPlan.Outcome(groups, players, kept[0], null, null);
         } catch (Throwable t) {

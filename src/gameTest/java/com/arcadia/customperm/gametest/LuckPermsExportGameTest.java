@@ -60,6 +60,7 @@ public class LuckPermsExportGameTest {
     private static final String BASE = "cp_x_base";
     private static final String VIP = "cp_x_vip";
     private static final String PAGE_GRADE = "cp_x_page";
+    private static final String TRACK = "cp_x_ladder";
     private static final UUID USER = UUID.fromString("00000000-0000-0000-0000-0000000000cc");
 
     @GameTest(template = TEMPLATE, timeoutTicks = 400, batch = "customperm_lp_export_write")
@@ -94,6 +95,7 @@ public class LuckPermsExportGameTest {
             GradesConfig.UserScoped end = new GradesConfig.UserScoped();
             end.grades.add(BASE);
             config.userContexts.put(USER.toString(), new java.util.HashMap<>(java.util.Map.of("world=minecraft:the_end", end)));
+            config.tracks.put(TRACK, new ArrayList<>(List.of(BASE, VIP)));
 
             ExportPlan plan = ExportPlan.of(config, BASE)
                     .withExisting(LuckPermsTestSupport.await(LuckPermsExport.existingGroups()));
@@ -103,7 +105,7 @@ public class LuckPermsExportGameTest {
             List<Integer> told = new ArrayList<>();
             ExportPlan.Outcome added = LuckPermsTestSupport.await(LuckPermsExport.write(plan, false, told::add));
             if (!added.complete()) fail("Adding stopped at " + added.stoppedAt() + ": " + added.error());
-            if (!told.equals(List.of(1, 2, 3, 4))) fail("Progress must count every holder, in order: " + told);
+            if (!told.equals(List.of(1, 2, 3, 4, 5))) fail("Progress must count every holder, in order: " + told);
             if (added.kept() != 1) fail("The node LuckPerms set the other way must be kept and counted: " + added);
 
             List<String> base = LuckPermsTestSupport.groupNodes(BASE);
@@ -130,6 +132,8 @@ public class LuckPermsExportGameTest {
             expect(user, "prefix." + ExportPlan.PLAYER_PRIORITY + ".[Me] =true",
                     "The player's own prefix must arrive above every grade's");
             if (LuckPermsTestSupport.groupExists("cp_x_bad")) fail("A refused grade must not be written under another name.");
+            if (!LuckPermsTestSupport.trackGroups(TRACK).equals(List.of(BASE, VIP)))
+                fail("The track must arrive with its groups in order: " + LuckPermsTestSupport.trackGroups(TRACK));
 
             ExportPlan.Outcome replaced = LuckPermsTestSupport.await(LuckPermsExport.write(plan, true, written -> { }));
             if (!replaced.complete()) fail("Replacing stopped at " + replaced.stoppedAt() + ": " + replaced.error());
@@ -145,7 +149,7 @@ public class LuckPermsExportGameTest {
             LuckPermsTestSupport.clearGroupNodes(ExportPlan.LP_DEFAULT, List.of("group." + BASE));
             LuckPermsTestSupport.clearNodes(USER, List.of("group." + VIP, "group." + BASE, "customperm.command.home",
                     "prefix." + ExportPlan.PLAYER_PRIORITY + ".[Me] "));
-            LuckPermsTestSupport.cleanup(List.of(BASE, VIP), List.of());
+            LuckPermsTestSupport.cleanup(List.of(BASE, VIP), List.of(TRACK));
         }
         helper.succeed();
     }

@@ -186,6 +186,23 @@ public final class ImportAdmin {
             if (source.suffix() != null) grades().userSuffixes.putIfAbsent(source.uuid(), source.suffix());
             playersWritten++;
         }
+        int tracksWritten = 0;
+        List<String> tracksKept = new ArrayList<>();
+        for (Map.Entry<String, List<String>> source : new java.util.TreeMap<>(plan.tracks()).entrySet()) {
+            if (!GradeAdmin.validName(source.getKey())) {
+                refused.add(source.getKey());
+                continue;
+            }
+            if (!replace && grades().tracks.containsKey(source.getKey())) {
+                // Merging two ladders has no right order: the one already here is what the admin built.
+                if (!grades().tracks.get(source.getKey()).equals(source.getValue())) tracksKept.add(source.getKey());
+                continue;
+            }
+            // A rung naming a group that did not become a grade would be a rung nobody can stand on.
+            grades().tracks.put(source.getKey(), new ArrayList<>(source.getValue().stream()
+                    .filter(grades().grades::containsKey).toList()));
+            tracksWritten++;
+        }
         // An entry left empty by a player who only carried entries that were not imported would show them
         // as holding something they do not.
         grades().normalize();
@@ -202,7 +219,11 @@ public final class ImportAdmin {
                 gradesWritten, playersWritten, exposed);
 
         AdminResult result = AdminResult.ok("Imported " + gradesWritten + " grade(s), " + playersWritten
-                + " player(s) and exposed " + exposed + " command(s).").warn(warning);
+                + " player(s), " + tracksWritten + " track(s) and exposed " + exposed + " command(s).").warn(warning);
+        if (!tracksKept.isEmpty()) {
+            result = result.note("Tracks that already existed kept their own rungs: " + String.join(", ", tracksKept)
+                    + ". Import with replace to take LuckPerms' order.");
+        }
         if (!merged.isEmpty()) {
             result = result.note("Added to grades that already existed, keeping their weight: "
                     + String.join(", ", merged) + ".");

@@ -33,7 +33,8 @@ import java.util.regex.Pattern;
  * its weight a weight, its parents inheritance nodes, a refused parent or a denied node a node set to
  * false. What can be left out is a name LuckPerms would refuse, and whatever names it.
  */
-public record ExportPlan(List<Group> groups, List<Player> players, String defaultGrade, List<String> refused,
+public record ExportPlan(List<Group> groups, List<Player> players, List<Track> tracks, String defaultGrade,
+                         List<String> refused,
                          List<String> notes, Set<String> existing, int dropped) {
 
     /** LuckPerms' own group, which every player is in unless moved out of it. */
@@ -73,6 +74,10 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
             return grades.size() + deniedGrades.size() + allow.size() + deny.size() + scoped.size()
                     + (prefix == null ? 0 : 1) + (suffix == null ? 0 : 1);
         }
+    }
+
+    /** One track as the LuckPerms track it would become, its groups lowest first. */
+    public record Track(String name, List<String> groups) {
     }
 
     /**
@@ -165,6 +170,17 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
             if (player.entries() > 0) players.add(player);
         }
 
+        List<Track> tracks = new ArrayList<>();
+        for (var entry : new TreeMap<>(config.tracks).entrySet()) {
+            String who = "track " + entry.getKey();
+            if (!validName(entry.getKey())) {
+                dropped[0]++;
+                notes.add("Not exported, LuckPerms would refuse or rename the track " + entry.getKey() + ".");
+                continue;
+            }
+            tracks.add(new Track(entry.getKey(), kept(entry.getValue(), exported, config, dropped, notes, who)));
+        }
+
         String exportedDefault = "";
         if (defaultGrade != null && !defaultGrade.isEmpty()) {
             if (exported.contains(defaultGrade)) {
@@ -175,7 +191,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
                         + "LuckPerms default group.");
             }
         }
-        return new ExportPlan(List.copyOf(groups), List.copyOf(players), exportedDefault, List.copyOf(refused),
+        return new ExportPlan(List.copyOf(groups), List.copyOf(players), List.copyOf(tracks), exportedDefault,
+                List.copyOf(refused),
                 List.copyOf(notes), Set.of(), dropped[0]);
     }
 
@@ -259,11 +276,11 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
         for (Group group : groups) {
             if (groupsInLuckPerms.contains(group.name())) existing.add(group.name());
         }
-        return new ExportPlan(groups, players, defaultGrade, refused, notes, Set.copyOf(existing), dropped);
+        return new ExportPlan(groups, players, tracks, defaultGrade, refused, notes, Set.copyOf(existing), dropped);
     }
 
     public boolean isEmpty() {
-        return groups.isEmpty() && players.isEmpty();
+        return groups.isEmpty() && players.isEmpty() && tracks.isEmpty();
     }
 
     /**
@@ -274,9 +291,9 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
         return !defaultGrade.isEmpty() && !defaultGrade.equals(LP_DEFAULT);
     }
 
-    /** Groups, the default group when a default grade is carried to it, then players: what gets written. */
+    /** Groups, the default group when a default grade is carried to it, players, then tracks: what gets written. */
     public int holders() {
-        return groups.size() + (carriesDefault() ? 1 : 0) + players.size();
+        return groups.size() + (carriesDefault() ? 1 : 0) + players.size() + tracks.size();
     }
 
     public int entries() {
@@ -309,6 +326,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
             source.scoped().forEach(entry -> entry.addTo(Scopes.of(grade, entry.context())));
             config.grades.put(grade.name, grade);
         }
+        for (Track track : tracks) config.tracks.put(track.name(), new ArrayList<>(track.groups()));
         for (Player player : players) {
             if (!player.grades().isEmpty()) config.userGrades.put(player.uuid(), new ArrayList<>(player.grades()));
             if (!player.deniedGrades().isEmpty()) {
@@ -350,6 +368,10 @@ public record ExportPlan(List<Group> groups, List<Player> players, String defaul
                     ? " is the LuckPerms default group itself."
                     : " becomes a parent of the LuckPerms default group, which every player is in unless "
                             + "moved out of it."));
+        }
+        if (!tracks.isEmpty()) {
+            lines.add(tracks.size() + " track(s) written with their rungs. Adding keeps a track LuckPerms already has "
+                    + "as it is; replacing sets its groups to these.");
         }
         if (!existing.isEmpty()) {
             lines.add("Already in LuckPerms: " + String.join(", ", existing) + ". Adding keeps what they hold; "

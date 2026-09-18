@@ -57,6 +57,7 @@ public class LuckPermsImportGameTest {
     private static final UUID USER = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
     private static final String PAGE_GROUP = "cp_m_page";
     private static final String NETHER = "world=minecraft:the_nether";
+    private static final String TRACK = "cp_m_ladder";
     private static final String END = "world=minecraft:the_end";
 
     @GameTest(template = TEMPLATE, timeoutTicks = 400)
@@ -89,6 +90,9 @@ public class LuckPermsImportGameTest {
             LuckPermsTestSupport.addTemporaryParent(BASE, "default", 3600);
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "minecraft.command.weather", "true", "", "0");
             apply(LpEditOp.USER_PERM_ADD, USER.toString(), "customperm.command.seed", "false", "world=the_end", "0");
+            apply(LpEditOp.TRACK_CREATE, TRACK);
+            apply(LpEditOp.TRACK_APPEND, TRACK, BASE);
+            apply(LpEditOp.TRACK_APPEND, TRACK, VIP);
 
             ImportPlan plan = LuckPermsTestSupport.await(LuckPermsImport.read(true));
 
@@ -137,6 +141,8 @@ public class LuckPermsImportGameTest {
             if (!player.scoped().equals(List.of(new ScopedGrant(END, ScopedGrant.DENY, "customperm.command.seed"))))
                 fail("A player's node limited to a world must arrive with it: " + player.scoped());
             if (plan.counts().worlds() != 2) fail("Both entries limited to a world must be counted: " + plan.counts());
+            if (!List.of(BASE, VIP).equals(plan.tracks().get(TRACK)))
+                fail("A track must arrive with its groups in order: " + plan.tracks());
 
             if (plan.counts().temporary() < 1 || plan.counts().contextual() < 1
                     || plan.counts().foreign() < 1 || plan.counts().other() < 1)
@@ -162,6 +168,7 @@ public class LuckPermsImportGameTest {
                 fail("The temporary node was written without its expiry.");
             if (!grades.userGradeExpiries.getOrDefault(USER.toString(), java.util.Map.of()).containsKey(BASE))
                 fail("The temporary grade was written without its expiry.");
+            if (!List.of(BASE, VIP).equals(grades.tracks.get(TRACK))) fail("The track was not written: " + grades.tracks);
             if (!grades.grades.get(VIP).contexts.get(NETHER).permissions.contains("customperm.command.seed"))
                 fail("The node limited to the Nether was not written there.");
             if (!grades.userContexts.get(USER.toString()).get(END).deniedPermissions.contains("customperm.command.seed"))
@@ -179,7 +186,8 @@ public class LuckPermsImportGameTest {
             grades.userDeniedPermissions.keySet().retainAll(nodeHoldersBefore);
             grades.userGradeExpiries.keySet().retainAll(holdersBefore);
             grades.userContexts.remove(USER.toString());
-            LuckPermsTestSupport.cleanup(List.of(BASE, VIP), List.of());
+            grades.tracks.remove(TRACK);
+            LuckPermsTestSupport.cleanup(List.of(BASE, VIP), List.of(TRACK));
         }
         helper.succeed();
     }

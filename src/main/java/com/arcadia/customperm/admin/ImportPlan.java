@@ -23,11 +23,12 @@ import java.util.Set;
  * <p>A plan is a description, never a promise: applying it can still refuse, for instance when the
  * change would take away the admin's own access to the grades.
  */
-public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> exposeCommands,
+public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, List<String>> tracks,
+                         Set<String> exposeCommands,
                          List<String> skipped, Counts counts) {
 
     public static final ImportPlan EMPTY =
-            new ImportPlan(List.of(), List.of(), Set.of(), List.of(), Counts.NONE);
+            new ImportPlan(List.of(), List.of(), Map.of(), Set.of(), List.of(), Counts.NONE);
 
     /**
      * One LuckPerms group as the grade it would become; {@code prefix} and {@code suffix} are null for none.
@@ -64,7 +65,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
     }
 
     public boolean isEmpty() {
-        return grades.isEmpty() && players.isEmpty();
+        return grades.isEmpty() && players.isEmpty() && tracks.isEmpty();
     }
 
     /**
@@ -78,6 +79,10 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
                 + "minecraft.command to customperm.command"
                 + (counts.timed == 0 ? "" : ", " + counts.timed + " temporary, carried with their expiry")
                 + (counts.worlds == 0 ? "." : ", " + counts.worlds + " limited to a world, carried with it."));
+        if (!tracks.isEmpty()) {
+            lines.add(tracks.size() + " track(s) carried with their rungs: " + String.join(", ", new java.util.TreeSet<>(tracks.keySet()))
+                    + ".");
+        }
         if (!exposeCommands.isEmpty()) {
             lines.add(exposeCommands.size() + " command(s) also exposed, without which those nodes would grant "
                     + "nothing: " + String.join(", ", exposeCommands) + ".");
@@ -88,8 +93,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
             lines.add(counts.skipped() + " entrie(s) are left behind: " + counts.temporary + " temporary parent or "
                     + "prefix, "
                     + counts.contextual + " contextual beyond one world, " + counts.foreign + " belonging to other mods, "
-                    + counts.other + " of a kind CustomPerm has no equivalent for (meta, display name, "
-                    + "tracks).");
+                    + counts.other + " of a kind CustomPerm has no equivalent for (meta, display name).");
         }
         lines.addAll(skipped);
         return lines;
@@ -127,6 +131,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
     public static final class Builder {
         private final List<Grade> grades = new ArrayList<>();
         private final List<Player> players = new ArrayList<>();
+        private final Map<String, List<String>> tracks = new java.util.LinkedHashMap<>();
         private final Set<String> commands = new LinkedHashSet<>();
         private final List<String> skipped = new ArrayList<>();
         private int nodes;
@@ -144,6 +149,11 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
 
         public void player(Player player) {
             players.add(player);
+        }
+
+        /** A LuckPerms track, its groups lowest first. */
+        public void track(String name, List<String> groups) {
+            tracks.put(name, List.copyOf(groups));
         }
 
         public void expose(String command) {
@@ -187,7 +197,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Set<String> e
         }
 
         public ImportPlan build() {
-            return new ImportPlan(List.copyOf(grades), List.copyOf(players), Set.copyOf(commands),
+            return new ImportPlan(List.copyOf(grades), List.copyOf(players), Map.copyOf(tracks), Set.copyOf(commands),
                     List.copyOf(skipped),
                     new Counts(grades.size(), players.size(), nodes, translated, timed, worlds, commands.size(),
                             temporary, contextual, foreign, other));

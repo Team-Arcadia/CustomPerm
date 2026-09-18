@@ -90,6 +90,7 @@ class ImportPlanTest {
         builder.imported(false);
         builder.world();
         builder.expose("tp");
+        builder.track("ladder", List.of("default", "vip"));
         builder.temporary();
         builder.contextual();
         builder.foreign();
@@ -111,6 +112,8 @@ class ImportPlanTest {
         assertTrue(report.contains("1 limited to a world, carried with it."), report);
         assertTrue(report.contains("4 entrie(s) are left behind"), report);
         assertTrue(report.contains("tp"), "the exposed command is named: " + report);
+        assertTrue(report.contains("1 track(s) carried with their rungs: ladder."), report);
+        assertFalse(report.contains("tracks)"), "tracks are no longer left behind: " + report);
     }
 
     @Test
