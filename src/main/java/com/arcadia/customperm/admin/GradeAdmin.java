@@ -83,6 +83,8 @@ public final class GradeAdmin {
             assigned.removeIf(name::equals);
             if (assigned.isEmpty()) iterator.remove();
         }
+        grades().userGradeExpiries.values().forEach(expiries -> expiries.remove(name));
+        grades().userGradeExpiries.values().removeIf(Map::isEmpty);
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
         AdminResult result = AdminResult.ok("Deleted grade " + name).warn(warning);
@@ -95,6 +97,15 @@ public final class GradeAdmin {
      * to operators too.
      */
     public static AdminResult addNode(MinecraftServer server, String gradeName, String rawNode, boolean deny) {
+        return addNode(server, gradeName, rawNode, deny, 0);
+    }
+
+    /**
+     * {@link #addNode(MinecraftServer, String, String, boolean)} for {@code seconds}, 0 for permanent. On a
+     * node already there, the duration replaces what it had: temporary from now, or permanent.
+     */
+    public static AdminResult addNode(MinecraftServer server, String gradeName, String rawNode, boolean deny,
+                                      long seconds) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
         String node = normalizeNode(rawNode);
@@ -102,12 +113,15 @@ public final class GradeAdmin {
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
         Set<String> nodes = deny ? grade.deniedPermissions : grade.permissions;
-        if (!nodes.add(node)) {
+        boolean added = nodes.add(node);
+        boolean timed = Expiries.apply(deny ? grade.deniedPermissionExpiries : grade.permissionExpiries, node, seconds);
+        if (!added && !timed) {
             return AdminResult.ok(node + " is already " + (deny ? "denied to " : "granted to ") + gradeName + " — no change.");
         }
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
-        return AdminResult.ok((deny ? "Denied " : "Added ") + node + " -> " + gradeName).warn(warning);
+        return AdminResult.ok(added ? (deny ? "Denied " : "Added ") + node + " -> " + gradeName + Expiries.span(seconds)
+                : node + " on " + gradeName + " " + Expiries.became(seconds)).warn(warning);
     }
 
     public static AdminResult removeNode(MinecraftServer server, String gradeName, String rawNode, boolean deny) {
@@ -120,6 +134,7 @@ public final class GradeAdmin {
         if (!nodes.remove(node)) {
             return AdminResult.ok(node + " is not " + (deny ? "denied to " : "granted to ") + gradeName + " — no change.");
         }
+        (deny ? grade.deniedPermissionExpiries : grade.permissionExpiries).remove(node);
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
         return AdminResult.ok((deny ? "Removed the denial of " : "Removed ") + node + " from " + gradeName).warn(warning);
@@ -298,6 +313,11 @@ public final class GradeAdmin {
     }
 
     public static AdminResult assign(MinecraftServer server, GameProfile profile, String gradeName) {
+        return assign(server, profile, gradeName, 0);
+    }
+
+    /** Assigns a grade for {@code seconds}, 0 for good; on a grade already held, the duration replaces its own. */
+    public static AdminResult assign(MinecraftServer server, GameProfile profile, String gradeName, long seconds) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
         if (!grades().grades.containsKey(gradeName)) return AdminResult.fail("No such grade: " + gradeName);
@@ -306,13 +326,17 @@ public final class GradeAdmin {
                     + "or the file would say both at once.");
         }
         List<String> list = grades().userGrades.computeIfAbsent(profile.getId().toString(), k -> new ArrayList<>());
-        if (list.contains(gradeName)) {
+        boolean added = !list.contains(gradeName);
+        if (added) list.add(gradeName);
+        boolean timed = Expiries.apply(Expiries.of(grades().userGradeExpiries, profile.getId()), gradeName, seconds);
+        Expiries.tidy(grades().userGradeExpiries, profile.getId());
+        if (!added && !timed) {
             return AdminResult.ok(profile.getName() + " is already assigned to " + gradeName + " — no change.");
         }
-        list.add(gradeName);
         String warning = ConfigAdmin.persist();
         resyncPlayer(server, profile.getId());
-        return AdminResult.ok("Assigned " + gradeName + " -> " + profile.getName()).warn(warning);
+        return AdminResult.ok(added ? "Assigned " + gradeName + " -> " + profile.getName() + Expiries.span(seconds)
+                : gradeName + " for " + profile.getName() + " " + Expiries.became(seconds)).warn(warning);
     }
 
     public static AdminResult unassign(MinecraftServer server, UUID uuid, String displayName, String gradeName) {
@@ -323,6 +347,7 @@ public final class GradeAdmin {
             return AdminResult.ok(displayName + " is not assigned to " + gradeName + " — no change.");
         }
         if (list.isEmpty()) grades().userGrades.remove(uuid.toString());
+        Expiries.forget(grades().userGradeExpiries, uuid, gradeName);
         String warning = ConfigAdmin.persist();
         resyncPlayer(server, uuid);
         return AdminResult.ok("Unassigned " + gradeName + " from " + displayName).warn(warning);

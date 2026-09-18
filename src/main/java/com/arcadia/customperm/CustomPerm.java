@@ -98,6 +98,7 @@ public class CustomPerm {
         NeoForge.EVENT_BUS.register(CommandTreeRewriter.class);
         NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStarted);
         NeoForge.EVENT_BUS.addListener(CustomPerm::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.admin.ExpirySweeper::onServerTick);
         NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.chat.NameDecoration::onNameFormat);
         NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.chat.NameDecoration::onTabListNameFormat);
         NeoForge.EVENT_BUS.addListener(AdminNotifier::onServerStarted);

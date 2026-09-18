@@ -48,18 +48,33 @@ public final class UserAdmin {
     /** Adds an ALLOW or a DENY node to one player. */
     public static AdminResult addNode(MinecraftServer server, UUID uuid, String displayName, String rawNode,
                                       boolean deny) {
+        return addNode(server, uuid, displayName, rawNode, deny, 0);
+    }
+
+    /** The same for {@code seconds}, 0 for permanent; on a node already there, the duration replaces its own. */
+    public static AdminResult addNode(MinecraftServer server, UUID uuid, String displayName, String rawNode,
+                                      boolean deny, long seconds) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
         String node = GradeAdmin.normalizeNode(rawNode);
         if (node == null) return AdminResult.fail("Invalid permission node '" + rawNode.trim() + "'.");
         Set<String> nodes = holder(deny).computeIfAbsent(uuid.toString(), key -> new LinkedHashSet<>());
-        if (!nodes.add(node)) {
+        boolean added = nodes.add(node);
+        Map<String, Map<String, Long>> expiries = expiries(deny);
+        boolean timed = Expiries.apply(Expiries.of(expiries, uuid), node, seconds);
+        Expiries.tidy(expiries, uuid);
+        if (!added && !timed) {
             return AdminResult.ok(node + " is already " + (deny ? "denied to " : "granted to ") + displayName
                     + " — no change.");
         }
         String warning = ConfigAdmin.persist();
         GradeAdmin.resyncPlayer(server, uuid);
-        return AdminResult.ok((deny ? "Denied " : "Added ") + node + " -> " + displayName).warn(warning);
+        return AdminResult.ok(added ? (deny ? "Denied " : "Added ") + node + " -> " + displayName + Expiries.span(seconds)
+                : node + " for " + displayName + " " + Expiries.became(seconds)).warn(warning);
+    }
+
+    private static Map<String, Map<String, Long>> expiries(boolean deny) {
+        return deny ? grades().userDeniedPermissionExpiries : grades().userPermissionExpiries;
     }
 
     /** Sets or clears the prefix or suffix one player carries above their grades. Blank clears it. */
@@ -80,6 +95,22 @@ public final class UserAdmin {
                 : what + " of " + displayName + " set to \"" + value + "\".").warn(warning));
     }
 
+    /**
+     * Seconds left on a temporary entry of one player, or 0 for a permanent one. {@code kind} is
+     * {@code "allow"}, {@code "deny"}, {@code "grade"} or {@code "refuse"}.
+     */
+    public static long remaining(UUID uuid, String kind, String key) {
+        Map<String, Map<String, Long>> byUser = switch (kind) {
+            case "deny" -> grades().userDeniedPermissionExpiries;
+            case "grade" -> grades().userGradeExpiries;
+            case "refuse" -> grades().userDeniedGradeExpiries;
+            default -> grades().userPermissionExpiries;
+        };
+        Map<String, Long> expiries = byUser.get(uuid.toString());
+        Long at = expiries == null ? null : expiries.get(key);
+        return at == null ? 0 : Math.max(1, at - com.arcadia.customperm.perm.Expiry.now());
+    }
+
     /** The prefix or suffix a player carries themselves, {@code null} for none. */
     public static String chat(UUID uuid, boolean suffix) {
         return (suffix ? grades().userSuffixes : grades().userPrefixes).get(uuid.toString());
@@ -98,6 +129,7 @@ public final class UserAdmin {
                     + " — no change.");
         }
         if (nodes.isEmpty()) target.remove(uuid.toString());
+        Expiries.forget(expiries(deny), uuid, node);
         String warning = ConfigAdmin.persist();
         GradeAdmin.resyncPlayer(server, uuid);
         return AdminResult.ok((deny ? "Removed the denial of " : "Removed ") + node + " from " + displayName)
@@ -110,6 +142,12 @@ public final class UserAdmin {
      * it never turns what that grade allows into a denial.
      */
     public static AdminResult refuseGrade(MinecraftServer server, UUID uuid, String displayName, String gradeName) {
+        return refuseGrade(server, uuid, displayName, gradeName, 0);
+    }
+
+    /** A refusal for {@code seconds}, 0 for good; on a refusal already there, the duration replaces its own. */
+    public static AdminResult refuseGrade(MinecraftServer server, UUID uuid, String displayName, String gradeName,
+                                          long seconds) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
         if (!grades().grades.containsKey(gradeName)) return AdminResult.fail("No such grade: " + gradeName);
@@ -118,13 +156,20 @@ public final class UserAdmin {
                     + "of refusing it.");
         }
         List<String> refused = grades().userDeniedGrades.computeIfAbsent(uuid.toString(), key -> new ArrayList<>());
-        if (refused.contains(gradeName)) {
+        boolean added = !refused.contains(gradeName);
+        if (added) refused.add(gradeName);
+        boolean timed = Expiries.apply(Expiries.of(grades().userDeniedGradeExpiries, uuid), gradeName, seconds);
+        Expiries.tidy(grades().userDeniedGradeExpiries, uuid);
+        if (!added && !timed) {
             return AdminResult.ok(displayName + " already refuses " + gradeName + " — no change.");
         }
-        refused.add(gradeName);
         String warning = ConfigAdmin.persist();
         GradeAdmin.resyncPlayer(server, uuid);
-        return AdminResult.ok(displayName + " now refuses " + gradeName).warn(warning)
+        if (!added) {
+            return AdminResult.ok("The refusal of " + gradeName + " by " + displayName + " " + Expiries.became(seconds))
+                    .warn(warning);
+        }
+        return AdminResult.ok(displayName + " now refuses " + gradeName + Expiries.span(seconds)).warn(warning)
                 .note("Nothing they hold brings it back, the default grade included.");
     }
 
@@ -136,6 +181,7 @@ public final class UserAdmin {
             return AdminResult.ok(displayName + " does not refuse " + gradeName + " — no change.");
         }
         if (refused.isEmpty()) grades().userDeniedGrades.remove(uuid.toString());
+        Expiries.forget(grades().userDeniedGradeExpiries, uuid, gradeName);
         String warning = ConfigAdmin.persist();
         GradeAdmin.resyncPlayer(server, uuid);
         return AdminResult.ok(displayName + " no longer refuses " + gradeName).warn(warning);

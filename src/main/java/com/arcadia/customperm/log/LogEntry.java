@@ -28,4 +28,6 @@ public record LogEntry(long time, String actor, String actorId, String source, S
     public static final String SOURCE_LUCKPERMS_EDITOR = "luckperms-editor";
     public static final String SOURCE_LUCKPERMS = "luckperms";
     public static final String SOURCE_PLAYER = "player";
+    /** A temporary entry that ran out, removed by CustomPerm itself. */
+    public static final String SOURCE_EXPIRY = "expiry";
 }

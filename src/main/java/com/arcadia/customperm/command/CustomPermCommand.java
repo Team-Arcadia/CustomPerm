@@ -32,6 +32,7 @@ import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.notify.AdminNotifier;
 import com.arcadia.customperm.perm.AdminAccess;
+import com.arcadia.customperm.perm.Expiry;
 import com.arcadia.customperm.perm.LuckPermsService;
 import com.arcadia.customperm.perm.PermissionNodes;
 import com.arcadia.customperm.perm.Tristate;
@@ -100,6 +101,10 @@ import java.util.stream.Collectors;
  *                     confirm [replace]                # applies what was previewed, nothing else
  * /customperm export  preview                          # what an export to LuckPerms would write
  *                     confirm [replace]                # writes what was previewed, in the background
+ * /customperm grade   addperm|adddeny <grade> <node> [duration]   # 30d, 2h, 1d12h: temporary until then
+ *                     assign <player> <grade> [duration]
+ * /customperm user    addperm|adddeny <player> <node> [duration]
+ *                     denygrade <player> <grade> [duration]
  * /customperm grade   prefix|suffix <grade> [text]     # chat prefix/suffix of a grade, & colour codes
  * /customperm user    prefix|suffix <player> [text]    # one player's own, above their grades
  * /customperm names   [on|off|format <format>]         # decorate names with them, {prefix}{name}{suffix}
@@ -126,6 +131,10 @@ public class CustomPermCommand {
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRADES =
         (ctx, builder) -> SharedSuggestionProvider.suggest(
             CustomPerm.configManager.getGrades().grades.keySet(), builder);
+
+    /** A few durations, to show the form; any combination of w, d, h, m and s is accepted. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_DURATIONS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(List.of("1h", "12h", "1d", "7d", "30d"), builder);
 
     /** Alias existants. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_ALIASES =
@@ -406,7 +415,10 @@ public class CustomPermCommand {
                             .suggests(SUGGEST_KNOWN_PLAYERS)
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
-                                .executes(CustomPermCommand::gradeAssign))))
+                                .executes(ctx -> gradeAssign(ctx, null))
+                                .then(Commands.argument("duration", StringArgumentType.word())
+                                    .suggests(SUGGEST_DURATIONS)
+                                    .executes(ctx -> gradeAssign(ctx, StringArgumentType.getString(ctx, "duration")))))))
                     .then(Commands.literal("unassign").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
@@ -453,13 +465,17 @@ public class CustomPermCommand {
                             .suggests(SUGGEST_KNOWN_PLAYERS)
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
-                                .executes(ctx -> userGradeRefusal(ctx, true)))))
+                                .executes(ctx -> userGradeRefusal(ctx, true, null))
+                                .then(Commands.argument("duration", StringArgumentType.word())
+                                    .suggests(SUGGEST_DURATIONS)
+                                    .executes(ctx -> userGradeRefusal(ctx, true,
+                                        StringArgumentType.getString(ctx, "duration")))))))
                     .then(Commands.literal("undenygrade").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_PLAYER_REFUSED_GRADES)
-                                .executes(ctx -> userGradeRefusal(ctx, false)))))
+                                .executes(ctx -> userGradeRefusal(ctx, false, null)))))
                     .then(Commands.literal("list")
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
@@ -786,8 +802,39 @@ public class CustomPermCommand {
     }
 
     private static int gradeAddPerm(CommandContext<CommandSourceStack> ctx) {
+        return gradeAddNode(ctx, false);
+    }
+
+    /**
+     * {@code <node> [duration]}: a node never holds a space, so what follows one is the duration, and a
+     * line written before durations existed reads exactly as it did.
+     */
+    private record Timed(String node, long seconds, String problem) {
+        static Timed of(String raw) {
+            String[] parts = raw.trim().split("\\s+");
+            if (parts.length == 1) return new Timed(parts[0], 0, null);
+            if (parts.length > 2) return new Timed(null, 0, "Expected a node, then optionally a duration such as 30d.");
+            long seconds = Expiry.parse(parts[1]);
+            return seconds < 0
+                ? new Timed(null, 0, "Invalid duration '" + parts[1] + "': use w, d, h, m, s, such as 30d or 1d12h, ten years at most.")
+                : new Timed(parts[0], seconds, null);
+        }
+    }
+
+    /** The seconds in an optional duration argument, 0 when absent, -1 when unreadable. */
+    private static long seconds(String duration) {
+        return duration == null ? 0 : Expiry.parse(duration);
+    }
+
+    private static AdminResult badDuration(String duration) {
+        return AdminResult.fail("Invalid duration '" + duration + "': use w, d, h, m, s, such as 30d or 1d12h, ten years at most.");
+    }
+
+    private static int gradeAddNode(CommandContext<CommandSourceStack> ctx, boolean deny) {
+        Timed timed = Timed.of(StringArgumentType.getString(ctx, "node"));
+        if (timed.problem() != null) return report(ctx, AdminResult.fail(timed.problem()));
         return report(ctx, guarded(ctx, () -> GradeAdmin.addNode(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "node"), false)));
+            StringArgumentType.getString(ctx, "grade"), timed.node(), deny, timed.seconds())));
     }
 
     private static int gradeRemovePerm(CommandContext<CommandSourceStack> ctx) {
@@ -796,8 +843,7 @@ public class CustomPermCommand {
     }
 
     private static int gradeAddDeny(CommandContext<CommandSourceStack> ctx) {
-        return report(ctx, guarded(ctx, () -> GradeAdmin.addNode(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "node"), true)));
+        return gradeAddNode(ctx, true);
     }
 
     private static int gradeRemoveDeny(CommandContext<CommandSourceStack> ctx) {
@@ -900,16 +946,19 @@ public class CustomPermCommand {
         return GradeAdmin.guarded(ctx.getSource(), ctx.getSource().getServer(), change);
     }
 
-    private static int gradeAssign(CommandContext<CommandSourceStack> ctx) {
+    private static int gradeAssign(CommandContext<CommandSourceStack> ctx, String duration) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return report(ctx, refusal);
+        long seconds = seconds(duration);
+        if (seconds < 0) return report(ctx, badDuration(duration));
         var server = ctx.getSource().getServer();
         String name = StringArgumentType.getString(ctx, "player");
         if (server == null) return 0;
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, name);
         var profile = resolution.profile();
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
-        return report(ctx, guarded(ctx, () -> GradeAdmin.assign(server, profile.get(), StringArgumentType.getString(ctx, "grade"))));
+        return report(ctx, guarded(ctx, () -> GradeAdmin.assign(server, profile.get(), StringArgumentType.getString(ctx, "grade"),
+            seconds)));
     }
 
     private static int gradeUnassign(CommandContext<CommandSourceStack> ctx) {
@@ -955,15 +1004,22 @@ public class CustomPermCommand {
         var profile = resolution.profile();
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
         String node = StringArgumentType.getString(ctx, "node");
-        return report(ctx, guarded(ctx, () -> add
-            ? UserAdmin.addNode(server, profile.get().getId(), profile.get().getName(), node, deny)
-            : UserAdmin.removeNode(server, profile.get().getId(), profile.get().getName(), node, deny)));
+        if (!add) {
+            return report(ctx, guarded(ctx, () ->
+                UserAdmin.removeNode(server, profile.get().getId(), profile.get().getName(), node, deny)));
+        }
+        Timed timed = Timed.of(node);
+        if (timed.problem() != null) return report(ctx, AdminResult.fail(timed.problem()));
+        return report(ctx, guarded(ctx, () -> UserAdmin.addNode(server, profile.get().getId(), profile.get().getName(),
+            timed.node(), deny, timed.seconds())));
     }
 
     /** Makes a player refuse a grade, or stop refusing it. */
-    private static int userGradeRefusal(CommandContext<CommandSourceStack> ctx, boolean refuse) {
+    private static int userGradeRefusal(CommandContext<CommandSourceStack> ctx, boolean refuse, String duration) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return report(ctx, refusal);
+        long seconds = seconds(duration);
+        if (seconds < 0) return report(ctx, badDuration(duration));
         var server = ctx.getSource().getServer();
         if (server == null) return 0;
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
@@ -971,7 +1027,7 @@ public class CustomPermCommand {
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
         String grade = StringArgumentType.getString(ctx, "grade");
         return report(ctx, guarded(ctx, () -> refuse
-            ? UserAdmin.refuseGrade(server, profile.get().getId(), profile.get().getName(), grade)
+            ? UserAdmin.refuseGrade(server, profile.get().getId(), profile.get().getName(), grade, seconds)
             : UserAdmin.acceptGrade(server, profile.get().getId(), profile.get().getName(), grade)));
     }
 
@@ -989,12 +1045,14 @@ public class CustomPermCommand {
         List<String> assigned = CustomPerm.configManager.getGrades().userGrades
             .getOrDefault(uuid.toString(), List.of());
         List<String> refused = UserAdmin.refusedGrades(uuid);
-        ctx.getSource().sendSuccess(() -> Component.literal(name + " — grades: " + join(assigned)), false);
+        ctx.getSource().sendSuccess(() -> Component.literal(name + " — grades: " + join(timed(uuid, "grade", assigned))), false);
         if (!refused.isEmpty()) {
-            ctx.getSource().sendSuccess(() -> Component.literal("  refuses: " + String.join(", ", refused)), false);
+            ctx.getSource().sendSuccess(() -> Component.literal("  refuses: " + join(timed(uuid, "refuse", refused))), false);
         }
-        ctx.getSource().sendSuccess(() -> Component.literal("  own allow: " + join(UserAdmin.nodes(uuid, false))), false);
-        ctx.getSource().sendSuccess(() -> Component.literal("  own deny : " + join(UserAdmin.nodes(uuid, true))), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  own allow: "
+            + join(timed(uuid, "allow", UserAdmin.nodes(uuid, false)))), false);
+        ctx.getSource().sendSuccess(() -> Component.literal("  own deny : "
+            + join(timed(uuid, "deny", UserAdmin.nodes(uuid, true)))), false);
         String prefix = UserAdmin.chat(uuid, false);
         String suffix = UserAdmin.chat(uuid, true);
         if (prefix != null || suffix != null) {
@@ -1003,6 +1061,14 @@ public class CustomPermCommand {
                 + ", suffix: " + (suffix == null ? "none" : "\"" + suffix + "\"")), false);
         }
         return 1;
+    }
+
+    /** Each entry with the time it has left, when it is temporary: {@code vip (29d 23h left)}. */
+    private static List<String> timed(java.util.UUID uuid, String kind, List<String> entries) {
+        return entries.stream().map(entry -> {
+            long left = UserAdmin.remaining(uuid, kind, entry);
+            return left > 0 ? entry + " (" + Expiry.describe(left) + " left)" : entry;
+        }).toList();
     }
 
     private static String join(List<String> values) {
