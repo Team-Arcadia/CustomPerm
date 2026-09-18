@@ -114,7 +114,7 @@ import java.util.stream.Collectors;
  *                     undenygrade <player> <grade> [world=<dim>]
  * /customperm track   create|delete <track>             # a ladder of grades, lowest first
  *                     append <track> <grade> | insert <track> <grade> <position> | remove <track> <grade>
- *                     promote|demote <player> <track>   # one rung up or down
+ *                     promote|demote <player> <track> [world=<dim>]  # one rung up or down, there only with a world
  *                     list [track]
  * /customperm contexts [player]                      # the static contexts, or what holds for a player now
  *             contexts set <key> <value> | unset <key>  # a context every player here is in (region=eu)
@@ -1590,10 +1590,13 @@ public class CustomPermCommand {
                 .suggests(SUGGEST_KNOWN_PLAYERS)
                 .then(Commands.argument("track", StringArgumentType.word())
                     .suggests(SUGGEST_TRACKS)
-                    .executes(ctx -> trackMove(ctx, up))));
+                    .executes(ctx -> trackMove(ctx, up, null))
+                    .then(Commands.argument("context", StringArgumentType.greedyString())
+                        .suggests(SUGGEST_WORLDS)
+                        .executes(ctx -> trackMove(ctx, up, StringArgumentType.getString(ctx, "context"))))));
     }
 
-    private static int trackMove(CommandContext<CommandSourceStack> ctx, boolean up) {
+    private static int trackMove(CommandContext<CommandSourceStack> ctx, boolean up, String context) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return report(ctx, refusal);
         var server = ctx.getSource().getServer();
@@ -1602,7 +1605,7 @@ public class CustomPermCommand {
         var profile = resolution.profile();
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
         return report(ctx, guarded(ctx, () -> com.arcadia.customperm.admin.TrackAdmin.move(server, profile.get(),
-            StringArgumentType.getString(ctx, "track"), up)));
+            StringArgumentType.getString(ctx, "track"), up, context)));
     }
 
     /** Every track with its rungs, or one track. */

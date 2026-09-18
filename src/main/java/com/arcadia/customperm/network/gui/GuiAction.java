@@ -108,10 +108,13 @@ public enum GuiAction {
     USER_NICK_SET(2, GuiArea.GRADES),
     /** {@code [playerUuid, node, "allow"|"deny", context]} Removes one, by UUID so an unnamed entry can be cleaned up. */
     USER_NODE_REMOVE(4, GuiArea.GRADES),
-    /** {@code [playerName, track]} Moves a player one rung up a track, like {@code /customperm track promote}. */
-    TRACK_PROMOTE(2, GuiArea.GRADES),
-    /** {@code [playerName, track]} Moves a player one rung down, off the track from its first rung. */
-    TRACK_DEMOTE(2, GuiArea.GRADES),
+    /**
+     * {@code [playerName, track, context]} Moves a player one rung up a track, like {@code /customperm track
+     * promote}; with a context, among the grades held there only.
+     */
+    TRACK_PROMOTE(3, GuiArea.GRADES),
+    /** {@code [playerName, track, context]} Moves a player one rung down, off the track from its first rung. */
+    TRACK_DEMOTE(3, GuiArea.GRADES),
 
     /**
      * {@code ["true"|"false"]} Reads LuckPerms and returns what an import would do, writing nothing. The

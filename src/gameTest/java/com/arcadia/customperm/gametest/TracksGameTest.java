@@ -137,9 +137,9 @@ public class TracksGameTest {
             ServerCommands.run(server, "customperm track append " + TRACK + " " + LOW);
             ServerCommands.run(server, "customperm track append " + TRACK + " " + MID);
 
-            act(owner, GuiAction.TRACK_PROMOTE, "cp_k_climber", TRACK);
+            act(owner, GuiAction.TRACK_PROMOTE, "cp_k_climber", TRACK, "");
             result(owner, "OK: Put cp_k_climber on " + TRACK + " at " + LOW);
-            act(owner, GuiAction.TRACK_PROMOTE, "cp_k_climber", TRACK);
+            act(owner, GuiAction.TRACK_PROMOTE, "cp_k_climber", TRACK, "");
             result(owner, "OK: Promoted cp_k_climber on " + TRACK + ": " + LOW + " -> " + MID);
             check(grades.userGrades.get(uuid).equals(List.of(MID)), "the page must move the player: " + grades.userGrades.get(uuid));
 
@@ -149,12 +149,84 @@ public class TracksGameTest {
             check(page.tracks().contains(new PlayersData.Track(TRACK, List.of(LOW, MID))),
                     "the page must carry the track and its rungs: " + page.tracks());
 
-            act(owner, GuiAction.TRACK_DEMOTE, "cp_k_climber", "cp_k_nothing");
+            act(owner, GuiAction.TRACK_DEMOTE, "cp_k_climber", "cp_k_nothing", "");
             result(owner, "FAIL: No such track: cp_k_nothing");
         } finally {
             grades.tracks.remove(TRACK);
             for (String grade : List.of(LOW, MID)) grades.grades.remove(grade);
             if (uuid != null) grades.userGrades.remove(uuid);
+            ConfigAdmin.persist();
+        }
+        helper.succeed();
+    }
+
+    /**
+     * Within one world: the rungs are the grades held there only, the move writes there only, and a refusal
+     * there stops it, like LuckPerms' promote with a context. The same move from the Players page.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "customperm_tracks")
+    public static void aPlayerClimbsATrackInOneWorld(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        String nether = "world=minecraft:the_nether";
+        String uuid = null;
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_k_wowner", 4);
+             TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_k_wplayer", 0);
+             CommandExposureGameTest.Exposure ignored = CommandExposureGameTest.Exposure.of(server, COMMAND)) {
+            uuid = player.uuid().toString();
+            for (String grade : List.of(LOW, MID)) ServerCommands.run(server, "customperm grade create " + grade);
+            ServerCommands.run(server, "customperm grade addperm " + MID + " " + NODE);
+            ServerCommands.run(server, "customperm track create " + TRACK);
+            ServerCommands.run(server, "customperm track append " + TRACK + " " + LOW);
+            ServerCommands.run(server, "customperm track append " + TRACK + " " + MID);
+            ServerCommands.run(server, "customperm grade assign cp_k_wplayer " + LOW);
+
+            // Held everywhere is not a rung in the Nether: the first move puts them on the track there.
+            List<String> put = ServerCommands.run(server, "customperm track promote cp_k_wplayer " + TRACK + " world=the_nether");
+            expect(put, "Put cp_k_wplayer on " + TRACK + " in the_nether at " + LOW);
+            expect(put, "also hold " + LOW + " everywhere");
+            check(grades.userContexts.get(uuid).get(nether).grades.equals(List.of(LOW)), "written in the Nether only");
+            check(grades.userGrades.get(uuid).equals(List.of(LOW)), "the grades held everywhere must not move");
+
+            // A temporary rung there gives up its expiry with it, and the grade given is held there only.
+            grades.userContexts.get(uuid).get(nether).gradeExpiries.put(LOW, Expiry.now() + 3600);
+            expect(ServerCommands.run(server, "customperm track promote cp_k_wplayer " + TRACK + " world=the_nether"),
+                    "Promoted cp_k_wplayer on " + TRACK + " in the_nether: " + LOW + " -> " + MID);
+            GradesConfig.UserScoped there = grades.userContexts.get(uuid).get(nether);
+            check(there.grades.equals(List.of(MID)) && there.gradeExpiries.isEmpty(),
+                    "the rung swapped in the Nether, its expiry gone: " + there.grades + " " + there.gradeExpiries);
+            check(grades.userGrades.get(uuid).equals(List.of(LOW)), "still " + LOW + " everywhere");
+            check(!player.canUse(COMMAND), "a grade held in the Nether grants nothing in the overworld");
+            expect(ServerCommands.run(server, "customperm track promote cp_k_wplayer " + TRACK + " world=the_nether"),
+                    "already on the top rung of " + TRACK + " in the_nether");
+
+            // A refusal in that world stops the move there.
+            ServerCommands.run(server, "customperm user denygrade cp_k_wplayer " + LOW + " world=the_nether");
+            expect(ServerCommands.run(server, "customperm track demote cp_k_wplayer " + TRACK + " world=the_nether"),
+                    "refuses " + LOW + " in the_nether");
+            ServerCommands.run(server, "customperm user undenygrade cp_k_wplayer " + LOW + " world=the_nether");
+
+            // From the page, with the context the world box gives.
+            act(owner, GuiAction.TRACK_DEMOTE, "cp_k_wplayer", TRACK, nether);
+            result(owner, "OK: Demoted cp_k_wplayer on " + TRACK + " in the_nether: " + MID + " -> " + LOW);
+            act(owner, GuiAction.TRACK_DEMOTE, "cp_k_wplayer", TRACK, nether);
+            result(owner, "OK: Took cp_k_wplayer off " + TRACK + " in the_nether");
+            check(grades.userContexts.get(uuid) == null || !grades.userContexts.get(uuid).containsKey(nether),
+                    "leaving the track there must leave no empty scope: " + grades.userContexts.get(uuid));
+            check(grades.userGrades.get(uuid).equals(List.of(LOW)), "and nothing moved everywhere");
+
+            act(owner, GuiAction.TRACK_PROMOTE, "cp_k_wplayer", TRACK, "nokey=1");
+            List<String> refused = owner.payloads(GuiActionResultPayload.class).stream()
+                    .map(r -> (r.success() ? "OK: " : "FAIL: ") + r.message()).toList();
+            check(refused.size() == 1 && refused.get(0).startsWith("FAIL"), "a context nothing sets is refused: " + refused);
+        } finally {
+            grades.tracks.remove(TRACK);
+            for (String grade : List.of(LOW, MID)) grades.grades.remove(grade);
+            if (uuid != null) {
+                grades.userGrades.remove(uuid);
+                grades.userContexts.remove(uuid);
+            }
             ConfigAdmin.persist();
         }
         helper.succeed();

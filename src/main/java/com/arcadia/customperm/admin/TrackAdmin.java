@@ -116,30 +116,73 @@ public final class TrackAdmin {
      * expiry with it, and the grade given is permanent, as with LuckPerms' promote.
      */
     public static AdminResult move(MinecraftServer server, GameProfile profile, String track, boolean up) {
+        return move(server, profile, track, up, null);
+    }
+
+    /**
+     * {@link #move(MinecraftServer, GameProfile, String, boolean)} within {@code rawContext}, such as
+     * {@code world=the_nether}; blank for everywhere. In a context the rungs are the grades held there only,
+     * like LuckPerms' promote with a context: a grade held everywhere is not a rung there, and the grade
+     * given is held in that context alone. A grade refused everywhere or in that context is not given.
+     */
+    public static AdminResult move(MinecraftServer server, GameProfile profile, String track, boolean up,
+                                   String rawContext) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
+        String context = Scopes.parse(rawContext);
+        if (context == Scopes.INVALID) return Scopes.invalid(rawContext);
         List<String> rungs = tracks().get(track);
         if (rungs == null) return AdminResult.fail("No such track: " + track);
         String uuid = profile.getId().toString();
         String name = profile.getName();
-        List<String> held = grades().userGrades.getOrDefault(uuid, List.of());
+        String where = Scopes.span(context);
+        GradesConfig.UserScoped found = context == null ? null : Scopes.find(grades(), profile.getId(), context);
+        List<String> held = context == null ? grades().userGrades.getOrDefault(uuid, List.of())
+                : found == null ? List.of() : found.grades;
         TrackStep step = TrackStep.of(rungs, held, up);
         if (step.problem() != null) {
-            return AdminResult.fail("Cannot " + (up ? "promote " : "demote ") + name + " on " + track + ": "
+            return AdminResult.fail("Cannot " + (up ? "promote " : "demote ") + name + " on " + track + where + ": "
                     + step.problem() + ".");
         }
         if (!step.changes()) {
-            return AdminResult.ok(up ? name + " is already on the top rung of " + track + " — no change."
-                    : name + " is on no rung of " + track + " — no change.");
+            return AdminResult.ok(up ? name + " is already on the top rung of " + track + where + " — no change."
+                    : name + " is on no rung of " + track + where + " — no change.");
         }
         if (step.to() != null) {
             if (!grades().grades.containsKey(step.to())) {
                 return AdminResult.fail(track + " names " + step.to() + ", which is not a grade: fix the track first.");
             }
-            if (grades().userDeniedGrades.getOrDefault(uuid, List.of()).contains(step.to())) {
-                return AdminResult.fail(name + " refuses " + step.to() + ": remove that refusal first.");
+            if (grades().userDeniedGrades.getOrDefault(uuid, List.of()).contains(step.to())
+                    || found != null && found.refused.contains(step.to())) {
+                return AdminResult.fail(name + " refuses " + step.to() + (found != null && found.refused.contains(step.to())
+                        ? where : "") + ": remove that refusal first.");
             }
         }
+        boolean wasTemporary = context == null ? moveEverywhere(profile, step) : moveWithin(profile, context, step);
+        String warning = ConfigAdmin.persist();
+        GradeAdmin.resyncPlayer(server, profile.getId());
+
+        String message;
+        if (step.from() == null) {
+            message = "Put " + name + " on " + track + where + " at " + step.to();
+        } else if (step.to() == null) {
+            message = "Took " + name + " off " + track + where + ": " + step.from() + " was its first rung";
+        } else {
+            message = (up ? "Promoted " : "Demoted ") + name + " on " + track + where + ": " + step.from() + " -> "
+                    + step.to();
+        }
+        AdminResult result = AdminResult.ok(message).warn(warning);
+        if (context != null && step.to() != null
+                && grades().userGrades.getOrDefault(uuid, List.of()).contains(step.to())) {
+            result = result.note("They also hold " + step.to() + " everywhere, which already covers that context.");
+        }
+        return wasTemporary ? result.note(step.from() + " was temporary; " + (step.to() == null ? "nothing replaces it."
+                : step.to() + " is held for good.")) : result;
+    }
+
+    /** Applies a step to the grades held everywhere; true when the grade given up was temporary. */
+    private static boolean moveEverywhere(GameProfile profile, TrackStep step) {
+        String uuid = profile.getId().toString();
         boolean wasTemporary = false;
         List<String> list = grades().userGrades.computeIfAbsent(uuid, k -> new ArrayList<>());
         if (step.from() != null) {
@@ -150,19 +193,19 @@ public final class TrackAdmin {
         }
         if (step.to() != null && !list.contains(step.to())) list.add(step.to());
         if (list.isEmpty()) grades().userGrades.remove(uuid);
-        String warning = ConfigAdmin.persist();
-        GradeAdmin.resyncPlayer(server, profile.getId());
+        return wasTemporary;
+    }
 
-        String message;
-        if (step.from() == null) {
-            message = "Put " + name + " on " + track + " at " + step.to();
-        } else if (step.to() == null) {
-            message = "Took " + name + " off " + track + ": " + step.from() + " was its first rung";
-        } else {
-            message = (up ? "Promoted " : "Demoted ") + name + " on " + track + ": " + step.from() + " -> " + step.to();
+    /** Applies a step to the grades held in {@code context}; true when the grade given up was temporary. */
+    private static boolean moveWithin(GameProfile profile, String context, TrackStep step) {
+        GradesConfig.UserScoped scope = Scopes.of(grades(), profile.getId(), context);
+        boolean wasTemporary = false;
+        if (step.from() != null) {
+            scope.grades.remove(step.from());
+            wasTemporary = scope.gradeExpiries.remove(step.from()) != null;
         }
-        AdminResult result = AdminResult.ok(message).warn(warning);
-        return wasTemporary ? result.note(step.from() + " was temporary; " + (step.to() == null ? "nothing replaces it."
-                : step.to() + " is held for good.")) : result;
+        if (step.to() != null && !scope.grades.contains(step.to())) scope.grades.add(step.to());
+        Scopes.tidy(grades(), profile.getId());
+        return wasTemporary;
     }
 }

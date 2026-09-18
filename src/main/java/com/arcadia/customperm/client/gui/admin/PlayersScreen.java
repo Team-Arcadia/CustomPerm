@@ -96,7 +96,11 @@ public final class PlayersScreen extends AdminScreen {
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
                 .hint(Component.literal("for, e.g. 30d"));
         this.worldField = new CpEditBox(Component.literal("World"), 128)
-                .hint(Component.literal("in, e.g. the_nether"));
+                .hint(Component.literal("in, e.g. the_nether"))
+                .onChange(text -> {
+                    // On the Tracks tab the world box says which rungs are read: follow it as it is typed.
+                    if (tab == Tab.TRACKS) fillTracks();
+                });
         this.search = new CpEditBox(Component.literal("Search players"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
                 .onChange(text -> refilter());
@@ -241,20 +245,7 @@ public final class PlayersScreen extends AdminScreen {
                     .forEach(e -> nodes.add(new NodeRow(e.value(), e.deny(), e.context(), e.remaining())));
         }
         nodeList.setItems(nodes);
-        List<TrackRow> tracks = new ArrayList<>();
-        if (player != null) {
-            for (PlayersData.Track track : data.tracks()) {
-                int rung = -1;
-                for (int i = 0; i < track.grades().size(); i++) {
-                    if (player.grades().contains(track.grades().get(i))) {
-                        rung = i;
-                        break;
-                    }
-                }
-                tracks.add(new TrackRow(track, rung));
-            }
-        }
-        trackList.setItems(tracks);
+        fillTracks();
         chat.fill(player == null ? List.of() : player.chat());
         meta.fill(player == null ? List.of() : player.meta());
         nickField.setValue(player == null ? "" : data.nickname(player.uuid()));
@@ -331,7 +322,9 @@ public final class PlayersScreen extends AdminScreen {
         Rect fieldRow = new Rect(in.x(), list.bottom() + 4, in.w(), FIELD);
         Rect buttonRow = new Rect(in.x(), fieldRow.bottom() + 4, in.w(), BUTTON);
         if (tab == Tab.TRACKS) {
-            addRenderableWidget(trackList.at(new Rect(list.x(), list.y(), list.w(), fieldRow.bottom() - list.y())));
+            addRenderableWidget(trackList.at(list));
+            addRenderableWidget(worldField.at(fieldRow));
+            worldField.setEditable(editable);
             TrackRow selected = trackList.getSelected();
             boolean movable = editable && selected != null && !selected.track().grades().isEmpty();
             placeButtonRow(buttonRow, 6, true, List.of(
@@ -341,7 +334,8 @@ public final class PlayersScreen extends AdminScreen {
                                     + "On no rung, they get the first one.")),
                     CpButton.neutral(Component.literal("Demote"), () -> move(selected, false)).icon(Icon.MINUS)
                             .enabled(movable && selected.rung() >= 0)
-                            .tooltip(Component.literal("One rung down; from the first rung, off the track."))));
+                            .tooltip(Component.literal("One rung down; from the first rung, off the track. With a "
+                                    + "world typed below, both read and move the grades held there only."))));
             return;
         }
         if (tab == Tab.META) {
@@ -403,7 +397,35 @@ public final class PlayersScreen extends AdminScreen {
     private void move(TrackRow row, boolean up) {
         PlayersData.Player player = playerList.getSelected();
         if (player == null || row == null) return;
-        act(up ? GuiAction.TRACK_PROMOTE : GuiAction.TRACK_DEMOTE, player.name(), row.track().name());
+        act(up ? GuiAction.TRACK_PROMOTE : GuiAction.TRACK_DEMOTE, player.name(), row.track().name(),
+                GradesScreen.context(worldField.getValue()));
+    }
+
+    /**
+     * The rung the selected player stands on in each track: among the grades held everywhere, or with the
+     * world box filled, among the grades held in that context only, which is what a move there reads.
+     */
+    private void fillTracks() {
+        PlayersData.Player player = playerList.getSelected();
+        List<TrackRow> tracks = new ArrayList<>();
+        if (player != null) {
+            String typed = GradesScreen.context(worldField.getValue());
+            String context = typed.isEmpty() ? null : com.arcadia.customperm.perm.Contexts.parse(typed);
+            List<String> held = typed.isEmpty() ? player.grades() : player.scoped().stream()
+                    .filter(e -> e.kind().equals("grade") && e.context().equals(context))
+                    .map(com.arcadia.customperm.network.gui.ScopedEntry::value).toList();
+            for (PlayersData.Track track : data.tracks()) {
+                int rung = -1;
+                for (int i = 0; i < track.grades().size(); i++) {
+                    if (held.contains(track.grades().get(i))) {
+                        rung = i;
+                        break;
+                    }
+                }
+                tracks.add(new TrackRow(track, rung));
+            }
+        }
+        trackList.setItems(tracks);
     }
 
     /** {@code staff   member > [vip] > admin}: the ladder, the player's rung bracketed. */
