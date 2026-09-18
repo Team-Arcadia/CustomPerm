@@ -51,6 +51,49 @@ public abstract class AdminScreen extends CpScreen {
         this.context = context;
     }
 
+    /**
+     * Places buttons on one row, in a width that is not always enough for them. Their natural widths when
+     * they fit, the last one against the right edge when {@code lastAtRight}; without their icons when that
+     * is what it takes, the label being what says what a button does; an equal share when even that
+     * overflows, each label then clipped by the button rather than drawn over its neighbour.
+     *
+     * <p>Written after seeing three buttons overlap and a tab row run past its panel on an ordinary small
+     * window: a row that assumes its content fits is a row that breaks on someone's screen.
+     */
+    protected void placeButtonRow(Rect row, int padding, boolean lastAtRight, List<CpButton> buttons) {
+        int gaps = 4 * (buttons.size() - 1);
+        int natural = rowWidth(buttons, padding);
+        if (natural + gaps > row.w()) {
+            buttons.forEach(button -> button.icon(null));
+            natural = rowWidth(buttons, padding);
+        }
+        if (natural + gaps > row.w()) {
+            int each = (row.w() - gaps) / buttons.size();
+            int x = row.x();
+            for (CpButton button : buttons) {
+                addRenderableWidget(button.at(new Rect(x, row.y(), each, row.h())));
+                x += each + 4;
+            }
+            return;
+        }
+        int x = row.x();
+        for (int i = 0; i < buttons.size(); i++) {
+            CpButton button = buttons.get(i);
+            int width = button.preferredWidth(font, padding);
+            boolean last = i == buttons.size() - 1;
+            addRenderableWidget(button.at(last && lastAtRight
+                    ? row.right(width)
+                    : new Rect(x, row.y(), width, row.h())));
+            x += width + 4;
+        }
+    }
+
+    private int rowWidth(List<CpButton> buttons, int padding) {
+        int total = 0;
+        for (CpButton button : buttons) total += button.preferredWidth(font, padding);
+        return total;
+    }
+
     /** The page this screen shows. */
     public abstract GuiPage page();
 

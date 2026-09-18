@@ -248,19 +248,13 @@ public final class PlayersScreen extends AdminScreen {
 
         Rect buttonRow = new Rect(in.x(), fieldRow.bottom() + 4, in.w(), BUTTON);
         NodeRow selected = nodeList.getSelected();
-        CpButton allow = CpButton.good(Component.literal("Allow"), () -> addNode(false)).icon(Icon.CHECK)
-                .enabled(editable);
-        CpButton deny = CpButton.danger(Component.literal("Deny"), () -> addNode(true)).icon(Icon.CROSS)
-                .enabled(editable)
-                .tooltip(Component.literal("Refused to this player, operators included, unless a more specific node "
-                        + "allows it. Their own nodes win over their grades at the same level."));
-        int allowW = allow.preferredWidth(font, 6);
-        addRenderableWidget(allow.at(buttonRow.left(allowW)));
-        addRenderableWidget(deny.at(new Rect(buttonRow.x() + allowW + 4, buttonRow.y(),
-                deny.preferredWidth(font, 6), BUTTON)));
-        CpButton remove = CpButton.neutral(Component.literal("Remove"), () -> removeNode(selected)).icon(Icon.MINUS)
-                .enabled(editable && selected != null && !player.uuid().isEmpty());
-        addRenderableWidget(remove.at(buttonRow.right(remove.preferredWidth(font, 6))));
+        placeButtonRow(buttonRow, 6, true, List.of(
+                CpButton.good(Component.literal("Allow"), () -> addNode(false)).icon(Icon.CHECK).enabled(editable),
+                CpButton.danger(Component.literal("Deny"), () -> addNode(true)).icon(Icon.CROSS).enabled(editable)
+                        .tooltip(Component.literal("Refused to this player, operators included, unless a more specific "
+                                + "node allows it. Their own nodes win over their grades at the same level.")),
+                CpButton.neutral(Component.literal("Remove"), () -> removeNode(selected)).icon(Icon.MINUS)
+                        .enabled(editable && selected != null && !player.uuid().isEmpty())));
     }
 
     // ------------------------------------------------------------------ actions
@@ -336,9 +330,11 @@ public final class PlayersScreen extends AdminScreen {
             return;
         }
         Skin.text(g, font, player.name(), in.x(), in.y(), in.w(), Palette.TEXT);
-        String grades = player.grades().isEmpty() ? "no grade" : "grades: " + String.join(", ", player.grades());
-        if (!player.refused().isEmpty()) grades += "  |  refuses: " + String.join(", ", player.refused());
-        String sub = player.allow().size() + " allow, " + player.deny().size() + " deny  |  " + grades
+        // Grades and refusals first: they are said nowhere else on this page, while the node counts are the
+        // list right below. A narrow panel then clips the counts rather than the refusals.
+        String sub = (player.grades().isEmpty() ? "no grade" : "grades: " + String.join(", ", player.grades()))
+                + (player.refused().isEmpty() ? "" : "  |  refuses: " + String.join(", ", player.refused()))
+                + "  |  " + player.allow().size() + " allow, " + player.deny().size() + " deny"
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, in.w(), Palette.TEXT_MUTE);
     }

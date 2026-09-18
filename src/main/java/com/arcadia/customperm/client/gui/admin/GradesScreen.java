@@ -299,22 +299,28 @@ public final class GradesScreen extends AdminScreen {
         addRenderableWidget(weightField.at(new Rect(in.right() - FIELD - 4 - defaultW - 4 - WEIGHT_FIELD, in.y(),
                 WEIGHT_FIELD, FIELD)));
         weightField.setEditable(editable);
+        // The box shows the weight in force. Set here rather than only when the selection changes: the first
+        // selection after the page opens left it empty, and a placed widget must not disagree with the data.
+        if (!weightField.isFocused()) weightField.setValue(String.valueOf(grade.weight()));
 
         Rect tabs = new Rect(in.x(), in.y() + 24, in.w(), FIELD);
-        int tabX = tabs.x();
-        for (CpButton button : List.of(
-                CpButton.ghost(Component.literal("Nodes (" + (grade.allow().size() + grade.deny().size()) + ")"),
-                        () -> setTab(Tab.NODES)).icon(Icon.LOCK).selected(tab == Tab.NODES),
-                CpButton.ghost(Component.literal("Parents (" + (grade.parents().size()
-                                + grade.deniedParents().size()) + ")"),
-                        () -> setTab(Tab.PARENTS)).icon(Icon.SHIELD).selected(tab == Tab.PARENTS),
-                CpButton.ghost(Component.literal("Players (" + (grade.members().size()
-                                + grade.refusers().size()) + ")"),
-                        () -> setTab(Tab.PLAYERS)).icon(Icon.USER).selected(tab == Tab.PLAYERS))) {
-            int width = button.preferredWidth(font, 8);
-            addRenderableWidget(button.at(new Rect(tabX, tabs.y(), width, FIELD)));
-            tabX += width + 4;
+        String nodesTab = "Nodes (" + (grade.allow().size() + grade.deny().size()) + ")";
+        String parentsTab = "Parents (" + (grade.parents().size() + grade.deniedParents().size()) + ")";
+        String playersTab = "Players (" + (grade.members().size() + grade.refusers().size()) + ")";
+        // Three tabs do not always fit. A bare name reads better than a count clipped to "Nodes (", so the
+        // counts go before the width is shared; the icons go after, in placeButtonRow.
+        if (font.width(nodesTab) + font.width(parentsTab) + font.width(playersTab) + 3 * 16 + 8 > tabs.w()) {
+            nodesTab = "Nodes";
+            parentsTab = "Parents";
+            playersTab = "Players";
         }
+        placeButtonRow(tabs, 8, false, List.of(
+                CpButton.ghost(Component.literal(nodesTab), () -> setTab(Tab.NODES))
+                        .icon(Icon.LOCK).selected(tab == Tab.NODES),
+                CpButton.ghost(Component.literal(parentsTab), () -> setTab(Tab.PARENTS))
+                        .icon(Icon.SHIELD).selected(tab == Tab.PARENTS),
+                CpButton.ghost(Component.literal(playersTab), () -> setTab(Tab.PLAYERS))
+                        .icon(Icon.USER).selected(tab == Tab.PLAYERS)));
 
         Rect list = listArea();
         Rect fieldRow = new Rect(in.x(), list.bottom() + 4, in.w(), FIELD);
@@ -324,55 +330,42 @@ public final class GradesScreen extends AdminScreen {
             addRenderableWidget(nodeField.at(fieldRow));
             nodeField.setEditable(editable);
             NodeRow selected = nodeList.getSelected();
-            CpButton allow = CpButton.good(Component.literal("Allow"), () -> addNode(false)).icon(Icon.CHECK).enabled(editable);
-            CpButton deny = CpButton.danger(Component.literal("Deny"), () -> addNode(true)).icon(Icon.CROSS).enabled(editable)
-                    .tooltip(Component.literal("Refused, operators included, unless a more specific node allows it: "
-                            + "deny * and allow one command to open only that command."));
-            int allowW = allow.preferredWidth(font, 6);
-            addRenderableWidget(allow.at(buttonRow.left(allowW)));
-            addRenderableWidget(deny.at(new Rect(buttonRow.x() + allowW + 4, buttonRow.y(), deny.preferredWidth(font, 6), BUTTON)));
-            CpButton remove = CpButton.neutral(Component.literal("Remove"), () -> removeNode(selected)).icon(Icon.MINUS)
-                    .enabled(editable && selected != null);
-            addRenderableWidget(remove.at(buttonRow.right(remove.preferredWidth(font, 6))));
+            placeButtonRow(buttonRow, 6, true, List.of(
+                    CpButton.good(Component.literal("Allow"), () -> addNode(false)).icon(Icon.CHECK).enabled(editable),
+                    CpButton.danger(Component.literal("Deny"), () -> addNode(true)).icon(Icon.CROSS).enabled(editable)
+                            .tooltip(Component.literal("Refused, operators included, unless a more specific node allows "
+                                    + "it: deny * and allow one command to open only that command.")),
+                    CpButton.neutral(Component.literal("Remove"), () -> removeNode(selected)).icon(Icon.MINUS)
+                            .enabled(editable && selected != null)));
         } else if (tab == Tab.PARENTS) {
             addRenderableWidget(parentList.at(list));
             addRenderableWidget(parentField.at(fieldRow));
             parentField.setEditable(editable);
             ParentRow selected = parentList.getSelected();
-            CpButton inherit = CpButton.accent(Component.literal("Inherit"), this::addParent).icon(Icon.PLUS)
-                    .enabled(editable)
-                    .tooltip(Component.literal("What a parent says applies where this grade says nothing as precise "
-                            + "about a node. A node set here still wins over the same node inherited."));
-            int inheritW = inherit.preferredWidth(font, 6);
-            addRenderableWidget(inherit.at(buttonRow.left(inheritW)));
-            CpButton refuse = CpButton.danger(Component.literal("Refuse"), this::refuseParent).icon(Icon.CROSS)
-                    .enabled(editable)
-                    .tooltip(Component.literal("Nothing this grade inherits brings that grade back. It removes it "
-                            + "from this chain only, never from another grade a player holds."));
-            addRenderableWidget(refuse.at(new Rect(buttonRow.x() + inheritW + 4, buttonRow.y(),
-                    refuse.preferredWidth(font, 6), BUTTON)));
-            CpButton stop = CpButton.neutral(Component.literal("Remove"), () -> removeParent(selected)).icon(Icon.MINUS)
-                    .enabled(editable && selected != null);
-            addRenderableWidget(stop.at(buttonRow.right(stop.preferredWidth(font, 6))));
+            placeButtonRow(buttonRow, 6, true, List.of(
+                    CpButton.accent(Component.literal("Inherit"), this::addParent).icon(Icon.PLUS).enabled(editable)
+                            .tooltip(Component.literal("What a parent says applies where this grade says nothing as "
+                                    + "precise about a node. A node set here still wins over the same node inherited.")),
+                    CpButton.danger(Component.literal("Refuse"), this::refuseParent).icon(Icon.CROSS).enabled(editable)
+                            .tooltip(Component.literal("Nothing this grade inherits brings that grade back. It removes "
+                                    + "it from this chain only, never from another grade a player holds.")),
+                    CpButton.neutral(Component.literal("Remove"), () -> removeParent(selected)).icon(Icon.MINUS)
+                            .enabled(editable && selected != null)));
         } else {
             addRenderableWidget(memberList.at(list));
             addRenderableWidget(playerField.at(fieldRow));
             playerField.setEditable(editable);
             MemberRow selected = memberList.getSelected();
-            CpButton assign = CpButton.accent(Component.literal("Assign"), this::assign).icon(Icon.PLUS).enabled(editable);
-            int assignW = assign.preferredWidth(font, 6);
-            addRenderableWidget(assign.at(buttonRow.left(assignW)));
-            CpButton refuse = CpButton.danger(Component.literal("Refuse"), this::refuseForPlayer).icon(Icon.CROSS)
-                    .enabled(editable)
-                    .tooltip(Component.literal("This grade is not read for that player, whichever grade of theirs "
-                            + "would have brought it. Unassign a grade they hold directly instead."));
-            addRenderableWidget(refuse.at(new Rect(buttonRow.x() + assignW + 4, buttonRow.y(),
-                    refuse.preferredWidth(font, 6), BUTTON)));
-            // One button for the two ways out: a row is either an assignment or a refusal.
-            CpButton takeBack = CpButton.neutral(
-                    Component.literal(selected != null && selected.refused() ? "Accept" : "Unassign"),
-                    () -> takeBack(selected)).icon(Icon.MINUS).enabled(editable && selected != null);
-            addRenderableWidget(takeBack.at(buttonRow.right(takeBack.preferredWidth(font, 6))));
+            placeButtonRow(buttonRow, 6, true, List.of(
+                    CpButton.accent(Component.literal("Assign"), this::assign).icon(Icon.PLUS).enabled(editable),
+                    CpButton.danger(Component.literal("Refuse"), this::refuseForPlayer).icon(Icon.CROSS)
+                            .enabled(editable)
+                            .tooltip(Component.literal("This grade is not read for that player, whichever grade of "
+                                    + "theirs would have brought it. Unassign a grade they hold directly instead.")),
+                    // One button for the two ways out: a row is either an assignment or a refusal.
+                    CpButton.neutral(
+                            Component.literal(selected != null && selected.refused() ? "Accept" : "Unassign"),
+                            () -> takeBack(selected)).icon(Icon.MINUS).enabled(editable && selected != null)));
         }
     }
 
@@ -582,11 +575,12 @@ public final class GradesScreen extends AdminScreen {
         int headerW = in.w() - FIELD - 10 - font.width("Default") - 26 - WEIGHT_FIELD - 4;
         Skin.text(g, font, grade.name(), in.x(), in.y(), headerW, Palette.TEXT);
         // Player and node totals are on the tabs: keep this line short enough for the Default button beside it.
-        String sub = grade.allow().size() + " allow, " + grade.deny().size() + " deny"
-                + ", weight " + grade.weight()
-                + (grade.parents().isEmpty() ? "" : ", inherits " + String.join(" ", grade.parents()))
-                + (grade.deniedParents().isEmpty() ? "" : ", refuses " + String.join(" ", grade.deniedParents()))
-                + (isDefault ? ", every player" : "")
+        // Ordered by what is said nowhere else on the page: the weight has its own box and the counts are
+        // on the tabs, so they go last, where a narrow panel clips them.
+        String sub = (isDefault ? "every player, " : "")
+                + (grade.parents().isEmpty() ? "" : "inherits " + String.join(" ", grade.parents()) + ", ")
+                + (grade.deniedParents().isEmpty() ? "" : "refuses " + String.join(" ", grade.deniedParents()) + ", ")
+                + grade.allow().size() + " allow, " + grade.deny().size() + " deny"
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, headerW, Palette.TEXT_MUTE);
     }
