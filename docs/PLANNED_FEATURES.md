@@ -14,17 +14,13 @@ silence, and this is where the reasons are.
 
 ## 1. Temporary entries (expiry)
 
-**What it is.** An expiry on a node, on a grade a player holds, or on a refusal: a donor rank for thirty
-days, a trial moderator for a week. LuckPerms has it, CustomPerm does not.
+**Done.** A node on a grade or a player, a grade a player holds and a refusal can carry an expiry, set with
+a duration on the commands and the pages; the resolver ignores what has run out and a sweep tidies the file.
+See the changelog and the README.
 
-**What it will take.** A timestamp beside each entry rather than a richer node type, so a file written
-before the field stays valid and reads as permanent. The resolver ignores an entry whose time has passed, so
-an expiry is right even if nothing swept; a periodic sweep then tidies the file and resyncs the command tree
-of the players concerned, or their client keeps offering a command that now refuses.
-
-**Until then.** Nothing expires: an entry stays until it is removed by hand. An import leaves temporary
-entries behind and counts them, rather than importing them as permanent, which would grant more than the
-source did.
+**What is left.** An expiry on a grade parent, and on a prefix or a suffix. An import leaves a group's
+temporary parents and temporary prefixes behind and counts them, rather than importing them as permanent,
+which would grant more than the source did.
 
 ---
 
@@ -107,18 +103,13 @@ les abandonner en silence, et c'est ici que se trouvent les raisons.
 
 ## 1. Entrées temporaires (expiration)
 
-**De quoi il s'agit.** Une expiration sur un nœud, sur un grade détenu par un joueur, ou sur un refus : un
-rang de donateur pour trente jours, un modérateur à l'essai pour une semaine. LuckPerms l'a, CustomPerm non.
+**Fait.** Un nœud sur un grade ou un joueur, un grade tenu par un joueur et un refus peuvent porter une
+expiration, posée avec une durée dans les commandes et les pages ; le résolveur ignore ce qui a expiré et un
+balayage nettoie le fichier. Voir le changelog et le README.
 
-**Ce qu'il faudra.** Un horodatage à côté de chaque entrée plutôt qu'un type de nœud plus riche, pour qu'un
-fichier écrit avant le champ reste valide et se lise comme permanent. Le résolveur ignore une entrée dont
-l'heure est passée, donc une expiration est juste même si rien n'a balayé ; un balayage périodique range
-ensuite le fichier et resynchronise l'arbre de commandes des joueurs concernés, sinon leur client continue de
-proposer une commande qui refuse désormais.
-
-**En attendant.** Rien n'expire : une entrée reste jusqu'à ce qu'elle soit retirée à la main. Un import
-laisse les entrées temporaires et les compte, plutôt que de les importer comme permanentes, ce qui
-accorderait plus que la source.
+**Ce qui reste.** Une expiration sur un parent de grade, et sur un préfixe ou un suffixe. Un import laisse de
+côté les parents temporaires d'un groupe et les préfixes temporaires, et les compte, plutôt que de les
+importer comme permanents, ce qui accorderait plus que la source.
 
 ---
 
