@@ -101,6 +101,11 @@ public enum GuiAction {
      * above their grades.
      */
     USER_NODE_ADD(5, GuiArea.GRADES),
+    /**
+     * {@code [uuid, nickname]} Sets the name a player is shown under; empty clears it. Allowed under LuckPerms
+     * too: a nickname is not a permission.
+     */
+    USER_NICK_SET(2, GuiArea.GRADES),
     /** {@code [playerUuid, node, "allow"|"deny", context]} Removes one, by UUID so an unnamed entry can be cleaned up. */
     USER_NODE_REMOVE(4, GuiArea.GRADES),
     /** {@code [playerName, track]} Moves a player one rung up a track, like {@code /customperm track promote}. */

@@ -37,6 +37,10 @@ import net.neoforged.neoforge.event.entity.player.PlayerEvent;
  * <p>Off by default ({@code decorateNames}), since another chat mod may already decorate names. Both
  * backends feed it: the grades without LuckPerms, LuckPerms' own prefix and suffix with it, which it
  * stores but nothing on NeoForge shows.
+ *
+ * <p>A nickname replaces the name itself, the {@code {name}} of the format, and applies even with
+ * decoration off: it was set on purpose for that one player. The team colour still applies around it, and
+ * vanilla's hover on a name keeps showing the real one.
  */
 public final class NameDecoration {
 
@@ -52,15 +56,23 @@ public final class NameDecoration {
     public static void onTabListNameFormat(PlayerEvent.TabListNameFormat event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         // The tab list shows the name the game already built, team colours included, so it reads the same.
-        if (enabled() && !meta(player).isEmpty()) event.setDisplayName(player.getDisplayName());
+        if (nickname(player) != null || enabled() && !meta(player).isEmpty()) {
+            event.setDisplayName(player.getDisplayName());
+        }
     }
 
-    /** The decorated name, or {@code null} when decoration is off or this player has nothing to show. */
+    /** The decorated name, or {@code null} when there is nothing to change: no nickname, nothing to decorate. */
     private static Component decorate(ServerPlayer player, Component name) {
-        if (!enabled()) return null;
+        String nickname = nickname(player);
+        Component shown = nickname == null ? name : LegacyText.parse(nickname);
+        if (!enabled()) return nickname == null ? null : shown;
         ChatMeta meta = meta(player);
-        if (meta.isEmpty()) return null;
-        return format(CustomPerm.configManager.getSettings().nameFormat, meta.prefix(), name, meta.suffix());
+        if (meta.isEmpty()) return nickname == null ? null : shown;
+        return format(CustomPerm.configManager.getSettings().nameFormat, meta.prefix(), shown, meta.suffix());
+    }
+
+    private static String nickname(ServerPlayer player) {
+        return CustomPerm.configManager == null ? null : com.arcadia.customperm.admin.NickAdmin.nickname(player.getUUID());
     }
 
     private static boolean enabled() {

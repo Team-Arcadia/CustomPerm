@@ -71,6 +71,11 @@ public class GradesConfig {
     public Map<String, Map<String, String>> userMeta = new HashMap<>();
     /** UUID string -> meta key -> when it expires. */
     public Map<String, Map<String, Long>> userMetaExpiries = new HashMap<>();
+    /**
+     * UUID string -> the name that player is shown under, {@code &} codes allowed. Read by the name decoration
+     * on both backends: a nickname is not a permission, so LuckPerms has nothing to say about it.
+     */
+    public Map<String, String> userNicknames = new HashMap<>();
 
     /**
      * UUID string -> context -> the nodes and grades that player holds in that context only, such as
@@ -362,6 +367,11 @@ public class GradesConfig {
         userContexts.keySet().removeIf(java.util.Objects::isNull);
         userContexts.replaceAll((uuid, scopes) -> normalizeScopes(scopes, UserScoped::new));
         userContexts.values().removeIf(Map::isEmpty);
+        Map<String, String> nicknames = new HashMap<>();
+        if (userNicknames != null) userNicknames.forEach((uuid, nickname) -> {
+            if (uuid != null && nickname != null && !nickname.isBlank()) nicknames.put(uuid, nickname.strip());
+        });
+        userNicknames = nicknames;
         if (tracks == null) tracks = new HashMap<>();
         tracks.keySet().removeIf(java.util.Objects::isNull);
         // An empty track is kept: it is one being built. A grade named twice would make its rung ambiguous.

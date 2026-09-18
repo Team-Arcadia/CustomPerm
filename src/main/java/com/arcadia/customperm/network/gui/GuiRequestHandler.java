@@ -235,6 +235,9 @@ public final class GuiRequestHandler {
             case USER_META_SET -> duration(args.get(3)) < 0 ? badDuration(args.get(3))
                     : userMetaByName(player, args.get(0), (uuid, name) -> com.arcadia.customperm.admin.MetaAdmin.setOnPlayer(
                             player.getServer(), uuid, name, args.get(1), args.get(2), duration(args.get(3)), args.get(4)));
+            case USER_NICK_SET -> uuid(args.get(0)) == null ? malformed(action)
+                    : com.arcadia.customperm.admin.NickAdmin.set(player.getServer(), uuid(args.get(0)),
+                            GradeAdmin.displayName(player.getServer(), uuid(args.get(0))), args.get(1), true);
             case USER_META_UNSET -> userMetaByName(player, args.get(0), (uuid, name) ->
                     com.arcadia.customperm.admin.MetaAdmin.unsetOnPlayer(player.getServer(), uuid, name, args.get(1),
                             args.get(2)));

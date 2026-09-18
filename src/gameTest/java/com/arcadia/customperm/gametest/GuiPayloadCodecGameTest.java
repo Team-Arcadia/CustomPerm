@@ -100,11 +100,16 @@ public class GuiPayloadCodecGameTest {
                         List.of("Alex", "Steve"), "deny", new NameSettings(false, "{prefix}&8| {name}", new NameSettings.Stack(false, 3, "", "", ""), new NameSettings.Stack(false, 3, "", "", "")),
                         List.of(new PlayersData.Track("staff", List.of("member", "vip", "staff")),
                                 new PlayersData.Track("empty", List.of())),
-                        List.of(new PlayersData.GradeName("vip", "Very Important")))));
+                        new PlayersData.Labels(List.of(new PlayersData.GradeName("vip", "Very Important")),
+                                List.of(new PlayersData.GradeName("00000000-0000-0000-0000-000000000002", "&bStevie"))))));
         PlayersData named = new PlayersData(List.of(), List.of(), "deny", null, List.of(),
-                List.of(new PlayersData.GradeName("vip", "Very Important")));
+                new PlayersData.Labels(List.of(new PlayersData.GradeName("vip", "Very Important")),
+                        List.of(new PlayersData.GradeName("00000000-0000-0000-0000-000000000002", "&bStevie"))));
         if (!named.shown("vip").equals("Very Important") || !named.shown("staff").equals("staff"))
             throw new GameTestAssertException("The Players page must show a display name, and the name without one.");
+        if (!named.nickname("00000000-0000-0000-0000-000000000002").equals("&bStevie")
+                || !named.nickname("00000000-0000-0000-0000-000000000009").isEmpty())
+            throw new GameTestAssertException("The Players page must find a nickname by UUID, and none for others.");
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.LUCKPERMS, GuiArea.LUCKPERMS.bit(), 0, true), new LuckPermsData(LuckPermsData.TRACKS)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,

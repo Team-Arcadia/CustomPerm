@@ -103,8 +103,16 @@ public final class GuiSnapshots {
                 .limit(GuiCodecs.SERVER_LIST_MAX)
                 .map(e -> new PlayersData.GradeName(e.getKey(), e.getValue().displayName))
                 .toList();
+        // Players listed first: the page can only show a nickname on a row it has.
+        java.util.Set<String> listed = new java.util.HashSet<>();
+        players.forEach(p -> listed.add(p.uuid()));
+        List<PlayersData.GradeName> nicknames = new java.util.TreeMap<>(config.userNicknames).entrySet().stream()
+                .filter(e -> listed.contains(e.getKey()))
+                .limit(GuiCodecs.SERVER_LIST_MAX)
+                .map(e -> new PlayersData.GradeName(e.getKey(), e.getValue()))
+                .toList();
         return new PlayersData(players, known, CustomPerm.configManager.getSettings().luckPermsFallbackMode,
-                nameSettings(), tracks, gradeNames);
+                nameSettings(), tracks, new PlayersData.Labels(gradeNames, nicknames));
     }
 
     static GradesData grades(MinecraftServer server) {

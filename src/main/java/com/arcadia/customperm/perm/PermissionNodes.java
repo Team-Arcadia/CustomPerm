@@ -43,10 +43,18 @@ public final class PermissionNodes {
     /** Writing to LuckPerms through the in-game editor. */
     public static final String MANAGE_LUCKPERMS = "customperm.manage.luckperms";
 
+    /** {@code /nick}: a player choosing their own nickname. Anyone else's is set with {@link #MANAGE_GRADES}. */
+    public static final String NICK = "customperm.nick";
+    /**
+     * Colour and format codes in one's own nickname. Apart from {@link #NICK}, since {@code &k} or a colour
+     * copied from a staff grade is what makes a nickname misleading.
+     */
+    public static final String NICK_COLOR = "customperm.nick.color";
+
     /** Every fixed node above, for command suggestions. */
     public static java.util.List<String> all() {
         return java.util.List.of(ADMIN, MANAGE_COMMANDS, MANAGE_ALIASES, MANAGE_RATELIMITS, MANAGE_GRADES, MANAGE_LOGS,
-                MANAGE_CONFIG, MANAGE_LUCKPERMS);
+                MANAGE_CONFIG, MANAGE_LUCKPERMS, NICK, NICK_COLOR);
     }
 
     private PermissionNodes() {

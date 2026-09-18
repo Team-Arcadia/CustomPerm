@@ -133,6 +133,7 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         AliasManager.clearServerState();
 
         CustomPermCommand.register(dispatcher);
+        NickCommand.register(dispatcher);
         AliasManager.registerAll(dispatcher);
 
         int wrapped = wrapUnwrappedRoots(dispatcher);
@@ -315,6 +316,8 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
 
         Set<String> skipRoots = new HashSet<>();
         skipRoots.add("customperm");
+        // Gated by customperm.nick itself: exposing it would hand it out without that node.
+        if (NickCommand.registered()) skipRoots.add(NickCommand.ROOT);
         skipRoots.addAll(CustomPerm.configManager.getAliases().aliases.keySet());
 
         CommandNode<CommandSourceStack> root = dispatcher.getRoot();

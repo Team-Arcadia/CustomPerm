@@ -84,6 +84,8 @@ import java.util.stream.Collectors;
  *                     adddeny|removedeny <player> <node>
  *                     denygrade|undenygrade <player> <grade>  # refuse a grade for one player
  *                     list <player>                       # grades held, refused, and own nodes
+ *                     nick <player> [set <nickname> | clear]  # shown instead of their name, both backends
+ * /nick               [<nickname> | clear]                # a player's own, with customperm.nick
  * /customperm alias   add <name> <cmd1[; cmd2; ...]>    # macro: split on ';'
  *                     addstep <name> <cmd>              # append a step to existing alias
  *                     removestep <name> <index>         # 0-based
@@ -599,7 +601,15 @@ public class CustomPermCommand {
                     .then(Commands.literal("list")
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
-                            .executes(CustomPermCommand::userList))))
+                            .executes(CustomPermCommand::userList)))
+                    .then(Commands.literal("nick").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+                        .then(Commands.argument("player", StringArgumentType.word())
+                            .suggests(SUGGEST_KNOWN_PLAYERS)
+                            .executes(ctx -> userNick(ctx, null))
+                            .then(Commands.literal("set")
+                                .then(Commands.argument("nickname", StringArgumentType.greedyString())
+                                    .executes(ctx -> userNick(ctx, StringArgumentType.getString(ctx, "nickname")))))
+                            .then(Commands.literal("clear").executes(ctx -> userNick(ctx, ""))))))
                 .then(Commands.literal("track")
                     .then(Commands.literal("create").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("track", StringArgumentType.word())
@@ -1499,6 +1509,10 @@ public class CustomPermCommand {
         List<String> refused = UserAdmin.refusedGrades(uuid);
         ctx.getSource().sendSuccess(() -> Component.literal(name + " — grades: "
             + join(timedGrades(uuid, "grade", assigned))), false);
+        String nickname = com.arcadia.customperm.admin.NickAdmin.nickname(uuid);
+        if (nickname != null) {
+            ctx.getSource().sendSuccess(() -> Component.literal("  nickname: " + nickname), false);
+        }
         if (!refused.isEmpty()) {
             ctx.getSource().sendSuccess(() -> Component.literal("  refuses: "
                 + join(timedGrades(uuid, "refuse", refused))), false);
@@ -1531,6 +1545,26 @@ public class CustomPermCommand {
             long left = UserAdmin.remaining(uuid, kind, entry);
             return left > 0 ? entry + " (" + Expiry.describe(left) + " left)" : entry;
         }).toList();
+    }
+
+    /**
+     * Shows ({@code text} null), sets or clears a player's nickname. Not a grade edit: it works on both
+     * backends, a nickname being shown by CustomPerm whoever decides permissions.
+     */
+    private static int userNick(CommandContext<CommandSourceStack> ctx, String text) {
+        var server = ctx.getSource().getServer();
+        if (server == null) return 0;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
+        var profile = resolution.profile();
+        if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
+        String name = profile.get().getName();
+        if (text == null) {
+            String nickname = com.arcadia.customperm.admin.NickAdmin.nickname(profile.get().getId());
+            String line = nickname == null ? name + " has no nickname." : name + " is shown as " + nickname;
+            ctx.getSource().sendSuccess(() -> Component.literal(line), false);
+            return 1;
+        }
+        return report(ctx, com.arcadia.customperm.admin.NickAdmin.set(server, profile.get().getId(), name, text, true));
     }
 
     /** {@link #timed} for grades, each under its display name when it has one. */
@@ -1960,7 +1994,7 @@ public class CustomPermCommand {
             if (patternLower != null && !name.toLowerCase(Locale.ROOT).contains(patternLower)) continue;
             String marker;
             ChatFormatting color;
-            if (name.equals("customperm")) {
+            if (name.equals("customperm") || name.equals(NickCommand.ROOT) && NickCommand.registered()) {
                 marker = "[ MOD  ] "; color = ChatFormatting.LIGHT_PURPLE;
             } else if (aliasNames.contains(name)) {
                 marker = "[ALIAS ] "; color = ChatFormatting.AQUA;

@@ -62,6 +62,8 @@ public final class PlayersScreen extends AdminScreen {
     private final CpEditBox search;
     private final CpList<PlayersData.Player> playerList;
     private final CpEditBox newPlayer;
+    /** The selected player's nickname, in the header; editable under LuckPerms too. */
+    private final CpEditBox nickField;
     private final CpList<NodeRow> nodeList;
     private final CpEditBox nodeField;
     private final ChatFields chat;
@@ -109,6 +111,12 @@ public final class PlayersScreen extends AdminScreen {
                     fillDetails();
                     rebuild();
                 });
+        this.nickField = new CpEditBox(Component.literal("Nickname"), com.arcadia.customperm.chat.LegacyText.MAX_LENGTH)
+                .hint(Component.literal("nickname"))
+                .onSubmit(this::applyNickname);
+        nickField.setTooltip(net.minecraft.client.gui.components.Tooltip.create(Component.literal(
+                "Shown instead of their name, & codes allowed; empty: none. Refused when it reads as another "
+                        + "player's name. Works with LuckPerms too; hovering the name still shows the real one.")));
         this.newPlayer = new CpEditBox(Component.literal("Player name"), 16)
                 .hint(Component.literal("player name"))
                 .onSubmit(this::track);
@@ -179,6 +187,20 @@ public final class PlayersScreen extends AdminScreen {
         return canEdit(GuiArea.GRADES) && !context.luckPermsActive();
     }
 
+    /** Width of the nickname box: a third of the header at most, the name keeping the rest. */
+    private static int nickWidth(Rect in) {
+        return Math.min(120, in.w() / 3);
+    }
+
+    /** Submits the nickname box. Blank clears it. */
+    private void applyNickname() {
+        PlayersData.Player player = playerList.getSelected();
+        if (player == null) return;
+        String typed = nickField.getValue().strip();
+        if (typed.equals(data.nickname(player.uuid()))) return;
+        act(GuiAction.USER_NICK_SET, player.uuid(), typed);
+    }
+
     private PlayersData.Player findByName(String name) {
         return data.players().stream().filter(p -> p.name().equalsIgnoreCase(name)).findFirst().orElse(null);
     }
@@ -198,7 +220,9 @@ public final class PlayersScreen extends AdminScreen {
         String query = search.getValue().trim().toLowerCase(Locale.ROOT);
         PlayersData.Player before = playerList.getSelected();
         playerList.setItems(rows().stream()
-                .filter(p -> query.isEmpty() || p.name().toLowerCase(Locale.ROOT).contains(query))
+                .filter(p -> query.isEmpty() || p.name().toLowerCase(Locale.ROOT).contains(query)
+                        || com.arcadia.customperm.chat.LegacyText.plain(data.nickname(p.uuid()))
+                                .toLowerCase(Locale.ROOT).contains(query))
                 .toList());
         if (layout != null && !Objects.equals(before == null ? null : before.uuid(),
                 playerList.getSelected() == null ? null : playerList.getSelected().uuid())) {
@@ -233,6 +257,7 @@ public final class PlayersScreen extends AdminScreen {
         trackList.setItems(tracks);
         chat.fill(player == null ? List.of() : player.chat());
         meta.fill(player == null ? List.of() : player.meta());
+        nickField.setValue(player == null ? "" : data.nickname(player.uuid()));
     }
 
     /** Shows the rest of the first known player name that starts with what was typed. */
@@ -293,6 +318,9 @@ public final class PlayersScreen extends AdminScreen {
         if (player == null) return;
         Rect in = inner();
         Rect list = listArea();
+        addRenderableWidget(nickField.at(new Rect(in.right() - nickWidth(in), in.y(), nickWidth(in), FIELD)));
+        nickField.setEditable(canEdit(GuiArea.GRADES));
+        if (!nickField.isFocused()) nickField.setValue(data.nickname(player.uuid()));
         placeButtonRow(tabRow(), 8, false, List.of(
                 CpButton.ghost(Component.literal("Nodes (" + (player.allow().size() + player.deny().size()) + ")"),
                         () -> setTab(Tab.NODES)).icon(Icon.LOCK).selected(tab == Tab.NODES),
@@ -518,7 +546,8 @@ public final class PlayersScreen extends AdminScreen {
             }
             return;
         }
-        Skin.text(g, font, player.name(), in.x(), in.y(), in.w(), Palette.TEXT);
+        int textW = in.w() - nickWidth(in) - 6;
+        Skin.text(g, font, player.name(), in.x(), in.y(), textW, Palette.TEXT);
         // Grades and refusals first: they are said nowhere else on this page, while the node counts are the
         // list right below. A narrow panel then clips the counts rather than the refusals.
         // Under their display names: the grades are only read here, the Grades page shows both.
@@ -532,7 +561,7 @@ public final class PlayersScreen extends AdminScreen {
                 + (refused.isEmpty() ? "" : "  |  refuses: " + String.join(", ", refused))
                 + "  |  " + player.allow().size() + " allow, " + player.deny().size() + " deny"
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
-        Skin.text(g, font, sub, in.x(), in.y() + 11, in.w(), Palette.TEXT_MUTE);
+        Skin.text(g, font, sub, in.x(), in.y() + 11, textW, Palette.TEXT_MUTE);
         if (tab == Tab.CHAT) chat.renderPreview(g, font, listArea(), player.name(), data.names());
     }
 }

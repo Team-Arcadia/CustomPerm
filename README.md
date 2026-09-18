@@ -424,6 +424,33 @@ advancement messages, `/msg`, `/me`, the join message, the tab list), not on the
 and the `<Name>` around it is vanilla's. If another mod decorates names too, the two apply one inside the
 other; that is why it is off by default.
 
+### Nicknames
+
+| Command | Description |
+|---|---|
+| `/customperm user nick <player>` | Shows the nickname of a player, online or who joined before. |
+| `/customperm user nick <player> set <nickname>` | Shows them under that name, `&` codes allowed. |
+| `/customperm user nick <player> clear` | Gives them their own name back. |
+| `/nick [<nickname> \| clear]` | A player's own nickname, with `customperm.nick`; codes need `customperm.nick.color`. |
+
+The admin command needs `customperm.manage.grades`, and the Players page has a nickname box beside the
+selected player. Both work with LuckPerms too: a nickname is not a permission, so CustomPerm shows it whoever
+decides permissions, and it is not imported or exported.
+
+A nickname replaces the name itself, the `{name}` of the name format, wherever the game shows the name (see
+above), and it applies with decoration off as well, since it was set for that one player on purpose. A team
+colour still applies around it, and hovering the name in chat still shows the real one; `/customperm user
+list` prints both. At most 16 visible characters, codes aside, on one line.
+
+**A nickname cannot pass for another player.** One that reads as another player's name, or as another
+player's nickname, is refused, whoever sets it. Letters are compared without their case, their codes, their
+spaces or the separators `_ - .`, so `&cMod Team` is refused while `mod_team` plays here. One's own name is
+always allowed. Look-alike letters from other alphabets are not caught: keep `customperm.nick` for players you
+trust not to try.
+
+`/nick` is left out when another mod already registers it, which the log says; nicknames are then set with
+`/customperm user nick` only.
+
 ### Moving from LuckPerms
 
 | Command | Description |
@@ -554,6 +581,8 @@ CustomPerm uses a hierarchical node scheme compatible with LuckPerms (and with t
 | `customperm.command.*` | Wildcard covering every exposed command (every command with `gateAllCommands`). With LuckPerms, LuckPerms' own wildcard engine resolves it. |
 | `customperm.alias.<name>` | Authorizes alias `<name>`. E.g. `customperm.alias.fly` |
 | `customperm.alias.*` | Alias wildcard. |
+| `customperm.nick` | `/nick`: a player sets their own nickname. |
+| `customperm.nick.color` | `&` codes in one's own nickname. |
 
 > ℹ️ With LuckPerms active, grant both `customperm.command.<name>` (for exposed commands) and `customperm.alias.<name>` (for aliases) via `/lp`. Grade subcommands (`/customperm grade ...`) remain disabled under LuckPerms — user/group membership is managed with `/lp`.
 
@@ -711,6 +740,8 @@ Prefixes and suffixes are lists of `{ "priority", "text", "expires" }`: `prefixe
 grade, `userPrefixEntries` and `userSuffixEntries` at the top, per player. `expires` is in epoch seconds, 0
 or absent for good. A file written before priorities, with a single `prefix` on a grade or `userPrefixes` at
 the top, is read into these at priority 0, which shows the same prefix it did.
+
+`userNicknames` at the top maps a player to their nickname, codes included. It is read on both backends.
 
 `displayName` on a grade is the name the listings and the Grades page show for it; absent, the grade is
 shown by its name. It is never looked up: `userGrades`, `parents` and `tracks` name the grade by its key.
@@ -1040,7 +1071,7 @@ Performance benchmarks can be run with:
 | Config manager | Atomic snapshot reads, serialized atomic saves, concurrent reload rejection, rollback after invalid JSON, backup creation, backup rotation. |
 | Backward compatibility | Missing files, `{}` files, explicit `null` collections, unknown future fields, partial config files. |
 | LuckPerms selection | Internal backend when LP is absent, version parsing, minimum version gate, stable backend selection. |
-| GameTests, both modes | Command exposure and removal with a non-op player, operator preservation, `/customperm` refused to non-ops, reconnection, aliases run with op-4 elevation by node holders only and unable to reach `/customperm`, step editing, recursion and shadowing guards, reload of hand-edited `aliases.json`, rate limits (refusal message, shared counter per root, per-player isolation, console exemption, window expiry, reconnection, repeated reloads, rule removal, aliases), all-or-nothing reload, concurrent reload refusal, unsaved changes after a failed reload, `null` entries, command-tree repush on reload, admin alerts in operators' chat, GUI and editor packets refused to non-operators, diagnostics output, tab-completion of every `/customperm` argument and no suggestions for non-operators, operators refused an exposed command, an alias, `/customperm` or an interface area by an explicit DENY while the console keeps access, a denied `*` blocking everything but explicit allows, admin changes from commands and the interface recorded with refusals, player commands recorded only when on and masked by default, files on disk, reload from disk skipping unreadable lines, retention, Logs page switches gated by their node, `/lp` changes recorded (LuckPerms mode), operators without the nodes refused `/customperm` and the interface while the console keeps access, each area needing its own `customperm.manage` node for the command and the page alike, the nodes alone opening nothing to a non-operator, the upgrade notice announced once for a configuration written before 1.1.0 and the configuration stamped afterwards. |
+| GameTests, both modes | Nicknames set by command, by the Players page and by `/nick` with its node, shown with decoration off, codes gated by their node, a name or nickname of another player refused whatever its case, codes or separators. Command exposure and removal with a non-op player, operator preservation, `/customperm` refused to non-ops, reconnection, aliases run with op-4 elevation by node holders only and unable to reach `/customperm`, step editing, recursion and shadowing guards, reload of hand-edited `aliases.json`, rate limits (refusal message, shared counter per root, per-player isolation, console exemption, window expiry, reconnection, repeated reloads, rule removal, aliases), all-or-nothing reload, concurrent reload refusal, unsaved changes after a failed reload, `null` entries, command-tree repush on reload, admin alerts in operators' chat, GUI and editor packets refused to non-operators, diagnostics output, tab-completion of every `/customperm` argument and no suggestions for non-operators, operators refused an exposed command, an alias, `/customperm` or an interface area by an explicit DENY while the console keeps access, a denied `*` blocking everything but explicit allows, admin changes from commands and the interface recorded with refusals, player commands recorded only when on and masked by default, files on disk, reload from disk skipping unreadable lines, retention, Logs page switches gated by their node, `/lp` changes recorded (LuckPerms mode), operators without the nodes refused `/customperm` and the interface while the console keeps access, each area needing its own `customperm.manage` node for the command and the page alike, the nodes alone opening nothing to a non-operator, the upgrade notice announced once for a configuration written before 1.1.0 and the configuration stamped afterwards. |
 | GameTests, internal mode | Grade commands, union of grades, most specific entry wins, grade weight breaking a tie, a display name shown by the listings and never a key, nodes carried by a player, the Players page and its lockout guard, grade parents with inheritance applied live and cycles refused, refusals applied live and contradictions answered, every wildcard form, editor without LuckPerms, `gateAllCommands` and an allowed `*`, a default grade restricting an accidental operator, refused self-lockout by command and interface. Chat prefixes: `&` codes and the name format, the name chat binds decorated from the grades with the heaviest grade and the player's own winning at equal priority and a higher priority winning over both, stacking, removal by priority, the commands with their listing, a temporary prefix expiring and swept, the tab list, the switch and the format applied at once, and the Chat tabs through the interface with priority and time left. Temporary entries: durations read and refused, a grant expiring before any sweep, the sweep tidying the file, logging and resending the tree, a held grade and a refusal expiring, a grade parent and a grade's refusal expiring and swept, and durations through the interface with the time left read back. Entries limited to a world: contexts read and refused, a node granted in the Nether only, the command tree resent and the verdict changing as a real player teleports between worlds, a grade and a player's own DENY held in one world, removal by world, a deleted grade leaving no world assignment behind, and a parent, a player's refusal and a prefix limited to the Nether followed as the player moves, the name included. Tracks: building one, a real player promoted and demoted along it with the command tree following, a temporary rung given up with its expiry, several rungs and a refused grade refused, a deleted grade leaving the ladder, and promote and demote from the Players page. Permissions of other mods: CustomPerm selected as handler, nodes declared under a foreign namespace answered with their default, an exact DENY, a wildcard ALLOW, a number node and an offline check; a number and a text node answered from a grade's meta, a player's own winning, a value that is no number leaving the default, an expired value swept, one limited to another world not applying, and meta set from the Grades page. |
 | GameTests, LuckPerms mode | Import from a source with one of everything: what carries over, a group's display name included and a temporary one left behind, what is left behind with its reason, reading writing nothing, what lands in the configuration, the three nodes asked together, and a spent preview refused. Export into a real LuckPerms: groups, weight, display name kept by adding and written by replacing, parents, denials, the default group and a player's nodes written, a renamed grade refused, adding keeping LuckPerms' own values and prefix, replacing clearing only the customperm nodes, progress per holder, the two nodes asked together, the lockout guard, and a spent preview refused. In-game editor against a real LuckPerms: groups, nodes with contexts and expiry, inheritance, meta, prefix and suffix, weight, display name, player groups and primary group, tracks, promote and demote, write gating by node and level, edit and sync rate limits; command tree resent after a LuckPerms change; `deny` and `internal` fallback when LuckPerms becomes unavailable. A LuckPerms prefix reaching the name without a reconnect; several prefixes carried by the import with their priority, and exported with theirs, a temporary one temporary. Temporary nodes, groups and group parents imported with their expiry and exported temporary. Nodes, a player's grade and refusal, a group's parent and refusal, and a prefix limited to a world imported and exported with LuckPerms' `dimension-type` context, a node limited to a game mode, LuckPerms' `world` context (the save's name) left behind, a `server=` node left behind unexposed. A track imported and exported with its groups in order. A node another mod declared imported from a group and a player, an undeclared one left behind, and LuckPerms keeping the permission handler. |
 | Performance | `PermissionResolver.resolve()` and concurrent config snapshot reads via JMH, including a check made from a world with no entry limited to one (the path every server takes) and one a world node decides. |

@@ -23,15 +23,36 @@ import java.util.List;
  * @param fallbackMode {@code settings.json} value, only to word the banner while LuckPerms is active
  * @param names        whether names carry their prefix, for the Chat tab's preview
  * @param tracks       every track with its rungs, lowest first, for the Tracks tab
- * @param gradeNames   the grades that have a display name, so this page shows it rather than the name
+ * @param labels       what is shown in place of a name: grade display names and player nicknames
  */
 public record PlayersData(List<Player> players, List<String> knownPlayers, String fallbackMode, NameSettings names,
-                          List<Track> tracks, List<GradeName> gradeNames) implements GuiPageData {
+                          List<Track> tracks, Labels labels) implements GuiPageData {
 
-    /** One without display names. */
+    /** One without display names or nicknames. */
     public PlayersData(List<Player> players, List<String> knownPlayers, String fallbackMode, NameSettings names,
                        List<Track> tracks) {
-        this(players, knownPlayers, fallbackMode, names, tracks, List.of());
+        this(players, knownPlayers, fallbackMode, names, tracks, Labels.NONE);
+    }
+
+    /**
+     * The grades that have a display name, and the players who have a nickname ({@code name} holding the UUID,
+     * {@code displayName} the nickname with its codes). Only those, so a server without either sends nothing.
+     */
+    public record Labels(List<GradeName> grades, List<GradeName> nicknames) {
+        public static final Labels NONE = new Labels(List.of(), List.of());
+
+        public static final StreamCodec<ByteBuf, Labels> CODEC = StreamCodec.composite(
+                GuiCodecs.list(GradeName.CODEC, GuiCodecs.SERVER_LIST_MAX), Labels::grades,
+                GuiCodecs.list(GradeName.CODEC, GuiCodecs.SERVER_LIST_MAX), Labels::nicknames,
+                Labels::new);
+    }
+
+    /** The nickname of the player with {@code uuid}, codes included, or an empty string for none. */
+    public String nickname(String uuid) {
+        for (GradeName entry : labels.nicknames()) {
+            if (entry.name().equals(uuid)) return entry.displayName();
+        }
+        return "";
     }
 
     /** A grade and the name shown for it. */
@@ -44,7 +65,7 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
 
     /** The name this page shows for {@code grade}: its display name, or the grade's name when it has none. */
     public String shown(String grade) {
-        for (GradeName entry : gradeNames) {
+        for (GradeName entry : labels.grades()) {
             if (entry.name().equals(grade)) return entry.displayName();
         }
         return grade;
@@ -133,7 +154,7 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
             GuiCodecs.TEXT, PlayersData::fallbackMode,
             NameSettings.CODEC, PlayersData::names,
             GuiCodecs.list(Track.CODEC, GuiCodecs.SERVER_LIST_MAX), PlayersData::tracks,
-            GuiCodecs.list(GradeName.CODEC, GuiCodecs.SERVER_LIST_MAX), PlayersData::gradeNames,
+            Labels.CODEC, PlayersData::labels,
             PlayersData::new);
 
     @Override

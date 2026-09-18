@@ -831,6 +831,7 @@ public final class GradeAdmin {
         source.userMeta.forEach((uuid, values) -> copy.userMeta.put(uuid, new java.util.TreeMap<>(values)));
         copyExpiries(source.userMetaExpiries, copy.userMetaExpiries);
         copy.userContexts = Scopes.copyUsers(source.userContexts);
+        copy.userNicknames = new java.util.HashMap<>(source.userNicknames);
         return copy;
     }
 
