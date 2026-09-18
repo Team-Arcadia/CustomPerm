@@ -271,17 +271,17 @@ Elles gèrent les nodes ALLOW. Les nodes DENY internes sont stockés dans `grade
 |---|---|
 | `/customperm grade create <name>` | Crée un grade vide. |
 | `/customperm grade delete <name>` | Supprime un grade et le désassigne de tous les joueurs. |
-| `/customperm grade addperm <grade> <node> [durée\|world=<dim>]` | Ajoute une perm au grade, pour de bon, pour une durée comme `30d`, ou dans un monde comme `world=the_nether`. |
+| `/customperm grade addperm <grade> <node> [durée] [world=<dim>]` | Ajoute une perm au grade, pour de bon, pour une durée comme `30d`, ou dans un monde comme `world=the_nether`. |
 | `/customperm grade removeperm <grade> <node> [world=<dim>]` | Retire une perm du grade, celle limitée à ce monde s'il est donné. |
-| `/customperm grade adddeny <grade> <node> [durée\|world=<dim>]` | Ajoute un nœud DENY : refusé, opérateurs compris, sauf si un nœud plus spécifique l'autorise. |
+| `/customperm grade adddeny <grade> <node> [durée] [world=<dim>]` | Ajoute un nœud DENY : refusé, opérateurs compris, sauf si un nœud plus spécifique l'autorise. |
 | `/customperm grade removedeny <grade> <node> [world=<dim>]` | Retire un nœud DENY. |
 | `/customperm grade weight <grade> <poids>` | Définit le poids de départage, 0 par défaut, négatif accepté. |
-| `/customperm grade parent add <grade> <parent> [durée\|world=<dim>]` | Fait hériter le grade d'un autre, pour de bon, pour une durée ou dans un monde ; un cycle est refusé, dans n'importe quel monde. |
+| `/customperm grade parent add <grade> <parent> [durée] [world=<dim>]` | Fait hériter le grade d'un autre, pour de bon, pour une durée ou dans un monde ; un cycle est refusé, dans n'importe quel monde. |
 | `/customperm grade parent remove <grade> <parent>` | Cesse d'en hériter. |
-| `/customperm grade parent adddeny <grade> <parent> [durée\|world=<dim>]` | Refuse un grade partout où celui-ci en hériterait, pour de bon, pour une durée ou dans un monde. |
+| `/customperm grade parent adddeny <grade> <parent> [durée] [world=<dim>]` | Refuse un grade partout où celui-ci en hériterait, pour de bon, pour une durée ou dans un monde. |
 | `/customperm grade parent removedeny <grade> <parent>` | Cesse de le refuser. |
 | `/customperm grade parent list <grade>` | Affiche ce dont le grade hérite et ce qu'il refuse. |
-| `/customperm grade assign <player> <grade> [durée\|world=<dim>]` | Assigne le grade à un joueur, en ligne ou hors ligne s'il est déjà venu sur le serveur ; avec un monde, il ne vaut que là. |
+| `/customperm grade assign <player> <grade> [durée] [world=<dim>]` | Assigne le grade à un joueur, en ligne ou hors ligne s'il est déjà venu sur le serveur ; avec un monde, il ne vaut que là. |
 | `/customperm grade unassign <player> <grade> [world=<dim>]` | Désassigne, en ligne ou hors ligne. |
 | `/customperm grade setdefault <grade>` | Applique le grade à tous les joueurs, sous leurs propres grades. |
 | `/customperm grade cleardefault` | Plus aucun grade ne s'applique à tous les joueurs. |
@@ -291,11 +291,11 @@ Nœuds portés par un joueur, au-dessus de ses grades :
 
 | Commande | Description |
 |---|---|
-| `/customperm user addperm <joueur> <node> [durée\|world=<dim>]` | Ajoute un nœud ALLOW à ce joueur seul. |
+| `/customperm user addperm <joueur> <node> [durée] [world=<dim>]` | Ajoute un nœud ALLOW à ce joueur seul. |
 | `/customperm user removeperm <joueur> <node> [world=<dim>]` | Le retire. |
-| `/customperm user adddeny <joueur> <node> [durée\|world=<dim>]` | Ajoute un nœud DENY à ce joueur seul. |
+| `/customperm user adddeny <joueur> <node> [durée] [world=<dim>]` | Ajoute un nœud DENY à ce joueur seul. |
 | `/customperm user removedeny <joueur> <node> [world=<dim>]` | Le retire. |
-| `/customperm user denygrade <joueur> <grade> [durée\|world=<dim>]` | Fait refuser un grade à un joueur, partout où l'un des siens l'apporterait, ou dans un seul monde. |
+| `/customperm user denygrade <joueur> <grade> [durée] [world=<dim>]` | Fait refuser un grade à un joueur, partout où l'un des siens l'apporterait, ou dans un seul monde. |
 | `/customperm user undenygrade <joueur> <grade> [world=<dim>]` | Cesse de le refuser. |
 | `/customperm user list <joueur>` | Affiche les grades détenus, ceux refusés, et les nœuds portés, avec le temps restant des entrées temporaires et, par monde, ce qui ne vaut que là. |
 
@@ -315,7 +315,9 @@ et chez le même détenteur, une entrée limitée au monde du joueur l'emporte s
 comme un nœud contextuel dans LuckPerms : un grade qui autorise `/home` partout et le refuse dans le Nether
 le refuse là-bas. Le détenteur passe toujours d'abord : un grade plus lourd, ou le nœud propre du joueur,
 décide face au nœud de monde d'un grade plus léger. L'arbre de commandes d'un joueur est renvoyé quand il
-change de monde. Une entrée limitée à un monde est permanente : donnez une durée ou un monde, pas les deux.
+change de monde. Une entrée limitée à un monde peut aussi être temporaire : donnez les deux, dans n'importe quel ordre
+(`/customperm grade assign Steve vip 7d world=the_nether`), et elle dure ce temps-là dans ce monde, le temps
+restant affiché par monde dans les listes et sur les pages.
 Un parent de grade, un refus (par un grade ou un joueur) et un préfixe ou suffixe peuvent être limités à un
 monde de la même façon : `/customperm grade parent add vip builder world=the_nether`, `/customperm user
 denygrade Steve vip world=the_end`, `/customperm grade prefix vip in the_nether add 10 &c[Chaud] `. Un parent
@@ -409,13 +411,13 @@ détenteur, ce que CustomPerm ne peut pas porter, le texte qui se trie en premie
 dit.
 
 Les entrées temporaires passent avec leur expiration : un nœud, un groupe d'un joueur, un parent de groupe, un refus. Les entrées
-limitées à un seul monde passent avec lui : un nœud sur un groupe ou un joueur, un groupe d'un joueur, un
-parent de groupe, un refus, et un préfixe ou suffixe.
+limitées à un seul monde passent avec lui, les temporaires avec leur expiration : un nœud sur un groupe ou un
+joueur, un groupe d'un joueur, un parent de groupe, un refus, et un préfixe ou suffixe.
 Les tracks passent avec leurs groupes dans l'ordre ; ajouter garde tel quel un track qui existe déjà ici,
 remplacer prend l'ordre de LuckPerms.
 
 Ce qui est laissé derrière, et dit dans le rapport plutôt qu'abandonné en silence : tout autre contexte (`server=`,
-plusieurs mondes), une entrée temporaire limitée à un monde ; meta, noms affichés, et les nœuds que d'autres mods lisent sans les déclarer à
+plusieurs mondes) ; meta, noms affichés, et les nœuds que d'autres mods lisent sans les déclarer à
 NeoForge, que plus rien ici ne lirait. Les nœuds déclarés par les mods sont importés tels quels, sur les
 groupes et les joueurs, puisque CustomPerm y répond. Sur les
 joueurs, seul ce que CustomPerm sait lire est regardé : leurs groupes, leurs préfixes et suffixes, leurs

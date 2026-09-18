@@ -270,17 +270,17 @@ They manage ALLOW nodes. Internal DENY nodes are stored in `grades.json` under `
 |---|---|
 | `/customperm grade create <name>` | Creates an empty grade. |
 | `/customperm grade delete <name>` | Deletes a grade and unassigns it from every user. |
-| `/customperm grade addperm <grade> <node> [duration\|world=<dim>]` | Adds a permission node to the grade, for good, for a duration such as `30d`, or in one world such as `world=the_nether`. |
+| `/customperm grade addperm <grade> <node> [duration] [world=<dim>]` | Adds a permission node to the grade, for good, for a duration such as `30d`, or in one world such as `world=the_nether`. |
 | `/customperm grade removeperm <grade> <node> [world=<dim>]` | Removes a node, the one limited to that world when one is given. |
-| `/customperm grade adddeny <grade> <node> [duration\|world=<dim>]` | Adds a DENY node: refused, operators included, unless a more specific node allows it. |
+| `/customperm grade adddeny <grade> <node> [duration] [world=<dim>]` | Adds a DENY node: refused, operators included, unless a more specific node allows it. |
 | `/customperm grade removedeny <grade> <node> [world=<dim>]` | Removes a DENY node. |
 | `/customperm grade weight <grade> <weight>` | Sets the tie-break weight, 0 by default, negative allowed. |
-| `/customperm grade parent add <grade> <parent> [duration\|world=<dim>]` | Makes the grade inherit another, for good, for a duration or in one world; a cycle is refused, in any world. |
+| `/customperm grade parent add <grade> <parent> [duration] [world=<dim>]` | Makes the grade inherit another, for good, for a duration or in one world; a cycle is refused, in any world. |
 | `/customperm grade parent remove <grade> <parent>` | Stops inheriting it. |
-| `/customperm grade parent adddeny <grade> <parent> [duration\|world=<dim>]` | Refuses a grade wherever this one would inherit it, for good, for a duration or in one world. |
+| `/customperm grade parent adddeny <grade> <parent> [duration] [world=<dim>]` | Refuses a grade wherever this one would inherit it, for good, for a duration or in one world. |
 | `/customperm grade parent removedeny <grade> <parent>` | Stops refusing it. |
 | `/customperm grade parent list <grade>` | Shows what the grade inherits and what it refuses. |
-| `/customperm grade assign <player> <grade> [duration\|world=<dim>]` | Assigns the grade to a player, online or offline if they joined the server before; with a world, it applies there only. |
+| `/customperm grade assign <player> <grade> [duration] [world=<dim>]` | Assigns the grade to a player, online or offline if they joined the server before; with a world, it applies there only. |
 | `/customperm grade unassign <player> <grade> [world=<dim>]` | Unassigns, online or offline. |
 | `/customperm grade setdefault <grade>` | Applies the grade to every player, below their own grades. |
 | `/customperm grade cleardefault` | No grade applies to every player any more. |
@@ -290,11 +290,11 @@ Nodes carried by one player, above their grades:
 
 | Command | Description |
 |---|---|
-| `/customperm user addperm <player> <node> [duration\|world=<dim>]` | Adds an ALLOW node to that player alone. |
+| `/customperm user addperm <player> <node> [duration] [world=<dim>]` | Adds an ALLOW node to that player alone. |
 | `/customperm user removeperm <player> <node> [world=<dim>]` | Removes it. |
-| `/customperm user adddeny <player> <node> [duration\|world=<dim>]` | Adds a DENY node to that player alone. |
+| `/customperm user adddeny <player> <node> [duration] [world=<dim>]` | Adds a DENY node to that player alone. |
 | `/customperm user removedeny <player> <node> [world=<dim>]` | Removes it. |
-| `/customperm user denygrade <player> <grade> [duration\|world=<dim>]` | Makes one player refuse a grade, wherever one of theirs would bring it, or in one world only. |
+| `/customperm user denygrade <player> <grade> [duration] [world=<dim>]` | Makes one player refuse a grade, wherever one of theirs would bring it, or in one world only. |
 | `/customperm user undenygrade <player> <grade> [world=<dim>]` | Stops refusing it. |
 | `/customperm user list <player>` | Shows the grades they hold, the ones they refuse, and the nodes they carry, with the time left on temporary ones and, per world, what they hold there only. |
 
@@ -313,7 +313,9 @@ from the same holder, an entry limited to the player's world outranks the same e
 contextual node in LuckPerms: a grade that allows `/home` everywhere and denies it in the Nether refuses it
 there. The holder still comes first: a heavier grade, or the player's own node, decides over a lighter
 grade's world node. A player's command tree is sent again when they change world. An entry limited to a
-world is permanent: give a duration or a world, not both. A grade parent, a refusal (by a grade or a player)
+world can be temporary too: give both, in either order (`/customperm grade assign Steve vip 7d
+world=the_nether`), and it lasts there that long, the time left shown per world in listings and on the
+pages. A grade parent, a refusal (by a grade or a player)
 and a prefix or suffix can be limited to a world the same way: `/customperm grade parent add vip builder
 world=the_nether`, `/customperm user denygrade Steve vip world=the_end`, `/customperm grade prefix vip in
 the_nether add 10 &c[Hot] `. A parent inherited in one world is followed there only, at the same depth
@@ -402,12 +404,11 @@ Prefixes and suffixes carry over with their priority and expiry. Of two at the s
 which CustomPerm cannot hold, the text that sorts first is imported and the report says so.
 
 Temporary entries carry over with their expiry: a node, a player's group, a group's parent, a refusal. Entries limited to one
-world carry over with it: a node on a group or a player, a player's group, a group's parent, a refusal, and a
-prefix or suffix. Tracks carry over with their
+world carry over with it, temporary ones with their expiry: a node on a group or a player, a player's group,
+a group's parent, a refusal, and a prefix or suffix. Tracks carry over with their
 groups in order; adding keeps a track that already exists here as it is, replacing takes LuckPerms' order.
 
-What is left behind, and said in the report rather than dropped in silence: any other context (`server=`, several worlds), a
-temporary entry limited to a world; meta,
+What is left behind, and said in the report rather than dropped in silence: any other context (`server=`, several worlds); meta,
 display names, and the nodes other mods read without declaring them to NeoForge, which nothing here would
 read back. Nodes mods declared are imported as they are, on groups and players, since CustomPerm answers them. On players, only
 what CustomPerm can read is looked at at all: their groups, their prefixes and suffixes, their `customperm`,
