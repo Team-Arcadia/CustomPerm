@@ -62,6 +62,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **RBAC multi-grades** : un joueur peut avoir plusieurs grades internes ; les permissions sont résolues par union des grades assignés.
 - **DENY explicite** : les grades internes supportent `deniedPermissions`. L'entrée la plus spécifique l'emporte, comme LuckPerms (nœud exact, puis `a.b.*`, puis `*`), et un DENY gagne à niveau égal.
 - **Nœuds par joueur** : un nœud peut être porté par un joueur plutôt que par un grade, l'exception qu'un joueur seul obtient sans qu'on invente un grade pour lui. Il l'emporte sur ses grades à niveau égal, quel que soit le poids du grade, mais un nœud de grade plus spécifique gagne toujours. `/customperm user addperm|adddeny`, ou la page Joueurs.
+- **Grades refusés** : un grade peut en refuser un autre partout où il en hériterait, et un joueur peut en refuser un partout où l'un de ses grades l'apporterait, grade par défaut compris. Un refus sort le grade de la résolution ; il ne transforme jamais ce que ce grade autorise en refus. `/customperm grade parent adddeny`, `/customperm user denygrade`, ou la page Grades.
 - **Héritage entre grades** : un grade peut hériter d'autres grades, comme le parent d'un groupe LuckPerms. Ce que dit un parent s'applique là où le grade ne dit rien d'aussi précis sur le nœud, l'ancêtre le plus proche d'abord, donc un grade écrase ce qu'il hérite tandis qu'une entrée d'ancêtre plus spécifique gagne toujours. Un cycle est refusé à la création, pas à la résolution.
 - **Poids de grade** : un grade porte un poids, comme le weight d'un groupe LuckPerms. Il départage deux grades d'un même joueur qui couvrent un nœud avec la même précision : le plus lourd décide, et un DENY gagne toujours entre poids égaux. Un poids ne bat jamais un nœud plus spécifique : il ne permet pas de contourner celui-ci.
 - **Wildcards de permissions** : `*`, `customperm.command.*` et `customperm.alias.*` sont supportés, dans les deux sens : un `*` refusé refuse tout sauf les autorisations explicites.
@@ -139,7 +140,7 @@ L'interface est dessinée nativement (sans bibliothèque d'interface) et remplac
 | Alias | Tous les alias avec recherche, badges pour les commandes masquées et les limites ; créer un alias avec sa première étape ; par alias : ajouter, remplacer, monter ou descendre et retirer des étapes, supprimer l'alias (avec confirmation) |
 | Limites d'exécution | Toutes les règles avec leurs valeurs et badges (désactivée, cible ni exposée ni alias) ; ajouter une limite, changer usages et fenêtre, activer ou désactiver, choisir quand l'historique est écrit (sauvegarde du monde ou à chaque usage), supprimer (avec confirmation) ; les commandes exposées et alias sans limite sont listés et remplissent le formulaire en un clic |
 | LuckPerms | Uniquement quand LuckPerms est installé : pas d'entrée de navigation sinon, et `/customperm gui luckperms` explique pourquoi. Installé mais pas démarré (solo, échec au démarrage), la page affiche une bannière au lieu de l'éditeur. **Groupes** : créer, supprimer, nœuds de permission allow/deny avec contextes et durée, parents, poids, nom affiché, préfixe, suffixe, meta. **Joueurs** : joueurs connectés et tout joueur trouvé par pseudo exact, leurs nœuds, groupes avec durée, groupe principal, promotion et rétrogradation sur un track, préfixe, suffixe, meta. **Tracks** : créer, supprimer, ajouter, insérer à une position, retirer un groupe. Les écritures passent par l'API LuckPerms côté serveur, protégées par `customperm.manage.luckperms` |
-| Grades | Toujours accessible, pour pouvoir lire le repli quand LuckPerms fonctionne ou tombe. Une bannière indique quand les grades ne décident pas des permissions ; avec LuckPerms actif la page est en lecture seule, comme les commandes de grade : grades avec recherche et création, triés par poids ; par grade, trois onglets : nœuds ALLOW et DENY, grades dont il hérite, et joueurs avec leur état en ligne, attribués par pseudo avec complétion, y compris hors ligne s'ils sont déjà venus sur le serveur ; suppression d'un grade (avec confirmation) |
+| Grades | Toujours accessible, pour pouvoir lire le repli quand LuckPerms fonctionne ou tombe. Une bannière indique quand les grades ne décident pas des permissions ; avec LuckPerms actif la page est en lecture seule, comme les commandes de grade : grades avec recherche et création, triés par poids ; par grade, trois onglets : nœuds ALLOW et DENY, grades dont il hérite et ceux qu'il refuse, et les joueurs qui le détiennent à côté de ceux qui le refusent, avec leur état en ligne, attribués par pseudo avec complétion, y compris hors ligne s'ils sont déjà venus sur le serveur ; suppression d'un grade (avec confirmation) |
 | Joueurs | Nœuds portés par un joueur plutôt que par un grade : tous les joueurs qui détiennent quelque chose en propre plus tous ceux connectés, avec recherche ; par joueur, ses nœuds ALLOW et DENY et les grades qu'il détient, en lecture seule ici. Un joueur qui ne détient encore rien s'atteint en tapant son pseudo. Écrire demande `customperm.manage.grades`, comme la page Grades |
 | Journaux | Deux onglets, du plus récent au plus ancien, avec recherche. **Admin** : chaque modification faite par les commandes `/customperm`, l'interface et l'éditeur LuckPerms, et les modifications que LuckPerms enregistre lui-même (`/lp`, éditeur web) : quand, qui, d'où, quoi, et le résultat ou le refus. **Joueurs** : chaque commande tapée par les joueurs, seulement quand l'enregistrement est actif (désactivé par défaut) ; arguments des commandes de message privé et de mot de passe masqués sauf si le masquage est désactivé. Changer l'enregistrement et le masquage demande `customperm.manage.logs` |
 
@@ -269,7 +270,9 @@ Elles gèrent les nodes ALLOW. Les nodes DENY internes sont stockés dans `grade
 | `/customperm grade weight <grade> <poids>` | Définit le poids de départage, 0 par défaut, négatif accepté. |
 | `/customperm grade parent add <grade> <parent>` | Fait hériter le grade d'un autre ; un cycle est refusé. |
 | `/customperm grade parent remove <grade> <parent>` | Cesse d'en hériter. |
-| `/customperm grade parent list <grade>` | Affiche ce dont le grade hérite. |
+| `/customperm grade parent adddeny <grade> <parent>` | Refuse un grade partout où celui-ci en hériterait. |
+| `/customperm grade parent removedeny <grade> <parent>` | Cesse de le refuser. |
+| `/customperm grade parent list <grade>` | Affiche ce dont le grade hérite et ce qu'il refuse. |
 | `/customperm grade assign <player> <grade>` | Assigne le grade à un joueur, en ligne ou hors ligne s'il est déjà venu sur le serveur. |
 | `/customperm grade unassign <player> <grade>` | Désassigne, en ligne ou hors ligne. |
 | `/customperm grade setdefault <grade>` | Applique le grade à tous les joueurs, sous leurs propres grades. |
@@ -284,7 +287,9 @@ Nœuds portés par un joueur, au-dessus de ses grades :
 | `/customperm user removeperm <joueur> <node>` | Le retire. |
 | `/customperm user adddeny <joueur> <node>` | Ajoute un nœud DENY à ce joueur seul. |
 | `/customperm user removedeny <joueur> <node>` | Le retire. |
-| `/customperm user list <joueur>` | Affiche les grades détenus et les nœuds portés. |
+| `/customperm user denygrade <joueur> <grade>` | Fait refuser un grade à un joueur, partout où l'un des siens l'apporterait. |
+| `/customperm user undenygrade <joueur> <grade>` | Cesse de le refuser. |
+| `/customperm user list <joueur>` | Affiche les grades détenus, ceux refusés, et les nœuds portés. |
 
 Une modification de grade qui vous retirerait votre propre accès à `/customperm` est refusée et annulée : autorisez d'abord `customperm.admin` pour vous-même, ou faites la modification depuis la console.
 
@@ -447,6 +452,7 @@ Grades et assignations utilisateurs.
       "name": "staff",
       "weight": 10,
       "parents": ["vip"],
+      "deniedParents": ["banned"],
       "permissions": ["customperm.command.*", "customperm.alias.*"],
       "deniedPermissions": ["customperm.command.op"]
     }
@@ -454,6 +460,9 @@ Grades et assignations utilisateurs.
   "userGrades": {
     "550e8400-e29b-41d4-a716-446655440000": ["vip"],
     "6ba7b810-9dad-11d1-80b4-00c04fd430c8": ["staff", "vip"]
+  },
+  "userDeniedGrades": {
+    "550e8400-e29b-41d4-a716-446655440000": ["banned"]
   },
   "userPermissions": {
     "550e8400-e29b-41d4-a716-446655440000": ["customperm.command.weather"]
@@ -466,7 +475,7 @@ Grades et assignations utilisateurs.
 
 Avec LuckPerms actif, ce fichier est ignoré (les perms passent par LP).
 
-`userPermissions` et `userDeniedPermissions` portent des nœuds pour un joueur seul, au-dessus de tous ses grades. `deniedPermissions` est utilisé uniquement par le backend interne. L'entrée la plus spécifique l'emporte sur l'ensemble de ce que porte le joueur et de ses grades (nœud exact, puis `a.b.*`, puis `a.*`, puis `*`) ; à niveau égal un nœud porté par le joueur l'emporte, puis le grade le plus lourd, puis un DENY entre égaux. `parents` liste les grades dont un grade hérite : leurs entrées s'appliquent là où il ne dit rien d'aussi précis sur le nœud, l'ancêtre le plus proche d'abord, et une chaîne concourt avec les autres grades au poids du grade que le joueur détient réellement. `weight` et `parents` sont facultatifs et vides s'ils sont absents, ce qui laisse la règle du DENY comme seul départage, comme avant l'existence de ces champs. Ce que porte le joueur et ses grades décident d'abord ; seul un nœud qu'aucun d'eux ne mentionne passe au grade par défaut.
+`userPermissions` et `userDeniedPermissions` portent des nœuds pour un joueur seul, au-dessus de tous ses grades. `deniedPermissions` est utilisé uniquement par le backend interne. L'entrée la plus spécifique l'emporte sur l'ensemble de ce que porte le joueur et de ses grades (nœud exact, puis `a.b.*`, puis `a.*`, puis `*`) ; à niveau égal un nœud porté par le joueur l'emporte, puis le grade le plus lourd, puis un DENY entre égaux. `parents` liste les grades dont un grade hérite : leurs entrées s'appliquent là où il ne dit rien d'aussi précis sur le nœud, l'ancêtre le plus proche d'abord, et une chaîne concourt avec les autres grades au poids du grade que le joueur détient réellement. `deniedParents` et `userDeniedGrades` sortent un grade de la résolution, respectivement pour la chaîne de ce grade et pour ce joueur partout, grade par défaut compris ; un refus ne transforme jamais ce que le grade refusé autorise en refus. `weight`, `parents`, `deniedParents` et `userDeniedGrades` sont facultatifs et vides s'ils sont absents, ce qui laisse la règle du DENY comme seul départage, comme avant l'existence de ces champs. Ce que porte le joueur et ses grades décident d'abord ; seul un nœud qu'aucun d'eux ne mentionne passe au grade par défaut.
 
 ---
 
@@ -765,7 +774,7 @@ Les benchmarks de performance se lancent avec :
 
 | Zone | Valide |
 |---|---|
-| Résolution de permissions | Deny par défaut, ALLOW direct, wildcard ALLOW, wildcard global, DENY explicite, entrée la plus spécifique gagnante entre grades, poids de grade départageant quel que soit l'ordre d'assignation, DENY à poids égaux, poids ne battant jamais la précision, nœud du joueur au-dessus de ses grades sans battre un nœud plus spécifique, héritage avec l'ancêtre le plus proche qui décide, diamants, cycles et chaîne concourant au poids du grade détenu, `*` refusé avec autorisations explicites, couche du grade par défaut. |
+| Résolution de permissions | Deny par défaut, ALLOW direct, wildcard ALLOW, wildcard global, DENY explicite, entrée la plus spécifique gagnante entre grades, poids de grade départageant quel que soit l'ordre d'assignation, DENY à poids égaux, poids ne battant jamais la précision, nœud du joueur au-dessus de ses grades sans battre un nœud plus spécifique, héritage avec l'ancêtre le plus proche qui décide, diamants, cycles et chaîne concourant au poids du grade détenu, grade refusé par un autre grade ou par un joueur rendu inatteignable sans devenir un refus, `*` refusé avec autorisations explicites, couche du grade par défaut. |
 | Grades internes | Création/listage/suppression de grades, assignation/désassignation joueurs, prévention des doublons, cascade lors de la suppression d'un grade. |
 | Exposition de commandes | Ajout/retrait/listage de commandes exposées, changements idempotents, commandes non exposées refusées par CustomPerm. |
 | Config aliases | Création, overwrite, suppression, listage, ordre des aliases, parsing par `;`, steps vides ignorés. |
@@ -774,7 +783,7 @@ Les benchmarks de performance se lancent avec :
 | Compatibilité config | Fichiers manquants, fichiers `{}`, collections explicitement `null`, champs futurs inconnus, configs partielles. |
 | Sélection LuckPerms | Backend interne sans LP, parsing de versions, version minimale, sélection stable du backend. |
 | GameTests, deux modes | Exposition et retrait de commande avec un joueur non-op, préservation des ops, `/customperm` refusé aux non-ops, reconnexion, aliases exécutés en op 4 par les seuls détenteurs du node et incapables d'atteindre `/customperm`, édition des steps, gardes de récursion et de shadowing, reload d'un `aliases.json` modifié à la main, limites de débit (message de refus, compteur partagé par racine, isolation par joueur, console exemptée, expiration de fenêtre, reconnexion, reloads répétés, suppression de règle, aliases), reload tout-ou-rien, refus du reload concurrent, changements non sauvegardés après un reload en échec, entrées `null`, repush du command tree au reload, alertes admin dans le chat des ops, paquets du GUI et de l'éditeur refusés aux non-ops, sorties de diagnostic, autocomplétion de chaque argument de `/customperm` et aucune suggestion pour un non-op, opérateurs refusés sur une commande exposée, un alias, `/customperm` ou un domaine de l'interface par un DENY explicite pendant que la console garde l'accès, `*` refusé bloquant tout sauf les autorisations explicites, modifications d'administration par commande et par l'interface enregistrées avec les refus, commandes des joueurs enregistrées seulement si actif et masquées par défaut, fichiers sur disque, rechargement depuis le disque ignorant les lignes illisibles, rétention, boutons de la page Journaux soumis à leur nœud, modifications `/lp` enregistrées (mode LuckPerms), opérateurs sans les nœuds refusés sur `/customperm` et l'interface pendant que la console garde l'accès, chaque domaine exigeant son propre nœud `customperm.manage` pour la commande comme pour la page, les nœuds seuls n'ouvrant rien à un non-op, avertissement de mise à jour donné une fois pour une configuration écrite avant la 1.1.0 puis configuration estampillée. |
-| GameTests, mode interne | Commandes de grade, union des grades, entrée la plus spécifique gagnante, poids de grade départageant, nœuds portés par un joueur, page Joueurs et son garde anti-verrouillage, parents de grade avec héritage appliqué à chaud et cycles refusés, toutes les formes de wildcard, éditeur sans LuckPerms, `gateAllCommands` et `*` autorisé, grade par défaut restreignant un op accidentel, auto-verrouillage refusé par commande et par l'interface. |
+| GameTests, mode interne | Commandes de grade, union des grades, entrée la plus spécifique gagnante, poids de grade départageant, nœuds portés par un joueur, page Joueurs et son garde anti-verrouillage, parents de grade avec héritage appliqué à chaud et cycles refusés, refus appliqués à chaud et contradictions répondues, toutes les formes de wildcard, éditeur sans LuckPerms, `gateAllCommands` et `*` autorisé, grade par défaut restreignant un op accidentel, auto-verrouillage refusé par commande et par l'interface. |
 | GameTests, mode LuckPerms | Éditeur en jeu face à un vrai LuckPerms : groupes, nodes avec contextes et expiration, héritage, meta, prefix et suffix, poids, nom d'affichage, groupes et groupe principal d'un joueur, tracks, promote et demote, verrouillage des écritures par node et niveau, limites d'édition et de sync ; command tree renvoyé après un changement LuckPerms ; repli `deny` et `internal` quand LuckPerms devient indisponible. |
 | Performance | `PermissionResolver.resolve()` et lecture concurrente du snapshot config via JMH. |
 
@@ -834,6 +843,8 @@ Le resolver interne applique cet ordre :
    grades qu'il détient avec tout ce dont ces grades héritent,
    l'entrée qui couvre le nœud le plus précisément gagne
    (exact, a.b.*, a.*, *)
+   (un grade que le détenteur refuse n'est jamais atteint,
+   quel que soit le chemin qui y menait)
    - égalité dans une chaîne => le détenteur le plus proche décide
    - égalité de précision    => un nœud du joueur, sinon le grade le plus lourd
    - égalité de rang         => le DENY gagne
