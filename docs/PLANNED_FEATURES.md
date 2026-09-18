@@ -1,7 +1,8 @@
 # Planned features
 
-Ideas that are deliberately not implemented, with the reason and what implementing them would take.
-Nothing here is a commitment or a schedule. What is actually being worked on lives in the changelog.
+Ideas that are not implemented, with the reason and what implementing them would take. Most are deliberate
+refusals; one that was refused is now planned and says so, with the date. Nothing here is a commitment or a
+schedule. What is actually being worked on lives in the changelog.
 
 **Français :** [Fonctionnalités envisagées](#fonctionnalités-envisagées)
 
@@ -53,11 +54,17 @@ saying how a contextual entry ranks against a global one.
 **What it is.** LuckPerms carries the prefix and suffix shown in chat, arbitrary meta key-value pairs, and a
 display name per group.
 
-**Why it is not implemented.** CustomPerm is not a chat plugin and does not render chat. This is out of
-scope rather than postponed.
+**Status.** Planned since 2026-09-18. This entry used to say the opposite, that rendering chat was out of
+scope rather than postponed; it was asked for, so it is now work to do.
+
+**What it would take.** A prefix and a suffix on a grade and on a player, resolved by the ranking that
+already decides between grades. The part that needs deciding first is not the resolution: chat messages are
+signed, so rewriting one breaks the signature chain, and the usual workaround, sending a system message
+instead, loses reporting and the secure chat indicator. That trade-off gets an answer in writing before any
+of it is built.
 
 **Until then.** Use a chat mod for it, or keep LuckPerms, which CustomPerm integrates with rather than
-replaces.
+replaces. Note that on NeoForge LuckPerms stores a prefix but renders nothing by itself.
 
 ---
 
@@ -87,7 +94,8 @@ their nodes would store strings nothing reads.
 
 # Fonctionnalités envisagées
 
-Idées volontairement non implémentées, avec la raison et ce que leur implémentation demanderait. Rien ici
+Idées non implémentées, avec la raison et ce que leur implémentation demanderait. La plupart sont des refus
+assumés ; l'une d'elles, refusée puis demandée, est désormais envisagée et le dit, avec la date. Rien ici
 n'est un engagement ni un calendrier. Ce qui est réellement en cours est dans le changelog.
 
 ---
@@ -140,11 +148,17 @@ résolution disant comment une entrée contextuelle se classe face à une entré
 **De quoi il s'agit.** LuckPerms porte le préfixe et le suffixe affichés dans le chat, des paires clé-valeur
 arbitraires, et un nom d'affichage par groupe.
 
-**Pourquoi ce n'est pas fait.** CustomPerm n'est pas un mod de chat et n'affiche pas le chat. C'est hors
-périmètre, pas reporté.
+**Statut.** Envisagé depuis le 2026-09-18. Cette entrée disait l'inverse, que l'affichage du chat était hors
+périmètre plutôt que reporté ; cela a été demandé, c'est donc devenu du travail à faire.
+
+**Ce qu'il faudrait.** Un préfixe et un suffixe sur un grade et sur un joueur, résolus par le classement qui
+départage déjà les grades. Ce qui demande une décision n'est pas la résolution : les messages de chat sont
+signés, donc en réécrire un casse la chaîne de signature, et le contournement habituel, envoyer un message
+système à la place, perd le signalement et l'indicateur de chat sécurisé. Cet arbitrage reçoit une réponse
+écrite avant qu'on en construise quoi que ce soit.
 
 **En attendant.** Utiliser un mod de chat, ou garder LuckPerms, avec lequel CustomPerm s'intègre au lieu de
-le remplacer.
+le remplacer. À noter que sur NeoForge, LuckPerms stocke un préfixe mais n'affiche rien de lui-même.
 
 ---
 
