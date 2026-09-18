@@ -398,6 +398,8 @@ public final class GradeAdmin {
             g.deniedParents = new ArrayList<>(grade.deniedParents);
             g.prefix = grade.prefix;
             g.suffix = grade.suffix;
+            g.permissionExpiries = new java.util.HashMap<>(grade.permissionExpiries);
+            g.deniedPermissionExpiries = new java.util.HashMap<>(grade.deniedPermissionExpiries);
             copy.grades.put(name, g);
         });
         source.userGrades.forEach((uuid, list) -> copy.userGrades.put(uuid, new ArrayList<>(list)));
@@ -406,6 +408,10 @@ public final class GradeAdmin {
         source.userDeniedPermissions.forEach((uuid, nodes) -> copy.userDeniedPermissions.put(uuid, new HashSet<>(nodes)));
         copy.userPrefixes.putAll(source.userPrefixes);
         copy.userSuffixes.putAll(source.userSuffixes);
+        copyExpiries(source.userPermissionExpiries, copy.userPermissionExpiries);
+        copyExpiries(source.userDeniedPermissionExpiries, copy.userDeniedPermissionExpiries);
+        copyExpiries(source.userGradeExpiries, copy.userGradeExpiries);
+        copyExpiries(source.userDeniedGradeExpiries, copy.userDeniedGradeExpiries);
         return copy;
     }
 
@@ -424,6 +430,18 @@ public final class GradeAdmin {
         target.userPrefixes.putAll(saved.userPrefixes);
         target.userSuffixes.clear();
         target.userSuffixes.putAll(saved.userSuffixes);
+        target.userPermissionExpiries.clear();
+        target.userPermissionExpiries.putAll(saved.userPermissionExpiries);
+        target.userDeniedPermissionExpiries.clear();
+        target.userDeniedPermissionExpiries.putAll(saved.userDeniedPermissionExpiries);
+        target.userGradeExpiries.clear();
+        target.userGradeExpiries.putAll(saved.userGradeExpiries);
+        target.userDeniedGradeExpiries.clear();
+        target.userDeniedGradeExpiries.putAll(saved.userDeniedGradeExpiries);
+    }
+
+    private static void copyExpiries(Map<String, Map<String, Long>> from, Map<String, Map<String, Long>> to) {
+        from.forEach((uuid, byKey) -> to.put(uuid, new java.util.HashMap<>(byKey)));
     }
 
     /** Outcome of resolving a player name: the profile, or why there is none. */

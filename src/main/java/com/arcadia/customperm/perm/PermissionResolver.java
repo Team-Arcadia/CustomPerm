@@ -84,12 +84,13 @@ public final class PermissionResolver {
         boolean hasDefault = defaultGrade != null && !defaultGrade.isEmpty();
         String user = uuid.toString();
 
-        List<String> refused = grades.userDeniedGrades.get(user);
+        List<String> refused = Expiry.alive(grades.userDeniedGrades.get(user), grades.userDeniedGradeExpiries.get(user));
 
         Ranked<Tristate> own = new Ranked<>(DENY_WINS);
-        offerNode(own, specificity(grades.userPermissions.get(user), node),
-                specificity(grades.userDeniedPermissions.get(user), node), PLAYER_RANK);
-        List<String> assigned = grades.userGrades.get(user);
+        offerNode(own, specificity(grades.userPermissions.get(user), grades.userPermissionExpiries.get(user), node),
+                specificity(grades.userDeniedPermissions.get(user), grades.userDeniedPermissionExpiries.get(user), node),
+                PLAYER_RANK);
+        List<String> assigned = Expiry.alive(grades.userGrades.get(user), grades.userGradeExpiries.get(user));
         if (assigned != null) {
             offerGrades(own, NODES, grades, assigned, node, hasDefault ? defaultGrade : null, refused);
         }
@@ -119,9 +120,9 @@ public final class PermissionResolver {
         String mine = own.get(user);
         if (mine != null && !mine.isEmpty()) return mine;
 
-        List<String> refused = grades.userDeniedGrades.get(user);
+        List<String> refused = Expiry.alive(grades.userDeniedGrades.get(user), grades.userDeniedGradeExpiries.get(user));
         Ranked<String> held = new Ranked<>(FIRST_SORTED);
-        List<String> assigned = grades.userGrades.get(user);
+        List<String> assigned = Expiry.alive(grades.userGrades.get(user), grades.userGradeExpiries.get(user));
         if (assigned != null) {
             offerGrades(held, reader, grades, assigned, null, hasDefault ? defaultGrade : null, refused);
         }
@@ -147,7 +148,8 @@ public final class PermissionResolver {
     }
 
     private static final Reader<Tristate> NODES = (into, grade, node, rank) ->
-            offerNode(into, specificity(grade.permissions, node), specificity(grade.deniedPermissions, node), rank);
+            offerNode(into, specificity(grade.permissions, grade.permissionExpiries, node),
+                    specificity(grade.deniedPermissions, grade.deniedPermissionExpiries, node), rank);
     private static final Reader<String> PREFIX = (into, grade, key, rank) -> offerText(into, grade.prefix, rank);
     private static final Reader<String> SUFFIX = (into, grade, key, rank) -> offerText(into, grade.suffix, rank);
 
@@ -267,13 +269,23 @@ public final class PermissionResolver {
      * the prefix itself. Package-private so PermissionResolverTest can call it directly.
      */
     static int specificity(Set<String> perms, String node) {
+        return specificity(perms, null, node);
+    }
+
+    /**
+     * {@link #specificity(Set, String)}, skipping an entry whose expiry has passed: an expired entry does
+     * not exist, so a less specific one below it answers instead. The expiry is read only for an entry that
+     * matches, and only when the holder has a temporary entry at all.
+     */
+    static int specificity(Set<String> perms, Map<String, Long> expiries, String node) {
         if (perms == null || perms.isEmpty()) return NONE;
-        if (perms.contains(node)) return EXACT;
+        if (perms.contains(node) && Expiry.alive(expiries, node)) return EXACT;
         int depth = segments(node) - 1;
         for (int dot = node.lastIndexOf('.'); dot > 0; dot = node.lastIndexOf('.', dot - 1), depth--) {
-            if (perms.contains(node.substring(0, dot) + ".*")) return depth;
+            String wildcard = node.substring(0, dot) + ".*";
+            if (perms.contains(wildcard) && Expiry.alive(expiries, wildcard)) return depth;
         }
-        return perms.contains("*") ? 0 : NONE;
+        return perms.contains("*") && Expiry.alive(expiries, "*") ? 0 : NONE;
     }
 
     /** Whether {@code perms} covers {@code node} at all. */

@@ -42,6 +42,21 @@ public class GradesConfig {
     /** UUID string -> chat suffix carried by that player alone. */
     public Map<String, String> userSuffixes = new HashMap<>();
 
+    /*
+     * Expiries, in epoch seconds, beside the collections they belong to: a node, a grade held or a grade
+     * refused that is absent from these maps is permanent, which is what every file written before them
+     * reads as. The resolver ignores an entry whose time has passed; the sweep then removes it for good.
+     */
+
+    /** UUID string -> own ALLOW node -> when it expires. */
+    public Map<String, Map<String, Long>> userPermissionExpiries = new HashMap<>();
+    /** UUID string -> own DENY node -> when it expires. */
+    public Map<String, Map<String, Long>> userDeniedPermissionExpiries = new HashMap<>();
+    /** UUID string -> grade held -> when the player stops holding it. */
+    public Map<String, Map<String, Long>> userGradeExpiries = new HashMap<>();
+    /** UUID string -> grade refused -> when the refusal ends. */
+    public Map<String, Map<String, Long>> userDeniedGradeExpiries = new HashMap<>();
+
     public static class Grade {
         public String name;
         public Set<String> permissions = new HashSet<>();        // ALLOW nodes
@@ -74,6 +89,10 @@ public class GradesConfig {
         public String prefix;
         /** Shown after the name, resolved like {@link #prefix}. */
         public String suffix;
+        /** ALLOW node -> when it expires, in epoch seconds; a node absent here is permanent. */
+        public Map<String, Long> permissionExpiries = new HashMap<>();
+        /** DENY node -> when it expires. */
+        public Map<String, Long> deniedPermissionExpiries = new HashMap<>();
     }
 
     public void normalize() {
@@ -102,6 +121,8 @@ public class GradesConfig {
             if (denied.size() != g.deniedParents.size()) g.deniedParents = new ArrayList<>(denied);
             g.prefix = emptyToNull(g.prefix);
             g.suffix = emptyToNull(g.suffix);
+            g.permissionExpiries = keepFor(g.permissionExpiries, g.permissions);
+            g.deniedPermissionExpiries = keepFor(g.deniedPermissionExpiries, g.deniedPermissions);
         }
         normalizeUserGrades(userGrades);
         if (userDeniedGrades == null) userDeniedGrades = new HashMap<>();
@@ -114,6 +135,36 @@ public class GradesConfig {
         if (userSuffixes == null) userSuffixes = new HashMap<>();
         normalizeUserTexts(userPrefixes);
         normalizeUserTexts(userSuffixes);
+        userPermissionExpiries = keepForUsers(userPermissionExpiries, userPermissions);
+        userDeniedPermissionExpiries = keepForUsers(userDeniedPermissionExpiries, userDeniedPermissions);
+        userGradeExpiries = keepForUsers(userGradeExpiries, userGrades);
+        userDeniedGradeExpiries = keepForUsers(userDeniedGradeExpiries, userDeniedGrades);
+    }
+
+    /**
+     * The expiries that still name an entry of {@code entries}: one left behind by a hand edit or a removal
+     * would otherwise make a permanent entry of the same name expire the day it is added back.
+     */
+    private static Map<String, Long> keepFor(Map<String, Long> expiries, java.util.Collection<String> entries) {
+        Map<String, Long> kept = new HashMap<>();
+        if (expiries == null) return kept;
+        expiries.forEach((key, at) -> {
+            if (key != null && at != null && at > 0 && entries.contains(key)) kept.put(key, at);
+        });
+        return kept;
+    }
+
+    private static <C extends java.util.Collection<String>> Map<String, Map<String, Long>> keepForUsers(
+            Map<String, Map<String, Long>> expiries, Map<String, C> entries) {
+        Map<String, Map<String, Long>> kept = new HashMap<>();
+        if (expiries == null) return kept;
+        expiries.forEach((uuid, byKey) -> {
+            C held = uuid == null ? null : entries.get(uuid);
+            if (held == null || byKey == null) return;
+            Map<String, Long> live = keepFor(byKey, held);
+            if (!live.isEmpty()) kept.put(uuid, live);
+        });
+        return kept;
     }
 
     /** An empty prefix is no prefix, stored as absent so the file does not carry it. */
