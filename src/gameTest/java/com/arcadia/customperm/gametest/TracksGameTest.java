@@ -15,6 +15,13 @@ import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.gametest.support.Modes;
 import com.arcadia.customperm.gametest.support.ServerCommands;
 import com.arcadia.customperm.gametest.support.TestPlayer;
+import com.arcadia.customperm.network.gui.GuiAction;
+import com.arcadia.customperm.network.gui.GuiActionPayload;
+import com.arcadia.customperm.network.gui.GuiActionResultPayload;
+import com.arcadia.customperm.network.gui.GuiPage;
+import com.arcadia.customperm.network.gui.GuiPagePayload;
+import com.arcadia.customperm.network.gui.GuiRequestHandler;
+import com.arcadia.customperm.network.gui.PlayersData;
 import com.arcadia.customperm.perm.Expiry;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
@@ -113,6 +120,57 @@ public class TracksGameTest {
             ConfigAdmin.persist();
         }
         helper.succeed();
+    }
+
+    /** The Players page: the tracks it carries, and promote and demote by name from the Tracks tab. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "customperm_tracks")
+    public static void thePlayersPageMovesAPlayerAlongATrack(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        String uuid = null;
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_k_owner", 4);
+             TestPlayer member = TestPlayer.join(helper.getLevel(), "cp_k_climber", 0)) {
+            uuid = member.uuid().toString();
+            for (String grade : List.of(LOW, MID)) ServerCommands.run(server, "customperm grade create " + grade);
+            ServerCommands.run(server, "customperm track create " + TRACK);
+            ServerCommands.run(server, "customperm track append " + TRACK + " " + LOW);
+            ServerCommands.run(server, "customperm track append " + TRACK + " " + MID);
+
+            act(owner, GuiAction.TRACK_PROMOTE, "cp_k_climber", TRACK);
+            result(owner, "OK: Put cp_k_climber on " + TRACK + " at " + LOW);
+            act(owner, GuiAction.TRACK_PROMOTE, "cp_k_climber", TRACK);
+            result(owner, "OK: Promoted cp_k_climber on " + TRACK + ": " + LOW + " -> " + MID);
+            check(grades.userGrades.get(uuid).equals(List.of(MID)), "the page must move the player: " + grades.userGrades.get(uuid));
+
+            PlayersData page = owner.payloads(GuiPagePayload.class).stream()
+                    .map(GuiPagePayload::data).filter(PlayersData.class::isInstance).map(PlayersData.class::cast)
+                    .reduce((first, second) -> second).orElseThrow(() -> new GameTestAssertException("No Players page"));
+            check(page.tracks().contains(new PlayersData.Track(TRACK, List.of(LOW, MID))),
+                    "the page must carry the track and its rungs: " + page.tracks());
+
+            act(owner, GuiAction.TRACK_DEMOTE, "cp_k_climber", "cp_k_nothing");
+            result(owner, "FAIL: No such track: cp_k_nothing");
+        } finally {
+            grades.tracks.remove(TRACK);
+            for (String grade : List.of(LOW, MID)) grades.grades.remove(grade);
+            if (uuid != null) grades.userGrades.remove(uuid);
+            ConfigAdmin.persist();
+        }
+        helper.succeed();
+    }
+
+    private static void act(TestPlayer player, GuiAction action, String... args) {
+        player.clearReceived();
+        GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.PLAYERS.id()),
+                player.payloadContext());
+    }
+
+    private static void result(TestPlayer player, String prefix) {
+        List<String> results = player.payloads(GuiActionResultPayload.class).stream()
+                .map(r -> (r.success() ? "OK: " : "FAIL: ") + r.message()).toList();
+        if (results.size() != 1 || !results.get(0).startsWith(prefix))
+            throw new GameTestAssertException("Expected one result starting with '" + prefix + "', got " + results);
     }
 
     private static void expect(List<String> lines, String fragment) {

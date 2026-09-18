@@ -201,6 +201,8 @@ public final class GuiRequestHandler {
                             duration(args.get(3)), args.get(4)));
             case USER_NODE_REMOVE -> kind(args.get(2)) == null ? malformed(action)
                     : guarded(player, () -> userNodeByUuid(player, args.get(0), args.get(1), kind(args.get(2)), args.get(3)));
+            case TRACK_PROMOTE -> guarded(player, () -> moveByName(player, args.get(0), args.get(1), true));
+            case TRACK_DEMOTE -> guarded(player, () -> moveByName(player, args.get(0), args.get(1), false));
             case IMPORT_PREVIEW -> bool(args.get(0)) == null ? malformed(action)
                     : importPreview(player, bool(args.get(0)));
             case IMPORT_APPLY -> importApply(player, args.get(0));
@@ -331,6 +333,16 @@ public final class GuiRequestHandler {
 
     private static AdminResult badDuration(String raw) {
         return AdminResult.fail("Invalid duration '" + raw.trim() + "': use w, d, h, m, s, such as 30d or 1d12h.");
+    }
+
+    /** By name, like assigning: the Tracks tab can move a player who holds nothing yet onto a first rung. */
+    private static AdminResult moveByName(ServerPlayer admin, String name, String track, boolean up) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
+        return resolution.profile()
+                .map(profile -> com.arcadia.customperm.admin.TrackAdmin.move(admin.getServer(), profile, track, up))
+                .orElseGet(() -> AdminResult.fail(resolution.problem()));
     }
 
     private static AdminResult assignByName(ServerPlayer admin, String name, String grade, long seconds,

@@ -22,9 +22,18 @@ import java.util.List;
  * @param knownPlayers every name the server has seen, for the completion of the add field
  * @param fallbackMode {@code settings.json} value, only to word the banner while LuckPerms is active
  * @param names        whether names carry their prefix, for the Chat tab's preview
+ * @param tracks       every track with its rungs, lowest first, for the Tracks tab
  */
-public record PlayersData(List<Player> players, List<String> knownPlayers, String fallbackMode, NameSettings names)
-        implements GuiPageData {
+public record PlayersData(List<Player> players, List<String> knownPlayers, String fallbackMode, NameSettings names,
+                          List<Track> tracks) implements GuiPageData {
+
+    /** A ladder of grades, lowest first. */
+    public record Track(String name, List<String> grades) {
+        public static final StreamCodec<ByteBuf, Track> CODEC = StreamCodec.composite(
+                GuiCodecs.TEXT, Track::name,
+                GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Track::grades,
+                Track::new);
+    }
 
     /** Most nodes carried per player, per kind. */
     public static final int NODES_MAX = 1024;
@@ -92,6 +101,7 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
             GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), PlayersData::knownPlayers,
             GuiCodecs.TEXT, PlayersData::fallbackMode,
             NameSettings.CODEC, PlayersData::names,
+            GuiCodecs.list(Track.CODEC, GuiCodecs.SERVER_LIST_MAX), PlayersData::tracks,
             PlayersData::new);
 
     @Override

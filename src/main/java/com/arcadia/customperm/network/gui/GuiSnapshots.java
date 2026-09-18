@@ -92,8 +92,12 @@ public final class GuiSnapshots {
 
         List<String> known = server == null ? List.of()
                 : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
+        List<PlayersData.Track> tracks = com.arcadia.customperm.admin.TrackAdmin.names().stream()
+                .limit(GuiCodecs.SERVER_LIST_MAX)
+                .map(name -> new PlayersData.Track(name, com.arcadia.customperm.admin.TrackAdmin.rungs(name)))
+                .toList();
         return new PlayersData(players, known, CustomPerm.configManager.getSettings().luckPermsFallbackMode,
-                nameSettings());
+                nameSettings(), tracks);
     }
 
     static GradesData grades(MinecraftServer server) {

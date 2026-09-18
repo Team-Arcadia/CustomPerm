@@ -69,8 +69,16 @@ public final class PlayersScreen extends AdminScreen {
     private final CpEditBox durationField;
     /** The world a node added is limited to; empty for everywhere. */
     private final CpEditBox worldField;
-    /** Whether the right-hand side shows the chat prefix and suffix rather than the nodes. */
-    private boolean chatTab;
+    /** What the right-hand side shows for the selected player. */
+    private enum Tab { NODES, CHAT, TRACKS }
+
+    private Tab tab = Tab.NODES;
+
+    /** One track, with the rung the selected player stands on, -1 for none. */
+    private record TrackRow(PlayersData.Track track, int rung) {
+    }
+
+    private final CpList<TrackRow> trackList;
     /** Name typed in the field below the list, shown as a row while that player holds nothing. */
     private String pendingPlayer;
 
@@ -112,6 +120,12 @@ public final class PlayersScreen extends AdminScreen {
                     nodeField.setValue(n.node());
                     rebuild();
                 });
+        this.trackList = new CpList<TrackRow>(Component.literal("Tracks"), 14)
+                .renderer(this::renderTrack)
+                .label(t -> t.track().name() + ", " + (t.rung() < 0 ? "not on it" : "on " + t.track().grades().get(t.rung())))
+                .identity(t -> t.track().name())
+                .emptyText("No track defined: create one with /customperm track create.")
+                .onSelect(t -> rebuild());
         refilter();
         fillDetails();
     }
@@ -200,6 +214,20 @@ public final class PlayersScreen extends AdminScreen {
                     .forEach(e -> nodes.add(new NodeRow(e.value(), e.deny(), e.context())));
         }
         nodeList.setItems(nodes);
+        List<TrackRow> tracks = new ArrayList<>();
+        if (player != null) {
+            for (PlayersData.Track track : data.tracks()) {
+                int rung = -1;
+                for (int i = 0; i < track.grades().size(); i++) {
+                    if (player.grades().contains(track.grades().get(i))) {
+                        rung = i;
+                        break;
+                    }
+                }
+                tracks.add(new TrackRow(track, rung));
+            }
+        }
+        trackList.setItems(tracks);
         chat.fill(player == null ? "" : player.prefix(), player == null ? "" : player.suffix());
     }
 
@@ -263,11 +291,27 @@ public final class PlayersScreen extends AdminScreen {
         Rect list = listArea();
         placeButtonRow(tabRow(), 8, false, List.of(
                 CpButton.ghost(Component.literal("Nodes (" + (player.allow().size() + player.deny().size()) + ")"),
-                        () -> setChatTab(false)).icon(Icon.LOCK).selected(!chatTab),
-                CpButton.ghost(Component.literal("Chat"), () -> setChatTab(true)).icon(Icon.EDIT).selected(chatTab)));
+                        () -> setTab(Tab.NODES)).icon(Icon.LOCK).selected(tab == Tab.NODES),
+                CpButton.ghost(Component.literal("Chat"), () -> setTab(Tab.CHAT)).icon(Icon.EDIT).selected(tab == Tab.CHAT),
+                CpButton.ghost(Component.literal("Tracks (" + data.tracks().size() + ")"), () -> setTab(Tab.TRACKS))
+                        .icon(Icon.SHIELD).selected(tab == Tab.TRACKS)));
         Rect fieldRow = new Rect(in.x(), list.bottom() + 4, in.w(), FIELD);
         Rect buttonRow = new Rect(in.x(), fieldRow.bottom() + 4, in.w(), BUTTON);
-        if (chatTab) {
+        if (tab == Tab.TRACKS) {
+            addRenderableWidget(trackList.at(new Rect(list.x(), list.y(), list.w(), fieldRow.bottom() - list.y())));
+            TrackRow selected = trackList.getSelected();
+            boolean movable = editable && selected != null && !selected.track().grades().isEmpty();
+            placeButtonRow(buttonRow, 6, true, List.of(
+                    CpButton.good(Component.literal("Promote"), () -> move(selected, true)).icon(Icon.PLUS)
+                            .enabled(movable && selected.rung() < selected.track().grades().size() - 1)
+                            .tooltip(Component.literal("One rung up: the grade they stand on is replaced by the next. "
+                                    + "On no rung, they get the first one.")),
+                    CpButton.neutral(Component.literal("Demote"), () -> move(selected, false)).icon(Icon.MINUS)
+                            .enabled(movable && selected.rung() >= 0)
+                            .tooltip(Component.literal("One rung down; from the first rung, off the track."))));
+            return;
+        }
+        if (tab == Tab.CHAT) {
             addRenderableWidget(chat.prefix.at(chat.prefixRect(fieldRow)));
             addRenderableWidget(chat.suffix.at(chat.suffixRect(fieldRow)));
             chat.setEditable(editable);
@@ -298,9 +342,32 @@ public final class PlayersScreen extends AdminScreen {
                         .enabled(editable && selected != null && !player.uuid().isEmpty())));
     }
 
-    private void setChatTab(boolean wanted) {
-        chatTab = wanted;
+    private void setTab(Tab wanted) {
+        tab = wanted;
         rebuild();
+    }
+
+    /** By name, like adding a node: a player who holds nothing yet can be put on a first rung. */
+    private void move(TrackRow row, boolean up) {
+        PlayersData.Player player = playerList.getSelected();
+        if (player == null || row == null) return;
+        act(up ? GuiAction.TRACK_PROMOTE : GuiAction.TRACK_DEMOTE, player.name(), row.track().name());
+    }
+
+    /** {@code staff   member > [vip] > admin}: the ladder, the player's rung bracketed. */
+    private void renderTrack(GuiGraphics g, Font font, TrackRow row, Rect r, boolean hovered, boolean selected) {
+        int y = r.y() + (r.h() - 8) / 2;
+        String name = row.track().name();
+        int nw = Math.min(font.width(name), r.w() / 3);
+        Skin.text(g, font, name, r.x() + 4, y, nw, Palette.TEXT);
+        List<String> rungs = new ArrayList<>();
+        for (int i = 0; i < row.track().grades().size(); i++) {
+            String grade = row.track().grades().get(i);
+            rungs.add(i == row.rung() ? "[" + grade + "]" : grade);
+        }
+        String ladder = rungs.isEmpty() ? "no grade yet" : String.join(" > ", rungs);
+        int x = r.x() + 4 + nw + 10;
+        Skin.text(g, font, ladder, x, y, r.right() - x - 4, row.rung() >= 0 ? Palette.ACCENT_HI : Palette.TEXT_MUTE);
     }
 
     // ------------------------------------------------------------------ actions
@@ -408,6 +475,6 @@ public final class PlayersScreen extends AdminScreen {
                 + "  |  " + player.allow().size() + " allow, " + player.deny().size() + " deny"
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, in.w(), Palette.TEXT_MUTE);
-        if (chatTab) chat.renderPreview(g, font, listArea(), player.name(), data.names());
+        if (tab == Tab.CHAT) chat.renderPreview(g, font, listArea(), player.name(), data.names());
     }
 }

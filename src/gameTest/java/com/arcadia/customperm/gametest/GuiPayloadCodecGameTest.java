@@ -93,7 +93,9 @@ public class GuiPayloadCodecGameTest {
                                 new PlayersData.Held(List.of("staff"), List.of("vip"), "&d[Me] ", "", List.of(new Remaining("deny:customperm.command.time", 60L)),
                                         List.of(new ScopedEntry("world=minecraft:the_end", "grade", "builder"))),
                                 List.of("customperm.command.weather"), List.of("customperm.command.time"))),
-                        List.of("Alex", "Steve"), "deny", new NameSettings(false, "{prefix}&8| {name}"))));
+                        List.of("Alex", "Steve"), "deny", new NameSettings(false, "{prefix}&8| {name}"),
+                        List.of(new PlayersData.Track("staff", List.of("member", "vip", "staff")),
+                                new PlayersData.Track("empty", List.of())))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.LUCKPERMS, GuiArea.LUCKPERMS.bit(), 0, true), new LuckPermsData(LuckPermsData.TRACKS)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
