@@ -19,6 +19,7 @@ import net.luckperms.api.node.types.InheritanceNode;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -35,8 +36,8 @@ import java.util.concurrent.CompletableFuture;
  * <p><strong>Nothing is written here.</strong> Reading and applying are separate on purpose: the admin
  * reads the whole report, including what is left behind, before a single grade exists.
  *
- * <p><strong>Every user, not only the loaded ones.</strong> Users come from two {@code searchAll} calls
- * rather than one {@code loadUser} per account: LuckPerms answers both from storage in one query each,
+ * <p><strong>Every user, not only the loaded ones.</strong> Users come from a handful of {@code searchAll}
+ * calls rather than one {@code loadUser} per account: LuckPerms answers each from storage in one query,
  * where loading every user of a large server one by one would not be something to run from a button.
  *
  * <p><strong>Threading.</strong> Everything LuckPerms answers is asynchronous and stays that way: the
@@ -94,22 +95,39 @@ public final class LuckPermsImport {
 
     private static CompletableFuture<Void> readUsers(LuckPerms api, ImportPlan.Builder plan,
                                                      boolean exposeCommands) {
+        // One search per family of keys rather than one per user. LuckPerms answers each from storage in a
+        // single query, where loading every account one by one is not something to run from a button. It has
+        // no matcher for permission nodes as a type, a permission key being any string, so the families that
+        // can be imported are named instead: what is left is what CustomPerm would not have read anyway.
         CompletableFuture<Map<UUID, Collection<InheritanceNode>>> inherited =
                 api.getUserManager().searchAll(NodeMatcher.type(NodeType.INHERITANCE));
-        CompletableFuture<Map<UUID, Collection<Node>>> permissions =
-                api.getUserManager().searchAll(NodeMatcher.type(NodeType.PERMISSION));
+        List<CompletableFuture<Map<UUID, Collection<Node>>>> permissions = List.of(
+                api.getUserManager().searchAll(NodeMatcher.keyStartsWith("customperm.")),
+                api.getUserManager().searchAll(NodeMatcher.keyStartsWith("minecraft.command.")),
+                api.getUserManager().searchAll(NodeMatcher.key("*")));
 
-        return inherited.thenCombine(permissions, (groupsByUser, nodesByUser) -> {
-            Set<UUID> users = new LinkedHashSet<>(groupsByUser.keySet());
-            users.addAll(nodesByUser.keySet());
-            for (UUID uuid : users) {
+        CompletableFuture<?>[] all = new CompletableFuture<?>[permissions.size() + 1];
+        all[0] = inherited;
+        for (int i = 0; i < permissions.size(); i++) all[i + 1] = permissions.get(i);
+
+        return CompletableFuture.allOf(all).thenApply(ignored -> {
+            Map<UUID, List<Node>> byUser = new LinkedHashMap<>();
+            inherited.join().forEach((uuid, nodes) -> byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
+            for (CompletableFuture<Map<UUID, Collection<Node>>> search : permissions) {
+                search.join().forEach((uuid, nodes) ->
+                        byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
+            }
+            plan.note("On players, only what CustomPerm can read is looked at: their groups and their "
+                    + "customperm, minecraft.command and * nodes.");
+
+            for (Map.Entry<UUID, List<Node>> user : byUser.entrySet()) {
+                UUID uuid = user.getKey();
                 List<String> grades = new ArrayList<>();
                 List<String> deniedGrades = new ArrayList<>();
                 Set<String> allow = new LinkedHashSet<>();
                 Set<String> deny = new LinkedHashSet<>();
-                List<Node> nodes = new ArrayList<>(groupsByUser.getOrDefault(uuid, List.of()));
-                nodes.addAll(nodesByUser.getOrDefault(uuid, List.of()));
-                readNodes(nodes, plan, exposeCommands, grades, deniedGrades, allow, deny, "player " + uuid);
+                readNodes(user.getValue(), plan, exposeCommands, grades, deniedGrades, allow, deny,
+                        "player " + uuid);
                 if (grades.isEmpty() && deniedGrades.isEmpty() && allow.isEmpty() && deny.isEmpty()) continue;
                 plan.player(new ImportPlan.Player(uuid.toString(), name(api, uuid), List.copyOf(grades),
                         List.copyOf(deniedGrades), Set.copyOf(allow), Set.copyOf(deny)));

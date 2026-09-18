@@ -14,6 +14,8 @@ import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.admin.GradeAdmin;
+import com.arcadia.customperm.admin.ImportAdmin;
+import com.arcadia.customperm.admin.ImportPlan;
 import com.arcadia.customperm.admin.RateLimitAdmin;
 import com.arcadia.customperm.admin.UserAdmin;
 import com.arcadia.customperm.config.GradesConfig;
@@ -91,6 +93,8 @@ import java.util.stream.Collectors;
  *                     disable <name>                       # keep the limit's numbers, stop enforcing it
  *                     remove <name>                        # delete the limit entirely
  *                     list                                 # show configured limits
+ * /customperm import  preview [nocommands]             # what an import from LuckPerms would do
+ *                     confirm [replace]                # applies what was previewed, nothing else
  * /customperm test    <player> <node>                   # debug: report grant/deny + backend
  * /customperm reload
  * /customperm log admin|players [count]            # latest admin changes / player commands
@@ -276,6 +280,15 @@ public class CustomPermCommand {
         };
     }
 
+    /**
+     * Importing writes grades, exposes commands and reads LuckPerms, so it asks for all three nodes
+     * rather than the one an area would carry. The console passes, as everywhere else.
+     */
+    private static final java.util.function.Predicate<CommandSourceStack> IMPORT_ACCESS =
+        AdminAccess.manage(PermissionNodes.MANAGE_GRADES)
+            .and(AdminAccess.manage(PermissionNodes.MANAGE_COMMANDS))
+            .and(AdminAccess.manage(PermissionNodes.MANAGE_LUCKPERMS));
+
     /** Players online or who joined before: grades can be assigned to offline players. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_KNOWN_PLAYERS =
         (ctx, builder) -> {
@@ -431,6 +444,15 @@ public class CustomPermCommand {
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
                             .executes(CustomPermCommand::userList))))
+                .then(Commands.literal("import").requires(IMPORT_ACCESS)
+                    .then(Commands.literal("preview")
+                        .executes(ctx -> importPreview(ctx, true))
+                        .then(Commands.literal("nocommands")
+                            .executes(ctx -> importPreview(ctx, false))))
+                    .then(Commands.literal("confirm")
+                        .executes(ctx -> importApply(ctx, false))
+                        .then(Commands.literal("replace")
+                            .executes(ctx -> importApply(ctx, true)))))
                 .then(Commands.literal("alias")
                     .then(Commands.literal("add").requires(AdminAccess.manage(PermissionNodes.MANAGE_ALIASES))
                         .then(Commands.argument("name", StringArgumentType.word())
@@ -900,6 +922,62 @@ public class CustomPermCommand {
 
     private static String join(List<String> values) {
         return values.isEmpty() ? "none" : String.join(", ", values);
+    }
+
+    // ---------------- import ----------------
+
+    /**
+     * Reads LuckPerms and prints what an import would do. Changes nothing: the report is the whole point,
+     * and what it does not import is as much of it as what it does.
+     */
+    private static int importPreview(CommandContext<CommandSourceStack> ctx, boolean exposeCommands) {
+        AdminResult refusal = ImportAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        var server = ctx.getSource().getServer();
+        if (server == null) return 0;
+        CommandSourceStack source = ctx.getSource();
+        String admin = importKey(source);
+        source.sendSuccess(() -> Component.literal("Reading LuckPerms, this changes nothing...")
+            .withStyle(ChatFormatting.GRAY), false);
+        // Inside the LuckPerms branch, and called rather than referenced: a method reference would resolve
+        // its target eagerly and drag LuckPerms onto a server that does not have it.
+        com.arcadia.customperm.perm.lp.LuckPermsImport.read(exposeCommands)
+            .whenComplete((plan, error) -> server.execute(() -> {
+                if (plan == null) {
+                    source.sendFailure(Component.literal("[CustomPerm] LuckPerms could not be read"
+                        + (error == null ? "." : ": " + error.getMessage())));
+                    return;
+                }
+                ImportAdmin.remember(admin, plan);
+                plan.report().forEach(line -> source.sendSuccess(() -> Component.literal(line), false));
+                source.sendSuccess(() -> Component.literal(plan.isEmpty()
+                    ? "Nothing to import."
+                    : "Nothing was changed. Run /customperm import confirm to apply this, or "
+                        + "/customperm import confirm replace to overwrite grades of the same name.")
+                    .withStyle(ChatFormatting.GRAY), false);
+            }));
+        return 1;
+    }
+
+    /** Applies what this admin previewed, and only that. */
+    private static int importApply(CommandContext<CommandSourceStack> ctx, boolean replace) {
+        AdminResult refusal = ImportAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        String admin = importKey(ctx.getSource());
+        ImportPlan plan = ImportAdmin.previewed(admin);
+        if (plan == null) {
+            return report(ctx, AdminResult.fail("Preview it first: /customperm import preview. A preview older "
+                + "than 10 minutes is read again rather than trusted."));
+        }
+        AdminResult result = guarded(ctx, () -> ImportAdmin.apply(ctx.getSource().getServer(), plan, replace));
+        // Forgotten once applied: confirming twice would import the same thing twice.
+        if (result.success()) ImportAdmin.forget(admin);
+        return report(ctx, result);
+    }
+
+    /** One preview per admin; the console is one of them. */
+    private static String importKey(CommandSourceStack source) {
+        return source.getEntity() instanceof ServerPlayer player ? player.getUUID().toString() : "console";
     }
 
     // ---------------- alias ----------------

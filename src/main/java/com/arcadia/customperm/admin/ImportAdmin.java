@@ -13,9 +13,13 @@ import com.arcadia.customperm.config.CommandsConfig;
 import com.arcadia.customperm.config.GradesConfig;
 import net.minecraft.server.MinecraftServer;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Writes an {@link ImportPlan} into the configuration. Server thread only, and deliberately not behind
@@ -28,7 +32,47 @@ import java.util.List;
  */
 public final class ImportAdmin {
 
+    /**
+     * How long a preview stays good for. An import is applied against what was read, not against what
+     * LuckPerms says now: past this, the report an admin is about to confirm may no longer describe
+     * anything, so it is read again rather than trusted.
+     */
+    private static final Duration PREVIEW_KEEPS = Duration.ofMinutes(10);
+
+    /** One preview per admin, so two of them cannot confirm each other's plan. */
+    private static final Map<String, Preview> PREVIEWS = new HashMap<>();
+
+    private record Preview(ImportPlan plan, Instant read) {
+    }
+
     private ImportAdmin() {
+    }
+
+    /** Remembers what an admin has just been shown, so confirming applies that and nothing else. */
+    public static void remember(String admin, ImportPlan plan) {
+        PREVIEWS.put(admin, new Preview(plan, Instant.now()));
+    }
+
+    /** What this admin previewed, or {@code null} when they previewed nothing or did it too long ago. */
+    public static ImportPlan previewed(String admin) {
+        Preview preview = PREVIEWS.get(admin);
+        if (preview == null) return null;
+        if (Duration.between(preview.read(), Instant.now()).compareTo(PREVIEW_KEEPS) > 0) {
+            PREVIEWS.remove(admin);
+            return null;
+        }
+        return preview.plan();
+    }
+
+    /** Forgets a preview once it has been applied: confirming twice would import the same thing twice. */
+    public static void forget(String admin) {
+        PREVIEWS.remove(admin);
+    }
+
+    /** The refusal when there is nothing to read, or {@code null} when LuckPerms can be imported. */
+    public static AdminResult unavailable() {
+        return CustomPerm.isLuckPermsActive() ? null
+                : AdminResult.fail("Nothing to import: LuckPerms is not running on this server.");
     }
 
     private static GradesConfig grades() {

@@ -131,7 +131,8 @@ public final class LuckPermsTestSupport {
         return LuckPermsProvider.get();
     }
 
-    private static <T> T await(CompletableFuture<T> future) {
+    /** Waits for one LuckPerms answer by wall clock: GameTest ticks do not advance its executors. */
+    public static <T> T await(CompletableFuture<T> future) {
         try {
             return future.get(TIMEOUT_SECONDS, TimeUnit.SECONDS);
         } catch (Exception e) {
