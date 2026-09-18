@@ -90,6 +90,14 @@ public enum GuiAction {
     /** {@code [playerUuid, node, "allow"|"deny"]} Removes one, by UUID so an unnamed entry can be cleaned up. */
     USER_NODE_REMOVE(3, GuiArea.GRADES),
 
+    /**
+     * {@code ["true"|"false"]} Reads LuckPerms and returns what an import would do, writing nothing. The
+     * expose flag says whether a translated {@code minecraft.command} node also exposes its command.
+     */
+    IMPORT_PREVIEW(1, GuiArea.GRADES),
+    /** {@code ["merge"|"replace"]} Applies what this admin previewed, and only that. */
+    IMPORT_APPLY(1, GuiArea.GRADES),
+
     /** {@code ["true"|"false"]} Records player commands, like {@code /customperm log record}. */
     LOG_PLAYERS(1, GuiArea.LOGS),
     /** {@code ["true"|"false"]} Masks the arguments of sensitive commands, like {@code /customperm log mask}. */

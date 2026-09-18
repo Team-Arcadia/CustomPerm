@@ -47,6 +47,7 @@ public final class GuiSnapshots {
             case GRADES -> grades(player.getServer());
             case PLAYERS -> players(player.getServer());
             case LUCKPERMS -> new LuckPermsData(LuckPermsData.GROUPS);
+            case IMPORT -> importPage(player);
             case LOGS -> logs();
         };
     }
@@ -141,6 +142,14 @@ public final class GuiSnapshots {
                         .add(new GradesData.Member(rawUuid, name, online));
             }
         });
+    }
+
+    /** The import page: what was previewed, if anything. The plan itself never leaves the server. */
+    static ImportData importPage(ServerPlayer player) {
+        var plan = com.arcadia.customperm.admin.ImportAdmin.previewed(player.getUUID().toString());
+        return new ImportData(CustomPerm.isLuckPermsActive(), plan != null,
+                com.arcadia.customperm.admin.ImportAdmin.previewedWithCommands(player.getUUID().toString()),
+                plan == null ? List.of() : plan.report().stream().limit(ImportData.REPORT_MAX).toList());
     }
 
     static LogsData logs() {

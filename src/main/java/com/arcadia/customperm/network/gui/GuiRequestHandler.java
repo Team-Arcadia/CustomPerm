@@ -14,6 +14,8 @@ import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.admin.GradeAdmin;
+import com.arcadia.customperm.admin.ImportAdmin;
+import com.arcadia.customperm.admin.ImportPlan;
 import com.arcadia.customperm.admin.LogAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
 import com.arcadia.customperm.admin.UserAdmin;
@@ -80,7 +82,7 @@ public final class GuiRequestHandler {
      * installed. Installed but not running, it is still shown, with a banner saying why it cannot edit.
      */
     public static boolean available(GuiPage page) {
-        return page != GuiPage.LUCKPERMS || CustomPerm.isLuckPermsPresent();
+        return (page != GuiPage.LUCKPERMS && page != GuiPage.IMPORT) || CustomPerm.isLuckPermsPresent();
     }
 
     // ------------------------------------------------------------------ packets
@@ -190,9 +192,59 @@ public final class GuiRequestHandler {
                     : guarded(player, () -> userNodeByName(player, args.get(0), args.get(1), kind(args.get(2))));
             case USER_NODE_REMOVE -> kind(args.get(2)) == null ? malformed(action)
                     : guarded(player, () -> userNodeByUuid(player, args.get(0), args.get(1), kind(args.get(2))));
+            case IMPORT_PREVIEW -> bool(args.get(0)) == null ? malformed(action)
+                    : importPreview(player, bool(args.get(0)));
+            case IMPORT_APPLY -> importApply(player, args.get(0));
             case LOG_PLAYERS -> bool(args.get(0)) == null ? malformed(action) : LogAdmin.setPlayerLog(bool(args.get(0)));
             case LOG_MASK -> bool(args.get(0)) == null ? malformed(action) : LogAdmin.setMasking(bool(args.get(0)));
         };
+    }
+
+    /**
+     * Reads LuckPerms and refreshes the page with the report. Answers at once and refreshes when the
+     * answer comes: the read is asynchronous, and the admin should not be left looking at a frozen page.
+     */
+    private static AdminResult importPreview(ServerPlayer admin, boolean exposeCommands) {
+        AdminResult refusal = importRefusal(admin);
+        if (refusal != null) return refusal;
+        String key = admin.getUUID().toString();
+        // Inside the LuckPerms branch, and called rather than referenced: a method reference resolves its
+        // target eagerly, which would drag LuckPerms onto a server that does not have it.
+        com.arcadia.customperm.perm.lp.LuckPermsImport.read(exposeCommands)
+                .whenComplete((plan, error) -> admin.getServer().execute(() -> {
+                    if (plan != null) ImportAdmin.remember(key, plan, exposeCommands);
+                    sendPage(admin, GuiPage.IMPORT, false);
+                    if (plan == null) {
+                        send(admin, GuiActionResultPayload.fail("LuckPerms could not be read"
+                                + (error == null ? "." : ": " + error.getMessage())));
+                    }
+                }));
+        return AdminResult.ok("Reading LuckPerms, this changes nothing.");
+    }
+
+    /** Applies what this admin previewed, and only that. */
+    private static AdminResult importApply(ServerPlayer admin, String mode) {
+        AdminResult refusal = importRefusal(admin);
+        if (refusal != null) return refusal;
+        if (!mode.equals("merge") && !mode.equals("replace")) return malformed(GuiAction.IMPORT_APPLY);
+        String key = admin.getUUID().toString();
+        ImportPlan plan = ImportAdmin.previewed(key);
+        if (plan == null) {
+            return AdminResult.fail("Read LuckPerms first. A preview older than 10 minutes is read again "
+                    + "rather than trusted.");
+        }
+        AdminResult result = guarded(admin, () -> ImportAdmin.apply(admin.getServer(), plan, mode.equals("replace")));
+        if (result.success()) ImportAdmin.forget(key);
+        return result;
+    }
+
+    /** Importing asks for the three nodes together, and for something to read. */
+    private static AdminResult importRefusal(ServerPlayer admin) {
+        if (!GuiAccess.canImport(admin)) {
+            return AdminResult.fail("Importing needs " + GuiArea.GRADES.node() + ", " + GuiArea.COMMANDS.node()
+                    + " and " + GuiArea.LUCKPERMS.node() + ".");
+        }
+        return ImportAdmin.unavailable();
     }
 
     /** Refuses a grade change that would lock this admin out of /customperm and the interface. */

@@ -948,7 +948,7 @@ public class CustomPermCommand {
                         + (error == null ? "." : ": " + error.getMessage())));
                     return;
                 }
-                ImportAdmin.remember(admin, plan);
+                ImportAdmin.remember(admin, plan, exposeCommands);
                 plan.report().forEach(line -> source.sendSuccess(() -> Component.literal(line), false));
                 source.sendSuccess(() -> Component.literal(plan.isEmpty()
                     ? "Nothing to import."

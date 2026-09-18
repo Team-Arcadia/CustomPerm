@@ -30,6 +30,15 @@ public final class GuiAccess {
         return AdminAccess.canManage(player, area.node());
     }
 
+    /**
+     * Importing from LuckPerms writes grades, exposes commands and reads LuckPerms, so it asks for the
+     * three nodes together rather than the one an area carries.
+     */
+    public static boolean canImport(ServerPlayer player) {
+        return canEdit(player, GuiArea.GRADES) && canEdit(player, GuiArea.COMMANDS)
+                && canEdit(player, GuiArea.LUCKPERMS);
+    }
+
     /** One bit per area this player may write to. */
     public static int editMask(ServerPlayer player) {
         int mask = 0;

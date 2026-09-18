@@ -22,6 +22,7 @@ public enum GuiPage {
     GRADES,
     PLAYERS,
     LUCKPERMS,
+    IMPORT,
     LOGS;
 
     /** Name used on the wire and as the {@code /customperm gui <page>} argument. */

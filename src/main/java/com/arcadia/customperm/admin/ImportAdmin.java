@@ -42,15 +42,21 @@ public final class ImportAdmin {
     /** One preview per admin, so two of them cannot confirm each other's plan. */
     private static final Map<String, Preview> PREVIEWS = new HashMap<>();
 
-    private record Preview(ImportPlan plan, Instant read) {
+    private record Preview(ImportPlan plan, boolean exposeCommands, Instant read) {
     }
 
     private ImportAdmin() {
     }
 
     /** Remembers what an admin has just been shown, so confirming applies that and nothing else. */
-    public static void remember(String admin, ImportPlan plan) {
-        PREVIEWS.put(admin, new Preview(plan, Instant.now()));
+    public static void remember(String admin, ImportPlan plan, boolean exposeCommands) {
+        PREVIEWS.put(admin, new Preview(plan, exposeCommands, Instant.now()));
+    }
+
+    /** Whether the preview this admin holds was read with the commands exposed; false when there is none. */
+    public static boolean previewedWithCommands(String admin) {
+        Preview preview = PREVIEWS.get(admin);
+        return preview != null && preview.exposeCommands();
     }
 
     /** What this admin previewed, or {@code null} when they previewed nothing or did it too long ago. */

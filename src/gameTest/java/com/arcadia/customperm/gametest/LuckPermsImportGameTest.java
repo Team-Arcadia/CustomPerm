@@ -16,12 +16,22 @@ import com.arcadia.customperm.admin.ImportPlan;
 import com.arcadia.customperm.config.CommandsConfig;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.gametest.support.LuckPermsTestSupport;
+import com.arcadia.customperm.gametest.support.Grants;
 import com.arcadia.customperm.gametest.support.Modes;
+import com.arcadia.customperm.gametest.support.TestPlayer;
+import com.arcadia.customperm.network.gui.GuiAction;
+import com.arcadia.customperm.network.gui.GuiActionPayload;
+import com.arcadia.customperm.network.gui.GuiActionResultPayload;
+import com.arcadia.customperm.network.gui.GuiPage;
+import com.arcadia.customperm.network.gui.GuiPagePayload;
+import com.arcadia.customperm.network.gui.GuiRequestHandler;
+import com.arcadia.customperm.network.gui.ImportData;
 import com.arcadia.customperm.network.lp.LpEditOp;
 import com.arcadia.customperm.perm.lp.LuckPermsImport;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
+import net.minecraft.server.MinecraftServer;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
@@ -44,6 +54,7 @@ public class LuckPermsImportGameTest {
     private static final String BASE = "cp_m_base";
     private static final String VIP = "cp_m_vip";
     private static final UUID USER = UUID.fromString("00000000-0000-0000-0000-0000000000aa");
+    private static final String PAGE_GROUP = "cp_m_page";
 
     @GameTest(template = TEMPLATE, timeoutTicks = 400)
     public static void importBringsWhatItCanAndSaysWhatItCannot(GameTestHelper helper) {
@@ -132,6 +143,107 @@ public class LuckPermsImportGameTest {
             LuckPermsTestSupport.cleanup(List.of(BASE, VIP), List.of());
         }
         helper.succeed();
+    }
+
+    /** The import page: reading answers with the report and writes nothing, and only a preview can be applied. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 400)
+    public static void importPageReadsThenImports(GameTestHelper helper) {
+        if (!Modes.luckPermsOnly(helper)) return;
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        CommandsConfig commands = CustomPerm.configManager.getCommands();
+        Set<String> gradesBefore = new HashSet<>(grades.grades.keySet());
+        Set<String> commandsBefore = new HashSet<>(commands.grantedCommands);
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_m_owner", 4);
+             TestPlayer reader = TestPlayer.reader(helper.getLevel(), "cp_m_reader", 2)) {
+            apply(LpEditOp.GROUP_CREATE, PAGE_GROUP);
+            apply(LpEditOp.GROUP_PERM_ADD, PAGE_GROUP, "minecraft.command.weather", "true", "", "0");
+
+            // The area check answers first, then the composite one: importing asks for three nodes.
+            reader.clearReceived();
+            importAct(reader, GuiAction.IMPORT_PREVIEW, "true");
+            expectResult(reader, "FAIL: You do not have customperm.manage.grades.");
+            try (Grants oneArea = Grants.allow(reader, "customperm.manage.grades")) {
+                reader.clearReceived();
+                importAct(reader, GuiAction.IMPORT_PREVIEW, "true");
+                expectResult(reader, "FAIL: Importing needs customperm.manage.grades, "
+                        + "customperm.manage.commands and customperm.manage.luckperms.");
+            }
+
+            owner.clearReceived();
+            importAct(owner, GuiAction.IMPORT_APPLY, "merge");
+            expectResult(owner, "FAIL: Read LuckPerms first");
+            if (grades.grades.containsKey(PAGE_GROUP)) fail("Applying without a preview wrote something.");
+
+            // Reading answers at once and refreshes the page when LuckPerms comes back.
+            owner.clearReceived();
+            importAct(owner, GuiAction.IMPORT_PREVIEW, "true");
+            expectResult(owner, "OK: Reading LuckPerms");
+            ImportData page = awaitReport(helper.getLevel().getServer(), owner);
+            if (!page.previewed() || page.report().isEmpty())
+                fail("The refreshed page must carry the report: " + page);
+            if (grades.grades.containsKey(PAGE_GROUP)) fail("Reading must not write anything.");
+
+            owner.clearReceived();
+            importAct(owner, GuiAction.IMPORT_APPLY, "sideways");
+            expectResult(owner, "FAIL: Malformed request for IMPORT_APPLY.");
+
+            owner.clearReceived();
+            importAct(owner, GuiAction.IMPORT_APPLY, "merge");
+            List<String> results = results(owner);
+            if (results.size() != 1 || !results.get(0).startsWith("OK: Imported"))
+                fail("Unexpected import result: " + results);
+            if (!grades.grades.containsKey(PAGE_GROUP) || !commands.grantedCommands.contains("weather"))
+                fail("The import did not write what it said it would.");
+
+            // The preview is spent: confirming again asks for a new read rather than importing twice.
+            owner.clearReceived();
+            importAct(owner, GuiAction.IMPORT_APPLY, "merge");
+            expectResult(owner, "FAIL: Read LuckPerms first");
+        } finally {
+            grades.grades.keySet().retainAll(gradesBefore);
+            commands.grantedCommands.retainAll(commandsBefore);
+            LuckPermsTestSupport.cleanup(List.of(PAGE_GROUP), List.of());
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The page the server pushes once LuckPerms has answered. The answer arrives on a LuckPerms thread and
+     * is then scheduled on the server thread, which is the one running this test: sleeping on it would wait
+     * for a task only it can run. {@code managedBlock} keeps draining that queue while waiting, and the
+     * deadline is inside the condition so a silent LuckPerms ends the test instead of hanging the run.
+     */
+    private static ImportData awaitReport(MinecraftServer server, TestPlayer player) {
+        long deadline = System.currentTimeMillis() + 5000;
+        server.managedBlock(() -> report(player) != null || System.currentTimeMillis() > deadline);
+        ImportData data = report(player);
+        if (data == null) throw new GameTestAssertException("LuckPerms did not answer the preview within 5s");
+        return data;
+    }
+
+    private static ImportData report(TestPlayer player) {
+        List<GuiPagePayload> pages = player.payloads(GuiPagePayload.class);
+        for (int i = pages.size() - 1; i >= 0; i--) {
+            if (pages.get(i).data() instanceof ImportData data && data.previewed()) return data;
+        }
+        return null;
+    }
+
+    private static void importAct(TestPlayer player, GuiAction action, String... args) {
+        GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.IMPORT.id()),
+                player.payloadContext());
+    }
+
+    private static void expectResult(TestPlayer player, String prefix) {
+        List<String> results = results(player);
+        if (results.size() != 1 || !results.get(0).startsWith(prefix))
+            throw new GameTestAssertException("Expected one result starting with '" + prefix + "', got " + results);
+    }
+
+    private static List<String> results(TestPlayer player) {
+        return player.payloads(GuiActionResultPayload.class).stream()
+                .map(r -> (r.success() ? "OK: " : "FAIL: ") + r.message())
+                .toList();
     }
 
     private static ImportPlan.Grade grade(ImportPlan plan, String name) {

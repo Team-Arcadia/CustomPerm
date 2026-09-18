@@ -19,6 +19,7 @@ import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPageData;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
+import com.arcadia.customperm.network.gui.ImportData;
 import com.arcadia.customperm.network.gui.LogsData;
 import com.arcadia.customperm.network.gui.PlayersData;
 import com.arcadia.customperm.network.gui.LuckPermsData;
@@ -61,7 +62,11 @@ public final class AdminScreens {
         // Nodes carried by a player themselves live next to the grades that hold the rest.
         entries.add(new NavEntry(GuiPage.PLAYERS, "Players", Icon.USER));
         // The LuckPerms editor needs the LuckPerms mod; installed but not running, it opens on a banner.
-        if (context.luckPermsInstalled()) entries.add(new NavEntry(GuiPage.LUCKPERMS, "LuckPerms", Icon.LOCK));
+        if (context.luckPermsInstalled()) {
+            entries.add(new NavEntry(GuiPage.LUCKPERMS, "LuckPerms", Icon.LOCK));
+            // Bringing LuckPerms over is only a question while LuckPerms is there to be read.
+            entries.add(new NavEntry(GuiPage.IMPORT, "Import", Icon.REFRESH));
+        }
         entries.add(new NavEntry(GuiPage.LOGS, "Logs", Icon.LOG));
         return entries;
     }
@@ -101,6 +106,7 @@ public final class AdminScreens {
             case GradesData d -> new GradesScreen(context, d);
             case PlayersData d -> new PlayersScreen(context, d);
             case LuckPermsData d -> new LuckPermsScreen(context, d);
+            case ImportData d -> new ImportScreen(context, d);
             case LogsData d -> new LogsScreen(context, d);
         };
     }
