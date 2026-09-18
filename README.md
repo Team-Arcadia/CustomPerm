@@ -64,7 +64,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Per-player nodes** — a node can be carried by one player rather than by a grade, the exception a single player gets without inventing a grade for them. It wins over their grades at the same level, whatever a grade weighs, but a more specific grade node still wins. `/customperm user addperm|adddeny`, or the Players page.
 - **Import from LuckPerms** — a server moving off LuckPerms brings its groups, its players and their nodes over instead of retyping them. Reading changes nothing and answers with a report, including what it leaves behind and why; only then can it be applied, after a backup of every config file. `/customperm import preview` then `/customperm import confirm`, or the Import page.
 - **Temporary entries** — a node, a grade a player holds, a grade parent or a refusal can last a set time: `/customperm grade assign Steve vip 30d`. An expired entry stops counting at once, and a sweep then removes it and resends the command tree. The Grades and Players pages take a duration and show the time left.
-- **Permissions of other mods** — nodes other mods declare through NeoForge's permission API are answered from the grades, so `/customperm grade addperm vip somemod.feature` works for them too. CustomPerm becomes NeoForge's permission handler on its own only without LuckPerms, and never replaces a handler an admin chose.
+- **Permissions of other mods** — nodes other mods declare through NeoForge's permission API are answered from the grades, so `/customperm grade addperm vip somemod.feature` works for them too. CustomPerm becomes NeoForge's permission handler on its own only without LuckPerms, and never replaces a handler an admin chose. Mods that call LuckPerms by name instead are listed by `/customperm modcheck`.
 - **Tracks** — an ordered ladder of grades, so promoting and demoting move a player one rung at a time: `/customperm track promote Steve staff`, or the Tracks tab of the Players page. A track grants nothing itself; it is the convenience a server coming from LuckPerms expects.
 - **Per-world entries** — a node on a grade or a player, or a grade a player holds, can apply in one world only: `/customperm grade adddeny member customperm.command.home world=the_nether`. It outranks the same holder's entry without a world, and the command tree follows the player through portals. The Grades and Players pages take a world too.
 - **Chat prefixes and suffixes** — a grade, or one player, carries prefixes and suffixes around their name in chat and wherever the game shows it, each with a priority and, if wanted, a duration, like LuckPerms: the highest priority shows, or several in a row. With LuckPerms, the prefixes LuckPerms stores are shown instead. The name is decorated, never the message, so chat stays signed and reportable. Off until `/customperm names on`.
@@ -560,6 +560,7 @@ Cap how many times one player may run a command or an alias within a sliding win
 | `/customperm test <player> <node>` | Verifies whether a player holds a permission node. Returns `GRANTED` or `DENIED`, with the reason: explicit ALLOW or DENY, or not set (granted to operators). |
 | `/customperm debug <player> <command>` | Detailed report: is the command in the dispatcher? exposed? does op-level pass? is the perm granted? what does the wrapper actually return? |
 | `/customperm status` | Global snapshot: backend, wrapped commands, exposed commands, aliases, grades, active admin alerts. |
+| `/customperm modcheck` | Lists the installed mods that call LuckPerms' own API, which CustomPerm cannot answer without LuckPerms. See [Mods that call LuckPerms by name](#mods-that-call-luckperms-by-name). |
 | `/customperm scan [pattern]` | Lists every command in the dispatcher with its state (exposed, alias, mod-internal). Optional substring filter. |
 | `/customperm reload` | Reloads config files from disk. |
 | `/customperm log admin [count]` | The latest admin changes (10 by default, up to 100), refused ones in red. |
@@ -1197,6 +1198,26 @@ here mentions it, the default its mod gave it (often an operator check), never a
 number or a text is answered from the meta of the same name (see [Meta](#meta)), and its default when
 there is none. An offline player is resolved from
 the grades too.
+
+### Mods that call LuckPerms by name
+
+Some mods do not ask NeoForge: they call LuckPerms' own API (`net.luckperms.api`) directly. CustomPerm cannot
+answer those checks. With LuckPerms installed, LuckPerms answers them. **Without LuckPerms, such a mod falls
+back to its own default, often the operator level, and a node granted to it in a grade does nothing.** This
+is the one limit of running CustomPerm alone, and it comes from the other mod's choice, not from a CustomPerm
+feature. Answering them would mean shipping a copy of LuckPerms' API, which cannot load next to the real
+LuckPerms.
+
+`/customperm modcheck` tells you which installed mods are in that case. It reads the compiled classes of every
+mod once, in the background, and lists the mods whose classes name LuckPerms' API:
+
+- **LuckPerms only**: without LuckPerms, CustomPerm cannot answer its checks. Its nodes belong in LuckPerms, or
+  ask its author to declare them through NeoForge's permission API, which CustomPerm then answers.
+- **Also uses NeoForge's permission API**: the checks it makes through NeoForge are answered; it may use
+  LuckPerms only when LuckPerms is there.
+
+A mod listed here may only use LuckPerms when it is present; its page or config says. LuckPerms and CustomPerm
+themselves are left out. The answer is kept until the next start, since installed mods cannot change before.
 
 ### Mods that mutate the dispatcher dynamically
 

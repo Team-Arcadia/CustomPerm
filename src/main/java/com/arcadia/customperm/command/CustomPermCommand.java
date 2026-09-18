@@ -127,6 +127,7 @@ import java.util.stream.Collectors;
  * /customperm names   [on|off|format <format>]         # decorate names with them, {prefix}{name}{suffix}
  *                     stack <prefix|suffix|both> <highest|stacked> [limit]  # one, or several in a row
  * /customperm test    <player> <node>                   # debug: report grant/deny + backend
+ * /customperm modcheck                              # mods calling LuckPerms' own API, which CustomPerm cannot answer
  * /customperm reload
  * /customperm log admin|players [count]            # latest admin changes / player commands
  *             log record|mask <true|false>          # player command log, argument masking
@@ -807,6 +808,8 @@ public class CustomPermCommand {
                     .then(Commands.argument("pattern", StringArgumentType.word())
                         .suggests(SUGGEST_ALL_COMMANDS)
                         .executes(CustomPermCommand::scanPattern)))
+                .then(Commands.literal("modcheck")
+                    .executes(CustomPermCommand::modCheck))
                 .then(Commands.literal("reload").requires(AdminAccess.manage(PermissionNodes.MANAGE_CONFIG))
                     .executes(CustomPermCommand::reload))
                 .then(logCommand())
@@ -1429,6 +1432,29 @@ public class CustomPermCommand {
         String line = grade.displayName == null ? name + " has no display name: it is shown by its name."
             : name + " is shown as " + grade.displayName;
         ctx.getSource().sendSuccess(() -> Component.literal(line), false);
+        return 1;
+    }
+
+    /**
+     * Lists the installed mods that call LuckPerms' own API, which CustomPerm cannot answer. Read once in the
+     * background; the answer comes back to whoever asked, even if it takes a few seconds.
+     */
+    private static int modCheck(CommandContext<CommandSourceStack> ctx) {
+        CommandSourceStack source = ctx.getSource();
+        var server = source.getServer();
+        if (!com.arcadia.customperm.admin.ModCheck.ready()) {
+            source.sendSuccess(() -> Component.literal("Reading the installed mods, this changes nothing...")
+                .withStyle(ChatFormatting.GRAY), false);
+        }
+        com.arcadia.customperm.admin.ModCheck.report().whenComplete((report, error) -> server.execute(() -> {
+            if (error != null) {
+                source.sendFailure(Component.literal("The mod check failed: " + error.getMessage()));
+                return;
+            }
+            for (String line : com.arcadia.customperm.admin.ModCheck.lines(report, CustomPerm.isLuckPermsPresent())) {
+                source.sendSuccess(() -> Component.literal(line), false);
+            }
+        }));
         return 1;
     }
 

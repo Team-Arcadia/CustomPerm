@@ -63,7 +63,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **DENY explicite** : les grades internes supportent `deniedPermissions`. L'entrée la plus spécifique l'emporte, comme LuckPerms (nœud exact, puis `a.b.*`, puis `*`), et un DENY gagne à niveau égal.
 - **Nœuds par joueur** : un nœud peut être porté par un joueur plutôt que par un grade, l'exception qu'un joueur seul obtient sans qu'on invente un grade pour lui. Il l'emporte sur ses grades à niveau égal, quel que soit le poids du grade, mais un nœud de grade plus spécifique gagne toujours. `/customperm user addperm|adddeny`, ou la page Joueurs.
 - **Entrées temporaires** : un nœud, un grade tenu par un joueur, un parent de grade ou un refus peut durer un temps donné : `/customperm grade assign Steve vip 30d`. Une entrée expirée cesse de compter aussitôt, puis un balayage la retire et renvoie l'arbre de commandes. Les pages Grades et Joueurs acceptent une durée et affichent le temps restant.
-- **Permissions des autres mods** : les nœuds que d'autres mods déclarent via l'API de permissions de NeoForge sont répondus depuis les grades, donc `/customperm grade addperm vip unmod.fonction` fonctionne pour eux aussi. CustomPerm devient de lui-même le handler de permissions de NeoForge seulement sans LuckPerms, et ne remplace jamais un handler choisi par un admin.
+- **Permissions des autres mods** : les nœuds que d'autres mods déclarent via l'API de permissions de NeoForge sont répondus depuis les grades, donc `/customperm grade addperm vip unmod.fonction` fonctionne pour eux aussi. CustomPerm devient de lui-même le handler de permissions de NeoForge seulement sans LuckPerms, et ne remplace jamais un handler choisi par un admin. Les mods qui appellent LuckPerms par son nom à la place sont listés par `/customperm modcheck`.
 - **Tracks** : une échelle ordonnée de grades, pour que promouvoir et rétrograder fassent monter ou descendre un joueur d'un cran : `/customperm track promote Steve staff`, ou l'onglet Tracks de la page Joueurs. Un track n'accorde rien lui-même ; c'est le confort qu'attend un serveur qui vient de LuckPerms.
 - **Entrées par monde** : un nœud sur un grade ou un joueur, ou un grade tenu par un joueur, peut ne valoir que dans un monde : `/customperm grade adddeny member customperm.command.home world=the_nether`. Elle l'emporte sur l'entrée sans monde du même détenteur, et l'arbre de commandes suit le joueur à travers les portails. Les pages Grades et Joueurs acceptent aussi un monde.
 - **Préfixes et suffixes de chat** : un grade, ou un joueur, porte des préfixes et des suffixes autour de son nom dans le chat et partout où le jeu l'affiche, chacun avec une priorité et, si voulu, une durée, comme LuckPerms : la priorité la plus haute s'affiche, ou plusieurs à la suite. Avec LuckPerms, ce sont les préfixes que LuckPerms stocke qui s'affichent. Le nom est décoré, jamais le message, donc le chat reste signé et signalable. Désactivé tant qu'on n'a pas fait `/customperm names on`.
@@ -578,6 +578,7 @@ Plafonne le nombre d'utilisations d'une commande ou d'un alias par joueur sur un
 | `/customperm test <player> <node>` | Vérifie si un joueur a un node de permission donné. Retourne `GRANTED` ou `DENIED`, avec la raison : ALLOW ou DENY explicite, ou non défini (accordé aux opérateurs). |
 | `/customperm debug <player> <command>` | Rapport détaillé : commande dans le dispatcher ? exposée ? l'op-level passe ? la perm est granted ? le wrapper renvoie quoi ? |
 | `/customperm status` | Snapshot global : backend, nb de commandes wrappées, exposées, aliases, grades, alertes admin actives. |
+| `/customperm modcheck` | Liste les mods installés qui appellent l'API propre de LuckPerms, à laquelle CustomPerm ne peut pas répondre sans LuckPerms. Voir [Mods qui appellent LuckPerms par son nom](#mods-qui-appellent-luckperms-par-son-nom). |
 | `/customperm scan [pattern]` | Liste toutes les commandes du dispatcher avec leur état (exposée, alias, mod-interne). Filtre optionnel. |
 | `/customperm reload` | Recharge les fichiers de config depuis le disque. |
 | `/customperm log admin [nombre]` | Les dernières modifications d'administration (10 par défaut, jusqu'à 100), les refus en rouge. |
@@ -1218,6 +1219,28 @@ Ce qui est répondu : un nœud oui/non vaut `true` pour un ALLOW explicite, `fal
 ici ne le mentionne, la valeur par défaut que son mod lui a donnée (souvent un test d'opérateur), jamais un
 refus. Un nœud qui porte un nombre ou un texte reçoit la meta du même nom (voir
 [Meta](#meta)), et sa valeur par défaut s'il n'y en a pas. Un joueur hors ligne est résolu depuis les grades lui aussi.
+
+### Mods qui appellent LuckPerms par son nom
+
+Certains mods ne passent pas par NeoForge : ils appellent directement l'API propre de LuckPerms
+(`net.luckperms.api`). CustomPerm ne peut pas répondre à ces vérifications. Avec LuckPerms installé, c'est
+LuckPerms qui répond. **Sans LuckPerms, un tel mod retombe sur son propre défaut, souvent le niveau d'opérateur,
+et un nœud qu'un grade lui donne ne fait rien.** C'est la seule limite de CustomPerm utilisé seul, et elle vient
+du choix de l'autre mod, pas d'une fonction de CustomPerm. Leur répondre voudrait dire livrer une copie de l'API
+de LuckPerms, qui ne peut pas se charger à côté du vrai LuckPerms.
+
+`/customperm modcheck` dit quels mods installés sont dans ce cas. Il lit une fois, en arrière-plan, les classes
+compilées de chaque mod et liste ceux dont les classes nomment l'API de LuckPerms :
+
+- **LuckPerms seulement** : sans LuckPerms, CustomPerm ne peut pas répondre à ses vérifications. Ses nœuds se
+  gèrent dans LuckPerms, ou demandez à son auteur de les déclarer via l'API de permissions de NeoForge, à
+  laquelle CustomPerm répond alors.
+- **Utilise aussi l'API de permissions de NeoForge** : les vérifications qu'il fait via NeoForge reçoivent une
+  réponse ; il n'utilise peut-être LuckPerms que quand LuckPerms est là.
+
+Un mod listé ici n'utilise peut-être LuckPerms que lorsqu'il est présent ; sa page ou sa config le dit. LuckPerms
+et CustomPerm eux-mêmes sont exclus. La réponse est gardée jusqu'au prochain démarrage, puisque les mods
+installés ne peuvent pas changer avant.
 
 ### Mods qui modifient le dispatcher dynamiquement
 
