@@ -62,6 +62,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **RBAC multi-grades** : un joueur peut avoir plusieurs grades internes ; les permissions sont résolues par union des grades assignés.
 - **DENY explicite** : les grades internes supportent `deniedPermissions`. L'entrée la plus spécifique l'emporte, comme LuckPerms (nœud exact, puis `a.b.*`, puis `*`), et un DENY gagne à niveau égal.
 - **Nœuds par joueur** : un nœud peut être porté par un joueur plutôt que par un grade, l'exception qu'un joueur seul obtient sans qu'on invente un grade pour lui. Il l'emporte sur ses grades à niveau égal, quel que soit le poids du grade, mais un nœud de grade plus spécifique gagne toujours. `/customperm user addperm|adddeny`, ou la page Joueurs.
+- **Préfixes et suffixes de chat** : un grade, ou un joueur, porte un préfixe et un suffixe autour de son nom dans le chat et partout où le jeu l'affiche, résolus comme une permission. Avec LuckPerms, ce sont les préfixes que LuckPerms stocke qui s'affichent. Le nom est décoré, jamais le message, donc le chat reste signé et signalable. Désactivé tant qu'on n'a pas fait `/customperm names on`.
 - **Export vers LuckPerms** : un serveur qui a construit ses grades ici et installe LuckPerms plus tard les écrit dans LuckPerms en groupes, utilisateurs et nœuds, pour qu'ils continuent de décider. Mêmes deux temps que l'import, rien n'est traduit. `/customperm export preview` puis `/customperm export confirm`, ou l'onglet To LuckPerms de la page Import.
 - **Import depuis LuckPerms** : un serveur qui quitte LuckPerms récupère ses groupes, ses joueurs et leurs nœuds au lieu de tout retaper. La lecture ne change rien et répond par un rapport, y compris ce qu'elle laisse derrière et pourquoi ; ce n'est qu'ensuite qu'on applique, après une sauvegarde de tous les fichiers de config. `/customperm import preview` puis `/customperm import confirm`, ou la page Import.
 - **Grades refusés** : un grade peut en refuser un autre partout où il en hériterait, et un joueur peut en refuser un partout où l'un de ses grades l'apporterait, grade par défaut compris. Un refus sort le grade de la résolution ; il ne transforme jamais ce que ce grade autorise en refus. `/customperm grade parent adddeny`, `/customperm user denygrade`, ou la page Grades.
@@ -142,8 +143,8 @@ L'interface est dessinée nativement (sans bibliothèque d'interface) et remplac
 | Alias | Tous les alias avec recherche, badges pour les commandes masquées et les limites ; créer un alias avec sa première étape ; par alias : ajouter, remplacer, monter ou descendre et retirer des étapes, supprimer l'alias (avec confirmation) |
 | Limites d'exécution | Toutes les règles avec leurs valeurs et badges (désactivée, cible ni exposée ni alias) ; ajouter une limite, changer usages et fenêtre, activer ou désactiver, choisir quand l'historique est écrit (sauvegarde du monde ou à chaque usage), supprimer (avec confirmation) ; les commandes exposées et alias sans limite sont listés et remplissent le formulaire en un clic |
 | LuckPerms | Uniquement quand LuckPerms est installé : pas d'entrée de navigation sinon, et `/customperm gui luckperms` explique pourquoi. Installé mais pas démarré (solo, échec au démarrage), la page affiche une bannière au lieu de l'éditeur. **Groupes** : créer, supprimer, nœuds de permission allow/deny avec contextes et durée, parents, poids, nom affiché, préfixe, suffixe, meta. **Joueurs** : joueurs connectés et tout joueur trouvé par pseudo exact, leurs nœuds, groupes avec durée, groupe principal, promotion et rétrogradation sur un track, préfixe, suffixe, meta. **Tracks** : créer, supprimer, ajouter, insérer à une position, retirer un groupe. Les écritures passent par l'API LuckPerms côté serveur, protégées par `customperm.manage.luckperms` |
-| Grades | Toujours accessible, pour pouvoir lire le repli quand LuckPerms fonctionne ou tombe. Une bannière indique quand les grades ne décident pas des permissions ; avec LuckPerms actif la page est en lecture seule, comme les commandes de grade : grades avec recherche et création, triés par poids ; par grade, trois onglets : nœuds ALLOW et DENY, grades dont il hérite et ceux qu'il refuse, et les joueurs qui le détiennent à côté de ceux qui le refusent, avec leur état en ligne, attribués par pseudo avec complétion, y compris hors ligne s'ils sont déjà venus sur le serveur ; suppression d'un grade (avec confirmation) |
-| Joueurs | Nœuds portés par un joueur plutôt que par un grade : tous les joueurs qui détiennent quelque chose en propre plus tous ceux connectés, avec recherche ; par joueur, ses nœuds ALLOW et DENY et les grades qu'il détient, en lecture seule ici. Un joueur qui ne détient encore rien s'atteint en tapant son pseudo. Écrire demande `customperm.manage.grades`, comme la page Grades |
+| Grades | Toujours accessible, pour pouvoir lire le repli quand LuckPerms fonctionne ou tombe. Une bannière indique quand les grades ne décident pas des permissions ; avec LuckPerms actif la page est en lecture seule, comme les commandes de grade : grades avec recherche et création, triés par poids ; par grade, trois onglets : nœuds ALLOW et DENY, grades dont il hérite et ceux qu'il refuse, et les joueurs qui le détiennent à côté de ceux qui le refusent, avec leur état en ligne, attribués par pseudo avec complétion, y compris hors ligne s'ils sont déjà venus sur le serveur ; suppression d'un grade (avec confirmation). Un quatrième onglet, **Chat**, règle le préfixe et le suffixe du grade avec un aperçu de la ligne de chat, et porte l'interrupteur qui décore les noms (`customperm.manage.config`) |
+| Joueurs | Nœuds portés par un joueur plutôt que par un grade : tous les joueurs qui détiennent quelque chose en propre plus tous ceux connectés, avec recherche ; par joueur, ses nœuds ALLOW et DENY et les grades qu'il détient, en lecture seule ici. Un joueur qui ne détient encore rien s'atteint en tapant son pseudo. Écrire demande `customperm.manage.grades`, comme la page Grades. Un onglet **Chat** règle le préfixe et le suffixe que le joueur porte lui-même, au-dessus de ses grades |
 | Import | Uniquement quand LuckPerms est installé : récupère ses groupes, joueurs et nœuds, en deux temps. Read LuckPerms répond par le rapport et ne change rien, Import applique ce rapport et rien d'autre, après une sauvegarde. Deux options : exposer les commandes dont les nœuds traduits ont besoin, et ajouter aux grades de même nom ou les remplacer. Demande les trois nœuds d'écriture ensemble. Un second onglet, **To LuckPerms**, exporte les grades dans l'autre sens : Read the grades, puis Export, qui reste désactivé tant que l'admin n'a pas indiqué que LuckPerms est sauvegardé ; la page suit la progression pendant l'écriture. Demande `customperm.manage.grades` et `customperm.manage.luckperms` |
 | Journaux | Deux onglets, du plus récent au plus ancien, avec recherche. **Admin** : chaque modification faite par les commandes `/customperm`, l'interface et l'éditeur LuckPerms, et les modifications que LuckPerms enregistre lui-même (`/lp`, éditeur web) : quand, qui, d'où, quoi, et le résultat ou le refus. **Joueurs** : chaque commande tapée par les joueurs, seulement quand l'enregistrement est actif (désactivé par défaut) ; arguments des commandes de message privé et de mot de passe masqués sauf si le masquage est désactivé. Changer l'enregistrement et le masquage demande `customperm.manage.logs` |
 
@@ -294,6 +295,35 @@ Nœuds portés par un joueur, au-dessus de ses grades :
 | `/customperm user undenygrade <joueur> <grade>` | Cesse de le refuser. |
 | `/customperm user list <joueur>` | Affiche les grades détenus, ceux refusés, et les nœuds portés. |
 
+### Préfixes et suffixes de chat
+
+| Commande | Description |
+|---|---|
+| `/customperm grade prefix <grade> [texte]` | Définit le préfixe d'un grade ; sans texte, l'efface. |
+| `/customperm grade suffix <grade> [texte]` | Pareil pour le suffixe. |
+| `/customperm user prefix <joueur> [texte]` | Définit le préfixe propre d'un joueur, au-dessus de tous ses grades. |
+| `/customperm user suffix <joueur> [texte]` | Pareil pour le suffixe. |
+| `/customperm names` | Dit si les noms sont décorés, comment, et depuis quel backend. |
+| `/customperm names on\|off` | Décore les noms avec leur préfixe et leur suffixe, ou arrête. |
+| `/customperm names format <format>` | Comment le nom est construit, `{prefix}{name}{suffix}` par défaut ; `{name}` est obligatoire. |
+
+Les préfixes demandent `customperm.manage.grades` et sont refusés tant que LuckPerms est actif : ils se
+règlent alors avec `/lp` et s'affichent depuis LuckPerms. `names` demande `customperm.manage.config` et
+fonctionne avec les deux backends.
+
+Quel préfixe s'affiche : celui du joueur, puis celui du plus lourd de ses grades, puis celui du grade hérité
+le plus proche ; un grade refusé n'en donne aucun, et le grade par défaut ne s'applique que si rien de ce que
+tient le joueur n'en a. Le texte accepte les codes couleur `&` (`&6`, `&l`, `&r`) et `&#RRGGBB`, 64
+caractères au plus.
+
+**Le nom est décoré, jamais le message.** Les messages de chat sont signés : un mod qui en réécrit un fait
+marquer le message comme modifié par le client, et un mod qui envoie un message système à la place perd le
+signalement et l'indicateur de chat sécurisé. Le nom de l'expéditeur ne fait pas partie de ce qui est signé :
+CustomPerm le décore et ne touche à aucun message. Conséquence : le préfixe est sur le nom partout où le jeu
+l'affiche (chat, messages de mort et de progrès, `/msg`, `/me`, message de connexion, liste des joueurs),
+pas sur le nom au-dessus de la tête, et le `<Nom>` autour reste celui de vanilla. Si un autre mod décore
+aussi les noms, les deux s'appliquent l'un dans l'autre : c'est pourquoi c'est désactivé par défaut.
+
 ### Migrer depuis LuckPerms
 
 | Commande | Description |
@@ -312,11 +342,14 @@ false devient un DENY ; un joueur garde ses groupes, ceux qu'il refuse et ses n�
 `minecraft.command.<x>` devient `customperm.command.<x>` et `<x>` est exposée avec, faute de quoi le nœud
 n'accorderait rien.
 
+Le préfixe et le suffixe passent aussi, un de chaque par groupe ou joueur : s'il y en a plusieurs, celui que
+LuckPerms affiche en premier (la priorité la plus haute).
+
 Ce qui est laissé derrière, et dit dans le rapport plutôt qu'abandonné en silence : nœuds temporaires, nœuds
-contextuels (`server=`, `world=`), préfixes, suffixes, meta, noms affichés, tracks, et les nœuds lus par
-d'autres mods, que plus rien ici ne lirait. Les raisons sont dans
-[docs/PLANNED_FEATURES.md](docs/PLANNED_FEATURES.md). Sur les joueurs, seul ce que CustomPerm sait lire est
-regardé : leurs groupes et leurs nœuds `customperm`, `minecraft.command` et `*`.
+contextuels (`server=`, `world=`), meta, noms affichés, tracks, et les nœuds lus par d'autres mods, que plus
+rien ici ne lirait. Les raisons sont dans [docs/PLANNED_FEATURES.md](docs/PLANNED_FEATURES.md). Sur les
+joueurs, seul ce que CustomPerm sait lire est regardé : leurs groupes, leur préfixe et leur suffixe, et leurs
+nœuds `customperm`, `minecraft.command` et `*`.
 
 **Tant que LuckPerms est installé, c'est lui qui décide des permissions**, donc ce qui est importé attend :
 c'est lisible sur la page Grades, et cela prend le relais le jour où LuckPerms est retiré.
@@ -345,8 +378,10 @@ sur le backend LuckPerms, CustomPerm lit `customperm.*` tel quel.
 Ce qui est écarté, et nommé dans le rapport : un grade dont LuckPerms refuserait ou passerait en minuscules
 le nom (il accepte minuscules, chiffres, `_`, `.` et `-`, 36 au plus), et chaque parent, attribution ou
 grade par défaut qui le nomme. Ajouter garde ce que LuckPerms contient déjà, poids compris ; là où il pose
-un nœud dans l'autre sens, sa valeur est gardée et comptée. Remplacer ne touche jamais un préfixe, un
-suffixe, une meta, une entrée contextuelle ou temporaire, ni les nœuds des autres mods.
+un nœud dans l'autre sens, sa valeur est gardée et comptée. Préfixes et suffixes sont écrits avec le poids
+du grade comme priorité, et ceux d'un joueur au-dessus de ceux de tout grade. Remplacer ne touche un préfixe
+ou un suffixe que là où le grade en définit un, et jamais une meta, une entrée contextuelle ou temporaire, ni
+les nœuds des autres mods.
 
 L'écriture tourne en arrière-plan, groupes avant joueurs, un chargement et une sauvegarde par détenteur, et
 dit où elle s'est arrêtée si elle échoue. Un seul export à la fois. Un export qui vous retirerait votre propre
@@ -445,7 +480,9 @@ Réglages de sécurité runtime.
   "playerCommandLog": false,
   "maskPlayerCommandArguments": true,
   "maskedCommands": ["msg", "tell", "w", "teammsg", "tm", "login", "l", "register", "reg", "changepassword", "changepw"],
-  "logRetentionDays": 30
+  "logRetentionDays": 30,
+  "decorateNames": false,
+  "nameFormat": "{prefix}{name}{suffix}"
 }
 ```
 
@@ -454,6 +491,8 @@ Réglages de sécurité runtime.
 - `playerCommandLog` (`false` par défaut) : enregistre chaque commande tapée par les joueurs dans le journal d'activité. Les modifications d'administration sont toujours enregistrées.
 - `maskPlayerCommandArguments` (`true` par défaut) et `maskedCommands` : les arguments de ces commandes racines sont stockés sous la forme `[masked]` (`/msg Alex salut` devient `/msg [masked]`). Un préfixe de namespace est ignoré.
 - `logRetentionDays` (`30` par défaut) : les fichiers quotidiens plus anciens sont supprimés au démarrage et à chaque changement de jour ; `0` les garde indéfiniment. Fichiers : `<monde>/customperm/logs/admin-AAAA-MM-JJ.jsonl` et `players-AAAA-MM-JJ.jsonl`, un objet JSON par ligne.
+- `decorateNames` (`false` par défaut) : met le préfixe et le suffixe de chat de chaque joueur autour de son nom, depuis les grades ou depuis LuckPerms. Le nom est décoré, jamais le message (voir [Préfixes et suffixes de chat](#préfixes-et-suffixes-de-chat)).
+- `nameFormat` (`{prefix}{name}{suffix}` par défaut) : comment le nom est construit ; codes `&` permis entre les marqueurs. Un format sans `{name}` est remplacé par celui par défaut, pour qu'un préfixe ne puisse jamais se faire passer pour un joueur.
 - `configVersion` : la version du format de réglages avec laquelle ce fichier a été écrit. Une installation neuve est estampillée avec la version actuelle ; un fichier d'une version plus ancienne n'en a pas, ce qui fait écrire les changements dans le log et prévenir chaque opérateur une fois (voir [MIGRATION.md](MIGRATION.md)). N'y touchez pas.
 
 `luckPermsFallbackMode` accepte :
@@ -845,8 +884,8 @@ Les benchmarks de performance se lancent avec :
 | Compatibilité config | Fichiers manquants, fichiers `{}`, collections explicitement `null`, champs futurs inconnus, configs partielles. |
 | Sélection LuckPerms | Backend interne sans LP, parsing de versions, version minimale, sélection stable du backend. |
 | GameTests, deux modes | Exposition et retrait de commande avec un joueur non-op, préservation des ops, `/customperm` refusé aux non-ops, reconnexion, aliases exécutés en op 4 par les seuls détenteurs du node et incapables d'atteindre `/customperm`, édition des steps, gardes de récursion et de shadowing, reload d'un `aliases.json` modifié à la main, limites de débit (message de refus, compteur partagé par racine, isolation par joueur, console exemptée, expiration de fenêtre, reconnexion, reloads répétés, suppression de règle, aliases), reload tout-ou-rien, refus du reload concurrent, changements non sauvegardés après un reload en échec, entrées `null`, repush du command tree au reload, alertes admin dans le chat des ops, paquets du GUI et de l'éditeur refusés aux non-ops, sorties de diagnostic, autocomplétion de chaque argument de `/customperm` et aucune suggestion pour un non-op, opérateurs refusés sur une commande exposée, un alias, `/customperm` ou un domaine de l'interface par un DENY explicite pendant que la console garde l'accès, `*` refusé bloquant tout sauf les autorisations explicites, modifications d'administration par commande et par l'interface enregistrées avec les refus, commandes des joueurs enregistrées seulement si actif et masquées par défaut, fichiers sur disque, rechargement depuis le disque ignorant les lignes illisibles, rétention, boutons de la page Journaux soumis à leur nœud, modifications `/lp` enregistrées (mode LuckPerms), opérateurs sans les nœuds refusés sur `/customperm` et l'interface pendant que la console garde l'accès, chaque domaine exigeant son propre nœud `customperm.manage` pour la commande comme pour la page, les nœuds seuls n'ouvrant rien à un non-op, avertissement de mise à jour donné une fois pour une configuration écrite avant la 1.1.0 puis configuration estampillée. |
-| GameTests, mode interne | Commandes de grade, union des grades, entrée la plus spécifique gagnante, poids de grade départageant, nœuds portés par un joueur, page Joueurs et son garde anti-verrouillage, parents de grade avec héritage appliqué à chaud et cycles refusés, refus appliqués à chaud et contradictions répondues, toutes les formes de wildcard, éditeur sans LuckPerms, `gateAllCommands` et `*` autorisé, grade par défaut restreignant un op accidentel, auto-verrouillage refusé par commande et par l'interface. |
-| GameTests, mode LuckPerms | Import depuis une source avec un exemplaire de chaque cas : ce qui passe, ce qui est écarté avec sa raison, la lecture qui n'écrit rien, ce qui atterrit en config, les trois nœuds demandés ensemble, et un preview déjà consommé refusé. Export dans un vrai LuckPerms : groupes, poids, parents, refus, groupe par défaut et nœuds d'un joueur écrits, grade renommé refusé, l'ajout qui garde les valeurs et le préfixe de LuckPerms, le remplacement qui ne vide que les nœuds customperm, la progression par détenteur, les deux nœuds demandés ensemble, la garde anti-verrouillage, et un preview déjà consommé refusé. Éditeur en jeu face à un vrai LuckPerms : groupes, nodes avec contextes et expiration, héritage, meta, prefix et suffix, poids, nom d'affichage, groupes et groupe principal d'un joueur, tracks, promote et demote, verrouillage des écritures par node et niveau, limites d'édition et de sync ; command tree renvoyé après un changement LuckPerms ; repli `deny` et `internal` quand LuckPerms devient indisponible. |
+| GameTests, mode interne | Commandes de grade, union des grades, entrée la plus spécifique gagnante, poids de grade départageant, nœuds portés par un joueur, page Joueurs et son garde anti-verrouillage, parents de grade avec héritage appliqué à chaud et cycles refusés, refus appliqués à chaud et contradictions répondues, toutes les formes de wildcard, éditeur sans LuckPerms, `gateAllCommands` et `*` autorisé, grade par défaut restreignant un op accidentel, auto-verrouillage refusé par commande et par l'interface. Préfixes de chat : codes `&` et format du nom, nom utilisé par le chat décoré depuis les grades avec le grade le plus lourd et celui du joueur qui l'emportent, liste des joueurs, interrupteur et format appliqués aussitôt, et onglets Chat via l'interface. |
+| GameTests, mode LuckPerms | Import depuis une source avec un exemplaire de chaque cas : ce qui passe, ce qui est écarté avec sa raison, la lecture qui n'écrit rien, ce qui atterrit en config, les trois nœuds demandés ensemble, et un preview déjà consommé refusé. Export dans un vrai LuckPerms : groupes, poids, parents, refus, groupe par défaut et nœuds d'un joueur écrits, grade renommé refusé, l'ajout qui garde les valeurs et le préfixe de LuckPerms, le remplacement qui ne vide que les nœuds customperm, la progression par détenteur, les deux nœuds demandés ensemble, la garde anti-verrouillage, et un preview déjà consommé refusé. Éditeur en jeu face à un vrai LuckPerms : groupes, nodes avec contextes et expiration, héritage, meta, prefix et suffix, poids, nom d'affichage, groupes et groupe principal d'un joueur, tracks, promote et demote, verrouillage des écritures par node et niveau, limites d'édition et de sync ; command tree renvoyé après un changement LuckPerms ; repli `deny` et `internal` quand LuckPerms devient indisponible. Un préfixe LuckPerms qui atteint le nom sans reconnexion ; préfixes transportés par l'import et l'export. |
 | Performance | `PermissionResolver.resolve()` et lecture concurrente du snapshot config via JMH. |
 
 ### Intégration continue

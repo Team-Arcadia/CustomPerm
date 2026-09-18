@@ -63,6 +63,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Explicit DENY support** — internal grades support `deniedPermissions`. The most specific entry wins, like LuckPerms (exact node, then `a.b.*`, then `*`), and a DENY wins at the same level.
 - **Per-player nodes** — a node can be carried by one player rather than by a grade, the exception a single player gets without inventing a grade for them. It wins over their grades at the same level, whatever a grade weighs, but a more specific grade node still wins. `/customperm user addperm|adddeny`, or the Players page.
 - **Import from LuckPerms** — a server moving off LuckPerms brings its groups, its players and their nodes over instead of retyping them. Reading changes nothing and answers with a report, including what it leaves behind and why; only then can it be applied, after a backup of every config file. `/customperm import preview` then `/customperm import confirm`, or the Import page.
+- **Chat prefixes and suffixes** — a grade, or one player, carries a prefix and a suffix around their name in chat and wherever the game shows it, resolved like a permission. With LuckPerms, the prefixes LuckPerms stores are shown instead. The name is decorated, never the message, so chat stays signed and reportable. Off until `/customperm names on`.
 - **Export to LuckPerms** — a server that built its grades here and installs LuckPerms later writes them into LuckPerms as groups, users and nodes, so they keep deciding. Same two steps as the import, nothing translated. `/customperm export preview` then `/customperm export confirm`, or the To LuckPerms tab of the Import page.
 - **Refused grades** — a grade can refuse another wherever it would inherit it, and a player can refuse one wherever a grade of theirs would bring it, the default grade included. A refusal takes the grade out of the resolution; it never turns what that grade allows into a denial. `/customperm grade parent adddeny`, `/customperm user denygrade`, or the Grades page.
 - **Grade inheritance** — a grade can inherit other grades, like a LuckPerms group parent. What a parent says applies where the grade says nothing as precise about the node, nearest ancestor first, so a grade overrides what it inherits while a more specific ancestor entry still wins. A cycle is refused when it is created, not when it is resolved.
@@ -141,8 +142,8 @@ The interface is drawn natively (no UI library) and replaces the former TesseraU
 | Aliases | Every alias with search, badges for shadowed commands and rate limits; create an alias with its first step; per alias: add, replace, move up or down and remove steps, delete the alias (with confirmation) |
 | Rate limits | Every rule with its numbers and badges (disabled, target neither exposed nor an alias); add a limit, change uses and window, enable or disable, switch when usage history is written (world save or every use), remove (with confirmation); exposed commands and aliases without a limit are listed and fill the form in one click |
 | LuckPerms | Only when LuckPerms is installed: no navigation entry otherwise, and `/customperm gui luckperms` explains why. Installed but not running (singleplayer, failed start), the page shows a banner instead of the editor. **Groups**: create, delete, permission nodes with allow/deny, contexts and duration, parents, weight, display name, prefix, suffix, meta. **Players**: online players and any player found by exact name, their nodes, groups with duration, primary group, promote and demote on a track, prefix, suffix, meta. **Tracks**: create, delete, append, insert at a position, remove a group. Writes go through the LuckPerms API server-side, gated by `customperm.manage.luckperms` |
-| Grades | Always reachable, so the fallback can be read while LuckPerms runs or fails. A banner says when grades do not decide permissions; while LuckPerms is active the page is read-only, like the grade commands: grades with search and creation, ordered by weight; per grade, three tabs: ALLOW and DENY nodes, the grades it inherits and the ones it refuses, and the players who hold it beside those who refuse it, with their online state, assigned by name with completion, including players who are offline but joined the server before; delete a grade (with confirmation) |
-| Players | Nodes carried by one player rather than by a grade: every player holding something of their own plus everyone online, with search; per player, their ALLOW and DENY nodes and the grades they hold, read-only here. A player who holds nothing yet is reached by typing their name. Writing needs `customperm.manage.grades`, like the Grades page |
+| Grades | Always reachable, so the fallback can be read while LuckPerms runs or fails. A banner says when grades do not decide permissions; while LuckPerms is active the page is read-only, like the grade commands: grades with search and creation, ordered by weight; per grade, three tabs: ALLOW and DENY nodes, the grades it inherits and the ones it refuses, and the players who hold it beside those who refuse it, with their online state, assigned by name with completion, including players who are offline but joined the server before; delete a grade (with confirmation). A fourth tab, **Chat**, edits the grade's prefix and suffix with a preview of the chat line, and carries the switch that decorates names (`customperm.manage.config`) |
+| Players | Nodes carried by one player rather than by a grade: every player holding something of their own plus everyone online, with search; per player, their ALLOW and DENY nodes and the grades they hold, read-only here. A player who holds nothing yet is reached by typing their name. Writing needs `customperm.manage.grades`, like the Grades page. A **Chat** tab edits the prefix and suffix the player carries themselves, above their grades |
 | Import | Only when LuckPerms is installed: brings its groups, players and nodes over, in two steps. Read LuckPerms answers with the report and changes nothing, Import applies that report and nothing else, after a backup. Two options: exposing the commands the translated nodes need, and adding to grades of the same name or replacing them. Needs the three write nodes together. A second tab, **To LuckPerms**, exports the grades the other way: Read the grades, then Export, which stays disabled until the admin says LuckPerms is backed up; the page follows the progress while it runs. Needs `customperm.manage.grades` and `customperm.manage.luckperms` |
 | Logs | Two tabs, newest first, with search. **Admin**: every change made with `/customperm` commands, the interface and the LuckPerms editor, and the changes LuckPerms itself records (`/lp`, web editor): when, who, from where, what, and the result or refusal. **Players**: every command players type, only while recording is on (off by default); arguments of private-message and password commands masked unless masking is turned off. Switching recording and masking needs `customperm.manage.logs` |
 
@@ -293,6 +294,33 @@ Nodes carried by one player, above their grades:
 | `/customperm user undenygrade <player> <grade>` | Stops refusing it. |
 | `/customperm user list <player>` | Shows the grades they hold, the ones they refuse, and the nodes they carry. |
 
+### Chat prefixes and suffixes
+
+| Command | Description |
+|---|---|
+| `/customperm grade prefix <grade> [text]` | Sets the prefix of a grade; without a text, clears it. |
+| `/customperm grade suffix <grade> [text]` | Same for the suffix. |
+| `/customperm user prefix <player> [text]` | Sets one player's own prefix, above every grade they hold. |
+| `/customperm user suffix <player> [text]` | Same for the suffix. |
+| `/customperm names` | Says whether names are decorated, how, and from which backend. |
+| `/customperm names on\|off` | Decorates names with their prefix and suffix, or stops. |
+| `/customperm names format <format>` | How the name is built, `{prefix}{name}{suffix}` by default; `{name}` is required. |
+
+Prefixes need `customperm.manage.grades` and are refused while LuckPerms is active, where they are set with
+`/lp` and shown from there; `names` needs `customperm.manage.config` and works with either backend.
+
+Which prefix shows: the player's own, then the heaviest of their grades, then the nearest grade a grade
+inherits; a refused grade gives none, and the default grade applies only when nothing the player holds has
+one. Text takes `&` colour codes (`&6`, `&l`, `&r`) and `&#RRGGBB`, 64 characters at most.
+
+**The name is decorated, never the message.** Chat messages are signed: a mod that rewrites one makes the
+client mark it as modified, and one that sends a system message instead loses reporting and the secure chat
+indicator. The sender name is not part of what is signed, so CustomPerm decorates it and leaves every message
+untouched. What that means: the prefix is on the name everywhere the game shows it (chat, death and
+advancement messages, `/msg`, `/me`, the join message, the tab list), not on the name above a player's head,
+and the `<Name>` around it is vanilla's. If another mod decorates names too, the two apply one inside the
+other; that is why it is off by default.
+
 ### Moving from LuckPerms
 
 | Command | Description |
@@ -311,10 +339,13 @@ set to false becomes a DENY; a player keeps their groups, the ones they refuse a
 `minecraft.command.<x>` becomes `customperm.command.<x>` and `<x>` is exposed with it, without which the
 node would grant nothing.
 
+The prefix and suffix carry over too, one of each per group or player: of several, the one LuckPerms shows
+first (the highest priority).
+
 What is left behind, and said in the report rather than dropped in silence: temporary nodes, contextual
-nodes (`server=`, `world=`), prefixes, suffixes, meta, display names, tracks, and the nodes other mods read,
-which nothing here would read back. The reasons are in [docs/PLANNED_FEATURES.md](docs/PLANNED_FEATURES.md).
-On players, only what CustomPerm can read is looked at at all: their groups and their `customperm`,
+nodes (`server=`, `world=`), meta, display names, tracks, and the nodes other mods read, which nothing here
+would read back. The reasons are in [docs/PLANNED_FEATURES.md](docs/PLANNED_FEATURES.md). On players, only
+what CustomPerm can read is looked at at all: their groups, their prefix and suffix, and their `customperm`,
 `minecraft.command` and `*` nodes.
 
 **While LuckPerms is installed it still decides permissions**, so what is imported waits: it is readable on
@@ -343,8 +374,9 @@ LuckPerms backend CustomPerm reads `customperm.*` as it is.
 What is left out, and named in the report: a grade whose name LuckPerms would refuse or lowercase (it
 accepts lowercase letters, digits, `_`, `.` and `-`, 36 at most), and every parent, assignment or default
 grade naming it. Adding keeps what LuckPerms already holds, weight included; where it sets a node the other
-way, its value is kept and counted. Replacing never touches a prefix, a suffix, meta, a contextual or
-temporary entry, or the nodes of other mods.
+way, its value is kept and counted. Prefixes and suffixes are written with the grade weight as priority,
+and a player's own above every grade's. Replacing touches a prefix or a suffix only where the grade sets one,
+and never meta, a contextual or temporary entry, or the nodes of other mods.
 
 It runs in the background, groups before players, one load and one save per holder, and reports where it
 stopped if it fails. One export runs at a time. An export that would take away your own `customperm.admin`
@@ -442,7 +474,9 @@ Runtime safety settings.
   "playerCommandLog": false,
   "maskPlayerCommandArguments": true,
   "maskedCommands": ["msg", "tell", "w", "teammsg", "tm", "login", "l", "register", "reg", "changepassword", "changepw"],
-  "logRetentionDays": 30
+  "logRetentionDays": 30,
+  "decorateNames": false,
+  "nameFormat": "{prefix}{name}{suffix}"
 }
 ```
 
@@ -451,6 +485,8 @@ Runtime safety settings.
 - `playerCommandLog` (default `false`): records every command players type in the activity log. Admin changes are always recorded.
 - `maskPlayerCommandArguments` (default `true`) and `maskedCommands`: the arguments of these root commands are stored as `[masked]` (`/msg Alex hi` becomes `/msg [masked]`). A namespace prefix is ignored.
 - `logRetentionDays` (default `30`): daily log files older than this are deleted at start and at each day change; `0` keeps them forever. Files: `<world>/customperm/logs/admin-YYYY-MM-DD.jsonl` and `players-YYYY-MM-DD.jsonl`, one JSON object per line.
+- `decorateNames` (default `false`): puts each player's chat prefix and suffix around their name, from the grades or from LuckPerms. The name is decorated, never the message (see [Chat prefixes and suffixes](#chat-prefixes-and-suffixes)).
+- `nameFormat` (default `{prefix}{name}{suffix}`): how the name is built; `&` codes allowed between the placeholders. A format without `{name}` is replaced by the default, so a prefix can never pass for a player.
 - `configVersion`: the settings format this file was written with. A fresh install is stamped with the current one; a file from an older CustomPerm has none, which makes the server log what changed and tell every operator once (see [MIGRATION.md](MIGRATION.md)). Leave it alone.
 
 `luckPermsFallbackMode` accepts:
@@ -842,8 +878,8 @@ Performance benchmarks can be run with:
 | Backward compatibility | Missing files, `{}` files, explicit `null` collections, unknown future fields, partial config files. |
 | LuckPerms selection | Internal backend when LP is absent, version parsing, minimum version gate, stable backend selection. |
 | GameTests, both modes | Command exposure and removal with a non-op player, operator preservation, `/customperm` refused to non-ops, reconnection, aliases run with op-4 elevation by node holders only and unable to reach `/customperm`, step editing, recursion and shadowing guards, reload of hand-edited `aliases.json`, rate limits (refusal message, shared counter per root, per-player isolation, console exemption, window expiry, reconnection, repeated reloads, rule removal, aliases), all-or-nothing reload, concurrent reload refusal, unsaved changes after a failed reload, `null` entries, command-tree repush on reload, admin alerts in operators' chat, GUI and editor packets refused to non-operators, diagnostics output, tab-completion of every `/customperm` argument and no suggestions for non-operators, operators refused an exposed command, an alias, `/customperm` or an interface area by an explicit DENY while the console keeps access, a denied `*` blocking everything but explicit allows, admin changes from commands and the interface recorded with refusals, player commands recorded only when on and masked by default, files on disk, reload from disk skipping unreadable lines, retention, Logs page switches gated by their node, `/lp` changes recorded (LuckPerms mode), operators without the nodes refused `/customperm` and the interface while the console keeps access, each area needing its own `customperm.manage` node for the command and the page alike, the nodes alone opening nothing to a non-operator, the upgrade notice announced once for a configuration written before 1.1.0 and the configuration stamped afterwards. |
-| GameTests, internal mode | Grade commands, union of grades, most specific entry wins, grade weight breaking a tie, nodes carried by a player, the Players page and its lockout guard, grade parents with inheritance applied live and cycles refused, refusals applied live and contradictions answered, every wildcard form, editor without LuckPerms, `gateAllCommands` and an allowed `*`, a default grade restricting an accidental operator, refused self-lockout by command and interface. |
-| GameTests, LuckPerms mode | Import from a source with one of everything: what carries over, what is left behind with its reason, reading writing nothing, what lands in the configuration, the three nodes asked together, and a spent preview refused. Export into a real LuckPerms: groups, weight, parents, denials, the default group and a player's nodes written, a renamed grade refused, adding keeping LuckPerms' own values and prefix, replacing clearing only the customperm nodes, progress per holder, the two nodes asked together, the lockout guard, and a spent preview refused. In-game editor against a real LuckPerms: groups, nodes with contexts and expiry, inheritance, meta, prefix and suffix, weight, display name, player groups and primary group, tracks, promote and demote, write gating by node and level, edit and sync rate limits; command tree resent after a LuckPerms change; `deny` and `internal` fallback when LuckPerms becomes unavailable. |
+| GameTests, internal mode | Grade commands, union of grades, most specific entry wins, grade weight breaking a tie, nodes carried by a player, the Players page and its lockout guard, grade parents with inheritance applied live and cycles refused, refusals applied live and contradictions answered, every wildcard form, editor without LuckPerms, `gateAllCommands` and an allowed `*`, a default grade restricting an accidental operator, refused self-lockout by command and interface. Chat prefixes: `&` codes and the name format, the name chat binds decorated from the grades with the heaviest grade and the player's own winning, the tab list, the switch and the format applied at once, and the Chat tabs through the interface. |
+| GameTests, LuckPerms mode | Import from a source with one of everything: what carries over, what is left behind with its reason, reading writing nothing, what lands in the configuration, the three nodes asked together, and a spent preview refused. Export into a real LuckPerms: groups, weight, parents, denials, the default group and a player's nodes written, a renamed grade refused, adding keeping LuckPerms' own values and prefix, replacing clearing only the customperm nodes, progress per holder, the two nodes asked together, the lockout guard, and a spent preview refused. In-game editor against a real LuckPerms: groups, nodes with contexts and expiry, inheritance, meta, prefix and suffix, weight, display name, player groups and primary group, tracks, promote and demote, write gating by node and level, edit and sync rate limits; command tree resent after a LuckPerms change; `deny` and `internal` fallback when LuckPerms becomes unavailable. A LuckPerms prefix reaching the name without a reconnect; prefixes carried by the import and the export. |
 | Performance | `PermissionResolver.resolve()` and concurrent config snapshot reads via JMH. |
 
 ### Continuous integration

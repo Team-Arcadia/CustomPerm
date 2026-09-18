@@ -45,19 +45,21 @@ dropping it would take away something the source granted.
 
 ---
 
-## 3. Chat prefixes and suffixes
+## 3. Chat metadata beyond prefixes and suffixes
 
-**What it is.** A prefix and a suffix shown in chat, carried by a grade or by a player. LuckPerms stores
-them; on NeoForge nothing renders them by itself.
+**Done so far.** A grade and a player carry a chat prefix and a suffix, resolved like a node (the player's
+own, then the heaviest grade, then the nearest ancestor), and names can be decorated with them, from the
+grades or from LuckPerms. The written answer on signed chat: the name is decorated through NeoForge's name
+event, never the message, so every message stays signed and reportable. The cost is that the name carries
+the prefix wherever the game shows it, not only in chat. The import and the export carry prefixes and
+suffixes both ways. See the changelog and the README.
 
-**What it will take.** The ranking that already decides between grades decides between prefixes too, minus
-the specificity step, since there is no such thing between two prefixes. The part that needs an answer first
-is not the resolution: chat messages are signed, so rewriting one breaks the signature chain, and the usual
-workaround, sending a system message instead, loses reporting and the secure chat indicator. That trade-off
-gets a written answer before any of it is built.
+**What is left.** Meta (arbitrary key and value pairs other mods read), display names, per-world prefixes,
+which are contexts (section 2), and nicknames. Meta has the same problem as the nodes of other mods
+(section 5): storing it is pointless while nothing here reads it back.
 
-**Until then.** Use a chat mod, or keep LuckPerms and a mod that renders its metadata. An import leaves
-prefixes, suffixes and meta behind and counts them.
+**Until then.** An import leaves meta and display names behind and counts them. A holder with several
+prefixes in LuckPerms arrives with the one LuckPerms shows first, and the report says so.
 
 ---
 
@@ -138,19 +140,21 @@ partout et la jeter retirerait ce que la source accordait.
 
 ---
 
-## 3. Préfixes et suffixes de chat
+## 3. Métadonnées de chat au-delà des préfixes et suffixes
 
-**De quoi il s'agit.** Un préfixe et un suffixe affichés dans le chat, portés par un grade ou par un joueur.
-LuckPerms les stocke ; sur NeoForge, rien ne les affiche de lui-même.
+**Déjà fait.** Un grade et un joueur portent un préfixe et un suffixe de chat, résolus comme un nœud (celui
+du joueur, puis le grade le plus lourd, puis l'ancêtre le plus proche), et les noms peuvent en être décorés,
+depuis les grades ou depuis LuckPerms. La réponse écrite sur le chat signé : le nom est décoré par
+l'événement de nom de NeoForge, jamais le message, donc chaque message reste signé et signalable. Le prix est
+que le nom porte le préfixe partout où le jeu l'affiche, pas seulement dans le chat. L'import et l'export
+transportent préfixes et suffixes dans les deux sens. Voir le changelog et le README.
 
-**Ce qu'il faudra.** Le classement qui départage déjà les grades départage aussi les préfixes, sans l'étape
-de spécificité, qui n'a pas de sens entre deux préfixes. Ce qui demande une réponse d'abord n'est pas la
-résolution : les messages de chat sont signés, donc en réécrire un casse la chaîne de signature, et le
-contournement habituel, envoyer un message système à la place, perd le signalement et l'indicateur de chat
-sécurisé. Cet arbitrage reçoit une réponse écrite avant qu'on en construise quoi que ce soit.
+**Ce qui reste.** Les meta (paires clé et valeur arbitraires que lisent d'autres mods), les noms d'affichage,
+les préfixes par monde, qui sont des contextes (section 2), et les surnoms. Les meta posent le même problème
+que les nœuds des autres mods (section 5) : les stocker ne sert à rien tant que rien ici ne les relit.
 
-**En attendant.** Utiliser un mod de chat, ou garder LuckPerms avec un mod qui affiche ses métadonnées. Un
-import laisse préfixes, suffixes et meta, et les compte.
+**En attendant.** Un import laisse les meta et les noms d'affichage de côté et les compte. Un détenteur qui
+a plusieurs préfixes dans LuckPerms arrive avec celui que LuckPerms affiche en premier, et le rapport le dit.
 
 ---
 
