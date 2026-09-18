@@ -146,6 +146,36 @@ public final class GradeAdmin {
     }
 
     /**
+     * Sets or clears the chat prefix or suffix of a grade. Blank clears it. Shown only while name
+     * decoration is on, which the result says, since a prefix nobody sees looks like one that failed.
+     */
+    public static AdminResult setChat(MinecraftServer server, String gradeName, boolean suffix, String text) {
+        AdminResult refusal = unavailable();
+        if (refusal != null) return refusal;
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        String value = text == null || text.isBlank() ? null : text;
+        String problem = com.arcadia.customperm.chat.LegacyText.problem(value);
+        if (problem != null) return AdminResult.fail("Invalid " + (suffix ? "suffix" : "prefix") + ": " + problem);
+        String what = suffix ? "Suffix" : "Prefix";
+        if (java.util.Objects.equals(suffix ? grade.suffix : grade.prefix, value)) {
+            return AdminResult.ok(what + " of " + gradeName + " unchanged.");
+        }
+        if (suffix) grade.suffix = value;
+        else grade.prefix = value;
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
+        return decorationNote(AdminResult.ok(value == null ? what + " of " + gradeName + " cleared."
+                : what + " of " + gradeName + " set to \"" + value + "\".").warn(warning));
+    }
+
+    /** Says a prefix shows nowhere while decoration is off. Shared with {@link UserAdmin}. */
+    static AdminResult decorationNote(AdminResult result) {
+        return CustomPerm.configManager.getSettings().decorateNames ? result
+                : result.note("Names are not decorated yet: /customperm names on to show prefixes and suffixes.");
+    }
+
+    /**
      * Makes {@code gradeName} inherit {@code parentName}: where the grade says nothing as precise about a
      * node, what its parents say applies, nearest first. A cycle is refused here rather than left to the
      * resolver, which stops one silently: an admin who asks for a cycle has made a mistake worth naming.
@@ -456,6 +486,8 @@ public final class GradeAdmin {
     static void resyncPlayer(MinecraftServer server, UUID uuid) {
         if (server == null) return;
         ServerPlayer player = server.getPlayerList().getPlayer(uuid);
-        if (player != null) server.getCommands().sendCommands(player);
+        if (player == null) return;
+        server.getCommands().sendCommands(player);
+        com.arcadia.customperm.chat.NameDecoration.refresh(player);
     }
 }

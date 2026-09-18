@@ -82,6 +82,7 @@ public final class UpgradeNotice {
                 "The in-game interface needs CustomPerm on the admin's client; network protocol 2, and TesseraUI is gone.",
                 "/customperm grade assign|unassign take a player name, not a selector; offline players must have joined before.",
                 "New settings.json fields: gateAllCommands, defaultGrade, playerCommandLog, maskPlayerCommandArguments, "
-                        + "maskedCommands, logRetentionDays, configVersion. The defaults keep the previous behaviour.");
+                        + "maskedCommands, logRetentionDays, configVersion, decorateNames, nameFormat. The defaults keep the "
+                        + "previous behaviour.");
     }
 }

@@ -9,6 +9,7 @@
 package com.arcadia.customperm.admin;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.chat.NameDecoration;
 import com.arcadia.customperm.config.ConfigSnapshot;
 import com.arcadia.customperm.perm.PermissionService;
 import net.minecraft.server.MinecraftServer;
@@ -36,9 +37,14 @@ public final class ConfigAdmin {
         return "[CustomPerm] Change applied in memory but NOT saved (" + reason + ").";
     }
 
-    /** Pushes the command tree again to every player, after a change of what they may run. */
+    /**
+     * Pushes the command tree again to every player, after a change of what they may run, and builds their
+     * names again: a change to the grades can change a prefix as surely as a permission.
+     */
     public static void resyncCommands(MinecraftServer server) {
-        if (server != null) server.getPlayerList().getPlayers().forEach(p -> server.getCommands().sendCommands(p));
+        if (server == null) return;
+        server.getPlayerList().getPlayers().forEach(p -> server.getCommands().sendCommands(p));
+        NameDecoration.refreshAll(server);
     }
 
     public static AdminResult reload(MinecraftServer server) {
@@ -61,10 +67,7 @@ public final class ConfigAdmin {
         // 3. Push the command tree again to every client (INVARIANT-501), always through
         //    server.execute() so it runs on the tick thread wherever the reload was triggered.
         if (server != null) {
-            server.execute(() ->
-                server.getPlayerList().getPlayers()
-                    .forEach(p -> server.getCommands().sendCommands(p))
-            );
+            server.execute(() -> resyncCommands(server));
         }
 
         CustomPerm.LOGGER.info("[CustomPerm] Configuration reloaded successfully");

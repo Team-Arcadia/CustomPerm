@@ -49,6 +49,22 @@ public class SettingsConfig {
      */
     public String defaultGrade = "";
 
+    /** The placeholder a {@link #nameFormat} must keep: a format without the name would let a prefix pass for one. */
+    public static final String NAME_PLACEHOLDER = "{name}";
+    public static final String DEFAULT_NAME_FORMAT = "{prefix}{name}{suffix}";
+    /** Longest {@link #nameFormat}. */
+    public static final int NAME_FORMAT_MAX = 128;
+
+    /**
+     * Puts each player's chat prefix and suffix around their name, from the grades or from LuckPerms.
+     * Off by default: another chat mod may already decorate names. The name is decorated, never the
+     * message, so chat stays signed and reportable; see {@code chat/NameDecoration}.
+     */
+    public boolean decorateNames = false;
+
+    /** How the name is built: {@code {prefix}}, {@code {name}} and {@code {suffix}}, with {@code &} codes between. */
+    public String nameFormat = DEFAULT_NAME_FORMAT;
+
     /** Default {@link #maskedCommands}: private messages, and the password commands of common login mods. */
     public static final List<String> DEFAULT_MASKED_COMMANDS = List.of(
             "msg", "tell", "w", "teammsg", "tm", "login", "l", "register", "reg", "changepassword", "changepw");
@@ -87,6 +103,9 @@ public class SettingsConfig {
         maskedCommands = new ArrayList<>(roots);
         if (logRetentionDays < 0) logRetentionDays = DEFAULT_LOG_RETENTION_DAYS;
         if (configVersion < 0) configVersion = 0;
+        if (nameFormat == null || !nameFormat.contains(NAME_PLACEHOLDER) || nameFormat.length() > NAME_FORMAT_MAX) {
+            nameFormat = DEFAULT_NAME_FORMAT;
+        }
         if (luckPermsFallbackMode == null) {
             luckPermsFallbackMode = LUCKPERMS_FALLBACK_DENY;
             return;

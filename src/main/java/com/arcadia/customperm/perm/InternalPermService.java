@@ -24,4 +24,11 @@ public class InternalPermService implements PermissionService {
         if (!(source.getEntity() instanceof ServerPlayer player)) return Tristate.UNSET;
         return PermissionResolver.check(config.getGrades(), player.getUUID(), node, config.getSettings().defaultGrade);
     }
+
+    @Override
+    public ChatMeta chatMeta(ServerPlayer player) {
+        String defaultGrade = config.getSettings().defaultGrade;
+        return new ChatMeta(PermissionResolver.prefix(config.getGrades(), player.getUUID(), defaultGrade),
+                PermissionResolver.suffix(config.getGrades(), player.getUUID(), defaultGrade));
+    }
 }

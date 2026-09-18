@@ -18,6 +18,7 @@ import com.arcadia.customperm.admin.ExportPlan;
 import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.admin.ImportAdmin;
 import com.arcadia.customperm.admin.ImportPlan;
+import com.arcadia.customperm.admin.NameAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
 import com.arcadia.customperm.admin.UserAdmin;
 import com.arcadia.customperm.config.GradesConfig;
@@ -99,6 +100,9 @@ import java.util.stream.Collectors;
  *                     confirm [replace]                # applies what was previewed, nothing else
  * /customperm export  preview                          # what an export to LuckPerms would write
  *                     confirm [replace]                # writes what was previewed, in the background
+ * /customperm grade   prefix|suffix <grade> [text]     # chat prefix/suffix of a grade, & colour codes
+ * /customperm user    prefix|suffix <player> [text]    # one player's own, above their grades
+ * /customperm names   [on|off|format <format>]         # decorate names with them, {prefix}{name}{suffix}
  * /customperm test    <player> <node>                   # debug: report grant/deny + backend
  * /customperm reload
  * /customperm log admin|players [count]            # latest admin changes / player commands
@@ -366,6 +370,8 @@ public class CustomPermCommand {
                             .suggests(SUGGEST_GRADES)
                             .then(Commands.argument("weight", IntegerArgumentType.integer())
                                 .executes(CustomPermCommand::gradeWeight))))
+                    .then(gradeChat("prefix", false))
+                    .then(gradeChat("suffix", true))
                     .then(Commands.literal("parent")
                         .then(Commands.literal("add").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                             .then(Commands.argument("grade", StringArgumentType.word())
@@ -416,6 +422,8 @@ public class CustomPermCommand {
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::gradeList)))
                 .then(Commands.literal("user")
+                    .then(userChat("prefix", false))
+                    .then(userChat("suffix", true))
                     .then(Commands.literal("addperm").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
@@ -465,6 +473,19 @@ public class CustomPermCommand {
                         .executes(ctx -> importApply(ctx, false))
                         .then(Commands.literal("replace")
                             .executes(ctx -> importApply(ctx, true)))))
+                .then(Commands.literal("names").requires(AdminAccess.manage(PermissionNodes.MANAGE_CONFIG))
+                    .executes(ctx -> {
+                        ctx.getSource().sendSuccess(() -> Component.literal(NameAdmin.describe()), false);
+                        return 1;
+                    })
+                    .then(Commands.literal("on")
+                        .executes(ctx -> report(ctx, NameAdmin.setEnabled(ctx.getSource().getServer(), true))))
+                    .then(Commands.literal("off")
+                        .executes(ctx -> report(ctx, NameAdmin.setEnabled(ctx.getSource().getServer(), false))))
+                    .then(Commands.literal("format")
+                        .then(Commands.argument("format", StringArgumentType.greedyString())
+                            .executes(ctx -> report(ctx, NameAdmin.setFormat(ctx.getSource().getServer(),
+                                StringArgumentType.getString(ctx, "format")))))))
                 .then(Commands.literal("export").requires(EXPORT_ACCESS)
                     .then(Commands.literal("preview")
                         .executes(CustomPermCommand::exportPreview))
@@ -789,6 +810,44 @@ public class CustomPermCommand {
             StringArgumentType.getString(ctx, "grade"), IntegerArgumentType.getInteger(ctx, "weight"))));
     }
 
+    /** {@code prefix|suffix <grade> [text]}: without a text, clears it. */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> gradeChat(String literal,
+                                                                                                  boolean suffix) {
+        return Commands.literal(literal).requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+            .then(Commands.argument("grade", StringArgumentType.word())
+                .suggests(SUGGEST_GRADES)
+                .executes(ctx -> gradeChat(ctx, suffix, null))
+                .then(Commands.argument("text", StringArgumentType.greedyString())
+                    .executes(ctx -> gradeChat(ctx, suffix, StringArgumentType.getString(ctx, "text")))));
+    }
+
+    private static int gradeChat(CommandContext<CommandSourceStack> ctx, boolean suffix, String text) {
+        return report(ctx, GradeAdmin.setChat(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "grade"), suffix, text));
+    }
+
+    /** {@code prefix|suffix <player> [text]}: without a text, clears it. */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> userChat(String literal,
+                                                                                                 boolean suffix) {
+        return Commands.literal(literal).requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
+            .then(Commands.argument("player", StringArgumentType.word())
+                .suggests(SUGGEST_KNOWN_PLAYERS)
+                .executes(ctx -> userChat(ctx, suffix, null))
+                .then(Commands.argument("text", StringArgumentType.greedyString())
+                    .executes(ctx -> userChat(ctx, suffix, StringArgumentType.getString(ctx, "text")))));
+    }
+
+    private static int userChat(CommandContext<CommandSourceStack> ctx, boolean suffix, String text) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        var server = ctx.getSource().getServer();
+        if (server == null) return 0;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
+        var profile = resolution.profile();
+        if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
+        return report(ctx, UserAdmin.setChat(server, profile.get().getId(), profile.get().getName(), suffix, text));
+    }
+
     private static int gradeParentAdd(CommandContext<CommandSourceStack> ctx) {
         return report(ctx, guarded(ctx, () -> GradeAdmin.addParent(ctx.getSource().getServer(),
             StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"))));
@@ -936,6 +995,13 @@ public class CustomPermCommand {
         }
         ctx.getSource().sendSuccess(() -> Component.literal("  own allow: " + join(UserAdmin.nodes(uuid, false))), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  own deny : " + join(UserAdmin.nodes(uuid, true))), false);
+        String prefix = UserAdmin.chat(uuid, false);
+        String suffix = UserAdmin.chat(uuid, true);
+        if (prefix != null || suffix != null) {
+            // Shown raw, codes included: this is what /customperm user prefix would take back.
+            ctx.getSource().sendSuccess(() -> Component.literal("  own prefix: " + (prefix == null ? "none" : "\"" + prefix + "\"")
+                + ", suffix: " + (suffix == null ? "none" : "\"" + suffix + "\"")), false);
+        }
         return 1;
     }
 

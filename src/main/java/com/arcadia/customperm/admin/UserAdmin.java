@@ -62,6 +62,29 @@ public final class UserAdmin {
         return AdminResult.ok((deny ? "Denied " : "Added ") + node + " -> " + displayName).warn(warning);
     }
 
+    /** Sets or clears the prefix or suffix one player carries above their grades. Blank clears it. */
+    public static AdminResult setChat(MinecraftServer server, UUID uuid, String displayName, boolean suffix,
+                                      String text) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        String value = text == null || text.isBlank() ? null : text;
+        String problem = com.arcadia.customperm.chat.LegacyText.problem(value);
+        if (problem != null) return AdminResult.fail("Invalid " + (suffix ? "suffix" : "prefix") + ": " + problem);
+        Map<String, String> texts = suffix ? grades().userSuffixes : grades().userPrefixes;
+        String what = suffix ? "Suffix" : "Prefix";
+        String before = value == null ? texts.remove(uuid.toString()) : texts.put(uuid.toString(), value);
+        if (java.util.Objects.equals(before, value)) return AdminResult.ok(what + " of " + displayName + " unchanged.");
+        String warning = ConfigAdmin.persist();
+        GradeAdmin.resyncPlayer(server, uuid);
+        return GradeAdmin.decorationNote(AdminResult.ok(value == null ? what + " of " + displayName + " cleared."
+                : what + " of " + displayName + " set to \"" + value + "\".").warn(warning));
+    }
+
+    /** The prefix or suffix a player carries themselves, {@code null} for none. */
+    public static String chat(UUID uuid, boolean suffix) {
+        return (suffix ? grades().userSuffixes : grades().userPrefixes).get(uuid.toString());
+    }
+
     /** Removes an ALLOW or a DENY node from one player; the entry goes with its last node. */
     public static AdminResult removeNode(MinecraftServer server, UUID uuid, String displayName, String rawNode,
                                          boolean deny) {
@@ -135,6 +158,8 @@ public final class UserAdmin {
         holders.addAll(grades().userDeniedGrades.keySet());
         holders.addAll(grades().userPermissions.keySet());
         holders.addAll(grades().userDeniedPermissions.keySet());
+        holders.addAll(grades().userPrefixes.keySet());
+        holders.addAll(grades().userSuffixes.keySet());
         return holders;
     }
 }

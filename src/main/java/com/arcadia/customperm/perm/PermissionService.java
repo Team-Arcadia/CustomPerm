@@ -11,6 +11,7 @@ package com.arcadia.customperm.perm;
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.ConfigSnapshot;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.server.level.ServerPlayer;
 
 public interface PermissionService {
 
@@ -41,6 +42,14 @@ public interface PermissionService {
      */
     default boolean hasGrantedNode(CommandSourceStack source, String node) {
         return check(source, node) == Tristate.ALLOW;
+    }
+
+    /**
+     * The chat prefix and suffix this backend gives {@code player}, for the name decoration. Nothing by
+     * default: a backend that grants nothing decorates nothing either.
+     */
+    default ChatMeta chatMeta(ServerPlayer player) {
+        return ChatMeta.NONE;
     }
 
     /**

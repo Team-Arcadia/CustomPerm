@@ -90,6 +90,29 @@ public class LuckPermsService implements PermissionService {
     }
 
     /**
+     * LuckPerms' own prefix and suffix for the player, from its cached meta: the ones its meta stacking
+     * picks, inheritance and priorities included. LuckPerms stores them, and nothing on NeoForge shows
+     * them without a mod like this one. Once degraded, the fallback policy applies as for a permission.
+     */
+    @Override
+    public ChatMeta chatMeta(ServerPlayer player) {
+        if (degraded.get()) {
+            return CustomPerm.configManager.getSettings().useInternalLuckPermsFallback()
+                    ? fallback.chatMeta(player) : ChatMeta.NONE;
+        }
+        try {
+            User user = LuckPermsProvider.get().getUserManager().getUser(player.getUUID());
+            if (user == null) return ChatMeta.NONE;
+            var meta = user.getCachedData().getMetaData();
+            return new ChatMeta(meta.getPrefix(), meta.getSuffix());
+        } catch (Throwable t) {
+            if (t instanceof Error e) throw e;
+            // A name is not worth degrading the permission backend for: the next permission check decides.
+            return ChatMeta.NONE;
+        }
+    }
+
+    /**
      * Switches permanently to the fallback policy. compareAndSet makes the log line and the admin
      * alert happen once, whichever path noticed first (AC2, P1).
      */
@@ -163,6 +186,8 @@ public class LuckPermsService implements PermissionService {
                             if (player != null) {
                                 CustomPerm.LOGGER.debug("[CustomPerm] LP user data recalculated for {}, resending command tree.", player.getGameProfile().getName());
                                 server.getCommands().sendCommands(player);
+                                // Their prefix may have changed with the rest.
+                                com.arcadia.customperm.chat.NameDecoration.refresh(player);
                             }
                         });
                     });
