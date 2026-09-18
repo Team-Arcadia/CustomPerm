@@ -38,7 +38,8 @@ import java.util.Objects;
  * read-only here since a grade is defined on the Grades page.
  *
  * <p>A node on a player wins over their grades at the same specificity, whatever a grade weighs, but it
- * does not beat a more specific grade node.
+ * does not beat a more specific grade node. Grades, and the grades the player refuses, are shown here and
+ * edited on the Grades page, which is where they are defined.
  *
  * <p>A player who holds nothing yet is not in the list: typing their name in the field below it selects
  * them so a first node can be added. That row is local until the node exists; nothing is written for a
@@ -77,7 +78,8 @@ public final class PlayersScreen extends AdminScreen {
         this.playerList = new CpList<PlayersData.Player>(Component.literal("Players"), ROW)
                 .renderer(this::renderPlayer)
                 .label(p -> p.name() + (p.online() ? ", online" : ", offline") + ", " + p.allow().size()
-                        + " allowed, " + p.deny().size() + " denied, " + p.grades().size() + " grades")
+                        + " allowed, " + p.deny().size() + " denied, " + p.grades().size() + " grades, "
+                        + p.refused().size() + " refused")
                 .identity(PlayersData.Player::uuid)
                 .emptyText("No player holds a node of their own: name one below.")
                 .onSelect(p -> {
@@ -155,7 +157,8 @@ public final class PlayersScreen extends AdminScreen {
     private List<PlayersData.Player> rows() {
         List<PlayersData.Player> rows = new ArrayList<>();
         if (pendingPlayer != null) {
-            rows.add(new PlayersData.Player("", pendingPlayer, false, List.of(), List.of(), List.of()));
+            rows.add(new PlayersData.Player("", pendingPlayer, false,
+                    new PlayersData.Held(List.of(), List.of()), List.of(), List.of()));
         }
         rows.addAll(data.players());
         return rows;
@@ -334,6 +337,7 @@ public final class PlayersScreen extends AdminScreen {
         }
         Skin.text(g, font, player.name(), in.x(), in.y(), in.w(), Palette.TEXT);
         String grades = player.grades().isEmpty() ? "no grade" : "grades: " + String.join(", ", player.grades());
+        if (!player.refused().isEmpty()) grades += "  |  refuses: " + String.join(", ", player.refused());
         String sub = player.allow().size() + " allow, " + player.deny().size() + " deny  |  " + grades
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, in.w(), Palette.TEXT_MUTE);

@@ -29,17 +29,33 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
     public static final int NODES_MAX = 1024;
 
     /** {@code name} is the UUID when the server has never seen a name for it. */
-    public record Player(String uuid, String name, boolean online, List<String> grades, List<String> allow,
+    public record Player(String uuid, String name, boolean online, Held held, List<String> allow,
                          List<String> deny) {
 
         public static final StreamCodec<ByteBuf, Player> CODEC = StreamCodec.composite(
                 GuiCodecs.TEXT, Player::uuid,
                 GuiCodecs.TEXT, Player::name,
                 ByteBufCodecs.BOOL, Player::online,
-                GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Player::grades,
+                Held.CODEC, Player::held,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Player::allow,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Player::deny,
                 Player::new);
+
+        public List<String> grades() {
+            return held.grades();
+        }
+
+        public List<String> refused() {
+            return held.refused();
+        }
+    }
+
+    /** The grades a player holds, and the ones they refuse wherever a grade of theirs would bring them. */
+    public record Held(List<String> grades, List<String> refused) {
+        public static final StreamCodec<ByteBuf, Held> CODEC = StreamCodec.composite(
+                GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Held::grades,
+                GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Held::refused,
+                Held::new);
     }
 
     public static final StreamCodec<ByteBuf, PlayersData> CODEC = StreamCodec.composite(

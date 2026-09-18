@@ -616,6 +616,63 @@ public class AdminInterfaceGameTest {
         helper.succeed();
     }
 
+    /** The refusal actions of the Grades page: a grade refusing a grade, and a player refusing one. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void gradesPageEditsRefusals(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        var server = helper.getLevel().getServer();
+        var config = CustomPerm.configManager.getGrades();
+        String target = null;
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_refuse", 4);
+             TestPlayer member = TestPlayer.join(helper.getLevel(), "cp_i_refused", 0)) {
+            target = member.uuid().toString();
+            owner.clearReceived();
+            gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_f_base");
+            gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_f_mid");
+            gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_f_leaf");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_f_mid", "cp_i_f_base");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_f_leaf", "cp_i_f_mid");
+            owner.clearReceived();
+
+            gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_base");
+            gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_mid");
+            gradeAct(owner, GuiAction.GRADE_REFUSE, "CP_I_REFUSED", "cp_i_f_base");
+            gradeAct(owner, GuiAction.GRADE_REFUSE, "cp_i_nobody_here", "cp_i_f_base");
+            List<String> results = results(owner);
+            if (!results.equals(List.of("OK: cp_i_f_leaf now refuses cp_i_f_base",
+                    "FAIL: cp_i_f_leaf inherits cp_i_f_mid directly: remove that parent instead of refusing it.",
+                    "OK: cp_i_refused now refuses cp_i_f_base",
+                    "FAIL: Unknown player 'cp_i_nobody_here': grades can be assigned to players online or who joined this server before.")))
+                fail("Unexpected results: " + results);
+            if (!config.grades.get("cp_i_f_leaf").deniedParents.equals(List.of("cp_i_f_base"))
+                    || !config.userDeniedGrades.getOrDefault(target, List.of()).equals(List.of("cp_i_f_base")))
+                fail("The refusals were not stored where they belong.");
+
+            var pages = owner.payloads(GuiPagePayload.class);
+            GradesData.Grade row = pages.isEmpty() || !(pages.get(pages.size() - 1).data() instanceof GradesData data)
+                    ? null
+                    : data.grades().stream().filter(g -> g.name().equals("cp_i_f_base")).findFirst().orElse(null);
+            if (row == null || row.refusers().stream().noneMatch(m -> m.name().equals("cp_i_refused")))
+                fail("The refreshed page must list who refuses the grade: " + row);
+
+            owner.clearReceived();
+            gradeAct(owner, GuiAction.GRADE_PARENT_ALLOW, "cp_i_f_leaf", "cp_i_f_base");
+            gradeAct(owner, GuiAction.GRADE_ACCEPT, target, "cp_i_f_base");
+            gradeAct(owner, GuiAction.GRADE_ACCEPT, "not-a-uuid", "cp_i_f_base");
+            results = results(owner);
+            if (!results.equals(List.of("OK: cp_i_f_leaf no longer refuses cp_i_f_base",
+                    "OK: cp_i_refused no longer refuses cp_i_f_base",
+                    "FAIL: Malformed request for GRADE_ACCEPT.")))
+                fail("Unexpected results: " + results);
+            if (config.userDeniedGrades.containsKey(target))
+                fail("An entry left without a refusal must be dropped, not kept empty.");
+        } finally {
+            for (String name : List.of("cp_i_f_base", "cp_i_f_mid", "cp_i_f_leaf")) GradeAdmin.delete(server, name);
+            if (target != null) config.userDeniedGrades.remove(target);
+        }
+        helper.succeed();
+    }
+
     private static void gradeAct(TestPlayer player, GuiAction action, String... args) {
         GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.GRADES.id()),
                 player.payloadContext());

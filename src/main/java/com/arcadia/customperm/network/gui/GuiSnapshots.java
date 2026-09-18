@@ -76,7 +76,8 @@ public final class GuiSnapshots {
             boolean online = server != null && server.getPlayerList().getPlayer(uuid) != null;
             String name = server == null ? rawUuid : GradeAdmin.displayName(server, uuid);
             players.add(new PlayersData.Player(rawUuid, name, online,
-                    List.copyOf(config.userGrades.getOrDefault(rawUuid, List.of())),
+                    new PlayersData.Held(List.copyOf(config.userGrades.getOrDefault(rawUuid, List.of())),
+                            List.copyOf(config.userDeniedGrades.getOrDefault(rawUuid, List.of()))),
                     UserAdmin.nodes(uuid, false).stream().limit(PlayersData.NODES_MAX).toList(),
                     UserAdmin.nodes(uuid, true).stream().limit(PlayersData.NODES_MAX).toList()));
         }
@@ -91,19 +92,9 @@ public final class GuiSnapshots {
     static GradesData grades(MinecraftServer server) {
         var config = CustomPerm.configManager.getGrades();
         java.util.Map<String, List<GradesData.Member>> members = new java.util.HashMap<>();
-        config.userGrades.forEach((rawUuid, assigned) -> {
-            java.util.UUID uuid;
-            try {
-                uuid = java.util.UUID.fromString(rawUuid);
-            } catch (IllegalArgumentException e) {
-                return;
-            }
-            boolean online = server != null && server.getPlayerList().getPlayer(uuid) != null;
-            String name = server == null ? rawUuid : GradeAdmin.displayName(server, uuid);
-            for (String grade : assigned) {
-                members.computeIfAbsent(grade, k -> new ArrayList<>()).add(new GradesData.Member(rawUuid, name, online));
-            }
-        });
+        java.util.Map<String, List<GradesData.Member>> refusers = new java.util.HashMap<>();
+        byGrade(server, config.userGrades, members);
+        byGrade(server, config.userDeniedGrades, refusers);
 
         // Heaviest first, then by name: the order in which two grades covering a node just as specifically
         // break the tie, so the list itself reads as the precedence.
@@ -117,16 +108,39 @@ public final class GuiSnapshots {
             var grade = config.grades.get(name);
             List<GradesData.Member> assigned = members.getOrDefault(name, new ArrayList<>());
             assigned.sort(java.util.Comparator.comparing(GradesData.Member::name, String.CASE_INSENSITIVE_ORDER));
-            grades.add(new GradesData.Grade(name, grade.weight, List.copyOf(grade.parents),
+            List<GradesData.Member> refusing = refusers.getOrDefault(name, new ArrayList<>());
+            refusing.sort(java.util.Comparator.comparing(GradesData.Member::name, String.CASE_INSENSITIVE_ORDER));
+            grades.add(new GradesData.Grade(name, grade.weight,
+                    new GradesData.Inheritance(List.copyOf(grade.parents), List.copyOf(grade.deniedParents)),
                     new TreeSet<>(grade.permissions).stream().limit(GradesData.NODES_MAX).toList(),
                     new TreeSet<>(grade.deniedPermissions).stream().limit(GradesData.NODES_MAX).toList(),
-                    assigned.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList()));
+                    new GradesData.Members(assigned.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList(),
+                            refusing.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList())));
         }
         List<String> known = server == null ? List.of()
                 : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
         var settings = CustomPerm.configManager.getSettings();
         return new GradesData(grades, known, settings.luckPermsFallbackMode, settings.defaultGrade,
                 CustomPerm.gatesAllCommands());
+    }
+
+    /** Turns a UUID-to-grade-names map inside out: one entry per grade, with the players resolved. */
+    private static void byGrade(MinecraftServer server, java.util.Map<String, List<String>> assignments,
+                                java.util.Map<String, List<GradesData.Member>> byGrade) {
+        assignments.forEach((rawUuid, names) -> {
+            java.util.UUID uuid;
+            try {
+                uuid = java.util.UUID.fromString(rawUuid);
+            } catch (IllegalArgumentException e) {
+                return;
+            }
+            boolean online = server != null && server.getPlayerList().getPlayer(uuid) != null;
+            String name = server == null ? rawUuid : GradeAdmin.displayName(server, uuid);
+            for (String grade : names) {
+                byGrade.computeIfAbsent(grade, k -> new ArrayList<>())
+                        .add(new GradesData.Member(rawUuid, name, online));
+            }
+        });
     }
 
     static LogsData logs() {

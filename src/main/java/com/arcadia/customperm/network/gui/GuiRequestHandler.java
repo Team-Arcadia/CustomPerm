@@ -179,6 +179,10 @@ public final class GuiRequestHandler {
                     : guarded(player, () -> GradeAdmin.setWeight(player.getServer(), args.get(0), signed(args.get(1))));
             case GRADE_PARENT_ADD -> guarded(player, () -> GradeAdmin.addParent(player.getServer(), args.get(0), args.get(1)));
             case GRADE_PARENT_REMOVE -> guarded(player, () -> GradeAdmin.removeParent(player.getServer(), args.get(0), args.get(1)));
+            case GRADE_PARENT_DENY -> guarded(player, () -> GradeAdmin.denyParent(player.getServer(), args.get(0), args.get(1)));
+            case GRADE_PARENT_ALLOW -> guarded(player, () -> GradeAdmin.allowParent(player.getServer(), args.get(0), args.get(1)));
+            case GRADE_REFUSE -> guarded(player, () -> refuseByName(player, args.get(0), args.get(1)));
+            case GRADE_ACCEPT -> guarded(player, () -> acceptByUuid(player, args.get(0), args.get(1)));
             case GRADE_ASSIGN -> guarded(player, () -> assignByName(player, args.get(0), args.get(1)));
             case GRADE_UNASSIGN -> guarded(player, () -> unassignByUuid(player, args.get(0), args.get(1)));
             case GRADE_DEFAULT -> guarded(player, () -> GradeAdmin.setDefault(player.getServer(), args.get(0)));
@@ -203,6 +207,21 @@ public final class GuiRequestHandler {
         return resolution.profile()
                 .map(profile -> GradeAdmin.assign(admin.getServer(), profile, grade))
                 .orElseGet(() -> AdminResult.fail(resolution.problem()));
+    }
+
+    private static AdminResult refuseByName(ServerPlayer admin, String name, String grade) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
+        return resolution.profile()
+                .map(profile -> UserAdmin.refuseGrade(admin.getServer(), profile.getId(), profile.getName(), grade))
+                .orElseGet(() -> AdminResult.fail(resolution.problem()));
+    }
+
+    private static AdminResult acceptByUuid(ServerPlayer admin, String rawUuid, String grade) {
+        java.util.UUID uuid = uuid(rawUuid);
+        if (uuid == null) return malformed(GuiAction.GRADE_ACCEPT);
+        return UserAdmin.acceptGrade(admin.getServer(), uuid, GradeAdmin.displayName(admin.getServer(), uuid), grade);
     }
 
     /** Adding addresses the player by name: the screen offers a field for someone who holds nothing yet. */

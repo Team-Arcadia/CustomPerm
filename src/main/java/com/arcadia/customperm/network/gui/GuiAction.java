@@ -74,6 +74,14 @@ public enum GuiAction {
     GRADE_ASSIGN(2, GuiArea.GRADES),
     /** {@code [playerUuid, grade]} Unassigns a grade, by UUID so unnamed entries can be cleaned up. */
     GRADE_UNASSIGN(2, GuiArea.GRADES),
+    /** {@code [grade, parent]} Refuses a grade wherever this one would inherit it. */
+    GRADE_PARENT_DENY(2, GuiArea.GRADES),
+    /** {@code [grade, parent]} Stops refusing it. */
+    GRADE_PARENT_ALLOW(2, GuiArea.GRADES),
+    /** {@code [playerName, grade]} Makes a player refuse a grade, wherever one of theirs would bring it. */
+    GRADE_REFUSE(2, GuiArea.GRADES),
+    /** {@code [playerUuid, grade]} Stops refusing it, by UUID like unassigning. */
+    GRADE_ACCEPT(2, GuiArea.GRADES),
     /** {@code [grade]} Makes a grade apply to every player; an empty name clears the default grade. */
     GRADE_DEFAULT(1, GuiArea.GRADES),
 

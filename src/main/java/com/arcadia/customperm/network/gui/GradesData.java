@@ -41,18 +41,54 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
 
     /**
      * {@code weight} breaks ties between two grades covering a node just as specifically; 0 for most.
-     * {@code parents} are the grades this one inherits, nearest first.
+     * {@code parents} are the grades this one inherits, nearest first, {@code deniedParents} the ones it
+     * refuses wherever they would be inherited. {@code refusers} are the players who refuse this grade.
+     *
+     * <p>Two records rather than one wider one: the codec composes at most six components, and inheritance
+     * and refusal read as two lists everywhere else too.
      */
-    public record Grade(String name, int weight, List<String> parents, List<String> allow, List<String> deny,
-                        List<Member> members) {
+    public record Grade(String name, int weight, Inheritance inheritance, List<String> allow, List<String> deny,
+                        Members players) {
         public static final StreamCodec<ByteBuf, Grade> CODEC = StreamCodec.composite(
                 GuiCodecs.TEXT, Grade::name,
                 ByteBufCodecs.VAR_INT, Grade::weight,
-                GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Grade::parents,
+                Inheritance.CODEC, Grade::inheritance,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Grade::allow,
                 GuiCodecs.list(GuiCodecs.TEXT, NODES_MAX), Grade::deny,
-                GuiCodecs.list(Member.CODEC, GuiCodecs.SERVER_LIST_MAX), Grade::members,
+                Members.CODEC, Grade::players,
                 Grade::new);
+
+        public List<String> parents() {
+            return inheritance.parents();
+        }
+
+        public List<String> deniedParents() {
+            return inheritance.denied();
+        }
+
+        public List<Member> members() {
+            return players.assigned();
+        }
+
+        public List<Member> refusers() {
+            return players.refusing();
+        }
+    }
+
+    /** What a grade inherits, and what it refuses to inherit. */
+    public record Inheritance(List<String> parents, List<String> denied) {
+        public static final StreamCodec<ByteBuf, Inheritance> CODEC = StreamCodec.composite(
+                GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Inheritance::parents,
+                GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Inheritance::denied,
+                Inheritance::new);
+    }
+
+    /** The players assigned to a grade, and the players who refuse it. */
+    public record Members(List<Member> assigned, List<Member> refusing) {
+        public static final StreamCodec<ByteBuf, Members> CODEC = StreamCodec.composite(
+                GuiCodecs.list(Member.CODEC, GuiCodecs.SERVER_LIST_MAX), Members::assigned,
+                GuiCodecs.list(Member.CODEC, GuiCodecs.SERVER_LIST_MAX), Members::refusing,
+                Members::new);
     }
 
     public static final StreamCodec<ByteBuf, GradesData> CODEC = StreamCodec.composite(

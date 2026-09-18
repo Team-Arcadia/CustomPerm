@@ -57,6 +57,14 @@ public final class GradesScreen extends AdminScreen {
     private record NodeRow(String node, boolean deny) {
     }
 
+    /** One grade the selected grade inherits, or refuses to inherit. */
+    private record ParentRow(String grade, boolean refused) {
+    }
+
+    /** One player assigned to the selected grade, or refusing it. */
+    private record MemberRow(GradesData.Member member, boolean refused) {
+    }
+
     /** Right-hand side of the page: what the selected grade is looked at through. */
     private enum Tab { NODES, PARENTS, PLAYERS }
 
@@ -68,9 +76,9 @@ public final class GradesScreen extends AdminScreen {
     private final CpEditBox newGrade;
     private final CpList<NodeRow> nodeList;
     private final CpEditBox nodeField;
-    private final CpList<String> parentList;
+    private final CpList<ParentRow> parentList;
     private final CpEditBox parentField;
-    private final CpList<GradesData.Member> memberList;
+    private final CpList<MemberRow> memberList;
     private final CpEditBox playerField;
     private final CpEditBox weightField;
     /** Grade to select once the next refresh lands, after creating it. */
@@ -118,21 +126,22 @@ public final class GradesScreen extends AdminScreen {
                 .hint(Component.literal("grade to inherit"))
                 .onSubmit(this::addParent);
         parentField.onChange(this::suggestParent);
-        this.parentList = new CpList<String>(Component.literal("Parents"), 14)
+        this.parentList = new CpList<ParentRow>(Component.literal("Parents"), 14)
                 .renderer(this::renderParent)
-                .label(name -> "inherits " + name)
-                .identity(name -> name)
+                .label(row -> (row.refused() ? "refuses " : "inherits ") + row.grade())
+                .identity(row -> (row.refused() ? "deny:" : "parent:") + row.grade())
                 .emptyText("No parent: this grade inherits nothing.")
-                .onSelect(name -> {
-                    parentField.setValue(name);
+                .onSelect(row -> {
+                    parentField.setValue(row.grade());
                     rebuild();
                 });
-        this.memberList = new CpList<GradesData.Member>(Component.literal("Players"), 14)
+        this.memberList = new CpList<MemberRow>(Component.literal("Players"), 14)
                 .renderer(this::renderMember)
-                .label(m -> m.name() + (m.online() ? ", online" : ", offline"))
-                .identity(GradesData.Member::uuid)
+                .label(row -> row.member().name() + (row.refused() ? ", refuses it" : "")
+                        + (row.member().online() ? ", online" : ", offline"))
+                .identity(row -> (row.refused() ? "deny:" : "member:") + row.member().uuid())
                 .emptyText("No player has this grade.")
-                .onSelect(m -> rebuild());
+                .onSelect(row -> rebuild());
         refilter();
         fillDetails();
     }
@@ -207,8 +216,16 @@ public final class GradesScreen extends AdminScreen {
             grade.allow().forEach(n -> nodes.add(new NodeRow(n, false)));
         }
         nodeList.setItems(nodes);
-        parentList.setItems(grade == null ? List.of() : grade.parents());
-        memberList.setItems(grade == null ? List.of() : grade.members());
+        List<ParentRow> parents = new ArrayList<>();
+        List<MemberRow> members = new ArrayList<>();
+        if (grade != null) {
+            grade.parents().forEach(name -> parents.add(new ParentRow(name, false)));
+            grade.deniedParents().forEach(name -> parents.add(new ParentRow(name, true)));
+            grade.members().forEach(member -> members.add(new MemberRow(member, false)));
+            grade.refusers().forEach(member -> members.add(new MemberRow(member, true)));
+        }
+        parentList.setItems(parents);
+        memberList.setItems(members);
         // The box shows the weight in force, so submitting it unchanged is a no-op rather than a reset.
         weightField.setValue(grade == null ? "" : String.valueOf(grade.weight()));
     }
@@ -288,9 +305,11 @@ public final class GradesScreen extends AdminScreen {
         for (CpButton button : List.of(
                 CpButton.ghost(Component.literal("Nodes (" + (grade.allow().size() + grade.deny().size()) + ")"),
                         () -> setTab(Tab.NODES)).icon(Icon.LOCK).selected(tab == Tab.NODES),
-                CpButton.ghost(Component.literal("Parents (" + grade.parents().size() + ")"),
+                CpButton.ghost(Component.literal("Parents (" + (grade.parents().size()
+                                + grade.deniedParents().size()) + ")"),
                         () -> setTab(Tab.PARENTS)).icon(Icon.SHIELD).selected(tab == Tab.PARENTS),
-                CpButton.ghost(Component.literal("Players (" + grade.members().size() + ")"),
+                CpButton.ghost(Component.literal("Players (" + (grade.members().size()
+                                + grade.refusers().size()) + ")"),
                         () -> setTab(Tab.PLAYERS)).icon(Icon.USER).selected(tab == Tab.PLAYERS))) {
             int width = button.preferredWidth(font, 8);
             addRenderableWidget(button.at(new Rect(tabX, tabs.y(), width, FIELD)));
@@ -319,12 +338,19 @@ public final class GradesScreen extends AdminScreen {
             addRenderableWidget(parentList.at(list));
             addRenderableWidget(parentField.at(fieldRow));
             parentField.setEditable(editable);
-            String selected = parentList.getSelected();
+            ParentRow selected = parentList.getSelected();
             CpButton inherit = CpButton.accent(Component.literal("Inherit"), this::addParent).icon(Icon.PLUS)
                     .enabled(editable)
                     .tooltip(Component.literal("What a parent says applies where this grade says nothing as precise "
                             + "about a node. A node set here still wins over the same node inherited."));
-            addRenderableWidget(inherit.at(buttonRow.left(inherit.preferredWidth(font, 6))));
+            int inheritW = inherit.preferredWidth(font, 6);
+            addRenderableWidget(inherit.at(buttonRow.left(inheritW)));
+            CpButton refuse = CpButton.danger(Component.literal("Refuse"), this::refuseParent).icon(Icon.CROSS)
+                    .enabled(editable)
+                    .tooltip(Component.literal("Nothing this grade inherits brings that grade back. It removes it "
+                            + "from this chain only, never from another grade a player holds."));
+            addRenderableWidget(refuse.at(new Rect(buttonRow.x() + inheritW + 4, buttonRow.y(),
+                    refuse.preferredWidth(font, 6), BUTTON)));
             CpButton stop = CpButton.neutral(Component.literal("Remove"), () -> removeParent(selected)).icon(Icon.MINUS)
                     .enabled(editable && selected != null);
             addRenderableWidget(stop.at(buttonRow.right(stop.preferredWidth(font, 6))));
@@ -332,12 +358,21 @@ public final class GradesScreen extends AdminScreen {
             addRenderableWidget(memberList.at(list));
             addRenderableWidget(playerField.at(fieldRow));
             playerField.setEditable(editable);
-            GradesData.Member selected = memberList.getSelected();
+            MemberRow selected = memberList.getSelected();
             CpButton assign = CpButton.accent(Component.literal("Assign"), this::assign).icon(Icon.PLUS).enabled(editable);
-            addRenderableWidget(assign.at(buttonRow.left(assign.preferredWidth(font, 6))));
-            CpButton unassign = CpButton.neutral(Component.literal("Unassign"), () -> unassign(selected)).icon(Icon.MINUS)
-                    .enabled(editable && selected != null);
-            addRenderableWidget(unassign.at(buttonRow.right(unassign.preferredWidth(font, 6))));
+            int assignW = assign.preferredWidth(font, 6);
+            addRenderableWidget(assign.at(buttonRow.left(assignW)));
+            CpButton refuse = CpButton.danger(Component.literal("Refuse"), this::refuseForPlayer).icon(Icon.CROSS)
+                    .enabled(editable)
+                    .tooltip(Component.literal("This grade is not read for that player, whichever grade of theirs "
+                            + "would have brought it. Unassign a grade they hold directly instead."));
+            addRenderableWidget(refuse.at(new Rect(buttonRow.x() + assignW + 4, buttonRow.y(),
+                    refuse.preferredWidth(font, 6), BUTTON)));
+            // One button for the two ways out: a row is either an assignment or a refusal.
+            CpButton takeBack = CpButton.neutral(
+                    Component.literal(selected != null && selected.refused() ? "Accept" : "Unassign"),
+                    () -> takeBack(selected)).icon(Icon.MINUS).enabled(editable && selected != null);
+            addRenderableWidget(takeBack.at(buttonRow.right(takeBack.preferredWidth(font, 6))));
         }
     }
 
@@ -403,10 +438,20 @@ public final class GradesScreen extends AdminScreen {
         addParent(Objects.requireNonNullElse(parentCompletion(typed), typed));
     }
 
-    private void removeParent(String name) {
+    private void refuseParent() {
         GradesData.Grade grade = gradeList.getSelected();
-        if (grade == null || name == null) return;
-        act(GuiAction.GRADE_PARENT_REMOVE, grade.name(), name);
+        String typed = parentField.getValue().trim();
+        String name = Objects.requireNonNullElse(parentCompletion(typed), typed);
+        if (grade == null || name.isEmpty()) return;
+        act(GuiAction.GRADE_PARENT_DENY, grade.name(), name);
+        parentField.setValue("");
+        parentField.setSuggestion(null);
+    }
+
+    private void removeParent(ParentRow row) {
+        GradesData.Grade grade = gradeList.getSelected();
+        if (grade == null || row == null) return;
+        act(row.refused() ? GuiAction.GRADE_PARENT_ALLOW : GuiAction.GRADE_PARENT_REMOVE, grade.name(), row.grade());
         parentField.setValue("");
     }
 
@@ -445,19 +490,35 @@ public final class GradesScreen extends AdminScreen {
 
     private void assign() {
         GradesData.Grade grade = gradeList.getSelected();
-        String typed = playerField.getValue().trim();
-        if (grade == null || typed.isEmpty()) return;
-        String exact = data.knownPlayers().stream().filter(n -> n.equalsIgnoreCase(typed)).findFirst().orElse(null);
-        String name = exact != null ? exact : Objects.requireNonNullElse(completion(typed), typed);
+        String name = typedPlayer();
+        if (grade == null || name == null) return;
         act(GuiAction.GRADE_ASSIGN, name, grade.name());
         playerField.setValue("");
         playerField.setSuggestion(null);
     }
 
-    private void unassign(GradesData.Member member) {
+    /** The player name in the field, completed against the known ones; {@code null} when it is empty. */
+    private String typedPlayer() {
+        String typed = playerField.getValue().trim();
+        if (typed.isEmpty()) return null;
+        String exact = data.knownPlayers().stream().filter(n -> n.equalsIgnoreCase(typed)).findFirst().orElse(null);
+        return exact != null ? exact : Objects.requireNonNullElse(completion(typed), typed);
+    }
+
+    /** Makes the player named in the field refuse this grade, wherever one of theirs would bring it. */
+    private void refuseForPlayer() {
         GradesData.Grade grade = gradeList.getSelected();
-        if (grade == null || member == null) return;
-        act(GuiAction.GRADE_UNASSIGN, member.uuid(), grade.name());
+        String name = typedPlayer();
+        if (grade == null || name == null) return;
+        act(GuiAction.GRADE_REFUSE, name, grade.name());
+        playerField.setValue("");
+        playerField.setSuggestion(null);
+    }
+
+    private void takeBack(MemberRow row) {
+        GradesData.Grade grade = gradeList.getSelected();
+        if (grade == null || row == null) return;
+        act(row.refused() ? GuiAction.GRADE_ACCEPT : GuiAction.GRADE_UNASSIGN, row.member().uuid(), grade.name());
     }
 
     // ------------------------------------------------------------------ rendering
@@ -477,10 +538,11 @@ public final class GradesScreen extends AdminScreen {
         Skin.text(g, font, grade.name(), r.x() + 6, r.y() + (r.h() - 8) / 2, r.w() - cw - 26 - ww, Palette.TEXT);
     }
 
-    private void renderParent(GuiGraphics g, Font font, String name, Rect r, boolean hovered, boolean selected) {
-        Skin.icon(g, Icon.SHIELD, r.x() + 6, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
-        int x = r.x() + 6 + 12;
-        Skin.text(g, font, name, x, r.y() + (r.h() - 8) / 2, r.right() - x - 4, Palette.TEXT);
+    private void renderParent(GuiGraphics g, Font font, ParentRow row, Rect r, boolean hovered, boolean selected) {
+        String label = row.refused() ? "REFUSED" : "INHERITS";
+        int w = Skin.badge(g, font, label, r.x() + 4, r.centerY(), row.refused() ? Palette.DANGER : Palette.ACCENT);
+        int x = r.x() + 4 + Math.max(w, font.width("INHERITS") + 6) + 5;
+        Skin.text(g, font, row.grade(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4, Palette.TEXT);
     }
 
     private void renderNode(GuiGraphics g, Font font, NodeRow row, Rect r, boolean hovered, boolean selected) {
@@ -490,12 +552,14 @@ public final class GradesScreen extends AdminScreen {
         Skin.text(g, font, row.node(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4, Palette.TEXT);
     }
 
-    private void renderMember(GuiGraphics g, Font font, GradesData.Member member, Rect r, boolean hovered, boolean selected) {
+    private void renderMember(GuiGraphics g, Font font, MemberRow row, Rect r, boolean hovered, boolean selected) {
+        GradesData.Member member = row.member();
         Skin.dot(g, r.x() + 6, r.centerY(), member.online() ? Palette.GOOD : Palette.LINE_STRONG);
         int x = r.x() + 6 + Atlas.DOT_SIZE + 5;
-        String state = member.online() ? "online" : "offline";
+        String state = row.refused() ? "refuses it" : member.online() ? "online" : "offline";
         int sw = font.width(state);
-        Skin.text(g, font, state, r.right() - sw - 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
+        Skin.text(g, font, state, r.right() - sw - 4, r.y() + (r.h() - 8) / 2,
+                row.refused() ? Palette.DANGER : Palette.TEXT_MUTE);
         Skin.text(g, font, member.name(), x, r.y() + (r.h() - 8) / 2, r.right() - sw - x - 10, Palette.TEXT);
     }
 
@@ -521,6 +585,7 @@ public final class GradesScreen extends AdminScreen {
         String sub = grade.allow().size() + " allow, " + grade.deny().size() + " deny"
                 + ", weight " + grade.weight()
                 + (grade.parents().isEmpty() ? "" : ", inherits " + String.join(" ", grade.parents()))
+                + (grade.deniedParents().isEmpty() ? "" : ", refuses " + String.join(" ", grade.deniedParents()))
                 + (isDefault ? ", every player" : "")
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, headerW, Palette.TEXT_MUTE);
