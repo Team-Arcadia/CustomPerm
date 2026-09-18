@@ -184,9 +184,11 @@ public final class GuiRequestHandler {
                             args.get(3)));
             case GRADE_WEIGHT_SET -> signed(args.get(1)) == null ? malformed(action)
                     : guarded(player, () -> GradeAdmin.setWeight(player.getServer(), args.get(0), signed(args.get(1))));
-            case GRADE_PARENT_ADD -> guarded(player, () -> GradeAdmin.addParent(player.getServer(), args.get(0), args.get(1)));
+            case GRADE_PARENT_ADD -> duration(args.get(2)) < 0 ? badDuration(args.get(2))
+                    : guarded(player, () -> GradeAdmin.addParent(player.getServer(), args.get(0), args.get(1), duration(args.get(2))));
             case GRADE_PARENT_REMOVE -> guarded(player, () -> GradeAdmin.removeParent(player.getServer(), args.get(0), args.get(1)));
-            case GRADE_PARENT_DENY -> guarded(player, () -> GradeAdmin.denyParent(player.getServer(), args.get(0), args.get(1)));
+            case GRADE_PARENT_DENY -> duration(args.get(2)) < 0 ? badDuration(args.get(2))
+                    : guarded(player, () -> GradeAdmin.denyParent(player.getServer(), args.get(0), args.get(1), duration(args.get(2))));
             case GRADE_PARENT_ALLOW -> guarded(player, () -> GradeAdmin.allowParent(player.getServer(), args.get(0), args.get(1)));
             case GRADE_REFUSE -> duration(args.get(2)) < 0 ? badDuration(args.get(2))
                     : guarded(player, () -> refuseByName(player, args.get(0), args.get(1), duration(args.get(2))));

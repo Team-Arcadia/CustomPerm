@@ -32,7 +32,8 @@ import java.util.function.BinaryOperator;
  *   <li>A grade inherits its parents ({@link GradesConfig.Grade#parents}): where it says nothing as
  *       precise about the node, what its parents say applies, nearest first, so a grade overrides what
  *       it inherits. A chain answers with one verdict, which then competes with the player's other
- *       grades at the weight of the grade they actually hold.</li>
+ *       grades at the weight of the grade they actually hold. A temporary parent that has run out is
+ *       not followed, and a temporary refusal that has run out refuses nothing.</li>
  *   <li>A grade is not reached at all when the holder refuses it: {@link GradesConfig#userDeniedGrades}
  *       takes it out of everything that player resolves, the default grade included, and
  *       {@link GradesConfig.Grade#deniedParents} takes it out of that grade's own chain, from the point
@@ -257,9 +258,12 @@ public final class PermissionResolver {
                 reader.read(chain, grade, node, -depth, contexts);
                 // Read where it is declared: a grade nearer to the holder has already been walked, so its
                 // refusal closes a farther one, never the other way round.
-                seen.addAll(grade.deniedParents);
+                for (String refusedParent : grade.deniedParents) {
+                    if (Expiry.alive(grade.deniedParentExpiries, refusedParent)) seen.add(refusedParent);
+                }
                 for (String parent : grade.parents) {
-                    if (parent == null || !seen.add(parent)) continue;
+                    // Alive first: a parent that ran out must not mark the grade as seen for another path.
+                    if (parent == null || !Expiry.alive(grade.parentExpiries, parent) || !seen.add(parent)) continue;
                     GradesConfig.Grade inherited = grades.grades.get(parent);
                     if (inherited != null) next.add(inherited);
                 }

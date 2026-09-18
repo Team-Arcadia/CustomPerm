@@ -73,8 +73,8 @@ import java.util.stream.Collectors;
  *                     addperm|removeperm <grade> <node>
  *                     adddeny|removedeny <grade> <node>   # most specific entry wins, DENY on a tie
  *                     weight <grade> <weight>             # breaks ties at the same specificity
- *                     parent add|remove <grade> <parent>  # inherit another grade, nearest entry wins
- *                     parent adddeny|removedeny <grade> <parent>  # refuse a grade, wherever it is inherited
+ *                     parent add|remove <grade> <parent> [duration]  # inherit another grade, nearest entry wins
+ *                     parent adddeny|removedeny <grade> <parent> [duration]  # refuse a grade, wherever it is inherited
  *                     parent list <grade>
  *                     assign|unassign <player> <grade>    # online, or joined the server before
  *                     setdefault <grade> | cleardefault   # grade applied to every player
@@ -435,7 +435,10 @@ public class CustomPermCommand {
                                 .suggests(SUGGEST_GRADES)
                                 .then(Commands.argument("parent", StringArgumentType.word())
                                     .suggests(SUGGEST_PARENT_CANDIDATES)
-                                    .executes(CustomPermCommand::gradeParentAdd))))
+                                    .executes(ctx -> gradeParentAdd(ctx, null))
+                                    .then(Commands.argument("duration", StringArgumentType.word())
+                                        .suggests(SUGGEST_DURATIONS)
+                                        .executes(ctx -> gradeParentAdd(ctx, StringArgumentType.getString(ctx, "duration")))))))
                         .then(Commands.literal("remove").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
@@ -447,7 +450,10 @@ public class CustomPermCommand {
                                 .suggests(SUGGEST_GRADES)
                                 .then(Commands.argument("parent", StringArgumentType.word())
                                     .suggests(SUGGEST_REFUSABLE_PARENTS)
-                                    .executes(CustomPermCommand::gradeParentDeny))))
+                                    .executes(ctx -> gradeParentDeny(ctx, null))
+                                    .then(Commands.argument("duration", StringArgumentType.word())
+                                        .suggests(SUGGEST_DURATIONS)
+                                        .executes(ctx -> gradeParentDeny(ctx, StringArgumentType.getString(ctx, "duration")))))))
                         .then(Commands.literal("removedeny").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                             .then(Commands.argument("grade", StringArgumentType.word())
                                 .suggests(SUGGEST_GRADES)
@@ -937,6 +943,11 @@ public class CustomPermCommand {
         }
     }
 
+    /** {@code name (29d 23h left)}, or the name alone for a permanent entry. */
+    private static String withTimeLeft(String name, long seconds) {
+        return seconds > 0 ? name + " (" + Expiry.describe(seconds) + " left)" : name;
+    }
+
     /** The seconds in an optional duration argument, 0 when absent, -1 when unreadable. */
     private static long seconds(String duration) {
         return duration == null ? 0 : Expiry.parse(duration);
@@ -1015,9 +1026,11 @@ public class CustomPermCommand {
         return report(ctx, UserAdmin.setChat(server, profile.get().getId(), profile.get().getName(), suffix, text));
     }
 
-    private static int gradeParentAdd(CommandContext<CommandSourceStack> ctx) {
+    private static int gradeParentAdd(CommandContext<CommandSourceStack> ctx, String duration) {
+        long seconds = seconds(duration);
+        if (seconds < 0) return report(ctx, badDuration(duration));
         return report(ctx, guarded(ctx, () -> GradeAdmin.addParent(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"))));
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"), seconds)));
     }
 
     private static int gradeParentRemove(CommandContext<CommandSourceStack> ctx) {
@@ -1025,9 +1038,11 @@ public class CustomPermCommand {
             StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"))));
     }
 
-    private static int gradeParentDeny(CommandContext<CommandSourceStack> ctx) {
+    private static int gradeParentDeny(CommandContext<CommandSourceStack> ctx, String duration) {
+        long seconds = seconds(duration);
+        if (seconds < 0) return report(ctx, badDuration(duration));
         return report(ctx, guarded(ctx, () -> GradeAdmin.denyParent(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"))));
+            StringArgumentType.getString(ctx, "grade"), StringArgumentType.getString(ctx, "parent"), seconds)));
     }
 
     private static int gradeParentAllow(CommandContext<CommandSourceStack> ctx) {
@@ -1042,8 +1057,10 @@ public class CustomPermCommand {
         if (!CustomPerm.configManager.getGrades().grades.containsKey(gradeName)) {
             return report(ctx, AdminResult.fail("No such grade: " + gradeName));
         }
-        List<String> parents = GradeAdmin.parents(gradeName);
-        List<String> refused = GradeAdmin.deniedParents(gradeName);
+        List<String> parents = GradeAdmin.parents(gradeName).stream()
+            .map(parent -> withTimeLeft(parent, GradeAdmin.parentRemaining(gradeName, parent, false))).toList();
+        List<String> refused = GradeAdmin.deniedParents(gradeName).stream()
+            .map(parent -> withTimeLeft(parent, GradeAdmin.parentRemaining(gradeName, parent, true))).toList();
         ctx.getSource().sendSuccess(() -> Component.literal(parents.isEmpty()
             ? gradeName + " inherits nothing."
             : gradeName + " inherits: " + String.join(", ", parents)), false);

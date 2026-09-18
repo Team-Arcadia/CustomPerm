@@ -118,6 +118,8 @@ public final class ImportAdmin {
                 target.contexts.clear();
                 target.parents.clear();
                 target.deniedParents.clear();
+                target.parentExpiries.clear();
+                target.deniedParentExpiries.clear();
                 target.weight = source.weight();
                 target.prefix = null;
                 target.suffix = null;
@@ -136,8 +138,8 @@ public final class ImportAdmin {
                 if (target.deniedPermissions.add(node) && at != null) target.deniedPermissionExpiries.put(node, at);
             }
             for (ScopedGrant entry : source.scoped()) entry.addTo(Scopes.of(target, entry.context()));
-            addAll(target.parents, source.parents());
-            addAll(target.deniedParents, source.deniedParents());
+            addTimed(target.parents, target.parentExpiries, source.parents(), source.expiries(), "grade:");
+            addTimed(target.deniedParents, target.deniedParentExpiries, source.deniedParents(), source.expiries(), "refuse:");
             // Adding keeps a prefix already set here, like the weight: it is what the admin chose.
             if (target.prefix == null) target.prefix = source.prefix();
             if (target.suffix == null) target.suffix = source.suffix();
@@ -243,9 +245,14 @@ public final class ImportAdmin {
         if (at != null) byUser.computeIfAbsent(uuid, k -> new HashMap<>()).put(key, at);
     }
 
-    private static void addAll(List<String> target, List<String> values) {
+    /** Adds what is not there yet, with its expiry when it has one; an entry already here keeps its own. */
+    private static void addTimed(List<String> target, Map<String, Long> targetExpiries, List<String> values,
+                                 Map<String, Long> expiries, String kind) {
         for (String value : values) {
-            if (!target.contains(value)) target.add(value);
+            if (target.contains(value)) continue;
+            target.add(value);
+            Long at = expiries.get(kind + value);
+            if (at != null) targetExpiries.put(value, at);
         }
     }
 }

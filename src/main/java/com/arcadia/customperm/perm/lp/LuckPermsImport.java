@@ -325,12 +325,6 @@ public final class LuckPermsImport {
                 continue;
             }
             if (node instanceof InheritanceNode inheritance) {
-                if (at != null && group) {
-                    plan.temporary();
-                    plan.note("A grade inherits for good here: temporary parents of a group are not imported: "
-                            + holder + ".");
-                    continue;
-                }
                 (node.getValue() ? parents : deniedParents).add(inheritance.getGroupName());
                 stamp(expiries, permanent, (node.getValue() ? "grade:" : "refuse:") + inheritance.getGroupName(), at, plan);
                 plan.imported(false);

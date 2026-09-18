@@ -121,8 +121,10 @@ public class LuckPermsImportGameTest {
             long kickAt = vip.expiries().getOrDefault("allow:customperm.command.kick", 0L);
             if (Math.abs(kickAt - (com.arcadia.customperm.perm.Expiry.now() + 3600)) > 30)
                 fail("The temporary node must keep its expiry: " + vip.expiries());
-            if (!base.parents().isEmpty())
-                fail("A temporary parent of a group must be left behind, a grade inheriting for good: " + base);
+            long parentAt = base.expiries().getOrDefault("grade:default", 0L);
+            if (!base.parents().equals(List.of("default"))
+                    || Math.abs(parentAt - (com.arcadia.customperm.perm.Expiry.now() + 3600)) > 30)
+                fail("A temporary parent of a group must arrive with its expiry: " + base);
             if (!"[VIP]".equals(vip.prefix()))
                 fail("The prefix LuckPerms shows first, the highest priority, must arrive: " + vip.prefix());
 
@@ -150,7 +152,8 @@ public class LuckPermsImportGameTest {
             if (!List.of(BASE, VIP).equals(plan.tracks().get(TRACK)))
                 fail("A track must arrive with its groups in order: " + plan.tracks());
 
-            if (plan.counts().temporary() < 1 || plan.counts().contextual() < 1
+            // Nothing temporary is left behind any more here: a group's temporary parent now arrives.
+            if (plan.counts().contextual() < 1
                     || plan.counts().foreign() < 1 || plan.counts().other() < 1)
                 fail("Each reason to leave a node behind must be counted: " + plan.counts());
             String report = String.join(" | ", plan.report());
@@ -174,6 +177,8 @@ public class LuckPermsImportGameTest {
                 fail("The temporary node was written without its expiry.");
             if (!grades.userGradeExpiries.getOrDefault(USER.toString(), java.util.Map.of()).containsKey(BASE))
                 fail("The temporary grade was written without its expiry.");
+            if (!grades.grades.get(BASE).parentExpiries.containsKey("default"))
+                fail("The temporary parent was written without its expiry: " + grades.grades.get(BASE).parents);
             if (!List.of(BASE, VIP).equals(grades.tracks.get(TRACK))) fail("The track was not written: " + grades.tracks);
             if (!grades.grades.get(VIP).contexts.get(NETHER).permissions.contains("customperm.command.seed"))
                 fail("The node limited to the Nether was not written there.");

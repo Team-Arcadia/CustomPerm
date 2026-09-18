@@ -58,6 +58,10 @@ public final class ExpirySweeper {
                     node -> removed.add(entry.getKey() + " no longer grants " + node));
             expire(grade.deniedPermissionExpiries, grade.deniedPermissions, now,
                     node -> removed.add(entry.getKey() + " no longer denies " + node));
+            expire(grade.parentExpiries, grade.parents, now,
+                    parent -> removed.add(entry.getKey() + " no longer inherits " + parent));
+            expire(grade.deniedParentExpiries, grade.deniedParents, now,
+                    parent -> removed.add(entry.getKey() + " no longer refuses " + parent));
         }
         expireUsers(server, config.userPermissionExpiries, config.userPermissions, now, removed,
                 (who, node) -> who + " no longer has " + node);

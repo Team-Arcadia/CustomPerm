@@ -85,6 +85,7 @@ public class LuckPermsExportGameTest {
             config.grades.get(BASE).permissionExpiries.put("customperm.command.dead",
                     com.arcadia.customperm.perm.Expiry.now() - 1);
             grade(config, VIP, 42, List.of(BASE), Set.of("customperm.command.fly"), Set.of());
+            config.grades.get(VIP).parentExpiries.put(BASE, com.arcadia.customperm.perm.Expiry.now() + 3600);
             grade(config, "cp_X_Bad", 0, List.of(), Set.of(), Set.of());
             config.userGrades.put(USER.toString(), new ArrayList<>(List.of(VIP)));
             config.userPermissions.put(USER.toString(), new LinkedHashSet<>(Set.of("customperm.command.home")));
@@ -118,7 +119,7 @@ public class LuckPermsExportGameTest {
             if (base.stream().anyMatch(node -> node.startsWith("customperm.command.dead")))
                 fail("A node that has already expired must not be exported: " + base);
             List<String> vip = LuckPermsTestSupport.groupNodes(VIP);
-            expect(vip, "group." + BASE + "=true", "A parent must arrive as an inheritance node");
+            expect(vip, "group." + BASE + "=true@expiring", "A temporary parent must arrive as a temporary inheritance node");
             expect(vip, "weight.42=true", "The weight must arrive on a group that had none");
             expect(vip, "customperm.command.fly=false", "Adding must keep LuckPerms' value");
             expect(vip, "customperm.command.kick=true", "Adding must keep what LuckPerms holds");
@@ -142,7 +143,7 @@ public class LuckPermsExportGameTest {
             if (vip.contains("customperm.command.kick=true")) fail("Replacing must clear the customperm nodes: " + vip);
             expect(vip, "essentials.fly=true", "Replacing must keep the nodes of other mods");
             expect(vip, "prefix.10.[VIP]=true", "Replacing must keep a prefix the grade does not set");
-            expect(vip, "group." + BASE + "=true", "Replacing must write the parent back");
+            expect(vip, "group." + BASE + "=true@expiring", "Replacing must write the parent back, still temporary");
             expect(LuckPermsTestSupport.userNodes(USER), "group.default=true",
                     "Replacing must leave a player in the default group");
         } finally {

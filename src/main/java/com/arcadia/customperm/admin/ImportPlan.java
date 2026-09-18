@@ -32,8 +32,9 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
 
     /**
      * One LuckPerms group as the grade it would become; {@code prefix} and {@code suffix} are null for none.
-     * {@code expiries} holds the temporary nodes, keyed {@code allow:<node>} or {@code deny:<node>}, in epoch
-     * seconds, and {@code scoped} the nodes limited to a world.
+     * {@code expiries} holds the temporary entries in epoch seconds, keyed {@code allow:<node>},
+     * {@code deny:<node>}, {@code grade:<parent>} or {@code refuse:<parent>}, and {@code scoped} the nodes
+     * limited to a world.
      */
     public record Grade(String name, int weight, List<String> parents, List<String> deniedParents,
                         Set<String> allow, Set<String> deny, String prefix, String suffix,

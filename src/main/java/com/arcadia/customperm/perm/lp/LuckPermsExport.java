@@ -108,9 +108,12 @@ public final class LuckPermsExport {
                     group.data().clear(NodeType.WEIGHT::matches);
                     if (source.weight() != 0) group.data().add(WeightNode.builder(source.weight()).build());
                 }
-                for (String parent : source.parents()) add(group, InheritanceNode.builder(parent).build(), kept);
+                for (String parent : source.parents()) {
+                    add(group, timed(InheritanceNode.builder(parent), source.expiries().get("grade:" + parent)), kept);
+                }
                 for (String parent : source.deniedParents()) {
-                    add(group, InheritanceNode.builder(parent).value(false).build(), kept);
+                    add(group, timed(InheritanceNode.builder(parent).value(false), source.expiries().get("refuse:" + parent)),
+                            kept);
                 }
                 addNodes(group, source.allow(), source.deny(), source.expiries(), kept);
                 addScoped(group, source.scoped(), kept);

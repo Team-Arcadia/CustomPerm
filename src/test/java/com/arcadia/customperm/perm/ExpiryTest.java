@@ -132,6 +132,53 @@ class ExpiryTest {
         assertNull(PermissionResolver.prefix(grades, player, null));
     }
 
+    @Test
+    void anExpiredParentIsNoLongerInherited() {
+        grade("base").permissions.add("x");
+        GradesConfig.Grade vip = grade("vip");
+        vip.parents.add("base");
+        assign("vip");
+        vip.parentExpiries.put("base", Expiry.now() + 60);
+        assertEquals(Tristate.ALLOW, check("x"), "until it expires, the parent is inherited");
+        vip.parentExpiries.put("base", Expiry.now() - 1);
+        assertEquals(Tristate.UNSET, check("x"));
+    }
+
+    @Test
+    void aParentExpiredOnOnePathIsStillReachedByAnother() {
+        grade("base").permissions.add("x");
+        grade("middle").parents.add("base");
+        GradesConfig.Grade vip = grade("vip");
+        vip.parents.addAll(List.of("base", "middle"));
+        vip.parentExpiries.put("base", Expiry.now() - 1);
+        assign("vip");
+        assertEquals(Tristate.ALLOW, check("x"),
+                "the direct link ran out, but middle still inherits base for good");
+    }
+
+    @Test
+    void anExpiredParentRefusalRefusesNothing() {
+        grade("base").permissions.add("x");
+        grade("middle").parents.add("base");
+        GradesConfig.Grade vip = grade("vip");
+        vip.parents.add("middle");
+        vip.deniedParents.add("base");
+        assign("vip");
+        assertEquals(Tristate.UNSET, check("x"));
+        vip.deniedParentExpiries.put("base", Expiry.now() - 1);
+        assertEquals(Tristate.ALLOW, check("x"));
+    }
+
+    @Test
+    void anExpiredParentGivesNoPrefix() {
+        grade("base").prefix = "[Base]";
+        GradesConfig.Grade vip = grade("vip");
+        vip.parents.add("base");
+        vip.parentExpiries.put("base", Expiry.now() - 1);
+        assign("vip");
+        assertNull(PermissionResolver.prefix(grades, player, null));
+    }
+
     // --- file hygiene ---
 
     @Test
@@ -143,6 +190,12 @@ class ExpiryTest {
         assertTrue(vip.permissionExpiries.isEmpty(),
                 "a node added back later must not inherit an expiry left behind");
         assertTrue(grades.userGradeExpiries.isEmpty(), "the player does not hold the grade");
+
+        vip.parentExpiries.put("gone", Expiry.now() + 60);
+        vip.deniedParentExpiries.put("gone", Expiry.now() + 60);
+        grades.normalize();
+        assertTrue(vip.parentExpiries.isEmpty() && vip.deniedParentExpiries.isEmpty(),
+                "a parent expiry naming no parent is dropped too");
     }
 
     private GradesConfig.Grade grade(String name) {

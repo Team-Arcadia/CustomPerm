@@ -582,9 +582,9 @@ public class AdminInterfaceGameTest {
             owner.clearReceived();
             gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_p_base");
             gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_p_leaf");
-            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_leaf", "cp_i_p_base");
-            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_base", "cp_i_p_leaf");
-            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_leaf", "cp_i_p_missing");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_leaf", "cp_i_p_base", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_base", "cp_i_p_leaf", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_p_leaf", "cp_i_p_missing", "");
             List<String> results = results(owner);
             if (!results.equals(List.of("OK: Created grade cp_i_p_base",
                     "OK: Created grade cp_i_p_leaf",
@@ -630,12 +630,12 @@ public class AdminInterfaceGameTest {
             gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_f_base");
             gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_f_mid");
             gradeAct(owner, GuiAction.GRADE_CREATE, "cp_i_f_leaf");
-            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_f_mid", "cp_i_f_base");
-            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_f_leaf", "cp_i_f_mid");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_f_mid", "cp_i_f_base", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_ADD, "cp_i_f_leaf", "cp_i_f_mid", "");
             owner.clearReceived();
 
-            gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_base");
-            gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_mid");
+            gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_base", "");
+            gradeAct(owner, GuiAction.GRADE_PARENT_DENY, "cp_i_f_leaf", "cp_i_f_mid", "");
             gradeAct(owner, GuiAction.GRADE_REFUSE, "CP_I_REFUSED", "cp_i_f_base", "");
             gradeAct(owner, GuiAction.GRADE_REFUSE, "cp_i_nobody_here", "cp_i_f_base", "");
             List<String> results = results(owner);

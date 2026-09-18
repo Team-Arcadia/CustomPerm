@@ -364,8 +364,10 @@ public final class GradesScreen extends AdminScreen {
                             .enabled(editable && selected != null)));
         } else if (tab == Tab.PARENTS) {
             addRenderableWidget(parentList.at(list));
-            addRenderableWidget(parentField.at(fieldRow));
+            addRenderableWidget(parentField.at(fieldRow.beforeRight(DURATION_FIELD + 4)));
+            addRenderableWidget(durationField.at(fieldRow.right(DURATION_FIELD)));
             parentField.setEditable(editable);
+            durationField.setEditable(editable);
             ParentRow selected = parentList.getSelected();
             placeButtonRow(buttonRow, 6, true, List.of(
                     CpButton.accent(Component.literal("Inherit"), this::addParent).icon(Icon.PLUS).enabled(editable)
@@ -483,7 +485,7 @@ public final class GradesScreen extends AdminScreen {
     private void addParent(String name) {
         GradesData.Grade grade = gradeList.getSelected();
         if (grade == null || name.isEmpty()) return;
-        act(GuiAction.GRADE_PARENT_ADD, grade.name(), name);
+        act(GuiAction.GRADE_PARENT_ADD, grade.name(), name, durationField.getValue().trim());
         parentField.setValue("");
         parentField.setSuggestion(null);
     }
@@ -498,7 +500,7 @@ public final class GradesScreen extends AdminScreen {
         String typed = parentField.getValue().trim();
         String name = Objects.requireNonNullElse(parentCompletion(typed), typed);
         if (grade == null || name.isEmpty()) return;
-        act(GuiAction.GRADE_PARENT_DENY, grade.name(), name);
+        act(GuiAction.GRADE_PARENT_DENY, grade.name(), name, durationField.getValue().trim());
         parentField.setValue("");
         parentField.setSuggestion(null);
     }
@@ -608,7 +610,11 @@ public final class GradesScreen extends AdminScreen {
         String label = row.refused() ? "REFUSED" : "INHERITS";
         int w = Skin.badge(g, font, label, r.x() + 4, r.centerY(), row.refused() ? Palette.DANGER : Palette.ACCENT);
         int x = r.x() + 4 + Math.max(w, font.width("INHERITS") + 6) + 5;
-        Skin.text(g, font, row.grade(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4, Palette.TEXT);
+        GradesData.Grade grade = gradeList.getSelected();
+        String left = grade == null ? "" : timeLeft(grade.remaining(row.refused() ? "refusedParent" : "parent", row.grade()));
+        int lw = left.isEmpty() ? 0 : font.width(left) + 8;
+        if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
+        Skin.text(g, font, row.grade(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4 - lw, Palette.TEXT);
     }
 
     private void renderNode(GuiGraphics g, Font font, NodeRow row, Rect r, boolean hovered, boolean selected) {

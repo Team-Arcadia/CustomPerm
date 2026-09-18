@@ -129,14 +129,21 @@ public final class GuiSnapshots {
                     new TreeSet<>(grade.deniedPermissions).stream().limit(GradesData.NODES_MAX).toList(),
                     new GradesData.Members(assigned.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList(),
                             refusing.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList()),
-                    new GradesData.Details(timers(grade.permissionExpiries, grade.deniedPermissionExpiries),
-                            gradeScoped(grade))));
+                    new GradesData.Details(gradeTimers(grade), gradeScoped(grade))));
         }
         List<String> known = server == null ? List.of()
                 : GradeAdmin.knownPlayerNames(server).stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
         var settings = CustomPerm.configManager.getSettings();
         return new GradesData(grades, known, settings.luckPermsFallbackMode, settings.defaultGrade,
                 CustomPerm.gatesAllCommands(), nameSettings());
+    }
+
+    /** A grade's temporary nodes, then its temporary parents ({@code parent:}) and refusals ({@code refusedParent:}). */
+    private static List<Remaining> gradeTimers(com.arcadia.customperm.config.GradesConfig.Grade grade) {
+        List<Remaining> timers = new ArrayList<>(timers(grade.permissionExpiries, grade.deniedPermissionExpiries));
+        grade.parentExpiries.forEach((parent, at) -> timers.add(new Remaining("parent:" + parent, left(at))));
+        grade.deniedParentExpiries.forEach((parent, at) -> timers.add(new Remaining("refusedParent:" + parent, left(at))));
+        return timers.size() > GuiCodecs.SERVER_LIST_MAX ? timers.subList(0, GuiCodecs.SERVER_LIST_MAX) : timers;
     }
 
     /** The nodes of one holder that are temporary, with the seconds each has left. */

@@ -251,6 +251,14 @@ public final class GradeAdmin {
      * resolver, which stops one silently: an admin who asks for a cycle has made a mistake worth naming.
      */
     public static AdminResult addParent(MinecraftServer server, String gradeName, String parentName) {
+        return addParent(server, gradeName, parentName, 0);
+    }
+
+    /**
+     * {@link #addParent(MinecraftServer, String, String)} for {@code seconds}, 0 for good. On a parent already
+     * there, the duration replaces what it had, as for a node.
+     */
+    public static AdminResult addParent(MinecraftServer server, String gradeName, String parentName, long seconds) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
         GradesConfig.Grade grade = grades().grades.get(gradeName);
@@ -258,7 +266,12 @@ public final class GradeAdmin {
         if (!grades().grades.containsKey(parentName)) return AdminResult.fail("No such grade: " + parentName);
         if (gradeName.equals(parentName)) return AdminResult.fail("A grade cannot inherit from itself.");
         if (grade.parents.contains(parentName)) {
-            return AdminResult.ok(gradeName + " already inherits " + parentName + " — no change.");
+            if (!Expiries.apply(grade.parentExpiries, parentName, seconds)) {
+                return AdminResult.ok(gradeName + " already inherits " + parentName + " — no change.");
+            }
+            String warning = ConfigAdmin.persist();
+            ConfigAdmin.resyncCommands(server);
+            return AdminResult.ok(gradeName + " inheriting " + parentName + " " + Expiries.became(seconds)).warn(warning);
         }
         if (grade.deniedParents.contains(parentName)) {
             return AdminResult.fail(gradeName + " refuses " + parentName + ": remove that refusal first, "
@@ -270,9 +283,10 @@ public final class GradeAdmin {
                     + " cannot inherit " + parentName + ".");
         }
         grade.parents.add(parentName);
+        Expiries.apply(grade.parentExpiries, parentName, seconds);
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
-        return AdminResult.ok(gradeName + " now inherits " + parentName).warn(warning)
+        return AdminResult.ok(gradeName + " now inherits " + parentName + Expiries.span(seconds)).warn(warning)
                 .note("A node set on " + gradeName + " itself still wins over the same node inherited.");
     }
 
@@ -284,6 +298,7 @@ public final class GradeAdmin {
         if (!grade.parents.remove(parentName)) {
             return AdminResult.ok(gradeName + " does not inherit " + parentName + " — no change.");
         }
+        grade.parentExpiries.remove(parentName);
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
         return AdminResult.ok(gradeName + " no longer inherits " + parentName).warn(warning);
@@ -294,6 +309,11 @@ public final class GradeAdmin {
      * refusal removes the grade from this chain; it never turns what that grade allows into a denial.
      */
     public static AdminResult denyParent(MinecraftServer server, String gradeName, String parentName) {
+        return denyParent(server, gradeName, parentName, 0);
+    }
+
+    /** {@link #denyParent(MinecraftServer, String, String)} for {@code seconds}, 0 for good. */
+    public static AdminResult denyParent(MinecraftServer server, String gradeName, String parentName, long seconds) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
         GradesConfig.Grade grade = grades().grades.get(gradeName);
@@ -305,12 +325,18 @@ public final class GradeAdmin {
                     + "instead of refusing it.");
         }
         if (grade.deniedParents.contains(parentName)) {
-            return AdminResult.ok(gradeName + " already refuses " + parentName + " — no change.");
+            if (!Expiries.apply(grade.deniedParentExpiries, parentName, seconds)) {
+                return AdminResult.ok(gradeName + " already refuses " + parentName + " — no change.");
+            }
+            String warning = ConfigAdmin.persist();
+            ConfigAdmin.resyncCommands(server);
+            return AdminResult.ok(gradeName + " refusing " + parentName + " " + Expiries.became(seconds)).warn(warning);
         }
         grade.deniedParents.add(parentName);
+        Expiries.apply(grade.deniedParentExpiries, parentName, seconds);
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
-        return AdminResult.ok(gradeName + " now refuses " + parentName).warn(warning)
+        return AdminResult.ok(gradeName + " now refuses " + parentName + Expiries.span(seconds)).warn(warning)
                 .note("Nothing " + gradeName + " inherits brings it back. Other grades a player holds are unaffected.");
     }
 
@@ -322,6 +348,7 @@ public final class GradeAdmin {
         if (!grade.deniedParents.remove(parentName)) {
             return AdminResult.ok(gradeName + " does not refuse " + parentName + " — no change.");
         }
+        grade.deniedParentExpiries.remove(parentName);
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
         return AdminResult.ok(gradeName + " no longer refuses " + parentName).warn(warning);
@@ -331,6 +358,17 @@ public final class GradeAdmin {
     public static List<String> deniedParents(String gradeName) {
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         return grade == null ? List.of() : List.copyOf(grade.deniedParents);
+    }
+
+    /**
+     * Seconds left on a temporary parent of {@code gradeName}, or on a temporary refusal when {@code refused};
+     * 0 when it is permanent or absent.
+     */
+    public static long parentRemaining(String gradeName, String parentName, boolean refused) {
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        if (grade == null) return 0;
+        Long at = (refused ? grade.deniedParentExpiries : grade.parentExpiries).get(parentName);
+        return at == null ? 0 : Math.max(0, at - com.arcadia.customperm.perm.Expiry.now());
     }
 
     /** The grades {@code gradeName} inherits directly, nearest first; empty for an unknown grade. */
@@ -525,6 +563,8 @@ public final class GradeAdmin {
             g.permissionExpiries = new java.util.HashMap<>(grade.permissionExpiries);
             g.deniedPermissionExpiries = new java.util.HashMap<>(grade.deniedPermissionExpiries);
             g.contexts = Scopes.copy(grade.contexts);
+            g.parentExpiries = new java.util.HashMap<>(grade.parentExpiries);
+            g.deniedParentExpiries = new java.util.HashMap<>(grade.deniedParentExpiries);
             copy.grades.put(name, g);
         });
         source.userGrades.forEach((uuid, list) -> copy.userGrades.put(uuid, new ArrayList<>(list)));

@@ -130,6 +130,10 @@ public class GradesConfig {
         public Map<String, Long> deniedPermissionExpiries = new HashMap<>();
         /** Context -> the nodes this grade gives in that context only. */
         public Map<String, Scoped> contexts = new HashMap<>();
+        /** Parent -> when this grade stops inheriting it, in epoch seconds; a parent absent here is permanent. */
+        public Map<String, Long> parentExpiries = new HashMap<>();
+        /** Refused grade -> when this grade stops refusing it. */
+        public Map<String, Long> deniedParentExpiries = new HashMap<>();
     }
 
     public void normalize() {
@@ -160,6 +164,8 @@ public class GradesConfig {
             g.suffix = emptyToNull(g.suffix);
             g.permissionExpiries = keepFor(g.permissionExpiries, g.permissions);
             g.deniedPermissionExpiries = keepFor(g.deniedPermissionExpiries, g.deniedPermissions);
+            g.parentExpiries = keepFor(g.parentExpiries, g.parents);
+            g.deniedParentExpiries = keepFor(g.deniedParentExpiries, g.deniedParents);
             g.contexts = normalizeScopes(g.contexts, Scoped::new);
         }
         normalizeUserGrades(userGrades);

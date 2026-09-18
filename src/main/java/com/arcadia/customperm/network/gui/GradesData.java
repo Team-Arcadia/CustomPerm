@@ -98,7 +98,10 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
             return players.refusing();
         }
 
-        /** Seconds left on a node of this grade ({@code "allow"} or {@code "deny"}), 0 when it is permanent. */
+        /**
+         * Seconds left on an entry of this grade, 0 when it is permanent: a node ({@code "allow"} or
+         * {@code "deny"}), a parent ({@code "parent"}) or a refused grade ({@code "refusedParent"}).
+         */
         public long remaining(String kind, String node) {
             return Remaining.of(details.timers(), kind, node);
         }

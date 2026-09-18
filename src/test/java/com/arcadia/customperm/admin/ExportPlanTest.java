@@ -51,6 +51,29 @@ class ExportPlanTest {
     }
 
     @Test
+    void aTemporaryParentIsExportedWithItsExpiryAndAnExpiredOneIsNot() {
+        GradesConfig config = new GradesConfig();
+        grade(config, "base", 0, List.of(), List.of(), Set.of(), Set.of());
+        grade(config, "staff", 0, List.of(), List.of(), Set.of(), Set.of());
+        grade(config, "old", 0, List.of(), List.of(), Set.of(), Set.of());
+        grade(config, "vip", 0, List.of("base", "old"), List.of("staff"), Set.of(), Set.of());
+        long later = com.arcadia.customperm.perm.Expiry.now() + 3600;
+        config.grades.get("vip").parentExpiries.put("base", later);
+        config.grades.get("vip").parentExpiries.put("old", com.arcadia.customperm.perm.Expiry.now() - 1);
+        config.grades.get("vip").deniedParentExpiries.put("staff", later);
+
+        ExportPlan plan = ExportPlan.of(config, "");
+
+        ExportPlan.Group vip = group(plan, "vip");
+        assertEquals(List.of("base"), vip.parents(), "a parent that ran out is not exported");
+        assertEquals(later, vip.expiries().get("grade:base"));
+        assertEquals(later, vip.expiries().get("refuse:staff"));
+        GradesConfig after = plan.asConfig();
+        assertEquals(later, after.grades.get("vip").parentExpiries.get("base"));
+        assertEquals(later, after.grades.get("vip").deniedParentExpiries.get("staff"));
+    }
+
+    @Test
     void groupsComeInNameOrder() {
         GradesConfig config = new GradesConfig();
         grade(config, "zeta", 0, List.of(), List.of(), Set.of(), Set.of());

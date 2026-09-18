@@ -158,6 +158,75 @@ public class TemporaryEntriesGameTest {
         helper.succeed();
     }
 
+    /**
+     * A grade inheriting another for a while, and refusing one for a while: the command, the listing, the
+     * resolver letting go at expiry, the sweep, and the interface's duration box on the Parents tab.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "customperm_temporary")
+    public static void aTemporaryParentExpiresAndIsSwept(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        String base = GRADE + "_pbase";
+        String staff = GRADE + "_pstaff";
+        String child = GRADE + "_pchild";
+        String uuid = null;
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_t_powner", 4);
+             TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_t_pplayer", 0);
+             CommandExposureGameTest.Exposure ignored = CommandExposureGameTest.Exposure.of(server, COMMAND)) {
+            uuid = player.uuid().toString();
+            for (String name : List.of(base, staff, child)) {
+                grades.grades.remove(name);
+                ServerCommands.run(server, "customperm grade create " + name);
+            }
+            ServerCommands.run(server, "customperm grade addperm " + base + " " + NODE);
+            ServerCommands.run(server, "customperm grade assign cp_t_pplayer " + child);
+
+            expect(ServerCommands.run(server, "customperm grade parent add " + child + " " + base + " later"),
+                    "Invalid duration 'later'");
+            expect(ServerCommands.run(server, "customperm grade parent add " + child + " " + base + " 2h"),
+                    child + " now inherits " + base + " for 2h");
+            expect(ServerCommands.run(server, "customperm grade parent add " + child + " " + base),
+                    child + " inheriting " + base + " is now permanent");
+            ServerCommands.run(server, "customperm grade parent add " + child + " " + base + " 2h");
+            expect(ServerCommands.run(server, "customperm grade parent adddeny " + child + " " + staff + " 1d"),
+                    child + " now refuses " + staff + " for 1d");
+            List<String> listed = ServerCommands.run(server, "customperm grade parent list " + child);
+            expectAny(listed, base + " (2h left)", base + " (1h 59m left)");
+            expectAny(listed, staff + " (1d left)", staff + " (23h 59m left)");
+            check(player.canUse(COMMAND), "the temporary parent must be inherited while it lasts");
+
+            grades.grades.get(child).parentExpiries.put(base, Expiry.now() - 1);
+            check(!player.canUse(COMMAND), "an expired parent must stop being inherited before any sweep");
+            grades.grades.get(child).deniedParentExpiries.put(staff, Expiry.now() - 1);
+            ExpirySweeper.sweep(server);
+            check(!grades.grades.get(child).parents.contains(base), "the sweep must remove the expired parent");
+            check(!grades.grades.get(child).deniedParents.contains(staff), "and the expired refusal");
+            check(grades.grades.get(child).parentExpiries.isEmpty() && grades.grades.get(child).deniedParentExpiries.isEmpty(),
+                    "with their expiries");
+            check(ActivityLog.recent(LogKind.ADMIN, 50).stream().anyMatch(entry ->
+                            entry.source().equals(LogEntry.SOURCE_EXPIRY)
+                                    && entry.action().equals(child + " no longer inherits " + base)),
+                    "the removal must be in the activity log");
+
+            act(owner, GuiAction.GRADE_PARENT_ADD, child, base, "never");
+            result(owner, "FAIL: Invalid duration 'never'");
+            act(owner, GuiAction.GRADE_PARENT_ADD, child, base, "7d");
+            result(owner, "OK: " + child + " now inherits " + base + " for 7d");
+            GradesData page = owner.payloads(GuiPagePayload.class).stream()
+                    .map(GuiPagePayload::data).filter(GradesData.class::isInstance).map(GradesData.class::cast)
+                    .reduce((first, second) -> second).orElseThrow(() -> new GameTestAssertException("No Grades page"));
+            long left = page.grades().stream().filter(g -> g.name().equals(child)).findFirst().orElseThrow()
+                    .remaining("parent", base);
+            check(left > 7L * 86400 - 60 && left <= 7L * 86400, "the page must carry the parent's time left: " + left);
+        } finally {
+            for (String name : List.of(base, staff, child)) grades.grades.remove(name);
+            if (uuid != null) grades.userGrades.remove(uuid);
+            ConfigAdmin.persist();
+        }
+        helper.succeed();
+    }
+
     /** The interface: a duration box on a node and on an assignment, and the page saying what is left. */
     @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "customperm_temporary")
     public static void theInterfaceTakesAndShowsDurations(GameTestHelper helper) {

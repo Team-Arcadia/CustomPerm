@@ -48,7 +48,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
 
     /**
      * One grade as the group it would become; {@code prefix} and {@code suffix} are null for none, and
-     * {@code expiries} holds its temporary nodes keyed {@code allow:<node>} or {@code deny:<node>}, and
+     * {@code expiries} holds its temporary entries keyed {@code allow:<node>}, {@code deny:<node>},
+     * {@code grade:<parent>} or {@code refuse:<parent>}, and
      * {@code scoped} its nodes limited to a world, written with LuckPerms' {@code world} context.
      */
     public record Group(String name, int weight, List<String> parents, List<String> deniedParents,
@@ -127,8 +128,10 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
             if (!exported.contains(name)) continue;
             Map<String, Long> expiries = new HashMap<>();
             groups.add(new Group(name, grade.weight,
-                    kept(grade.parents, exported, config, dropped, notes, "grade " + name),
-                    kept(grade.deniedParents, exported, config, dropped, notes, "grade " + name),
+                    live(kept(grade.parents, exported, config, dropped, notes, "grade " + name),
+                            grade.parentExpiries, "grade:", expiries, now),
+                    live(kept(grade.deniedParents, exported, config, dropped, notes, "grade " + name),
+                            grade.deniedParentExpiries, "refuse:", expiries, now),
                     live(grade.permissions, grade.permissionExpiries, "allow:", expiries, now),
                     live(grade.deniedPermissions, grade.deniedPermissionExpiries, "deny:", expiries, now),
                     grade.prefix, grade.suffix, Map.copyOf(expiries), worldOnly(ScopedGrant.of(grade.contexts),
@@ -322,6 +325,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
             source.expiries().forEach((key, at) -> {
                 if (key.startsWith("allow:")) grade.permissionExpiries.put(key.substring(6), at);
                 else if (key.startsWith("deny:")) grade.deniedPermissionExpiries.put(key.substring(5), at);
+                else if (key.startsWith("grade:")) grade.parentExpiries.put(key.substring(6), at);
+                else if (key.startsWith("refuse:")) grade.deniedParentExpiries.put(key.substring(7), at);
             });
             source.scoped().forEach(entry -> entry.addTo(Scopes.of(grade, entry.context())));
             config.grades.put(grade.name, grade);
