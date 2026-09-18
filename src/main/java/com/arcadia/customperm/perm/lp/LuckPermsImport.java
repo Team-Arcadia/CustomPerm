@@ -103,7 +103,7 @@ public final class LuckPermsImport {
                     scoped, true, "group " + group.getName());
             plan.grade(new ImportPlan.Grade(group.getName(), group.getWeight().orElse(0),
                     List.copyOf(parents), List.copyOf(deniedParents), Set.copyOf(allow), Set.copyOf(deny),
-                    chat.prefix, chat.suffix, Map.copyOf(expiries), List.copyOf(scoped)));
+                    chat.grants(), Map.copyOf(expiries), List.copyOf(scoped)));
         }
         return null;
     }
@@ -154,8 +154,8 @@ public final class LuckPermsImport {
                 search.join().forEach((uuid, nodes) ->
                         byUser.computeIfAbsent(uuid, k -> new ArrayList<>()).addAll(nodes));
             }
-            plan.note("On players, only what CustomPerm can read is looked at: their groups, their prefix and "
-                    + "suffix, their customperm, minecraft.command and * nodes, and the nodes other mods declared "
+            plan.note("On players, only what CustomPerm can read is looked at: their groups, their prefixes and "
+                    + "suffixes, their customperm, minecraft.command and * nodes, and the nodes other mods declared "
                     + "to NeoForge.");
 
             for (Map.Entry<UUID, List<Node>> user : byUser.entrySet()) {
@@ -170,9 +170,9 @@ public final class LuckPermsImport {
                 readNodes(user.getValue(), plan, exposeCommands, grades, deniedGrades, allow, deny, chat, expiries,
                         scoped, false, "player " + uuid);
                 if (grades.isEmpty() && deniedGrades.isEmpty() && allow.isEmpty() && deny.isEmpty()
-                        && chat.prefix == null && chat.suffix == null && scoped.isEmpty()) continue;
+                        && chat.grants().isEmpty() && scoped.isEmpty()) continue;
                 plan.player(new ImportPlan.Player(uuid.toString(), name(api, uuid), List.copyOf(grades),
-                        List.copyOf(deniedGrades), Set.copyOf(allow), Set.copyOf(deny), chat.prefix, chat.suffix,
+                        List.copyOf(deniedGrades), Set.copyOf(allow), Set.copyOf(deny), chat.grants(),
                         Map.copyOf(expiries), List.copyOf(scoped)));
             }
             return null;
@@ -274,33 +274,33 @@ public final class LuckPermsImport {
     }
 
     /**
-     * The prefix and suffix one holder keeps: a grade or a player carries one of each, so of several the
-     * one LuckPerms would show first, the highest priority, is the one imported. Ties go to the text that
-     * sorts first, so two reads of the same data import the same thing.
+     * The prefixes and suffixes one holder keeps, each with its priority and expiry. A holder carries one per
+     * priority here, so of two at the same priority the text that sorts first is imported, and two reads of
+     * the same data import the same thing. The same text twice is one entry: permanent if either is, else
+     * the later expiry, as LuckPerms would keep showing it.
      */
     private static final class Chat {
-        private String prefix;
-        private int prefixPriority = Integer.MIN_VALUE;
-        private String suffix;
-        private int suffixPriority = Integer.MIN_VALUE;
+        private final Map<String, com.arcadia.customperm.admin.ChatGrant> kept = new java.util.TreeMap<>();
 
-        /** Keeps the node when it beats the one kept so far; false when it does not, and is left behind. */
-        boolean offer(ChatMetaNode<?, ?> node) {
-            boolean isPrefix = node instanceof PrefixNode;
-            String kept = isPrefix ? prefix : suffix;
-            int keptPriority = isPrefix ? prefixPriority : suffixPriority;
-            if (kept != null && (node.getPriority() < keptPriority
-                    || (node.getPriority() == keptPriority && node.getMetaValue().compareTo(kept) >= 0))) {
-                return false;
+        /** False when the node is left behind: another at its priority sorts first, or it displaced one. */
+        boolean offer(ChatMetaNode<?, ?> node, Long at) {
+            boolean suffix = !(node instanceof PrefixNode);
+            String key = (suffix ? "suffix:" : "prefix:") + node.getPriority();
+            long expires = at == null ? 0 : at;
+            var offered = new com.arcadia.customperm.admin.ChatGrant(suffix, node.getPriority(), node.getMetaValue(), expires);
+            var existing = kept.get(key);
+            if (existing != null && existing.text().equals(offered.text())) {
+                long longer = existing.expires() == 0 || expires == 0 ? 0 : Math.max(existing.expires(), expires);
+                kept.put(key, new com.arcadia.customperm.admin.ChatGrant(suffix, node.getPriority(), offered.text(), longer));
+                return true;
             }
-            if (isPrefix) {
-                prefix = node.getMetaValue();
-                prefixPriority = node.getPriority();
-            } else {
-                suffix = node.getMetaValue();
-                suffixPriority = node.getPriority();
-            }
-            return kept == null;
+            if (existing != null && offered.text().compareTo(existing.text()) >= 0) return false;
+            kept.put(key, offered);
+            return existing == null;
+        }
+
+        List<com.arcadia.customperm.admin.ChatGrant> grants() {
+            return List.copyOf(kept.values());
         }
     }
 
@@ -331,18 +331,13 @@ public final class LuckPermsImport {
                 continue;
             }
             if (node instanceof ChatMetaNode<?, ?> meta) {
-                if (at != null) {
-                    plan.temporary();
-                    plan.note("A prefix or a suffix is set for good here: temporary ones are not imported: "
-                            + holder + ".");
-                    continue;
-                }
-                if (chat.offer(meta)) {
+                if (chat.offer(meta, at)) {
                     plan.imported(false);
+                    if (at != null) plan.timed();
                 } else {
                     plan.other();
-                    plan.note("One prefix and one suffix per holder: the one with the highest priority is "
-                            + "imported, the others are not.");
+                    plan.note("One prefix and one suffix per priority on a holder: of two at the same priority, "
+                            + "the text that sorts first is imported.");
                 }
                 continue;
             }

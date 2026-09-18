@@ -125,8 +125,11 @@ public class LuckPermsImportGameTest {
             if (!base.parents().equals(List.of("default"))
                     || Math.abs(parentAt - (com.arcadia.customperm.perm.Expiry.now() + 3600)) > 30)
                 fail("A temporary parent of a group must arrive with its expiry: " + base);
-            if (!"[VIP]".equals(vip.prefix()))
-                fail("The prefix LuckPerms shows first, the highest priority, must arrive: " + vip.prefix());
+            if (!vip.chat().equals(List.of(new com.arcadia.customperm.admin.ChatGrant(false, 5, "[Lesser]", 0),
+                    new com.arcadia.customperm.admin.ChatGrant(false, 10, "[VIP]", 0)))
+                    && !vip.chat().equals(List.of(new com.arcadia.customperm.admin.ChatGrant(false, 10, "[VIP]", 0),
+                    new com.arcadia.customperm.admin.ChatGrant(false, 5, "[Lesser]", 0))))
+                fail("Every prefix must arrive with its priority: " + vip.chat());
 
             if (!plan.exposeCommands().contains("gamemode") || !plan.exposeCommands().contains("weather"))
                 fail("A translated node must expose its command, or it grants nothing: " + plan.exposeCommands());
@@ -168,7 +171,8 @@ public class LuckPermsImportGameTest {
                 fail("The grades were not written.");
             if (grades.grades.get(VIP).weight != 42 || !grades.grades.get(VIP).parents.contains(BASE))
                 fail("The weight and the parent were not written.");
-            if (!"[VIP]".equals(grades.grades.get(VIP).prefix)) fail("The prefix was not written.");
+            if (grades.grades.get(VIP).prefixes.size() != 2 || !"[VIP]".equals(grades.grades.get(VIP).prefixes.get(0).text))
+                fail("The prefixes were not written, highest priority first.");
             if (!grades.grades.get(BASE).deniedPermissions.contains("customperm.command.ban"))
                 fail("The denial was not written.");
             if (!grades.userGrades.getOrDefault(USER.toString(), List.of()).contains(VIP))

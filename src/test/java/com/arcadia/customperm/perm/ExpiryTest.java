@@ -126,7 +126,7 @@ class ExpiryTest {
 
     @Test
     void anExpiredGradeGivesNoPrefix() {
-        grade("vip").prefix = "[VIP]";
+        grade("vip").prefixes.add(new GradesConfig.ChatEntry(0, "[VIP]", 0));
         assign("vip");
         grades.userGradeExpiries.put(user, new HashMap<>(Map.of("vip", Expiry.now() - 1)));
         assertNull(PermissionResolver.prefix(grades, player, null));
@@ -171,7 +171,7 @@ class ExpiryTest {
 
     @Test
     void anExpiredParentGivesNoPrefix() {
-        grade("base").prefix = "[Base]";
+        grade("base").prefixes.add(new GradesConfig.ChatEntry(0, "[Base]", 0));
         GradesConfig.Grade vip = grade("vip");
         vip.parents.add("base");
         vip.parentExpiries.put("base", Expiry.now() - 1);

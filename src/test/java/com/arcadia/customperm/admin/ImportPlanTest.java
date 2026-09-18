@@ -81,17 +81,16 @@ class ImportPlanTest {
     void theReportCountsWhatIsImportedAndWhatIsLeftBehind() {
         ImportPlan.Builder builder = new ImportPlan.Builder();
         builder.grade(new ImportPlan.Grade("vip", 10, List.of("default"), List.of(),
-                Set.of("customperm.command.tp"), Set.of(), "&6[VIP] ", null, java.util.Map.of(),
+                Set.of("customperm.command.tp"), Set.of(), List.of(new ChatGrant(false, 10, "&6[VIP] ", 0)), java.util.Map.of(),
                 List.of(new ScopedGrant("world=minecraft:the_nether", ScopedGrant.DENY, "customperm.command.tp"))));
         builder.player(new ImportPlan.Player("00000000-0000-0000-0000-000000000001", "Alex",
-                List.of("vip"), List.of(), Set.of(), Set.of(), null, null, java.util.Map.of(), List.of()));
+                List.of("vip"), List.of(), Set.of(), Set.of(), List.of(), java.util.Map.of(), List.of()));
         builder.imported(false);
         builder.imported(true);
         builder.imported(false);
         builder.world();
         builder.expose("tp");
         builder.track("ladder", List.of("default", "vip"));
-        builder.temporary();
         builder.contextual();
         builder.foreign();
         builder.other();
@@ -103,14 +102,14 @@ class ImportPlanTest {
         assertEquals(1, plan.counts().worlds());
         assertEquals(1, plan.counts().translated());
         assertEquals(1, plan.counts().commands());
-        assertEquals(4, plan.counts().skipped());
+        assertEquals(3, plan.counts().skipped());
         assertFalse(plan.isEmpty());
 
         String report = String.join("\n", plan.report());
         assertTrue(report.contains("1 group(s) become grades"), report);
         assertTrue(report.contains("3 node(s) imported, 1 of them translated"), report);
         assertTrue(report.contains("1 limited to a world, carried with it."), report);
-        assertTrue(report.contains("4 entrie(s) are left behind"), report);
+        assertTrue(report.contains("3 entrie(s) are left behind"), report);
         assertTrue(report.contains("tp"), "the exposed command is named: " + report);
         assertTrue(report.contains("1 track(s) carried with their rungs: ladder."), report);
         assertFalse(report.contains("tracks)"), "tracks are no longer left behind: " + report);

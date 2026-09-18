@@ -57,9 +57,47 @@ public final class NameAdmin {
         return AdminResult.ok("Names are now built as " + value + ".").warn(warning);
     }
 
-    /** The two settings, as a line for {@code /customperm names}. */
+    /**
+     * Shows the highest prefix only, or several in a row, for prefixes, suffixes or both ({@code which}
+     * {@code "prefix"}, {@code "suffix"}, {@code "both"}). {@code limit} is how many a stack shows, null to
+     * keep it. The spacers are set in {@code settings.json}.
+     */
+    public static AdminResult setStack(MinecraftServer server, String which, boolean stacked, Integer limit) {
+        if (limit != null && (limit < 1 || limit > SettingsConfig.ChatStack.LIMIT_MAX)) {
+            return AdminResult.fail("A stack shows 1 to " + SettingsConfig.ChatStack.LIMIT_MAX + " entries.");
+        }
+        java.util.List<SettingsConfig.ChatStack> stacks = switch (which) {
+            case "prefix" -> java.util.List.of(settings().prefixStack);
+            case "suffix" -> java.util.List.of(settings().suffixStack);
+            default -> java.util.List.of(settings().prefixStack, settings().suffixStack);
+        };
+        String mode = stacked ? SettingsConfig.ChatStack.STACKED : SettingsConfig.ChatStack.HIGHEST;
+        boolean changed = false;
+        for (SettingsConfig.ChatStack stack : stacks) {
+            changed |= !stack.mode.equals(mode) || (limit != null && stack.limit != limit);
+            stack.mode = mode;
+            if (limit != null) stack.limit = limit;
+        }
+        String what = which.equals("both") ? "Prefixes and suffixes" : which.equals("prefix") ? "Prefixes" : "Suffixes";
+        if (!changed) return AdminResult.ok(what + " are already shown that way. No change.");
+        String warning = ConfigAdmin.persist();
+        NameDecoration.refreshAll(server);
+        AdminResult result = AdminResult.ok(what + (stacked
+                ? " now show up to " + stacks.get(0).limit + " in a row, highest priority first."
+                : " now show the highest priority only.")).warn(warning);
+        return CustomPerm.isLuckPermsActive()
+                ? result.note("LuckPerms is active: its own meta formatting decides which prefix it gives, not this.")
+                : result;
+    }
+
+    /** The settings, as a line for {@code /customperm names}. */
     public static String describe() {
         return "Name decoration: " + (settings().decorateNames ? "on" : "off") + ", format " + settings().nameFormat
+                + ", prefixes " + stack(settings().prefixStack) + ", suffixes " + stack(settings().suffixStack)
                 + ", from " + (CustomPerm.isLuckPermsActive() ? "LuckPerms" : "the grades") + ".";
+    }
+
+    private static String stack(SettingsConfig.ChatStack stack) {
+        return stack.stacked() ? "stacked (up to " + stack.limit + ")" : "highest only";
     }
 }

@@ -112,10 +112,19 @@ public enum GuiAction {
     /** {@code ["merge"|"replace"]} Writes what this admin previewed into LuckPerms, in the background. */
     EXPORT_APPLY(1, GuiArea.LUCKPERMS),
 
-    /** {@code [grade, "prefix"|"suffix", text]} Sets a grade's prefix or suffix; an empty text clears it. */
-    GRADE_CHAT_SET(3, GuiArea.GRADES),
-    /** {@code [playerName, "prefix"|"suffix", text]} Sets one player's own; by name, like adding a node. */
-    USER_CHAT_SET(3, GuiArea.GRADES),
+    /**
+     * {@code [grade, "prefix"|"suffix", priority, text, duration]} Gives a grade a prefix or suffix at that
+     * priority, replacing one already there; an empty duration is for good.
+     */
+    GRADE_CHAT_ADD(5, GuiArea.GRADES),
+    /** {@code [grade, "prefix"|"suffix", priority]} Removes the one at that priority. */
+    GRADE_CHAT_REMOVE(3, GuiArea.GRADES),
+    /** {@code [playerName, "prefix"|"suffix", priority, text, duration]} One player's own; by name, like a node. */
+    USER_CHAT_ADD(5, GuiArea.GRADES),
+    /** {@code [playerName, "prefix"|"suffix", priority]} Removes one player's own at that priority. */
+    USER_CHAT_REMOVE(3, GuiArea.GRADES),
+    /** {@code ["highest"|"stacked"]} Shows one prefix and suffix, or several in a row, like {@code names stack both}. */
+    NAMES_STACK(1, GuiArea.CONFIG),
     /** {@code ["true"|"false"]} Decorates names with their prefix and suffix, like {@code /customperm names}. */
     NAMES_DECORATE(1, GuiArea.CONFIG),
 

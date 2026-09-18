@@ -208,10 +208,21 @@ public final class GuiRequestHandler {
             case IMPORT_PREVIEW -> bool(args.get(0)) == null ? malformed(action)
                     : importPreview(player, bool(args.get(0)));
             case IMPORT_APPLY -> importApply(player, args.get(0));
-            case GRADE_CHAT_SET -> chatKind(args.get(1)) == null ? malformed(action)
-                    : GradeAdmin.setChat(player.getServer(), args.get(0), chatKind(args.get(1)), args.get(2));
-            case USER_CHAT_SET -> chatKind(args.get(1)) == null ? malformed(action)
-                    : userChatByName(player, args.get(0), chatKind(args.get(1)), args.get(2));
+            case GRADE_CHAT_ADD -> chatKind(args.get(1)) == null || signed(args.get(2)) == null ? malformed(action)
+                    : duration(args.get(4)) < 0 ? badDuration(args.get(4))
+                    : GradeAdmin.addChat(player.getServer(), args.get(0), chatKind(args.get(1)), signed(args.get(2)),
+                            args.get(3), duration(args.get(4)));
+            case GRADE_CHAT_REMOVE -> chatKind(args.get(1)) == null || signed(args.get(2)) == null ? malformed(action)
+                    : GradeAdmin.removeChat(player.getServer(), args.get(0), chatKind(args.get(1)), signed(args.get(2)));
+            case USER_CHAT_ADD -> chatKind(args.get(1)) == null || signed(args.get(2)) == null ? malformed(action)
+                    : duration(args.get(4)) < 0 ? badDuration(args.get(4))
+                    : userChatByName(player, args.get(0), holder -> holder.add(chatKind(args.get(1)), signed(args.get(2)),
+                            args.get(3), duration(args.get(4))));
+            case USER_CHAT_REMOVE -> chatKind(args.get(1)) == null || signed(args.get(2)) == null ? malformed(action)
+                    : userChatByName(player, args.get(0), holder -> holder.remove(chatKind(args.get(1)), signed(args.get(2))));
+            case NAMES_STACK -> !args.get(0).equals("highest") && !args.get(0).equals("stacked") ? malformed(action)
+                    : com.arcadia.customperm.admin.NameAdmin.setStack(player.getServer(), "both",
+                            args.get(0).equals("stacked"), null);
             case NAMES_DECORATE -> bool(args.get(0)) == null ? malformed(action)
                     : com.arcadia.customperm.admin.NameAdmin.setEnabled(player.getServer(), bool(args.get(0)));
             case EXPORT_PREVIEW -> exportPreview(player);
@@ -385,12 +396,14 @@ public final class GuiRequestHandler {
     }
 
     /** By name, like adding a node: a player picked in the field has no row, so no UUID, yet. */
-    private static AdminResult userChatByName(ServerPlayer admin, String name, boolean suffix, String text) {
+    private static AdminResult userChatByName(ServerPlayer admin, String name,
+                                              java.util.function.Function<com.arcadia.customperm.admin.ChatHolder, AdminResult> edit) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(admin.getServer(), name);
         return resolution.profile()
-                .map(profile -> UserAdmin.setChat(admin.getServer(), profile.getId(), profile.getName(), suffix, text))
+                .map(profile -> edit.apply(com.arcadia.customperm.admin.ChatHolder.player(admin.getServer(),
+                        profile.getId(), profile.getName())))
                 .orElseGet(() -> AdminResult.fail(resolution.problem()));
     }
 

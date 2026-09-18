@@ -22,6 +22,7 @@ import com.arcadia.customperm.config.SettingsConfig;
 import com.arcadia.customperm.gametest.support.LuckPermsTestSupport;
 import com.arcadia.customperm.gametest.support.Modes;
 import com.arcadia.customperm.gametest.support.TestPlayer;
+import com.arcadia.customperm.network.gui.GradesData;
 import com.arcadia.customperm.network.gui.GuiAction;
 import com.arcadia.customperm.network.gui.GuiActionPayload;
 import com.arcadia.customperm.network.gui.GuiActionResultPayload;
@@ -107,6 +108,7 @@ public class NameDecorationGameTest {
         GradesConfig grades = CustomPerm.configManager.getGrades();
         SettingsConfig settings = CustomPerm.configManager.getSettings();
         String formatBefore = settings.nameFormat;
+        SettingsConfig.ChatStack prefixStackBefore = settings.prefixStack;
         String uuid = null;
         // The GameTest config outlives a run: start from a known state rather than from what a failed run left.
         settings.decorateNames = false;
@@ -118,12 +120,13 @@ public class NameDecorationGameTest {
             ok(GradeAdmin.create(VIP));
             ok(GradeAdmin.create(MEMBER));
             ok(GradeAdmin.setWeight(server, VIP, 10));
-            ok(GradeAdmin.setChat(server, VIP, false, "&6[VIP] "));
-            AdminResult member = GradeAdmin.setChat(server, MEMBER, false, "[Member] ");
+            ok(GradeAdmin.addChat(server, VIP, false, 0, "&6[VIP] ", 0));
+            AdminResult member = GradeAdmin.addChat(server, MEMBER, false, 0, "[Member] ", 0);
             ok(member);
             check(member.notes().stream().anyMatch(n -> n.contains("/customperm names on")),
                     "a prefix set while names are not decorated must say so: " + member.notes());
-            ok(GradeAdmin.setChat(server, MEMBER, true, " &7*"));
+            ok(GradeAdmin.addChat(server, MEMBER, true, 0, " &7*", 0));
+            check(!GradeAdmin.addChat(server, MEMBER, false, 0, "§6bad", 0).success(), "the section sign must be refused");
             grades.userGrades.put(player.getUUID().toString(), new ArrayList<>(List.of(MEMBER, VIP)));
             NameDecoration.refresh(player);
             equal("cp_n_steve", player.getDisplayName().getString(), "nothing is decorated while it is off");
@@ -136,8 +139,38 @@ public class NameDecorationGameTest {
             Component tab = player.getTabListDisplayName();
             check(tab != null && tab.getString().equals("[VIP] cp_n_steve *"), "the tab list shows it too: " + tab);
 
-            ok(UserAdmin.setChat(server, player.getUUID(), "cp_n_steve", false, "&d[Me] "));
-            equal("[Me] cp_n_steve *", player.getDisplayName().getString(), "the player's own prefix wins, at once");
+            ok(UserAdmin.addChat(server, player.getUUID(), "cp_n_steve", false, 0, "&d[Me] ", 0));
+            equal("[Me] cp_n_steve *", player.getDisplayName().getString(),
+                    "the player's own prefix wins at equal priority, at once");
+
+            // A priority above the player's own shows first, whichever holder carries it.
+            ok(GradeAdmin.addChat(server, MEMBER, false, 50, "&a[Event] ", 0));
+            equal("[Event] cp_n_steve *", player.getDisplayName().getString(), "the highest priority shows");
+            ok(NameAdmin.setStack(server, "prefix", true, 2));
+            equal("[Event] [Me] cp_n_steve *", player.getDisplayName().getString(),
+                    "stacked, the two highest in priority order");
+            ok(NameAdmin.setStack(server, "prefix", false, null));
+            ok(GradeAdmin.removeChat(server, MEMBER, false, 50));
+
+            // The same through the commands: add, a temporary one, the listing, removal by priority.
+            commandSays(server, "customperm grade prefix " + VIP + " add 5 [Cmd] ", "Prefix \"[Cmd] \" at 5 -> " + VIP);
+            commandSays(server, "customperm grade prefix " + VIP + " addtemp 7 later [T] ", "Invalid duration 'later'");
+            commandSays(server, "customperm grade prefix " + VIP + " addtemp 7 1h [T] ", "Prefix \"[T] \" at 7 -> " + VIP + " for 1h");
+            commandSays(server, "customperm grade prefix " + VIP, "\"[T] \" at 7 (");
+            commandSays(server, "customperm grade prefix " + VIP + " remove 5", "Removed the prefix \"[Cmd] \" at 5");
+            commandSays(server, "customperm grade prefix " + VIP + " clear", "Cleared 2 prefixes from " + VIP);
+            ok(GradeAdmin.addChat(server, VIP, false, 0, "&6[VIP] ", 0));
+            equal("[Me] cp_n_steve *", player.getDisplayName().getString(), "removed by its priority");
+
+            // A temporary prefix stops showing once it has run out, and the sweep removes it.
+            ok(UserAdmin.addChat(server, player.getUUID(), "cp_n_steve", false, 90, "[Trial] ", 3600));
+            equal("[Trial] cp_n_steve *", player.getDisplayName().getString(), "while it lasts, it shows");
+            grades.userPrefixEntries.get(uuid).stream().filter(e -> e.priority == 90).findFirst().orElseThrow()
+                    .expires = com.arcadia.customperm.perm.Expiry.now() - 1;
+            com.arcadia.customperm.admin.ExpirySweeper.sweep(server);
+            check(grades.userPrefixEntries.get(uuid).stream().noneMatch(e -> e.priority == 90),
+                    "the sweep must remove the expired prefix");
+            equal("[Me] cp_n_steve *", player.getDisplayName().getString(), "and the name must follow");
 
             ok(NameAdmin.setFormat(server, "{prefix}&8| {name}{suffix}"));
             equal("[Me] | cp_n_steve *", player.getDisplayName().getString(), "the format applies at once");
@@ -149,12 +182,13 @@ public class NameDecorationGameTest {
         } finally {
             settings.decorateNames = false;
             settings.nameFormat = formatBefore;
+            settings.prefixStack = prefixStackBefore;
             grades.grades.remove(VIP);
             grades.grades.remove(MEMBER);
             if (uuid != null) {
                 grades.userGrades.remove(uuid);
-                grades.userPrefixes.remove(uuid);
-                grades.userSuffixes.remove(uuid);
+                grades.userPrefixEntries.remove(uuid);
+                grades.userSuffixEntries.remove(uuid);
             }
             ConfigAdmin.persist();
         }
@@ -178,18 +212,32 @@ public class NameDecorationGameTest {
             targetUuid = target.uuid().toString();
             ok(GradeAdmin.create(VIP));
 
-            act(owner, GuiAction.GRADE_CHAT_SET, GuiPage.GRADES, VIP, "prefix", "&6[VIP] ");
-            expect(owner, "OK: Prefix of " + VIP + " set");
-            equal("&6[VIP] ", grades.grades.get(VIP).prefix, "the grade prefix was not written");
-            act(owner, GuiAction.GRADE_CHAT_SET, GuiPage.GRADES, VIP, "colour", "x");
-            expect(owner, "FAIL: Malformed request for GRADE_CHAT_SET.");
-            act(owner, GuiAction.GRADE_CHAT_SET, GuiPage.GRADES, VIP, "prefix", "");
-            expect(owner, "OK: Prefix of " + VIP + " cleared.");
-            check(grades.grades.get(VIP).prefix == null, "an empty text must clear the prefix");
+            act(owner, GuiAction.GRADE_CHAT_ADD, GuiPage.GRADES, VIP, "prefix", "10", "&6[VIP] ", "7d");
+            expect(owner, "OK: Prefix \"&6[VIP] \" at 10 -> " + VIP + " for 7d");
+            GradesConfig.ChatEntry written = grades.grades.get(VIP).prefixes.get(0);
+            equal("&6[VIP] ", written.text, "the grade prefix was not written");
+            check(written.priority == 10 && written.expires > 0, "with its priority and expiry");
+            GradesData page = owner.payloads(com.arcadia.customperm.network.gui.GuiPagePayload.class).stream()
+                    .map(com.arcadia.customperm.network.gui.GuiPagePayload::data)
+                    .filter(GradesData.class::isInstance).map(GradesData.class::cast)
+                    .reduce((first, second) -> second).orElse(null);
+            check(page != null && page.grades().stream().filter(g -> g.name().equals(VIP)).findFirst().orElseThrow()
+                    .chat().stream().anyMatch(line -> line.priority() == 10 && line.remaining() > 0),
+                    "the page must carry the prefix with its priority and time left");
+            act(owner, GuiAction.GRADE_CHAT_ADD, GuiPage.GRADES, VIP, "colour", "10", "x", "");
+            expect(owner, "FAIL: Malformed request for GRADE_CHAT_ADD.");
+            act(owner, GuiAction.GRADE_CHAT_ADD, GuiPage.GRADES, VIP, "prefix", "high", "x", "");
+            expect(owner, "FAIL: Malformed request for GRADE_CHAT_ADD.");
+            act(owner, GuiAction.GRADE_CHAT_REMOVE, GuiPage.GRADES, VIP, "prefix", "10");
+            expect(owner, "OK: Removed the prefix \"&6[VIP] \" at 10 from " + VIP);
+            check(grades.grades.get(VIP).prefixes.isEmpty(), "removing by priority must remove it");
 
-            act(owner, GuiAction.USER_CHAT_SET, GuiPage.PLAYERS, "cp_n_target", "suffix", " &7*");
-            expect(owner, "OK: Suffix of cp_n_target set");
-            equal(" &7*", grades.userSuffixes.get(targetUuid), "the player's suffix was not written");
+            act(owner, GuiAction.USER_CHAT_ADD, GuiPage.PLAYERS, "cp_n_target", "suffix", "0", " &7*", "");
+            expect(owner, "OK: Suffix \" &7*\" at 0 -> cp_n_target");
+            equal(" &7*", grades.userSuffixEntries.get(targetUuid).get(0).text, "the player's suffix was not written");
+
+            act(reader, GuiAction.NAMES_STACK, GuiPage.GRADES, "stacked");
+            expect(reader, "FAIL: You do not have customperm.manage.config.");
 
             act(reader, GuiAction.NAMES_DECORATE, GuiPage.GRADES, "true");
             expect(reader, "FAIL: You do not have customperm.manage.config.");
@@ -199,10 +247,16 @@ public class NameDecorationGameTest {
         } finally {
             settings.decorateNames = false;
             grades.grades.remove(VIP);
-            if (targetUuid != null) grades.userSuffixes.remove(targetUuid);
+            if (targetUuid != null) grades.userSuffixEntries.remove(targetUuid);
             ConfigAdmin.persist();
         }
         helper.succeed();
+    }
+
+    private static void commandSays(MinecraftServer server, String command, String fragment) {
+        List<String> lines = com.arcadia.customperm.gametest.support.ServerCommands.run(server, command);
+        if (!com.arcadia.customperm.gametest.support.ServerCommands.contains(lines, fragment))
+            throw new GameTestAssertException("Expected '" + fragment + "' from /" + command + ", got " + lines);
     }
 
     private static void act(TestPlayer player, GuiAction action, GuiPage page, String... args) {
@@ -236,7 +290,7 @@ public class NameDecorationGameTest {
             LuckPermsTestSupport.apply(LpEditOp.GROUP_PREFIX_SET, LP_GROUP, "10", "&c[LP] ", "");
             LuckPermsTestSupport.apply(LpEditOp.USER_PARENT_ADD, player.getUUID().toString(), LP_GROUP, "", "0");
             awaitName(server, player, "[LP] cp_n_alex");
-            check(GradeAdmin.setChat(server, "anything", false, "[X]").message().contains("/lp"),
+            check(GradeAdmin.addChat(server, "anything", false, 0, "[X]", 0).message().contains("/lp"),
                     "with LuckPerms, prefixes are set in LuckPerms");
         } finally {
             settings.decorateNames = false;

@@ -62,6 +62,8 @@ public final class ExpirySweeper {
                     parent -> removed.add(entry.getKey() + " no longer inherits " + parent));
             expire(grade.deniedParentExpiries, grade.deniedParents, now,
                     parent -> removed.add(entry.getKey() + " no longer refuses " + parent));
+            expireChat(grade.prefixes, now, text -> removed.add(entry.getKey() + " no longer shows the prefix " + text));
+            expireChat(grade.suffixes, now, text -> removed.add(entry.getKey() + " no longer shows the suffix " + text));
         }
         expireUsers(server, config.userPermissionExpiries, config.userPermissions, now, removed,
                 (who, node) -> who + " no longer has " + node);
@@ -71,6 +73,8 @@ public final class ExpirySweeper {
                 (who, grade) -> who + " no longer holds " + grade);
         expireUsers(server, config.userDeniedGradeExpiries, config.userDeniedGrades, now, removed,
                 (who, grade) -> who + " no longer refuses " + grade);
+        expireUserChat(server, config.userPrefixEntries, now, removed, "prefix");
+        expireUserChat(server, config.userSuffixEntries, now, removed, "suffix");
         if (removed.isEmpty()) return removed;
 
         String warning = ConfigAdmin.persist();
@@ -81,6 +85,28 @@ public final class ExpirySweeper {
         }
         if (warning != null) CustomPerm.LOGGER.warn("[CustomPerm] {}", warning);
         return removed;
+    }
+
+    private static void expireChat(List<GradesConfig.ChatEntry> entries, long now,
+                                   java.util.function.Consumer<String> onRemoved) {
+        Iterator<GradesConfig.ChatEntry> iterator = entries.iterator();
+        while (iterator.hasNext()) {
+            GradesConfig.ChatEntry entry = iterator.next();
+            if (entry.alive(now)) continue;
+            iterator.remove();
+            onRemoved.accept("\"" + entry.text + "\" at " + entry.priority);
+        }
+    }
+
+    private static void expireUserChat(MinecraftServer server, Map<String, List<GradesConfig.ChatEntry>> byUser,
+                                       long now, List<String> removed, String what) {
+        Iterator<Map.Entry<String, List<GradesConfig.ChatEntry>>> users = byUser.entrySet().iterator();
+        while (users.hasNext()) {
+            Map.Entry<String, List<GradesConfig.ChatEntry>> user = users.next();
+            expireChat(user.getValue(), now,
+                    text -> removed.add(name(server, user.getKey()) + " no longer shows the " + what + " " + text));
+            if (user.getValue().isEmpty()) users.remove();
+        }
     }
 
     private static void expire(Map<String, Long> expiries, Collection<String> entries, long now,

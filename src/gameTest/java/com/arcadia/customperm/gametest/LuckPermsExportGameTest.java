@@ -77,7 +77,9 @@ public class LuckPermsExportGameTest {
 
             GradesConfig config = new GradesConfig();
             grade(config, BASE, 0, List.of(), Set.of("customperm.command.time"), Set.of("customperm.command.ban"));
-            config.grades.get(BASE).prefix = "&7[Base] ";
+            config.grades.get(BASE).prefixes.add(new GradesConfig.ChatEntry(0, "&7[Base] ", 0));
+            config.grades.get(BASE).prefixes.add(new GradesConfig.ChatEntry(20, "[Temp] ",
+                    com.arcadia.customperm.perm.Expiry.now() + 3600));
             config.grades.get(BASE).permissions.add("customperm.command.list");
             config.grades.get(BASE).permissionExpiries.put("customperm.command.list",
                     com.arcadia.customperm.perm.Expiry.now() + 3600);
@@ -89,7 +91,7 @@ public class LuckPermsExportGameTest {
             grade(config, "cp_X_Bad", 0, List.of(), Set.of(), Set.of());
             config.userGrades.put(USER.toString(), new ArrayList<>(List.of(VIP)));
             config.userPermissions.put(USER.toString(), new LinkedHashSet<>(Set.of("customperm.command.home")));
-            config.userPrefixes.put(USER.toString(), "[Me] ");
+            config.userPrefixEntries.put(USER.toString(), new ArrayList<>(List.of(new GradesConfig.ChatEntry(100, "[Me] ", 0))));
             GradesConfig.Scoped nether = new GradesConfig.Scoped();
             nether.deniedPermissions.add("customperm.command.time");
             config.grades.get(BASE).contexts.put("world=minecraft:the_nether", nether);
@@ -112,7 +114,8 @@ public class LuckPermsExportGameTest {
             List<String> base = LuckPermsTestSupport.groupNodes(BASE);
             expect(base, "customperm.command.time=true", "A grade's node must arrive as it is");
             expect(base, "customperm.command.ban=false", "A denied node must arrive set to false");
-            expect(base, "prefix.0.&7[Base] =true", "A grade's prefix must arrive at its weight");
+            expect(base, "prefix.0.&7[Base] =true", "A grade's prefix must arrive at its priority");
+            expect(base, "prefix.20.[Temp] =true@expiring", "A temporary prefix must arrive temporary");
             expect(base, "customperm.command.list=true@expiring", "A temporary node must arrive temporary");
             expect(base, "customperm.command.time=false[world=the_nether]",
                     "A node limited to a world must arrive with LuckPerms' world context");
@@ -130,8 +133,7 @@ public class LuckPermsExportGameTest {
             expect(user, "group." + VIP + "=true", "The player's grade must arrive as a parent");
             expect(user, "customperm.command.home=true", "The player's own node must arrive");
             expect(user, "group." + BASE + "=true[world=the_end]", "A grade held in one world must arrive there");
-            expect(user, "prefix." + ExportPlan.PLAYER_PRIORITY + ".[Me] =true",
-                    "The player's own prefix must arrive above every grade's");
+            expect(user, "prefix.100.[Me] =true", "The player's own prefix must arrive at its priority");
             if (LuckPermsTestSupport.groupExists("cp_x_bad")) fail("A refused grade must not be written under another name.");
             if (!LuckPermsTestSupport.trackGroups(TRACK).equals(List.of(BASE, VIP)))
                 fail("The track must arrive with its groups in order: " + LuckPermsTestSupport.trackGroups(TRACK));
@@ -149,7 +151,7 @@ public class LuckPermsExportGameTest {
         } finally {
             LuckPermsTestSupport.clearGroupNodes(ExportPlan.LP_DEFAULT, List.of("group." + BASE));
             LuckPermsTestSupport.clearNodes(USER, List.of("group." + VIP, "group." + BASE, "customperm.command.home",
-                    "prefix." + ExportPlan.PLAYER_PRIORITY + ".[Me] "));
+                    "prefix.100.[Me] "));
             LuckPermsTestSupport.cleanup(List.of(BASE, VIP), List.of(TRACK));
         }
         helper.succeed();

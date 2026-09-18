@@ -59,17 +59,14 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
             return held.refused();
         }
 
-        public String prefix() {
-            return held.prefix();
+        /** Their own prefixes then suffixes, highest priority first. */
+        public List<ChatLine> chat() {
+            return held.chat();
         }
 
         /** Seconds left on an own node ({@code "allow"} or {@code "deny"}), 0 when it is permanent. */
         public long remaining(String kind, String node) {
             return Remaining.of(held.timers(), kind, node);
-        }
-
-        public String suffix() {
-            return held.suffix();
         }
 
         /** Grades and nodes this player holds in one world only. */
@@ -80,17 +77,16 @@ public record PlayersData(List<Player> players, List<String> knownPlayers, Strin
 
     /**
      * The grades a player holds, the ones they refuse wherever a grade of theirs would bring them, the
-     * prefix and suffix they carry themselves, empty for none, and what they hold in one world only.
+     * prefixes and suffixes they carry themselves, and what they hold in one world only.
      */
-    public record Held(List<String> grades, List<String> refused, String prefix, String suffix,
+    public record Held(List<String> grades, List<String> refused, List<ChatLine> chat,
                        List<Remaining> timers, List<ScopedEntry> scoped) {
-        public static final Held NONE = new Held(List.of(), List.of(), "", "", List.of(), List.of());
+        public static final Held NONE = new Held(List.of(), List.of(), List.of(), List.of(), List.of());
 
         public static final StreamCodec<ByteBuf, Held> CODEC = StreamCodec.composite(
                 GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Held::grades,
                 GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX), Held::refused,
-                GuiCodecs.TEXT, Held::prefix,
-                GuiCodecs.TEXT, Held::suffix,
+                ChatLine.LIST, Held::chat,
                 Remaining.LIST, Held::timers,
                 ScopedEntry.LIST, Held::scoped,
                 Held::new);

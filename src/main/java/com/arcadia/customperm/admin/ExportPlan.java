@@ -47,18 +47,17 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
     private static final Pattern LP_NAME = Pattern.compile("[a-z0-9_.\\-]{1,36}");
 
     /**
-     * One grade as the group it would become; {@code prefix} and {@code suffix} are null for none, and
+     * One grade as the group it would become; {@code chat} holds its prefixes and suffixes, and
      * {@code expiries} holds its temporary entries keyed {@code allow:<node>}, {@code deny:<node>},
      * {@code grade:<parent>} or {@code refuse:<parent>}, and
      * {@code scoped} its nodes limited to a world, written with LuckPerms' {@code world} context.
      */
     public record Group(String name, int weight, List<String> parents, List<String> deniedParents,
-                        Set<String> allow, Set<String> deny, String prefix, String suffix,
+                        Set<String> allow, Set<String> deny, List<ChatGrant> chat,
                         Map<String, Long> expiries, List<ScopedGrant> scoped) {
 
         int entries() {
-            return parents.size() + deniedParents.size() + allow.size() + deny.size() + scoped.size()
-                    + (prefix == null ? 0 : 1) + (suffix == null ? 0 : 1);
+            return parents.size() + deniedParents.size() + allow.size() + deny.size() + scoped.size() + chat.size();
         }
     }
 
@@ -68,25 +67,17 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
      * grades limited to a world.
      */
     public record Player(String uuid, List<String> grades, List<String> deniedGrades,
-                         Set<String> allow, Set<String> deny, String prefix, String suffix,
+                         Set<String> allow, Set<String> deny, List<ChatGrant> chat,
                          Map<String, Long> expiries, List<ScopedGrant> scoped) {
 
         int entries() {
-            return grades.size() + deniedGrades.size() + allow.size() + deny.size() + scoped.size()
-                    + (prefix == null ? 0 : 1) + (suffix == null ? 0 : 1);
+            return grades.size() + deniedGrades.size() + allow.size() + deny.size() + scoped.size() + chat.size();
         }
     }
 
     /** One track as the LuckPerms track it would become, its groups lowest first. */
     public record Track(String name, List<String> groups) {
     }
-
-    /**
-     * The priority a player's own prefix is written with. LuckPerms shows the highest priority it finds,
-     * own or inherited, where CustomPerm puts a player's own above every grade: this is above any weight a
-     * grade is likely to carry, and a grade's prefix is written at its weight.
-     */
-    public static final int PLAYER_PRIORITY = 1_000_000;
 
     /**
      * How a write ended. {@code stoppedAt} is {@code null} when everything was written; otherwise it names
@@ -134,7 +125,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                             grade.deniedParentExpiries, "refuse:", expiries, now),
                     live(grade.permissions, grade.permissionExpiries, "allow:", expiries, now),
                     live(grade.deniedPermissions, grade.deniedPermissionExpiries, "deny:", expiries, now),
-                    grade.prefix, grade.suffix, Map.copyOf(expiries), worldOnly(ScopedGrant.of(grade.contexts),
+                    ChatGrant.of(grade.prefixes, grade.suffixes, now), Map.copyOf(expiries), worldOnly(ScopedGrant.of(grade.contexts),
                     exported, config, dropped, notes, "grade " + name)));
         }
 
@@ -143,8 +134,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
         holders.addAll(config.userDeniedGrades.keySet());
         holders.addAll(config.userPermissions.keySet());
         holders.addAll(config.userDeniedPermissions.keySet());
-        holders.addAll(config.userPrefixes.keySet());
-        holders.addAll(config.userSuffixes.keySet());
+        holders.addAll(config.userPrefixEntries.keySet());
+        holders.addAll(config.userSuffixEntries.keySet());
         holders.addAll(config.userContexts.keySet());
         List<Player> players = new ArrayList<>();
         for (String uuid : holders) {
@@ -167,7 +158,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
                             "allow:", expiries, now),
                     live(config.userDeniedPermissions.getOrDefault(uuid, Set.of()),
                             config.userDeniedPermissionExpiries.get(uuid), "deny:", expiries, now),
-                    config.userPrefixes.get(uuid), config.userSuffixes.get(uuid), Map.copyOf(expiries),
+                    ChatGrant.of(config.userPrefixEntries.get(uuid), config.userSuffixEntries.get(uuid), now),
+                    Map.copyOf(expiries),
                     worldOnly(ScopedGrant.of(config.userContexts.getOrDefault(uuid, Map.of())), exported, config,
                             dropped, notes, who));
             if (player.entries() > 0) players.add(player);
@@ -320,8 +312,7 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
             grade.deniedParents = new ArrayList<>(source.deniedParents());
             grade.permissions = new HashSet<>(source.allow());
             grade.deniedPermissions = new HashSet<>(source.deny());
-            grade.prefix = source.prefix();
-            grade.suffix = source.suffix();
+            source.chat().forEach(chat -> chat.addTo(grade.prefixes, grade.suffixes));
             source.expiries().forEach((key, at) -> {
                 if (key.startsWith("allow:")) grade.permissionExpiries.put(key.substring(6), at);
                 else if (key.startsWith("deny:")) grade.deniedPermissionExpiries.put(key.substring(5), at);
@@ -387,10 +378,9 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
             lines.add("Entries limited to a world are written with LuckPerms' world context: the_nether for a "
                     + "vanilla world, the full id for a modded one.");
         }
-        if (groups.stream().anyMatch(g -> g.prefix() != null || g.suffix() != null)
-                || players.stream().anyMatch(p -> p.prefix() != null || p.suffix() != null)) {
-            lines.add("Prefixes and suffixes are written with the grade weight as their priority, and a player's "
-                    + "own above every grade's.");
+        if (groups.stream().anyMatch(g -> !g.chat().isEmpty()) || players.stream().anyMatch(p -> !p.chat().isEmpty())) {
+            lines.add("Prefixes and suffixes are written with their own priority, temporary ones temporary. Adding "
+                    + "keeps one LuckPerms already has at the same priority.");
         }
         lines.addAll(refusedLines());
         if (dropped > 0) lines.add(dropped + " entrie(s) left out, each named below.");

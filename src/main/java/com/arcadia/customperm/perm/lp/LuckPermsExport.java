@@ -16,6 +16,7 @@ import net.luckperms.api.model.group.Group;
 import net.luckperms.api.model.user.User;
 import net.luckperms.api.node.Node;
 import net.luckperms.api.node.NodeType;
+import net.luckperms.api.node.types.ChatMetaNode;
 import net.luckperms.api.node.types.InheritanceNode;
 import net.luckperms.api.node.types.PrefixNode;
 import net.luckperms.api.node.types.SuffixNode;
@@ -117,7 +118,7 @@ public final class LuckPermsExport {
                 }
                 addNodes(group, source.allow(), source.deny(), source.expiries(), kept);
                 addScoped(group, source.scoped(), kept);
-                addChat(group, source.prefix(), source.suffix(), source.weight(), replace, kept);
+                addChat(group, source.chat(), replace, kept);
                 await(api.getGroupManager().saveGroup(group));
                 groups++;
                 progress.accept(groups);
@@ -146,7 +147,7 @@ public final class LuckPermsExport {
                 }
                 addNodes(user, source.allow(), source.deny(), source.expiries(), kept);
                 addScoped(user, source.scoped(), kept);
-                addChat(user, source.prefix(), source.suffix(), ExportPlan.PLAYER_PRIORITY, replace, kept);
+                addChat(user, source.chat(), replace, kept);
                 await(api.getUserManager().saveUser(user));
                 user.getCachedData().invalidate();
                 players++;
@@ -213,21 +214,32 @@ public final class LuckPermsExport {
      * one it keeps instead; replacing clears the holder's own first, but only for what the grade sets, so a
      * group given a prefix in LuckPerms keeps it when the grade has none.
      */
-    private static void addChat(PermissionHolder holder, String prefix, String suffix, int priority, boolean replace,
-                                int[] kept) {
-        if (prefix != null) chat(holder, NodeType.PREFIX, PrefixNode.builder(prefix, priority).build(), replace, kept);
-        if (suffix != null) chat(holder, NodeType.SUFFIX, SuffixNode.builder(suffix, priority).build(), replace, kept);
-    }
-
-    private static void chat(PermissionHolder holder, NodeType<?> type, Node node, boolean replace, int[] kept) {
-        List<Node> own = holder.getNodes().stream().filter(LuckPermsExport::global).filter(type::matches).toList();
+    private static void addChat(PermissionHolder holder, List<com.arcadia.customperm.admin.ChatGrant> chat,
+                                boolean replace, int[] kept) {
+        if (chat.isEmpty()) return;
         if (replace) {
-            own.forEach(existing -> holder.data().remove(existing));
-        } else if (!own.isEmpty()) {
-            if (own.stream().noneMatch(existing -> existing.getKey().equals(node.getKey()))) kept[0]++;
-            return;
+            // Only the kinds this holder carries: a group given only a suffix here keeps its LuckPerms prefixes.
+            boolean prefixes = chat.stream().anyMatch(c -> !c.suffix());
+            boolean suffixes = chat.stream().anyMatch(com.arcadia.customperm.admin.ChatGrant::suffix);
+            holder.getNodes().stream().filter(LuckPermsExport::global)
+                    .filter(node -> (prefixes && NodeType.PREFIX.matches(node)) || (suffixes && NodeType.SUFFIX.matches(node)))
+                    .toList().forEach(existing -> holder.data().remove(existing));
         }
-        holder.data().add(node);
+        for (com.arcadia.customperm.admin.ChatGrant grant : chat) {
+            NodeType<? extends ChatMetaNode<?, ?>> type = grant.suffix() ? NodeType.SUFFIX : NodeType.PREFIX;
+            ChatMetaNode<?, ?> same = holder.getNodes().stream().filter(LuckPermsExport::global)
+                    .filter(type::matches).map(type::cast)
+                    .filter(node -> node.getPriority() == grant.priority()).findFirst().orElse(null);
+            if (same != null) {
+                // Adding keeps what LuckPerms has at that priority, and counts it when it says something else.
+                if (!same.getMetaValue().equals(grant.text())) kept[0]++;
+                continue;
+            }
+            Long at = grant.expires() > 0 ? grant.expires() : null;
+            holder.data().add(grant.suffix()
+                    ? timed(SuffixNode.builder(grant.text(), grant.priority()), at)
+                    : timed(PrefixNode.builder(grant.text(), grant.priority()), at));
+        }
     }
 
     /**

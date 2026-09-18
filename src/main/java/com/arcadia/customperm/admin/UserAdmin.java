@@ -97,22 +97,57 @@ public final class UserAdmin {
         return deny ? grades().userDeniedPermissionExpiries : grades().userPermissionExpiries;
     }
 
-    /** Sets or clears the prefix or suffix one player carries above their grades. Blank clears it. */
-    public static AdminResult setChat(MinecraftServer server, UUID uuid, String displayName, boolean suffix,
-                                      String text) {
+    /**
+     * Gives one player a prefix or suffix of their own at {@code priority}, for {@code seconds} or for good.
+     * At equal priority it shows before any grade's; a grade's at a higher priority still shows first.
+     */
+    public static AdminResult addChat(MinecraftServer server, UUID uuid, String displayName, boolean suffix,
+                                      int priority, String text, long seconds) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return refusal;
-        String value = text == null || text.isBlank() ? null : text;
-        String problem = com.arcadia.customperm.chat.LegacyText.problem(value);
-        if (problem != null) return AdminResult.fail("Invalid " + (suffix ? "suffix" : "prefix") + ": " + problem);
-        Map<String, String> texts = suffix ? grades().userSuffixes : grades().userPrefixes;
+        String problem = ChatEntries.problem(suffix, priority, text);
+        if (problem != null) return AdminResult.fail(problem);
+        Map<String, List<GradesConfig.ChatEntry>> byUser = suffix ? grades().userSuffixEntries : grades().userPrefixEntries;
+        List<GradesConfig.ChatEntry> entries = byUser.computeIfAbsent(uuid.toString(), k -> new ArrayList<>());
         String what = suffix ? "Suffix" : "Prefix";
-        String before = value == null ? texts.remove(uuid.toString()) : texts.put(uuid.toString(), value);
-        if (java.util.Objects.equals(before, value)) return AdminResult.ok(what + " of " + displayName + " unchanged.");
+        ChatEntries.Change change = ChatEntries.put(entries, priority, text, seconds);
+        if (change == ChatEntries.Change.UNCHANGED) {
+            return AdminResult.ok(what + " \"" + text + "\" at " + priority + " on " + displayName + " unchanged.");
+        }
         String warning = ConfigAdmin.persist();
         GradeAdmin.resyncPlayer(server, uuid);
-        return GradeAdmin.decorationNote(AdminResult.ok(value == null ? what + " of " + displayName + " cleared."
-                : what + " of " + displayName + " set to \"" + value + "\".").warn(warning));
+        return GradeAdmin.decorationNote(AdminResult.ok(what + " \"" + text + "\" at " + priority + " -> " + displayName
+                + Expiries.span(seconds) + (change == ChatEntries.Change.REPLACED ? ", replacing the one at that priority." : ""))
+                .warn(warning));
+    }
+
+    /** Removes the prefix or suffix one player carries at {@code priority}. */
+    public static AdminResult removeChat(MinecraftServer server, UUID uuid, String displayName, boolean suffix,
+                                         int priority) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        Map<String, List<GradesConfig.ChatEntry>> byUser = suffix ? grades().userSuffixEntries : grades().userPrefixEntries;
+        String what = suffix ? "suffix" : "prefix";
+        List<GradesConfig.ChatEntry> entries = byUser.get(uuid.toString());
+        GradesConfig.ChatEntry removed = ChatEntries.remove(entries, priority);
+        if (removed == null) return AdminResult.ok(displayName + " has no " + what + " at " + priority + " — no change.");
+        if (entries.isEmpty()) byUser.remove(uuid.toString());
+        String warning = ConfigAdmin.persist();
+        GradeAdmin.resyncPlayer(server, uuid);
+        return AdminResult.ok("Removed the " + what + " " + ChatEntries.describe(removed) + " from " + displayName).warn(warning);
+    }
+
+    /** Removes every prefix, or every suffix, one player carries themselves. */
+    public static AdminResult clearChat(MinecraftServer server, UUID uuid, String displayName, boolean suffix) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return refusal;
+        List<GradesConfig.ChatEntry> removed = (suffix ? grades().userSuffixEntries : grades().userPrefixEntries)
+                .remove(uuid.toString());
+        String what = suffix ? "suffixes" : "prefixes";
+        if (removed == null || removed.isEmpty()) return AdminResult.ok(displayName + " has no " + what + " — no change.");
+        String warning = ConfigAdmin.persist();
+        GradeAdmin.resyncPlayer(server, uuid);
+        return AdminResult.ok("Cleared " + removed.size() + " " + what + " from " + displayName).warn(warning);
     }
 
     /**
@@ -131,9 +166,9 @@ public final class UserAdmin {
         return at == null ? 0 : Math.max(1, at - com.arcadia.customperm.perm.Expiry.now());
     }
 
-    /** The prefix or suffix a player carries themselves, {@code null} for none. */
-    public static String chat(UUID uuid, boolean suffix) {
-        return (suffix ? grades().userSuffixes : grades().userPrefixes).get(uuid.toString());
+    /** The prefixes or suffixes a player carries themselves, for a listing, highest priority first. */
+    public static List<String> chat(UUID uuid, boolean suffix) {
+        return ChatEntries.listing((suffix ? grades().userSuffixEntries : grades().userPrefixEntries).get(uuid.toString()));
     }
 
     /** Removes an ALLOW or a DENY node from one player; the entry goes with its last node. */
@@ -262,8 +297,8 @@ public final class UserAdmin {
         holders.addAll(grades().userDeniedGrades.keySet());
         holders.addAll(grades().userPermissions.keySet());
         holders.addAll(grades().userDeniedPermissions.keySet());
-        holders.addAll(grades().userPrefixes.keySet());
-        holders.addAll(grades().userSuffixes.keySet());
+        holders.addAll(grades().userPrefixEntries.keySet());
+        holders.addAll(grades().userSuffixEntries.keySet());
         holders.addAll(grades().userContexts.keySet());
         return holders;
     }

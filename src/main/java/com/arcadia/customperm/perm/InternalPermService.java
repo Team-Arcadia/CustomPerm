@@ -8,6 +8,7 @@
  */
 package com.arcadia.customperm.perm;
 
+import com.arcadia.customperm.chat.ChatStack;
 import com.arcadia.customperm.config.ConfigManager;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.resources.ResourceKey;
@@ -41,8 +42,12 @@ public class InternalPermService implements PermissionService {
 
     @Override
     public ChatMeta chatMeta(ServerPlayer player) {
-        String defaultGrade = config.getSettings().defaultGrade;
-        return new ChatMeta(PermissionResolver.prefix(config.getGrades(), player.getUUID(), defaultGrade),
-                PermissionResolver.suffix(config.getGrades(), player.getUUID(), defaultGrade));
+        var settings = config.getSettings();
+        String defaultGrade = settings.defaultGrade;
+        return new ChatMeta(
+                ChatStack.format(PermissionResolver.prefixes(config.getGrades(), player.getUUID(), defaultGrade),
+                        settings.prefixStack),
+                ChatStack.format(PermissionResolver.suffixes(config.getGrades(), player.getUUID(), defaultGrade),
+                        settings.suffixStack));
     }
 }

@@ -35,12 +35,19 @@ public class GradesConfig {
     /** UUID string -> DENY nodes carried by that player alone. */
     public Map<String, Set<String>> userDeniedPermissions = new HashMap<>();
     /**
-     * UUID string -> chat prefix carried by that player alone, above whatever their grades give, like a
-     * prefix set on a LuckPerms user. Colour codes use {@code &}; see {@code chat/NameDecoration}.
+     * UUID string -> chat prefixes carried by that player alone, like prefix nodes set on a LuckPerms user.
+     * Colour codes use {@code &}; see {@link ChatEntry} for how they rank and {@code chat/NameDecoration}.
      */
-    public Map<String, String> userPrefixes = new HashMap<>();
-    /** UUID string -> chat suffix carried by that player alone. */
-    public Map<String, String> userSuffixes = new HashMap<>();
+    public Map<String, List<ChatEntry>> userPrefixEntries = new HashMap<>();
+    /** UUID string -> chat suffixes carried by that player alone. */
+    public Map<String, List<ChatEntry>> userSuffixEntries = new HashMap<>();
+    /**
+     * Files written before priorities: UUID string -> the one prefix a player carried. Read, moved into
+     * {@link #userPrefixEntries} at priority 0 by {@link #normalize()}, and never written again.
+     */
+    public Map<String, String> userPrefixes;
+    /** The same for suffixes, moved into {@link #userSuffixEntries}. */
+    public Map<String, String> userSuffixes;
 
     /*
      * Expiries, in epoch seconds, beside the collections they belong to: a node, a grade held or a grade
@@ -68,6 +75,44 @@ public class GradesConfig {
      * ladder promote and demote move a player along, one rung at a time. A grade may sit on several tracks.
      */
     public Map<String, List<String>> tracks = new HashMap<>();
+
+    /**
+     * One chat prefix or suffix. The highest priority reachable shows, like LuckPerms' prefix nodes; at equal
+     * priority the player's own beats a grade's, a heavier grade a lighter one, and a nearer ancestor a
+     * farther one. A holder carries at most one per priority, so a priority names the entry to remove.
+     */
+    public static class ChatEntry {
+        public int priority;
+        public String text;
+        /** When it ends, in epoch seconds; 0 for good, which is what an entry without the field reads as. */
+        public long expires;
+
+        public ChatEntry() {
+        }
+
+        public ChatEntry(int priority, String text, long expires) {
+            this.priority = priority;
+            this.text = text;
+            this.expires = expires;
+        }
+
+        public boolean alive(long now) {
+            return expires <= 0 || expires > now;
+        }
+
+        /** A deep copy of a holder's entries: they are mutable, and a copy must not share them. */
+        public static List<ChatEntry> copy(List<ChatEntry> entries) {
+            List<ChatEntry> copy = new ArrayList<>();
+            if (entries != null) entries.forEach(e -> copy.add(new ChatEntry(e.priority, e.text, e.expires)));
+            return copy;
+        }
+
+        public static Map<String, List<ChatEntry>> copyUsers(Map<String, List<ChatEntry>> byUser) {
+            Map<String, List<ChatEntry>> copy = new HashMap<>();
+            byUser.forEach((uuid, entries) -> copy.put(uuid, copy(entries)));
+            return copy;
+        }
+    }
 
     /**
      * Nodes that apply in one context only. At the same specificity and from the same holder, one of these
@@ -118,11 +163,14 @@ public class GradesConfig {
         public int weight = 0;
         /**
          * Shown before the name of the players who hold this grade, in chat and wherever the game shows
-         * their name, when name decoration is on. Among several grades the heaviest decides, as for a node;
-         * absent from a file, it is null, which is no prefix.
+         * their name, when name decoration is on. See {@link ChatEntry} for how several rank.
          */
+        public List<ChatEntry> prefixes = new ArrayList<>();
+        /** Shown after the name, ranked like {@link #prefixes}. */
+        public List<ChatEntry> suffixes = new ArrayList<>();
+        /** Files written before priorities: the one prefix, moved into {@link #prefixes} at priority 0. */
         public String prefix;
-        /** Shown after the name, resolved like {@link #prefix}. */
+        /** The same for the suffix, moved into {@link #suffixes}. */
         public String suffix;
         /** ALLOW node -> when it expires, in epoch seconds; a node absent here is permanent. */
         public Map<String, Long> permissionExpiries = new HashMap<>();
@@ -160,8 +208,10 @@ public class GradesConfig {
             g.deniedParents.removeIf(parent -> parent.equals(g.name));
             java.util.Set<String> denied = new java.util.LinkedHashSet<>(g.deniedParents);
             if (denied.size() != g.deniedParents.size()) g.deniedParents = new ArrayList<>(denied);
-            g.prefix = emptyToNull(g.prefix);
-            g.suffix = emptyToNull(g.suffix);
+            g.prefixes = normalizeChat(g.prefixes, g.prefix);
+            g.suffixes = normalizeChat(g.suffixes, g.suffix);
+            g.prefix = null;
+            g.suffix = null;
             g.permissionExpiries = keepFor(g.permissionExpiries, g.permissions);
             g.deniedPermissionExpiries = keepFor(g.deniedPermissionExpiries, g.deniedPermissions);
             g.parentExpiries = keepFor(g.parentExpiries, g.parents);
@@ -175,10 +225,10 @@ public class GradesConfig {
         if (userDeniedPermissions == null) userDeniedPermissions = new HashMap<>();
         normalizeUserNodes(userPermissions);
         normalizeUserNodes(userDeniedPermissions);
-        if (userPrefixes == null) userPrefixes = new HashMap<>();
-        if (userSuffixes == null) userSuffixes = new HashMap<>();
-        normalizeUserTexts(userPrefixes);
-        normalizeUserTexts(userSuffixes);
+        userPrefixEntries = normalizeUserChat(userPrefixEntries, userPrefixes);
+        userSuffixEntries = normalizeUserChat(userSuffixEntries, userSuffixes);
+        userPrefixes = null;
+        userSuffixes = null;
         userPermissionExpiries = keepForUsers(userPermissionExpiries, userPermissions);
         userDeniedPermissionExpiries = keepForUsers(userDeniedPermissionExpiries, userDeniedPermissions);
         userGradeExpiries = keepForUsers(userGradeExpiries, userGrades);
@@ -259,14 +309,36 @@ public class GradesConfig {
         return kept;
     }
 
-    /** An empty prefix is no prefix, stored as absent so the file does not carry it. */
-    private static String emptyToNull(String text) {
-        return text == null || text.isEmpty() ? null : text;
+    /**
+     * One holder's prefixes, with the legacy single one moved in at priority 0 unless that priority is taken.
+     * An empty text is no prefix, and of two at one priority the first is kept: a priority names one entry.
+     */
+    private static List<ChatEntry> normalizeChat(List<ChatEntry> entries, String legacy) {
+        List<ChatEntry> clean = new ArrayList<>();
+        java.util.Set<Integer> taken = new java.util.HashSet<>();
+        if (entries != null) {
+            for (ChatEntry entry : entries) {
+                if (entry == null || entry.text == null || entry.text.isEmpty() || !taken.add(entry.priority)) continue;
+                if (entry.expires < 0) entry.expires = 0;
+                clean.add(entry);
+            }
+        }
+        if (legacy != null && !legacy.isEmpty() && taken.add(0)) clean.add(new ChatEntry(0, legacy, 0));
+        clean.sort(java.util.Comparator.comparingInt((ChatEntry e) -> e.priority).reversed());
+        return clean;
     }
 
-    private static void normalizeUserTexts(Map<String, String> texts) {
-        texts.keySet().removeIf(java.util.Objects::isNull);
-        texts.values().removeIf(text -> text == null || text.isEmpty());
+    private static Map<String, List<ChatEntry>> normalizeUserChat(Map<String, List<ChatEntry>> entries,
+                                                                  Map<String, String> legacy) {
+        Map<String, List<ChatEntry>> clean = new HashMap<>();
+        if (entries != null) entries.forEach((uuid, list) -> {
+            if (uuid != null) clean.put(uuid, normalizeChat(list, null));
+        });
+        if (legacy != null) legacy.forEach((uuid, text) -> {
+            if (uuid != null) clean.put(uuid, normalizeChat(clean.get(uuid), text));
+        });
+        clean.values().removeIf(List::isEmpty);
+        return clean;
     }
 
     private static void normalizeUserGrades(Map<String, List<String>> assignments) {

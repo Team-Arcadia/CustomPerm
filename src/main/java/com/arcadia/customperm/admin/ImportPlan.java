@@ -31,13 +31,13 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
             new ImportPlan(List.of(), List.of(), Map.of(), Set.of(), List.of(), Counts.NONE);
 
     /**
-     * One LuckPerms group as the grade it would become; {@code prefix} and {@code suffix} are null for none.
+     * One LuckPerms group as the grade it would become; {@code chat} holds its prefixes and suffixes.
      * {@code expiries} holds the temporary entries in epoch seconds, keyed {@code allow:<node>},
      * {@code deny:<node>}, {@code grade:<parent>} or {@code refuse:<parent>}, and {@code scoped} the nodes
      * limited to a world.
      */
     public record Grade(String name, int weight, List<String> parents, List<String> deniedParents,
-                        Set<String> allow, Set<String> deny, String prefix, String suffix,
+                        Set<String> allow, Set<String> deny, List<ChatGrant> chat,
                         Map<String, Long> expiries, List<ScopedGrant> scoped) {
     }
 
@@ -47,7 +47,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
      * {@code scoped} holds the nodes and grades limited to a world.
      */
     public record Player(String uuid, String name, List<String> grades, List<String> deniedGrades,
-                         Set<String> allow, Set<String> deny, String prefix, String suffix,
+                         Set<String> allow, Set<String> deny, List<ChatGrant> chat,
                          Map<String, Long> expiries, List<ScopedGrant> scoped) {
     }
 
@@ -56,12 +56,12 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
      * silently disappears in a migration is how a server ends up open or locked without anyone knowing.
      */
     public record Counts(int groups, int players, int nodes, int translated, int timed, int worlds, int commands,
-                         int temporary, int contextual, int foreign, int other) {
+                         int contextual, int foreign, int other) {
 
-        public static final Counts NONE = new Counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+        public static final Counts NONE = new Counts(0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
         public int skipped() {
-            return temporary + contextual + foreign + other;
+            return contextual + foreign + other;
         }
     }
 
@@ -91,8 +91,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
         if (counts.skipped() == 0) {
             lines.add("Nothing is left behind.");
         } else {
-            lines.add(counts.skipped() + " entrie(s) are left behind: " + counts.temporary + " temporary parent or "
-                    + "prefix, "
+            lines.add(counts.skipped() + " entrie(s) are left behind: "
                     + counts.contextual + " contextual beyond one world, " + counts.foreign + " belonging to other mods, "
                     + counts.other + " of a kind CustomPerm has no equivalent for (meta, display name).");
         }
@@ -160,7 +159,6 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
         private int translated;
         private int timed;
         private int worlds;
-        private int temporary;
         private int contextual;
         private int foreign;
         private int other;
@@ -197,10 +195,6 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
             worlds++;
         }
 
-        public void temporary() {
-            temporary++;
-        }
-
         public void contextual() {
             contextual++;
         }
@@ -222,7 +216,7 @@ public record ImportPlan(List<Grade> grades, List<Player> players, Map<String, L
             return new ImportPlan(List.copyOf(grades), List.copyOf(players), Map.copyOf(tracks), Set.copyOf(commands),
                     List.copyOf(skipped),
                     new Counts(grades.size(), players.size(), nodes, translated, timed, worlds, commands.size(),
-                            temporary, contextual, foreign, other));
+                            contextual, foreign, other));
         }
     }
 }

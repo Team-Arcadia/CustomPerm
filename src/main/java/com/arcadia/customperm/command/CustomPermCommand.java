@@ -112,9 +112,11 @@ import java.util.stream.Collectors;
  *                     append <track> <grade> | insert <track> <grade> <position> | remove <track> <grade>
  *                     promote|demote <player> <track>   # one rung up or down
  *                     list [track]
- * /customperm grade   prefix|suffix <grade> [text]     # chat prefix/suffix of a grade, & colour codes
- * /customperm user    prefix|suffix <player> [text]    # one player's own, above their grades
+ * /customperm grade   prefix|suffix <grade> [add <priority> <text> | addtemp <priority> <duration> <text>
+ *                                           | remove <priority> | clear]   # & colour codes, highest priority shows
+ * /customperm user    prefix|suffix <player> [...]     # the same, one player's own
  * /customperm names   [on|off|format <format>]         # decorate names with them, {prefix}{name}{suffix}
+ *                     stack <prefix|suffix|both> <highest|stacked> [limit]  # one, or several in a row
  * /customperm test    <player> <node>                   # debug: report grant/deny + backend
  * /customperm reload
  * /customperm log admin|players [count]            # latest admin changes / player commands
@@ -598,7 +600,11 @@ public class CustomPermCommand {
                     .then(Commands.literal("format")
                         .then(Commands.argument("format", StringArgumentType.greedyString())
                             .executes(ctx -> report(ctx, NameAdmin.setFormat(ctx.getSource().getServer(),
-                                StringArgumentType.getString(ctx, "format")))))))
+                                StringArgumentType.getString(ctx, "format"))))))
+                    .then(Commands.literal("stack")
+                        .then(stackTarget("prefix"))
+                        .then(stackTarget("suffix"))
+                        .then(stackTarget("both"))))
                 .then(Commands.literal("export").requires(EXPORT_ACCESS)
                     .then(Commands.literal("preview")
                         .executes(CustomPermCommand::exportPreview))
@@ -988,34 +994,86 @@ public class CustomPermCommand {
             StringArgumentType.getString(ctx, "grade"), IntegerArgumentType.getInteger(ctx, "weight"))));
     }
 
-    /** {@code prefix|suffix <grade> [text]}: without a text, clears it. */
+    /** {@code names stack <which> highest|stacked [limit]}. */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> stackTarget(String which) {
+        return Commands.literal(which)
+            .then(Commands.literal("highest")
+                .executes(ctx -> report(ctx, NameAdmin.setStack(ctx.getSource().getServer(), which, false, null))))
+            .then(Commands.literal("stacked")
+                .executes(ctx -> report(ctx, NameAdmin.setStack(ctx.getSource().getServer(), which, true, null)))
+                .then(Commands.argument("limit", IntegerArgumentType.integer(1,
+                        com.arcadia.customperm.config.SettingsConfig.ChatStack.LIMIT_MAX))
+                    .executes(ctx -> report(ctx, NameAdmin.setStack(ctx.getSource().getServer(), which, true,
+                        IntegerArgumentType.getInteger(ctx, "limit"))))));
+    }
+
+    /** What a chat subcommand asks of the holder, once the holder is known. */
+    private interface ChatEdit {
+        AdminResult apply(com.arcadia.customperm.admin.ChatHolder holder);
+    }
+
+    /**
+     * {@code add <priority> <text>}, {@code addtemp <priority> <duration> <text>}, {@code remove <priority>}
+     * and {@code clear}, below a holder argument; the holder alone lists what it carries.
+     */
+    private static <T extends com.mojang.brigadier.builder.ArgumentBuilder<CommandSourceStack, T>> T chatEdits(
+            T holder, boolean suffix, java.util.function.BiFunction<CommandContext<CommandSourceStack>, ChatEdit, Integer> run) {
+        IntegerArgumentType priorities = IntegerArgumentType.integer(-com.arcadia.customperm.admin.ChatEntries.PRIORITY_MAX,
+            com.arcadia.customperm.admin.ChatEntries.PRIORITY_MAX);
+        return holder
+            .then(Commands.literal("add")
+                .then(Commands.argument("priority", priorities)
+                    .then(Commands.argument("text", StringArgumentType.greedyString())
+                        .executes(ctx -> run.apply(ctx, h -> h.add(suffix, IntegerArgumentType.getInteger(ctx, "priority"),
+                            StringArgumentType.getString(ctx, "text"), 0))))))
+            .then(Commands.literal("addtemp")
+                .then(Commands.argument("priority", priorities)
+                    .then(Commands.argument("duration", StringArgumentType.word())
+                        .suggests(SUGGEST_DURATIONS)
+                        .then(Commands.argument("text", StringArgumentType.greedyString())
+                            .executes(ctx -> {
+                                String duration = StringArgumentType.getString(ctx, "duration");
+                                long seconds = Expiry.parse(duration);
+                                if (seconds < 0) return report(ctx, badDuration(duration));
+                                return run.apply(ctx, h -> h.add(suffix, IntegerArgumentType.getInteger(ctx, "priority"),
+                                    StringArgumentType.getString(ctx, "text"), seconds));
+                            })))))
+            .then(Commands.literal("remove")
+                .then(Commands.argument("priority", priorities)
+                    .executes(ctx -> run.apply(ctx, h -> h.remove(suffix, IntegerArgumentType.getInteger(ctx, "priority"))))))
+            .then(Commands.literal("clear")
+                .executes(ctx -> run.apply(ctx, h -> h.clear(suffix))));
+    }
+
+    /** {@code prefix|suffix <grade> ...}: see {@link #chatEdits}. */
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> gradeChat(String literal,
                                                                                                   boolean suffix) {
         return Commands.literal(literal).requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
-            .then(Commands.argument("grade", StringArgumentType.word())
+            .then(chatEdits(Commands.argument("grade", StringArgumentType.word())
                 .suggests(SUGGEST_GRADES)
-                .executes(ctx -> gradeChat(ctx, suffix, null))
-                .then(Commands.argument("text", StringArgumentType.greedyString())
-                    .executes(ctx -> gradeChat(ctx, suffix, StringArgumentType.getString(ctx, "text")))));
+                .executes(ctx -> listChat(ctx, StringArgumentType.getString(ctx, "grade"),
+                    GradeAdmin.chat(StringArgumentType.getString(ctx, "grade"), suffix), suffix)),
+                suffix, CustomPermCommand::gradeChat));
     }
 
-    private static int gradeChat(CommandContext<CommandSourceStack> ctx, boolean suffix, String text) {
-        return report(ctx, GradeAdmin.setChat(ctx.getSource().getServer(),
-            StringArgumentType.getString(ctx, "grade"), suffix, text));
+    private static int gradeChat(CommandContext<CommandSourceStack> ctx, ChatEdit edit) {
+        // Unguarded, as a prefix changes what a player is called, never what they may do.
+        return report(ctx, edit.apply(com.arcadia.customperm.admin.ChatHolder.grade(
+            ctx.getSource().getServer(), StringArgumentType.getString(ctx, "grade"))));
     }
 
-    /** {@code prefix|suffix <player> [text]}: without a text, clears it. */
+    /** {@code prefix|suffix <player> ...}: see {@link #chatEdits}. */
     private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> userChat(String literal,
                                                                                                  boolean suffix) {
         return Commands.literal(literal).requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
-            .then(Commands.argument("player", StringArgumentType.word())
+            .then(chatEdits(Commands.argument("player", StringArgumentType.word())
                 .suggests(SUGGEST_KNOWN_PLAYERS)
-                .executes(ctx -> userChat(ctx, suffix, null))
-                .then(Commands.argument("text", StringArgumentType.greedyString())
-                    .executes(ctx -> userChat(ctx, suffix, StringArgumentType.getString(ctx, "text")))));
+                .executes(ctx -> userChat(ctx, null, suffix)),
+                suffix, (ctx, edit) -> userChat(ctx, edit, suffix)));
     }
 
-    private static int userChat(CommandContext<CommandSourceStack> ctx, boolean suffix, String text) {
+    /** Applies {@code edit} to the player named, or lists their own prefixes or suffixes when it is null. */
+    private static int userChat(CommandContext<CommandSourceStack> ctx, ChatEdit edit, boolean suffix) {
         AdminResult refusal = GradeAdmin.unavailable();
         if (refusal != null) return report(ctx, refusal);
         var server = ctx.getSource().getServer();
@@ -1023,7 +1081,20 @@ public class CustomPermCommand {
         GradeAdmin.Resolution resolution = GradeAdmin.resolvePlayer(server, StringArgumentType.getString(ctx, "player"));
         var profile = resolution.profile();
         if (profile.isEmpty()) return report(ctx, AdminResult.fail(resolution.problem()));
-        return report(ctx, UserAdmin.setChat(server, profile.get().getId(), profile.get().getName(), suffix, text));
+        if (edit == null) {
+            return listChat(ctx, profile.get().getName(), UserAdmin.chat(profile.get().getId(), suffix), suffix);
+        }
+        return report(ctx, edit.apply(com.arcadia.customperm.admin.ChatHolder.player(server,
+            profile.get().getId(), profile.get().getName())));
+    }
+
+    private static int listChat(CommandContext<CommandSourceStack> ctx, String holder, List<String> entries,
+                                boolean suffix) {
+        String what = suffix ? "suffixes" : "prefixes";
+        // Shown raw, codes included: this is what add would take back.
+        ctx.getSource().sendSuccess(() -> Component.literal(entries.isEmpty() ? holder + " has no " + what + " of its own."
+            : holder + " " + what + ", highest priority first: " + String.join(", ", entries)), false);
+        return 1;
     }
 
     private static int gradeParentAdd(CommandContext<CommandSourceStack> ctx, String duration) {
@@ -1195,12 +1266,13 @@ public class CustomPermCommand {
             + join(timed(uuid, "deny", UserAdmin.nodes(uuid, true)))), false);
         UserAdmin.scoped(uuid).forEach((context, entries) -> ctx.getSource().sendSuccess(() -> Component.literal(
             "  in " + com.arcadia.customperm.perm.Contexts.describe(context) + ": " + String.join(", ", entries)), false));
-        String prefix = UserAdmin.chat(uuid, false);
-        String suffix = UserAdmin.chat(uuid, true);
-        if (prefix != null || suffix != null) {
-            // Shown raw, codes included: this is what /customperm user prefix would take back.
-            ctx.getSource().sendSuccess(() -> Component.literal("  own prefix: " + (prefix == null ? "none" : "\"" + prefix + "\"")
-                + ", suffix: " + (suffix == null ? "none" : "\"" + suffix + "\"")), false);
+        List<String> prefixes = UserAdmin.chat(uuid, false);
+        List<String> suffixes = UserAdmin.chat(uuid, true);
+        if (!prefixes.isEmpty() || !suffixes.isEmpty()) {
+            // Shown raw, codes included: this is what /customperm user prefix add would take back.
+            ctx.getSource().sendSuccess(() -> Component.literal("  own prefixes: "
+                + (prefixes.isEmpty() ? "none" : String.join(", ", prefixes))
+                + "; suffixes: " + (suffixes.isEmpty() ? "none" : String.join(", ", suffixes))), false);
         }
         return 1;
     }

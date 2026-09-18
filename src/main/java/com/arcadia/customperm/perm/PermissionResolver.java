@@ -59,11 +59,12 @@ import java.util.function.BinaryOperator;
  *       operator level.</li>
  * </ol>
  *
- * <p>A chat prefix or suffix ({@link #prefix}, {@link #suffix}) is resolved by the same ranking with the
- * specificity step dropped, there being no specificity between two prefixes: the player's own above every
- * grade, then the heaviest grade, then the nearest ancestor inside a chain, refusals and the default grade
- * applying as they do to a node. Between two grades of equal weight the text that sorts first wins, so the
- * answer never depends on the order grades were assigned in.</p>
+ * <p>Chat prefixes and suffixes ({@link #prefixes}, {@link #suffixes}) are collected rather than decided:
+ * every one the player reaches, ordered by priority, highest first, like LuckPerms. At equal priority the
+ * holder ranks them as it ranks a node, the player's own above every grade, then the heaviest grade, then
+ * the nearest ancestor inside a chain, and the text that sorts first last of all, so the order never depends
+ * on the order grades were assigned in. Refusals, expiries and the default grade apply as they do to a node.
+ * Showing the first or several of them is the caller's choice ({@code chat/ChatStack}).</p>
  */
 public final class PermissionResolver {
 
@@ -135,34 +136,89 @@ public final class PermissionResolver {
         return fallback.value == null ? Tristate.UNSET : fallback.value;
     }
 
-    /** The chat prefix of {@code uuid}, or {@code null} when neither they nor any grade of theirs has one. */
+    /** The chat prefix that shows first for {@code uuid}, or {@code null} when they reach none. */
     public static String prefix(GradesConfig grades, UUID uuid, String defaultGrade) {
-        return meta(grades, uuid, defaultGrade, grades.userPrefixes, PREFIX);
+        List<String> all = prefixes(grades, uuid, defaultGrade);
+        return all.isEmpty() ? null : all.get(0);
     }
 
-    /** The chat suffix of {@code uuid}, or {@code null} when neither they nor any grade of theirs has one. */
+    /** The chat suffix that shows first for {@code uuid}, or {@code null} when they reach none. */
     public static String suffix(GradesConfig grades, UUID uuid, String defaultGrade) {
-        return meta(grades, uuid, defaultGrade, grades.userSuffixes, SUFFIX);
+        List<String> all = suffixes(grades, uuid, defaultGrade);
+        return all.isEmpty() ? null : all.get(0);
     }
 
-    private static String meta(GradesConfig grades, UUID uuid, String defaultGrade, Map<String, String> own,
-                               Reader<String> reader) {
-        if (uuid == null) return null;
+    /** Every chat prefix {@code uuid} reaches, the one that shows first first, each text once. */
+    public static List<String> prefixes(GradesConfig grades, UUID uuid, String defaultGrade) {
+        return chat(grades, uuid, defaultGrade, false);
+    }
+
+    /** Every chat suffix {@code uuid} reaches, ordered like {@link #prefixes}. */
+    public static List<String> suffixes(GradesConfig grades, UUID uuid, String defaultGrade) {
+        return chat(grades, uuid, defaultGrade, true);
+    }
+
+    /** One prefix or suffix reached, with what orders it. */
+    private record Found(int priority, long rank, int depth, String text) {
+    }
+
+    private static final java.util.Comparator<Found> SHOWN_FIRST =
+            java.util.Comparator.comparingInt(Found::priority).reversed()
+                    .thenComparing(java.util.Comparator.comparingLong(Found::rank).reversed())
+                    .thenComparingInt(Found::depth)
+                    .thenComparing(Found::text);
+
+    /**
+     * Off the permission path: called when a name is built, not per command, so it may allocate. It walks
+     * the grades the way a node does, through {@link #walkChain}, so the two can never disagree on what a
+     * player holds; only what is read on each grade differs.
+     */
+    private static List<String> chat(GradesConfig grades, UUID uuid, String defaultGrade, boolean suffix) {
+        if (uuid == null) return List.of();
         boolean hasDefault = defaultGrade != null && !defaultGrade.isEmpty();
         String user = uuid.toString();
-        String mine = own.get(user);
-        if (mine != null && !mine.isEmpty()) return mine;
+        long now = Expiry.now();
+        List<Found> found = new ArrayList<>();
+        collect(found, (suffix ? grades.userSuffixEntries : grades.userPrefixEntries).get(user), PLAYER_RANK, 0, now);
 
         List<String> refused = Expiry.alive(grades.userDeniedGrades.get(user), grades.userDeniedGradeExpiries.get(user));
-        Ranked<String> held = new Ranked<>(FIRST_SORTED);
         List<String> assigned = Expiry.alive(grades.userGrades.get(user), grades.userGradeExpiries.get(user));
         if (assigned != null) {
-            offerGrades(held, reader, grades, assigned, null, hasDefault ? defaultGrade : null, refused, Contexts.NONE);
+            collectGrades(found, grades, assigned, hasDefault ? defaultGrade : null, refused, suffix, now);
         }
-        if (held.value != null || !hasDefault) return held.value;
-        Ranked<String> fallback = new Ranked<>(FIRST_SORTED);
-        offerGrades(fallback, reader, grades, List.of(defaultGrade), null, null, refused, Contexts.NONE);
-        return fallback.value;
+        // As for a node, the default grade speaks only when nothing the player carries does.
+        if (found.isEmpty() && hasDefault) {
+            collectGrades(found, grades, List.of(defaultGrade), null, refused, suffix, now);
+        }
+        found.sort(SHOWN_FIRST);
+        java.util.LinkedHashSet<String> texts = new java.util.LinkedHashSet<>();
+        for (Found entry : found) texts.add(entry.text());
+        return List.copyOf(texts);
+    }
+
+    private static void collectGrades(List<Found> found, GradesConfig grades, List<String> gradeNames, String skip,
+                                      List<String> refused, boolean suffix, long now) {
+        for (String gradeName : gradeNames) {
+            if (gradeName == null || gradeName.equals(skip)) continue;
+            if (refused != null && refused.contains(gradeName)) continue;
+            GradesConfig.Grade grade = grades.grades.get(gradeName);
+            if (grade == null) continue;
+            long weight = grade.weight;
+            // The walk passes minus the depth as the rank; what the player holds ranks the whole chain.
+            Reader<String> reader = (into, reached, key, depth, contexts) ->
+                    collect(found, suffix ? reached.suffixes : reached.prefixes, weight, (int) -depth, now);
+            walkChain(new Ranked<>(KEEP), reader, grades, gradeName, grade, null, refused, Contexts.NONE);
+        }
+    }
+
+    private static void collect(List<Found> found, List<GradesConfig.ChatEntry> entries, long rank, int depth,
+                                long now) {
+        if (entries == null) return;
+        for (GradesConfig.ChatEntry entry : entries) {
+            if (entry.text != null && !entry.text.isEmpty() && entry.alive(now)) {
+                found.add(new Found(entry.priority, rank, depth, entry.text));
+            }
+        }
     }
 
     /** True only for an explicit ALLOW from the assigned grades, ignoring any default grade. */
@@ -191,27 +247,17 @@ public final class PermissionResolver {
                     specificity(entry.getValue().deniedPermissions, node), rank, Contexts.size(entry.getKey()));
         }
     };
-    private static final Reader<String> PREFIX =
-            (into, grade, key, rank, contexts) -> offerText(into, grade.prefix, rank);
-    private static final Reader<String> SUFFIX =
-            (into, grade, key, rank, contexts) -> offerText(into, grade.suffix, rank);
 
     /** Between equal ranks, a DENY wins over an ALLOW (INVARIANT-101). */
     private static final BinaryOperator<Tristate> DENY_WINS =
             (kept, offered) -> offered == Tristate.DENY ? Tristate.DENY : kept;
-    /** Between equal ranks, the text that sorts first: any fixed rule would do, as long as it ignores order. */
-    private static final BinaryOperator<String> FIRST_SORTED =
-            (kept, offered) -> offered.compareTo(kept) < 0 ? offered : kept;
+    /** The chat walk decides nothing through a ranking: its reader collects, and this is never reached. */
+    private static final BinaryOperator<String> KEEP = (kept, offered) -> kept;
 
     /** Inside one holder the same rule applies, DENY included: allowing and denying at one level refuses. */
     private static void offerNode(Ranked<Tristate> into, int allow, int deny, long rank, int context) {
         if (allow == NONE && deny == NONE) return;
         into.offer(Math.max(allow, deny), deny >= allow ? Tristate.DENY : Tristate.ALLOW, rank, context);
-    }
-
-    /** A prefix has no specificity: every one is offered at the same reach, so only the rank decides. */
-    private static void offerText(Ranked<String> into, String text, long rank) {
-        if (text != null && !text.isEmpty()) into.offer(EXACT, text, rank, 0);
     }
 
     private static <T> void offerGrades(Ranked<T> best, Reader<T> reader, GradesConfig grades,
@@ -276,8 +322,7 @@ public final class PermissionResolver {
      * The best entry seen so far in one layer: the most specific wins, the highest rank breaks a tie on
      * specificity, the entry naming more contexts breaks a tie on rank, and {@code onTie} breaks the rest. A rank is a grade weight, or {@link #PLAYER_RANK}
      * for what the player carries themselves. Written so the outcome does not depend on the order things
-     * are offered in, which is the order grades were assigned in and carries no meaning. Permissions and
-     * prefixes are both resolved here, so the two can never rank holders differently.
+     * are offered in, which is the order grades were assigned in and carries no meaning.
      */
     private static final class Ranked<T> {
         private final BinaryOperator<T> onTie;

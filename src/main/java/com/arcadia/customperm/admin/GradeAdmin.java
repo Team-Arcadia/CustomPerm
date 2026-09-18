@@ -216,27 +216,64 @@ public final class GradeAdmin {
     }
 
     /**
-     * Sets or clears the chat prefix or suffix of a grade. Blank clears it. Shown only while name
-     * decoration is on, which the result says, since a prefix nobody sees looks like one that failed.
+     * Gives a grade a chat prefix or suffix at {@code priority}, for {@code seconds} or for good (0). The
+     * highest priority a player reaches shows first; one already at that priority is replaced. Shown only
+     * while name decoration is on, which the result says, since a prefix nobody sees looks like one that failed.
      */
-    public static AdminResult setChat(MinecraftServer server, String gradeName, boolean suffix, String text) {
+    public static AdminResult addChat(MinecraftServer server, String gradeName, boolean suffix, int priority,
+                                      String text, long seconds) {
         AdminResult refusal = unavailable();
         if (refusal != null) return refusal;
         GradesConfig.Grade grade = grades().grades.get(gradeName);
         if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
-        String value = text == null || text.isBlank() ? null : text;
-        String problem = com.arcadia.customperm.chat.LegacyText.problem(value);
-        if (problem != null) return AdminResult.fail("Invalid " + (suffix ? "suffix" : "prefix") + ": " + problem);
+        String problem = ChatEntries.problem(suffix, priority, text);
+        if (problem != null) return AdminResult.fail(problem);
         String what = suffix ? "Suffix" : "Prefix";
-        if (java.util.Objects.equals(suffix ? grade.suffix : grade.prefix, value)) {
-            return AdminResult.ok(what + " of " + gradeName + " unchanged.");
+        ChatEntries.Change change = ChatEntries.put(suffix ? grade.suffixes : grade.prefixes, priority, text, seconds);
+        if (change == ChatEntries.Change.UNCHANGED) {
+            return AdminResult.ok(what + " \"" + text + "\" at " + priority + " on " + gradeName + " unchanged.");
         }
-        if (suffix) grade.suffix = value;
-        else grade.prefix = value;
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
-        return decorationNote(AdminResult.ok(value == null ? what + " of " + gradeName + " cleared."
-                : what + " of " + gradeName + " set to \"" + value + "\".").warn(warning));
+        return decorationNote(AdminResult.ok(what + " \"" + text + "\" at " + priority + " -> " + gradeName
+                + Expiries.span(seconds) + (change == ChatEntries.Change.REPLACED ? ", replacing the one at that priority." : ""))
+                .warn(warning));
+    }
+
+    /** Removes the prefix or suffix a grade has at {@code priority}. */
+    public static AdminResult removeChat(MinecraftServer server, String gradeName, boolean suffix, int priority) {
+        AdminResult refusal = unavailable();
+        if (refusal != null) return refusal;
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        String what = suffix ? "suffix" : "prefix";
+        GradesConfig.ChatEntry removed = ChatEntries.remove(suffix ? grade.suffixes : grade.prefixes, priority);
+        if (removed == null) return AdminResult.ok(gradeName + " has no " + what + " at " + priority + " — no change.");
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
+        return AdminResult.ok("Removed the " + what + " " + ChatEntries.describe(removed) + " from " + gradeName).warn(warning);
+    }
+
+    /** Removes every prefix, or every suffix, of a grade. */
+    public static AdminResult clearChat(MinecraftServer server, String gradeName, boolean suffix) {
+        AdminResult refusal = unavailable();
+        if (refusal != null) return refusal;
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        if (grade == null) return AdminResult.fail("No such grade: " + gradeName);
+        List<GradesConfig.ChatEntry> entries = suffix ? grade.suffixes : grade.prefixes;
+        String what = suffix ? "suffixes" : "prefixes";
+        if (entries.isEmpty()) return AdminResult.ok(gradeName + " has no " + what + " — no change.");
+        int count = entries.size();
+        entries.clear();
+        String warning = ConfigAdmin.persist();
+        ConfigAdmin.resyncCommands(server);
+        return AdminResult.ok("Cleared " + count + " " + what + " from " + gradeName).warn(warning);
+    }
+
+    /** A grade's prefixes or suffixes for a listing, highest priority first; empty for an unknown grade. */
+    public static List<String> chat(String gradeName, boolean suffix) {
+        GradesConfig.Grade grade = grades().grades.get(gradeName);
+        return grade == null ? List.of() : ChatEntries.listing(suffix ? grade.suffixes : grade.prefixes);
     }
 
     /** Says a prefix shows nowhere while decoration is off. Shared with {@link UserAdmin}. */
@@ -558,8 +595,8 @@ public final class GradeAdmin {
             g.weight = grade.weight;
             g.parents = new ArrayList<>(grade.parents);
             g.deniedParents = new ArrayList<>(grade.deniedParents);
-            g.prefix = grade.prefix;
-            g.suffix = grade.suffix;
+            g.prefixes = GradesConfig.ChatEntry.copy(grade.prefixes);
+            g.suffixes = GradesConfig.ChatEntry.copy(grade.suffixes);
             g.permissionExpiries = new java.util.HashMap<>(grade.permissionExpiries);
             g.deniedPermissionExpiries = new java.util.HashMap<>(grade.deniedPermissionExpiries);
             g.contexts = Scopes.copy(grade.contexts);
@@ -571,8 +608,8 @@ public final class GradeAdmin {
         source.userDeniedGrades.forEach((uuid, list) -> copy.userDeniedGrades.put(uuid, new ArrayList<>(list)));
         source.userPermissions.forEach((uuid, nodes) -> copy.userPermissions.put(uuid, new HashSet<>(nodes)));
         source.userDeniedPermissions.forEach((uuid, nodes) -> copy.userDeniedPermissions.put(uuid, new HashSet<>(nodes)));
-        copy.userPrefixes.putAll(source.userPrefixes);
-        copy.userSuffixes.putAll(source.userSuffixes);
+        copy.userPrefixEntries = GradesConfig.ChatEntry.copyUsers(source.userPrefixEntries);
+        copy.userSuffixEntries = GradesConfig.ChatEntry.copyUsers(source.userSuffixEntries);
         copyExpiries(source.userPermissionExpiries, copy.userPermissionExpiries);
         copyExpiries(source.userDeniedPermissionExpiries, copy.userDeniedPermissionExpiries);
         copyExpiries(source.userGradeExpiries, copy.userGradeExpiries);
@@ -592,10 +629,10 @@ public final class GradeAdmin {
         target.userPermissions.putAll(saved.userPermissions);
         target.userDeniedPermissions.clear();
         target.userDeniedPermissions.putAll(saved.userDeniedPermissions);
-        target.userPrefixes.clear();
-        target.userPrefixes.putAll(saved.userPrefixes);
-        target.userSuffixes.clear();
-        target.userSuffixes.putAll(saved.userSuffixes);
+        target.userPrefixEntries.clear();
+        target.userPrefixEntries.putAll(saved.userPrefixEntries);
+        target.userSuffixEntries.clear();
+        target.userSuffixEntries.putAll(saved.userSuffixEntries);
         target.userPermissionExpiries.clear();
         target.userPermissionExpiries.putAll(saved.userPermissionExpiries);
         target.userDeniedPermissionExpiries.clear();

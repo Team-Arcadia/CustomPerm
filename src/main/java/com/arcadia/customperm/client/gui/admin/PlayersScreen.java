@@ -88,7 +88,7 @@ public final class PlayersScreen extends AdminScreen {
         this.nodeField = new CpEditBox(Component.literal("Permission node"), GuiCodecs.CLIENT_ARG_MAX)
                 .hint(Component.literal("permission node"))
                 .onSubmit(() -> addNode(false));
-        this.chat = new ChatFields(this::saveChat);
+        this.chat = new ChatFields(this::rebuild);
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
                 .hint(Component.literal("for, e.g. 30d"));
         this.worldField = new CpEditBox(Component.literal("World"), 64)
@@ -228,7 +228,7 @@ public final class PlayersScreen extends AdminScreen {
             }
         }
         trackList.setItems(tracks);
-        chat.fill(player == null ? "" : player.prefix(), player == null ? "" : player.suffix());
+        chat.fill(player == null ? List.of() : player.chat());
     }
 
     /** Shows the rest of the first known player name that starts with what was typed. */
@@ -312,15 +312,19 @@ public final class PlayersScreen extends AdminScreen {
             return;
         }
         if (tab == Tab.CHAT) {
-            addRenderableWidget(chat.prefix.at(chat.prefixRect(fieldRow)));
-            addRenderableWidget(chat.suffix.at(chat.suffixRect(fieldRow)));
+            addRenderableWidget(chat.list.at(chat.listRect(list)));
+            addRenderableWidget(chat.text.at(chat.textRect(fieldRow)));
+            addRenderableWidget(chat.priority.at(chat.priorityRect(fieldRow)));
+            addRenderableWidget(chat.duration.at(chat.durationRect(fieldRow)));
             chat.setEditable(editable);
             placeButtonRow(buttonRow, 6, true, List.of(
-                    CpButton.accent(Component.literal("Save"), this::saveChat).icon(Icon.CHECK).enabled(editable)
-                            .tooltip(Component.literal("A player's own prefix wins over every grade they hold.")),
-                    CpButton.neutral(Component.literal("Clear"), this::clearChat).icon(Icon.MINUS)
-                            .enabled(editable && (!player.prefix().isEmpty() || !player.suffix().isEmpty()))
-                            .tooltip(Component.literal("Their grades' prefix shows again."))));
+                    CpButton.accent(Component.literal("Prefix"), () -> addChat(false)).icon(Icon.PLUS).enabled(editable)
+                            .tooltip(Component.literal("Their own, at that priority. At equal priority it shows before "
+                                    + "any grade's; a grade's at a higher priority still shows first.")),
+                    CpButton.accent(Component.literal("Suffix"), () -> addChat(true)).icon(Icon.PLUS).enabled(editable),
+                    CpButton.neutral(Component.literal("Remove"), this::removeChat).icon(Icon.MINUS)
+                            .enabled(editable && chat.list.getSelected() != null)
+                            .tooltip(Component.literal("Their grades' prefixes still apply."))));
             return;
         }
         addRenderableWidget(nodeList.at(list));
@@ -372,19 +376,26 @@ public final class PlayersScreen extends AdminScreen {
 
     // ------------------------------------------------------------------ actions
 
-    /** Sends what changed; by name like a node, so a player who holds nothing yet can get a prefix. */
-    private void saveChat() {
+    /** By name like a node, so a player who holds nothing yet can get a prefix. */
+    private void addChat(boolean suffix) {
         PlayersData.Player player = playerList.getSelected();
-        if (player == null) return;
-        if (chat.prefixChanged()) act(GuiAction.USER_CHAT_SET, player.name(), "prefix", chat.prefix.getValue());
-        if (chat.suffixChanged()) act(GuiAction.USER_CHAT_SET, player.name(), "suffix", chat.suffix.getValue());
+        String text = chat.text.getValue();
+        if (player == null || text.isEmpty()) return;
+        Integer priority = chat.typedPriority();
+        if (priority == null) {
+            status("A priority is a whole number: the highest shows first.", false);
+            return;
+        }
+        act(GuiAction.USER_CHAT_ADD, player.name(), suffix ? "suffix" : "prefix", String.valueOf(priority), text,
+                chat.duration.getValue().trim());
+        chat.clearTyped();
     }
 
-    private void clearChat() {
+    private void removeChat() {
         PlayersData.Player player = playerList.getSelected();
-        if (player == null) return;
-        if (!player.prefix().isEmpty()) act(GuiAction.USER_CHAT_SET, player.name(), "prefix", "");
-        if (!player.suffix().isEmpty()) act(GuiAction.USER_CHAT_SET, player.name(), "suffix", "");
+        com.arcadia.customperm.network.gui.ChatLine line = chat.list.getSelected();
+        if (player == null || line == null) return;
+        act(GuiAction.USER_CHAT_REMOVE, player.name(), line.suffix() ? "suffix" : "prefix", String.valueOf(line.priority()));
     }
 
     /** Selects a player by name, adding a local row when the server does not know them yet. */

@@ -121,8 +121,8 @@ public final class ImportAdmin {
                 target.parentExpiries.clear();
                 target.deniedParentExpiries.clear();
                 target.weight = source.weight();
-                target.prefix = null;
-                target.suffix = null;
+                target.prefixes.clear();
+                target.suffixes.clear();
             } else {
                 // A grade that already exists keeps its weight: the number an admin set by hand here is
                 // a decision, and silently taking the one from LuckPerms would undo it.
@@ -140,9 +140,8 @@ public final class ImportAdmin {
             for (ScopedGrant entry : source.scoped()) entry.addTo(Scopes.of(target, entry.context()));
             addTimed(target.parents, target.parentExpiries, source.parents(), source.expiries(), "grade:");
             addTimed(target.deniedParents, target.deniedParentExpiries, source.deniedParents(), source.expiries(), "refuse:");
-            // Adding keeps a prefix already set here, like the weight: it is what the admin chose.
-            if (target.prefix == null) target.prefix = source.prefix();
-            if (target.suffix == null) target.suffix = source.suffix();
+            // Adding keeps a prefix already set here at that priority, like the weight: it is what the admin chose.
+            for (ChatGrant chat : source.chat()) chat.addTo(target.prefixes, target.suffixes);
             gradesWritten++;
         }
 
@@ -153,8 +152,8 @@ public final class ImportAdmin {
                 grades().userDeniedGrades.remove(source.uuid());
                 grades().userPermissions.remove(source.uuid());
                 grades().userDeniedPermissions.remove(source.uuid());
-                grades().userPrefixes.remove(source.uuid());
-                grades().userSuffixes.remove(source.uuid());
+                grades().userPrefixEntries.remove(source.uuid());
+                grades().userSuffixEntries.remove(source.uuid());
                 grades().userGradeExpiries.remove(source.uuid());
                 grades().userDeniedGradeExpiries.remove(source.uuid());
                 grades().userPermissionExpiries.remove(source.uuid());
@@ -184,8 +183,13 @@ public final class ImportAdmin {
             }
             java.util.UUID id = java.util.UUID.fromString(uuid);
             for (ScopedGrant entry : source.scoped()) entry.addTo(Scopes.of(grades(), id, entry.context()));
-            if (source.prefix() != null) grades().userPrefixes.putIfAbsent(source.uuid(), source.prefix());
-            if (source.suffix() != null) grades().userSuffixes.putIfAbsent(source.uuid(), source.suffix());
+            if (!source.chat().isEmpty()) {
+                List<GradesConfig.ChatEntry> prefixes = grades().userPrefixEntries.computeIfAbsent(uuid, k -> new ArrayList<>());
+                List<GradesConfig.ChatEntry> suffixes = grades().userSuffixEntries.computeIfAbsent(uuid, k -> new ArrayList<>());
+                for (ChatGrant chat : source.chat()) chat.addTo(prefixes, suffixes);
+                if (prefixes.isEmpty()) grades().userPrefixEntries.remove(uuid);
+                if (suffixes.isEmpty()) grades().userSuffixEntries.remove(uuid);
+            }
             playersWritten++;
         }
         int tracksWritten = 0;

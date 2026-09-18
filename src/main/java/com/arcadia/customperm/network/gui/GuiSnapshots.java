@@ -79,8 +79,7 @@ public final class GuiSnapshots {
             players.add(new PlayersData.Player(rawUuid, name, online,
                     new PlayersData.Held(List.copyOf(config.userGrades.getOrDefault(rawUuid, List.of())),
                             List.copyOf(config.userDeniedGrades.getOrDefault(rawUuid, List.of())),
-                            config.userPrefixes.getOrDefault(rawUuid, ""),
-                            config.userSuffixes.getOrDefault(rawUuid, ""),
+                            ChatLine.of(config.userPrefixEntries.get(rawUuid), config.userSuffixEntries.get(rawUuid)),
                             timers(config.userPermissionExpiries.get(rawUuid),
                                     config.userDeniedPermissionExpiries.get(rawUuid)),
                             userScoped(uuid)),
@@ -123,7 +122,7 @@ public final class GuiSnapshots {
             List<GradesData.Member> refusing = refusers.getOrDefault(name, new ArrayList<>());
             refusing.sort(java.util.Comparator.comparing(GradesData.Member::name, String.CASE_INSENSITIVE_ORDER));
             grades.add(new GradesData.Grade(new GradesData.Header(name, grade.weight,
-                    grade.prefix == null ? "" : grade.prefix, grade.suffix == null ? "" : grade.suffix),
+                    ChatLine.of(grade.prefixes, grade.suffixes)),
                     new GradesData.Inheritance(List.copyOf(grade.parents), List.copyOf(grade.deniedParents)),
                     new TreeSet<>(grade.permissions).stream().limit(GradesData.NODES_MAX).toList(),
                     new TreeSet<>(grade.deniedPermissions).stream().limit(GradesData.NODES_MAX).toList(),
@@ -181,7 +180,8 @@ public final class GuiSnapshots {
 
     static NameSettings nameSettings() {
         var settings = CustomPerm.configManager.getSettings();
-        return new NameSettings(settings.decorateNames, settings.nameFormat);
+        return new NameSettings(settings.decorateNames, settings.nameFormat,
+                NameSettings.Stack.of(settings.prefixStack), NameSettings.Stack.of(settings.suffixStack));
     }
 
     /** Turns a UUID-to-grade-names map inside out: one entry per grade, with the players resolved. */

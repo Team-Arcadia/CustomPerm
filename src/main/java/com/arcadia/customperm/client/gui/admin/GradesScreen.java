@@ -107,7 +107,7 @@ public final class GradesScreen extends AdminScreen {
         this.weightField = new CpEditBox(Component.literal("Grade weight"), 7)
                 .hint(Component.literal("weight"))
                 .onSubmit(this::applyWeight);
-        this.chat = new ChatFields(this::saveChat);
+        this.chat = new ChatFields(this::rebuild);
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
                 .hint(Component.literal("for, e.g. 30d"));
         this.worldField = new CpEditBox(Component.literal("World"), 64)
@@ -244,7 +244,7 @@ public final class GradesScreen extends AdminScreen {
         memberList.setItems(members);
         // The box shows the weight in force, so submitting it unchanged is a no-op rather than a reset.
         weightField.setValue(grade == null ? "" : String.valueOf(grade.weight()));
-        chat.fill(grade == null ? "" : grade.prefix(), grade == null ? "" : grade.suffix());
+        chat.fill(grade == null ? List.of() : grade.chat());
     }
 
     /** Shows the rest of the first known player name that starts with what was typed. */
@@ -379,16 +379,28 @@ public final class GradesScreen extends AdminScreen {
                     CpButton.neutral(Component.literal("Remove"), () -> removeParent(selected)).icon(Icon.MINUS)
                             .enabled(editable && selected != null)));
         } else if (tab == Tab.CHAT) {
-            addRenderableWidget(chat.prefix.at(chat.prefixRect(fieldRow)));
-            addRenderableWidget(chat.suffix.at(chat.suffixRect(fieldRow)));
+            addRenderableWidget(chat.list.at(chat.listRect(list)));
+            addRenderableWidget(chat.text.at(chat.textRect(fieldRow)));
+            addRenderableWidget(chat.priority.at(chat.priorityRect(fieldRow)));
+            addRenderableWidget(chat.duration.at(chat.durationRect(fieldRow)));
             chat.setEditable(editable);
             boolean decorate = data.names().decorate();
+            boolean stacked = data.names().prefix().stacked();
             placeButtonRow(buttonRow, 6, true, List.of(
-                    CpButton.accent(Component.literal("Save"), this::saveChat).icon(Icon.CHECK).enabled(editable)
-                            .tooltip(Component.literal("Among a player's grades the heaviest one's prefix shows; their "
-                                    + "own prefix, on the Players page, wins over every grade.")),
-                    CpButton.neutral(Component.literal("Clear"), this::clearChat).icon(Icon.MINUS)
-                            .enabled(editable && (!grade.prefix().isEmpty() || !grade.suffix().isEmpty())),
+                    CpButton.accent(Component.literal("Prefix"), () -> addChat(false)).icon(Icon.PLUS).enabled(editable)
+                            .tooltip(Component.literal("Adds the text at that priority, replacing one already there. "
+                                    + "The highest priority a player reaches shows first; at equal priority their own, "
+                                    + "then the heaviest grade.")),
+                    CpButton.accent(Component.literal("Suffix"), () -> addChat(true)).icon(Icon.PLUS).enabled(editable),
+                    CpButton.neutral(Component.literal("Remove"), this::removeChat).icon(Icon.MINUS)
+                            .enabled(editable && chat.list.getSelected() != null),
+                    CpButton.ghost(Component.literal(stacked ? "Stacked" : "Highest"),
+                                    () -> act(GuiAction.NAMES_STACK, stacked ? "highest" : "stacked"))
+                            .icon(stacked ? Icon.CHECK : Icon.CROSS).selected(stacked)
+                            .enabled(canEdit(GuiArea.CONFIG))
+                            .tooltip(Component.literal("Highest shows one prefix and one suffix; Stacked shows several "
+                                    + "in a row, highest priority first. Spacers and the limit are in settings.json. Needs "
+                                    + GuiArea.CONFIG.node() + ".")),
                     CpButton.ghost(Component.literal(decorate ? "Names decorated" : "Names plain"),
                                     () -> act(GuiAction.NAMES_DECORATE, String.valueOf(!decorate)))
                             .icon(decorate ? Icon.CHECK : Icon.CROSS).selected(decorate)
@@ -452,19 +464,26 @@ public final class GradesScreen extends AdminScreen {
                 () -> act(GuiAction.GRADE_DEFAULT, grade.name()));
     }
 
-    /** Sends what changed in the two boxes; an emptied box clears it. */
-    private void saveChat() {
+    /** Sends the text at the typed priority; the text is sent as typed, a trailing space being part of it. */
+    private void addChat(boolean suffix) {
         GradesData.Grade grade = gradeList.getSelected();
-        if (grade == null) return;
-        if (chat.prefixChanged()) act(GuiAction.GRADE_CHAT_SET, grade.name(), "prefix", chat.prefix.getValue());
-        if (chat.suffixChanged()) act(GuiAction.GRADE_CHAT_SET, grade.name(), "suffix", chat.suffix.getValue());
+        String text = chat.text.getValue();
+        if (grade == null || text.isEmpty()) return;
+        Integer priority = chat.typedPriority();
+        if (priority == null) {
+            status("A priority is a whole number: the highest shows first.", false);
+            return;
+        }
+        act(GuiAction.GRADE_CHAT_ADD, grade.name(), suffix ? "suffix" : "prefix", String.valueOf(priority), text,
+                chat.duration.getValue().trim());
+        chat.clearTyped();
     }
 
-    private void clearChat() {
+    private void removeChat() {
         GradesData.Grade grade = gradeList.getSelected();
-        if (grade == null) return;
-        if (!grade.prefix().isEmpty()) act(GuiAction.GRADE_CHAT_SET, grade.name(), "prefix", "");
-        if (!grade.suffix().isEmpty()) act(GuiAction.GRADE_CHAT_SET, grade.name(), "suffix", "");
+        com.arcadia.customperm.network.gui.ChatLine line = chat.list.getSelected();
+        if (grade == null || line == null) return;
+        act(GuiAction.GRADE_CHAT_REMOVE, grade.name(), line.suffix() ? "suffix" : "prefix", String.valueOf(line.priority()));
     }
 
     /** Submits the weight box. A grade that weighs nothing is the norm, so a blank box means 0. */

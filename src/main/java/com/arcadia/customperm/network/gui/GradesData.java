@@ -73,13 +73,9 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
             return header.weight();
         }
 
-        /** Raw text with its codes, empty for none. */
-        public String prefix() {
-            return header.prefix();
-        }
-
-        public String suffix() {
-            return header.suffix();
+        /** Its prefixes then its suffixes, highest priority first, raw text with codes. */
+        public List<ChatLine> chat() {
+            return header.chat();
         }
 
         public List<String> parents() {
@@ -122,13 +118,12 @@ public record GradesData(List<Grade> grades, List<String> knownPlayers, String f
                 Details::new);
     }
 
-    /** A grade's own scalars: its name, its weight, and the prefix and suffix it gives, empty for none. */
-    public record Header(String name, int weight, String prefix, String suffix) {
+    /** A grade's own scalars: its name, its weight, and the prefixes and suffixes it gives. */
+    public record Header(String name, int weight, List<ChatLine> chat) {
         public static final StreamCodec<ByteBuf, Header> CODEC = StreamCodec.composite(
                 GuiCodecs.TEXT, Header::name,
                 ByteBufCodecs.VAR_INT, Header::weight,
-                GuiCodecs.TEXT, Header::prefix,
-                GuiCodecs.TEXT, Header::suffix,
+                ChatLine.LIST, Header::chat,
                 Header::new);
     }
 
