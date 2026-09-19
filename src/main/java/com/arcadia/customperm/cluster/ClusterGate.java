@@ -83,7 +83,7 @@ public final class ClusterGate {
             case NO_DATABASE -> "Arcadia Lib has no database connection (disabled in its database config, or "
                     + "unreachable at start: see its log lines). This server runs alone.";
             case DUPLICATE_NAME -> "another running server already uses this server's name. Give each server its own "
-                    + "server_id in config/arcadia/lib/server.toml (the default is server1). This server runs alone.";
+                    + "server_id in <world>/serverconfig/arcadia/lib/server.toml (the default is server1). This server runs alone.";
             case STORE_FAILED -> "the database refused cluster mode's tables or first read (see the server log). "
                     + "This server runs alone on its own files.";
         };

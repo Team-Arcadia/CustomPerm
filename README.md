@@ -35,6 +35,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - [Commands](#commands)
 - [Permission nodes](#permission-nodes)
 - [Configuration files](#configuration-files)
+- [Cluster mode (several servers)](#cluster-mode-several-servers)
 - [Common workflows](#common-workflows)
 - [Aliases and macros](#aliases-and-macros)
 - [Security considerations](#security-considerations)
@@ -67,6 +68,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Permissions of other mods** — nodes other mods declare through NeoForge's permission API are answered from the grades, so `/customperm grade addperm vip somemod.feature` works for them too. CustomPerm becomes NeoForge's permission handler on its own only without LuckPerms, and never replaces a handler an admin chose. Mods that call LuckPerms by name instead are listed by `/customperm modcheck`.
 - **Tracks** — an ordered ladder of grades, so promoting and demoting move a player one rung at a time: `/customperm track promote Steve staff`, or the Tracks tab of the Players page. A track grants nothing itself; it is the convenience a server coming from LuckPerms expects.
 - **Per-world entries** — a node on a grade or a player, or a grade a player holds, can apply in one world only: `/customperm grade adddeny member customperm.command.home world=the_nether`. It outranks the same holder's entry without a world, and the command tree follows the player through portals. The Grades and Players pages take a world too.
+- **Cluster mode** — several servers without LuckPerms share their grades, commands, aliases, rate limits and activity log through [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib)'s MySQL database; a change made on one applies on all within about two seconds. Off by default. See [Cluster mode](#cluster-mode-several-servers).
 - **Chat prefixes and suffixes** — a grade, or one player, carries prefixes and suffixes around their name in chat and wherever the game shows it, each with a priority and, if wanted, a duration, like LuckPerms: the highest priority shows, or several in a row. With LuckPerms, the prefixes LuckPerms stores are shown instead. The name is decorated, never the message, so chat stays signed and reportable. Off until `/customperm names on`.
 - **Export to LuckPerms** — a server that built its grades here and installs LuckPerms later writes them into LuckPerms as groups, users and nodes, so they keep deciding. Same two steps as the import, nothing translated. `/customperm export preview` then `/customperm export confirm`, or the To LuckPerms tab of the Import page.
 - **Refused grades** — a grade can refuse another wherever it would inherit it, and a player can refuse one wherever a grade of theirs would bring it, the default grade included. A refusal takes the grade out of the resolution; it never turns what that grade allows into a denial. `/customperm grade parent adddeny`, `/customperm user denygrade`, or the Grades page.
@@ -330,7 +332,7 @@ sets for the whole server, like LuckPerms' `static-contexts` (`region=eu`). Two 
 one: `world=the_nether,world=the_end` applies in both; two keys must both hold:
 `world=the_nether,gamemode=creative`. At the same specificity and holder, an entry naming more keys outranks
 one naming fewer. A key nothing on this server sets is refused, since the entry would apply nowhere; `server=`
-waits for cluster mode. The command tree and names follow a change of game mode as they follow a change of
+is set only in a cluster (see [Cluster mode](#cluster-mode-several-servers)). The command tree and names follow a change of game mode as they follow a change of
 world. For prefixes, `in <world>` stays, and any other context goes quoted after `where`:
 `/customperm grade prefix vip where "gamemode=creative" add 5 [Builder] `. The world box of the pages takes
 the same text (`the_nether,gamemode=creative`).
@@ -489,7 +491,7 @@ a group's parent, a refusal, a prefix or suffix, and meta. On NeoForge LuckPerms
 static context sets it here. Tracks carry over with their
 groups in order; adding keeps a track that already exists here as it is, replacing takes LuckPerms' order.
 
-What is left behind, and said in the report rather than dropped in silence: LuckPerms' `world` context, which on NeoForge is the save's name and not a dimension, a `server=` context,
+What is left behind, and said in the report rather than dropped in silence: LuckPerms' `world` context, which on NeoForge is the save's name and not a dimension, a `server=` context unless a cluster runs,
 and a key no static context sets here; a display name that is temporary, limited to a context or longer than 48
 characters, which a grade's cannot be; regular expression permissions; and the nodes other mods read without declaring them to NeoForge, which nothing here would
 read back. Adding keeps the display name of a grade that already has one. Nodes mods declared are imported as they are, on groups and players, since CustomPerm answers them. On players, only
@@ -653,6 +655,7 @@ Runtime safety settings.
 - `nameFormat` (default `{prefix}{name}{suffix}`): how the name is built; `&` codes allowed between the placeholders. A format without `{name}` is replaced by the default, so a prefix can never pass for a player.
 - `prefixStack` and `suffixStack` (internal backend): `mode` is `highest` (one, the default) or `stacked` (several in a row, highest priority first, at most `limit`, 1 to 16); `start`, `middle` and `end` are written before the first, between two and after the last when stacked, `&` codes allowed. `/customperm names stack` sets the mode and the limit.
 - `answerOtherMods` (default `true`): answer the permission checks other mods make through NeoForge, from the grades. Read at start; see [Mods that check permissions through NeoForge](#mods-that-check-permissions-through-neoforge).
+- `cluster` (internal backend, off by default): several servers sharing one configuration through Arcadia Lib; read at start. See [Cluster mode](#cluster-mode-several-servers).
 - `configVersion`: the settings format this file was written with. A fresh install is stamped with the current one; a file from an older CustomPerm has none, which makes the server log what changed and tell every operator once (see [MIGRATION.md](MIGRATION.md)). Leave it alone.
 
 `luckPermsFallbackMode` accepts:
@@ -777,6 +780,80 @@ damaged.
 `tracks` maps a track to its grades, lowest first. It only names grades, which is why it lives in this file:
 deleting a grade takes it off every track in the same write. It decides nothing when permissions are
 checked.
+
+---
+
+## Cluster mode (several servers)
+
+Several servers running CustomPerm **without LuckPerms** can share one configuration: a grade created on the hub
+applies on survival and creative within about two seconds. Off by default; a server that does not turn it on
+behaves exactly as before. With LuckPerms, cluster mode does nothing: LuckPerms shares its own storage between
+servers, and CustomPerm reads it.
+
+**What it needs**
+
+- A dedicated server (a singleplayer or LAN world always runs alone).
+- [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) 1.3.0 or later on every server, connected
+  to one MySQL or MariaDB database: `<world>/serverconfig/arcadia/lib/database.toml` (Arcadia Lib's file, `enabled`,
+  `host`, `port`, `name`, `user`, `password`). CustomPerm ships no database driver and opens no connection of its
+  own. Without Arcadia Lib, CustomPerm loads and runs as usual.
+- A different name per server: `server_id` in `<world>/serverconfig/arcadia/lib/server.toml` (Arcadia Lib's default
+  is `server1` for everyone). A server whose name another running server already uses stays out of the cluster and
+  says so.
+- `"cluster": { "enabled": true }` in each server's `settings.json`, then a restart. Cluster settings apply at
+  start only.
+
+**What is shared**
+
+Each part can be shared or kept local, in `settings.json`:
+
+```json
+"cluster": {
+  "enabled": false,
+  "share": { "grades": true, "commands": true, "aliases": true, "rateLimits": true,
+             "rateLimitCounters": false, "log": true },
+  "pollSeconds": 2,
+  "whenDatabaseLost": "last-known"
+}
+```
+
+- `grades`: every grade and everything players hold (`grades.json`), tracks included.
+- `commands`, `aliases`, `rateLimits`: exposed commands, aliases, rate-limit rules.
+- `rateLimitCounters` (off by default): uses counted on one server count on the others, so a limit of 3 an hour
+  is 3 across the network, to within `pollSeconds`. Costs a database write per limited command use.
+- `log`: the activity log. Entries from other servers show in the Logs page and `/customperm log` with
+  `@<server>`; each server's files keep only what happened there.
+- `settings.json` itself stays local: the default grade, `gateAllCommands`, name display and static contexts are
+  set per server.
+
+**How changes travel**
+
+- Each grade, player, command, alias and rule is its own row with a version. A change is written before the
+  command answers. Two admins changing two different grades never collide; if two servers change the same grade
+  at the same moment, the second is **refused**, sees the first change, and is told which server made it.
+- The other servers read what changed every `pollSeconds` (2 by default) and apply it: permissions, command trees
+  and names follow.
+- The first server to join fills the database from its files. A server joining a filled database takes what the
+  database holds; its previous files are copied to `backup/` first.
+- Permission checks never wait on the database: they read memory, as on a single server.
+
+**`server=` context**
+
+In a cluster, `server=<name>` is a context like `world=`: `/customperm grade addperm vip customperm.command.fly
+server=creative` grants `/fly` on the server named `creative` only. Outside a cluster it is refused, since it would
+apply nowhere. Import from LuckPerms carries LuckPerms' `server=` nodes while a cluster runs, and export writes
+them back; both match only when LuckPerms' server names are the same as the cluster's.
+
+**When the database is lost**
+
+The server keeps the rights it last read, refuses admin changes until the database answers again, and tells the
+admins online. Its files are kept up to date as a copy, so a restart during the outage starts from the last known
+state. The dashboard shows the cluster: this server's name, the parts it shares and the other servers it hears.
+
+**Security**
+
+Arcadia Lib connects without TLS. Keep the database on a private network or the same machine: anyone able to read
+or alter that traffic can read or change every permission.
 
 ---
 

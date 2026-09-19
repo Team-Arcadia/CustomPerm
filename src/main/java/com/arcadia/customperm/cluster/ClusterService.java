@@ -394,7 +394,7 @@ final class ClusterService {
             if (!others.isEmpty()) {
                 server.execute(() -> AdminNotifier.raise(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "Another running server "
                         + "now uses this server's name \"" + name + "\" in the cluster. Give each server its own "
-                        + "server_id in config/arcadia/lib/server.toml and restart one of them."));
+                        + "server_id in <world>/serverconfig/arcadia/lib/server.toml and restart one of them."));
             }
         } catch (ClusterStore.StoreException e) {
             server.execute(() -> lost(e.getMessage()));
