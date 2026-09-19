@@ -159,7 +159,7 @@ public final class Cluster {
         if (running != null) running.log(kind, entry);
     }
 
-    /** A rate-limited use counted here, shared when a cluster runs with {@code share.rateLimitCounters}. Any thread. */
+    /** A rate-limited use counted here, shared when its rule's scope reaches other servers. Any thread. */
     public static void use(String command, java.util.UUID player, long time) {
         ClusterService running = service;
         if (running != null) running.use(command, player, time);
@@ -222,6 +222,6 @@ public final class Cluster {
     private static String fingerprint(SettingsConfig.Cluster c) {
         SettingsConfig.Share s = c.share;
         return c.enabled + "|" + c.pollSeconds + "|" + c.whenDatabaseLost + "|" + s.grades + s.commands + s.aliases
-                + s.rateLimits + s.rateLimitCounters + s.log;
+                + s.rateLimits + s.log;
     }
 }

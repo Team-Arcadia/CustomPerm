@@ -173,6 +173,7 @@ public final class GuiRequestHandler {
             case RATELIMIT_DISABLE -> RateLimitAdmin.disable(args.get(0));
             case RATELIMIT_REMOVE -> RateLimitAdmin.remove(args.get(0));
             case RATELIMIT_PERSISTENCE -> RateLimitAdmin.setPersistence(args.get(0), args.get(1));
+            case RATELIMIT_SCOPE -> RateLimitAdmin.setScope(args.get(0), args.get(1));
             case GRADE_CREATE -> GradeAdmin.create(args.get(0));
             case GRADE_DELETE -> guarded(player, () -> GradeAdmin.delete(player.getServer(), args.get(0)));
             case GRADE_NODE_ADD -> kind(args.get(2)) == null ? malformed(action)

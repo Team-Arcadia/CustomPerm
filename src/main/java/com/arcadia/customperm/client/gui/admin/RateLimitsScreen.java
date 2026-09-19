@@ -49,6 +49,7 @@ public final class RateLimitsScreen extends AdminScreen {
     private final CpEditBox target;
     private final CpEditBox max;
     private final CpEditBox window;
+    private final CpEditBox scope;
     private final CpList<String> unlimitedList;
     /** Rule to select once the next refresh lands, after saving a new one. */
     private String pendingRule;
@@ -64,6 +65,9 @@ public final class RateLimitsScreen extends AdminScreen {
                 .onSubmit(this::save);
         max.setFilter(RateLimitsScreen::digitsOnly);
         window.setFilter(RateLimitsScreen::digitsOnly);
+        this.scope = new CpEditBox(Component.literal("Who shares the budget"), 200)
+                .hint(Component.literal("server, network or hub,survival"))
+                .onSubmit(this::applyScope);
         this.search = new CpEditBox(Component.literal("Search rate limits"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
                 .onChange(text -> refilter());
@@ -171,9 +175,13 @@ public final class RateLimitsScreen extends AdminScreen {
         return saveY() + BUTTON + 4;
     }
 
+    private int scopeY() {
+        return togglesY() + BUTTON + 4;
+    }
+
     private Rect unlimitedArea() {
         Rect in = inner();
-        int top = togglesY() + BUTTON + 18;
+        int top = scopeY() + BUTTON + 18;
         return new Rect(in.x(), top, in.w(), in.bottom() - top);
     }
 
@@ -220,12 +228,28 @@ public final class RateLimitsScreen extends AdminScreen {
                     .tooltip(Component.literal("When usage history is written. World save: no cost per use, uses since the last save are lost on a crash. "
                             + "Every use: nothing lost, one disk write per accepted use."))
                     .at(new Rect(in.x() + half + GAP, togglesY(), half, BUTTON)));
+            Rect[] scopeRow = new Rect(in.x(), scopeY(), in.w(), BUTTON).split(4, 60);
+            addRenderableWidget(scope.at(new Rect(scopeRow[0].x(), scopeY() + (BUTTON - FIELD) / 2, scopeRow[0].w(), FIELD)));
+            scope.setEditable(editable);
+            if (!scope.isFocused()) scope.setValue(rule.scope());
+            addRenderableWidget(CpButton.neutral(Component.literal("Share"), this::applyScope).enabled(editable)
+                    .tooltip(Component.literal("In cluster mode, who counts against one budget. server: each server counts "
+                            + "its own. network: one budget for every server. hub,survival: those servers share one, the "
+                            + "others count on their own. Outside a cluster every server counts its own."))
+                    .at(scopeRow[1]));
         }
         Rect unlimited = unlimitedArea();
         if (unlimited.h() >= 24) addRenderableWidget(unlimitedList.at(unlimited));
     }
 
     // ------------------------------------------------------------------ actions
+
+    private void applyScope() {
+        RateLimitsData.Rule rule = ruleList.getSelected();
+        String typed = scope.getValue().trim();
+        if (rule == null || typed.isEmpty() || typed.equalsIgnoreCase(rule.scope())) return;
+        act(GuiAction.RATELIMIT_SCOPE, rule.name(), typed);
+    }
 
     private void startNew() {
         ruleList.clearSelection();

@@ -96,6 +96,7 @@ import java.util.stream.Collectors;
  *                     list
  * /customperm ratelimit set <name> <max> <windowSeconds>   # cap executions per player per window
  *                     persistence <name> <world_save|immediate>  # when usage history is written
+ *                     scope <name> <server|network|hub,survival>  # who shares the budget in cluster mode
  *                     enable <name>                        # re-enable a previously configured limit
  *                     disable <name>                       # keep the limit's numbers, stop enforcing it
  *                     remove <name>                        # delete the limit entirely
@@ -776,6 +777,14 @@ public class CustomPermCommand {
                                 .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
                                     List.of(RateLimitsConfig.PERSISTENCE_WORLD_SAVE, RateLimitsConfig.PERSISTENCE_IMMEDIATE), builder))
                                 .executes(CustomPermCommand::rateLimitPersistence))))
+                    .then(Commands.literal("scope").requires(AdminAccess.manage(PermissionNodes.MANAGE_RATELIMITS))
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_RATE_LIMITS)
+                            .then(Commands.argument("scope", StringArgumentType.greedyString())
+                                .suggests((ctx, builder) -> SharedSuggestionProvider.suggest(
+                                    List.of(RateLimitsConfig.SCOPE_SERVER, RateLimitsConfig.SCOPE_NETWORK), builder))
+                                .executes(ctx -> report(ctx, RateLimitAdmin.setScope(StringArgumentType.getString(ctx, "name"),
+                                    StringArgumentType.getString(ctx, "scope")))))))
                     .then(Commands.literal("enable").requires(AdminAccess.manage(PermissionNodes.MANAGE_RATELIMITS))
                         .then(Commands.argument("name", StringArgumentType.word())
                             .suggests(SUGGEST_RATE_LIMITS)
@@ -984,7 +993,7 @@ public class CustomPermCommand {
             ChatFormatting color = rule.enabled ? ChatFormatting.GREEN : ChatFormatting.GRAY;
             ctx.getSource().sendSuccess(() -> Component.literal(
                 "/" + name + "  " + rule.maxExecutions + " per " + rule.windowSeconds + "s  [" + status + "]"
-                    + "  persistence=" + rule.persistence
+                    + "  persistence=" + rule.persistence + "  scope=" + rule.scope
             ).withStyle(color), false);
         });
         return 1;

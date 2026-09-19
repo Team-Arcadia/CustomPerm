@@ -295,7 +295,7 @@ public final class GuiSnapshots {
             RateLimitsData.Target target = aliases.contains(name) ? RateLimitsData.Target.ALIAS
                     : exposed.contains(name) ? RateLimitsData.Target.EXPOSED_COMMAND : RateLimitsData.Target.NONE;
             rows.add(new RateLimitsData.Rule(name, rule.maxExecutions, rule.windowSeconds, rule.enabled,
-                    rule.persistsImmediately(), target));
+                    rule.persistsImmediately(), target, rule.scope));
         }
         Set<String> candidates = new TreeSet<>(exposed);
         candidates.addAll(aliases);

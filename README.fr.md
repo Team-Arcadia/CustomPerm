@@ -569,6 +569,7 @@ Plafonne le nombre d'utilisations d'une commande ou d'un alias par joueur sur un
 | Commande | Effet |
 |---|---|
 | `/customperm ratelimit set <name> <max> <windowSeconds>` | Autorise `<max>` utilisations par joueur toutes les `<windowSeconds>`. Redéfinir une règle conserve son mode de persistance. |
+| `/customperm ratelimit scope <name> <server\|network\|hub,survival>` | En mode cluster, qui partage le budget : chaque serveur seul (par défaut), tous les serveurs, ou ceux nommés. Voir [Mode cluster](#mode-cluster-plusieurs-serveurs). |
 | `/customperm ratelimit persistence <name> <world_save\|immediate>` | Choisit quand l'historique d'utilisation de cette commande est écrit sur le disque (voir `ratelimits.json`). |
 | `/customperm ratelimit disable <name>` / `enable <name>` | Suspend ou reprend l'application d'une règle sans perdre ses valeurs. |
 | `/customperm ratelimit remove <name>` | Supprime la règle. |
@@ -832,9 +833,11 @@ anglaise) :
 
 - `grades` : tous les grades et tout ce que tiennent les joueurs (`grades.json`), tracks comprises.
 - `commands`, `aliases`, `rateLimits` : commandes exposées, alias, règles de limites.
-- `rateLimitCounters` (désactivé par défaut) : les usages comptés sur un serveur comptent sur les autres, donc une
-  limite de 3 par heure vaut 3 sur tout le réseau, à `pollSeconds` près. Coûte une écriture en base par usage d'une
-  commande limitée.
+- Les **compteurs** des limites se partagent règle par règle, selon sa portée : `server` (par défaut, chaque
+  serveur compte ses usages), `network` (un seul budget pour tous les serveurs : 3 par heure vaut 3 sur tout le
+  cluster, à `pollSeconds` près), ou des noms de serveurs comme `hub,survival` (ces serveurs partagent un budget,
+  les autres comptent seuls). Se règle avec `/customperm ratelimit scope <commande> <portée>` ou dans la page Rate
+  limits. Seuls les usages des règles partagées vont en base.
 - `log` : le journal d'activité. Les entrées des autres serveurs apparaissent dans la page Logs et `/customperm log`
   avec `@<serveur>` ; les fichiers de chaque serveur ne gardent que ce qui s'y est passé.
 - `settings.json` lui-même reste local : grade par défaut, `gateAllCommands`, affichage des noms et contextes

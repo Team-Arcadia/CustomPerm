@@ -65,7 +65,6 @@ class ClusterGateTest {
         assertNotNull(settings.cluster);
         assertFalse(settings.cluster.enabled);
         assertTrue(settings.cluster.share.grades);
-        assertFalse(settings.cluster.share.rateLimitCounters);
         assertEquals(SettingsConfig.Cluster.WHEN_LOST_LAST_KNOWN, settings.cluster.whenDatabaseLost);
     }
 

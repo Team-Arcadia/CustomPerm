@@ -551,6 +551,7 @@ Cap how many times one player may run a command or an alias within a sliding win
 |---|---|
 | `/customperm ratelimit set <name> <max> <windowSeconds>` | Allows `<max>` uses per player per `<windowSeconds>`. Redefining a rule keeps its persistence mode. |
 | `/customperm ratelimit persistence <name> <world_save\|immediate>` | Chooses when the usage history of that command is written to disk (see `ratelimits.json`). |
+| `/customperm ratelimit scope <name> <server\|network\|hub,survival>` | In cluster mode, who shares the budget: each server alone (default), every server, or the servers named. See [Cluster mode](#cluster-mode-several-servers). |
 | `/customperm ratelimit disable <name>` / `enable <name>` | Stops or resumes enforcing a rule without losing its numbers. |
 | `/customperm ratelimit remove <name>` | Deletes the rule. |
 | `/customperm ratelimit list` | Lists rules with their state and persistence mode. |
@@ -811,7 +812,7 @@ Each part can be shared or kept local, in `settings.json`:
 "cluster": {
   "enabled": false,
   "share": { "grades": true, "commands": true, "aliases": true, "rateLimits": true,
-             "rateLimitCounters": false, "log": true },
+             "log": true },
   "pollSeconds": 2,
   "whenDatabaseLost": "last-known"
 }
@@ -819,8 +820,11 @@ Each part can be shared or kept local, in `settings.json`:
 
 - `grades`: every grade and everything players hold (`grades.json`), tracks included.
 - `commands`, `aliases`, `rateLimits`: exposed commands, aliases, rate-limit rules.
-- `rateLimitCounters` (off by default): uses counted on one server count on the others, so a limit of 3 an hour
-  is 3 across the network, to within `pollSeconds`. Costs a database write per limited command use.
+- Rate-limit **counters** are shared per rule, by its scope: `server` (the default, each server counts its own
+  uses), `network` (one budget for every server: 3 an hour means 3 across the cluster, to within `pollSeconds`), or
+  server names such as `hub,survival` (those servers share one budget, the others count on their own). Set it with
+  `/customperm ratelimit scope <command> <scope>` or on the Rate limits page. Only uses of shared rules reach the
+  database.
 - `log`: the activity log. Entries from other servers show in the Logs page and `/customperm log` with
   `@<server>`; each server's files keep only what happened there.
 - `settings.json` itself stays local: the default grade, `gateAllCommands`, name display and static contexts are

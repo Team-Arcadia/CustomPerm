@@ -222,42 +222,69 @@ public class ClusterGameTest {
         helper.succeed();
     }
 
-    /** With the counters shared, uses counted on the other server count here: a limit of 3 holds across the network. */
+    /**
+     * Each rule says who shares its budget. network: three uses on the other server use up a limit of three here.
+     * A group: only the servers named count together. server (the default): nothing is shared.
+     */
     @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_uses")
-    public static void sharedCountersLimitAcrossServers(GameTestHelper helper) throws Exception {
+    public static void eachRuleSaysWhoSharesItsBudget(GameTestHelper helper) throws Exception {
         if (!Modes.internalOnly(helper)) return;
         MinecraftServer server = helper.getLevel().getServer();
         MemoryStore store = new MemoryStore();
-        var share = CustomPerm.configManager.getSettings().cluster.share;
-        java.util.UUID player = java.util.UUID.randomUUID();
-        share.rateLimitCounters = true;
-        try {
-            inCluster(server, store, () -> {
-                if (!RateLimitAdmin.set("cp_cl_limited", 3, 60).success()) fail("Could not set the rule.");
-                long now = System.currentTimeMillis();
-                List<ClusterStore.Use> uses = new ArrayList<>();
-                for (int i = 0; i < 3; i++) uses.add(new ClusterStore.Use("cp_cl_limited", player.toString(), now - 1000 + i));
-                store.appendUses("other", uses);
-                Cluster.pollNow();
-                if (RateLimiter.tryAcquire("cp_cl_limited", player, 3, 60).allowed()) {
-                    fail("Three uses on the other server must use up a limit of three here.");
-                }
+        inCluster(server, store, () -> {
+            if (!RateLimitAdmin.set("cp_cl_net", 3, 60).success()) fail("Could not set the rule.");
+            if (!RateLimitAdmin.setScope("cp_cl_net", "network").success()) fail("Could not set the network scope.");
+            java.util.UUID player = java.util.UUID.randomUUID();
+            store.appendUses("other", threeUses("cp_cl_net", player));
+            Cluster.pollNow();
+            if (RateLimiter.tryAcquire("cp_cl_net", player, 3, 60).allowed()) {
+                fail("network: three uses on the other server must use up a limit of three here.");
+            }
+            java.util.UUID fresh = java.util.UUID.randomUUID();
+            if (!RateLimiter.tryAcquire("cp_cl_net", fresh, 3, 60).allowed()) fail("A fresh player has uses left.");
+            Cluster.pollNow();
+            boolean sent = store.usesAfter(0, 0, 100).stream()
+                    .anyMatch(r -> r.server().equals("gametest") && r.use().player().equals(fresh.toString()));
+            if (!sent) fail("network: a use counted here must reach the store under this server's name.");
 
-                java.util.UUID fresh = java.util.UUID.randomUUID();
-                if (!RateLimiter.tryAcquire("cp_cl_limited", fresh, 3, 60).allowed()) fail("A fresh player has uses left.");
-                Cluster.pollNow();
-                boolean sent = store.usesAfter(0, 0, 100).stream()
-                        .anyMatch(r -> r.server().equals("gametest") && r.use().player().equals(fresh.toString()));
-                if (!sent) fail("A use counted here must reach the store under this server's name.");
-                RateLimitAdmin.remove("cp_cl_limited");
-            });
-        } finally {
-            // Saves made during the test wrote the switch to settings.json: put the file back too, or the next
-            // reload reads it and reports a changed cluster setting.
-            share.rateLimitCounters = false;
-            CustomPerm.configManager.save();
-        }
+            if (!RateLimitAdmin.set("cp_cl_group", 3, 60).success()) fail("Could not set the group rule.");
+            if (!RateLimitAdmin.setScope("cp_cl_group", "Other, gametest").success()) fail("Could not set the group scope.");
+            java.util.UUID member = java.util.UUID.randomUUID();
+            java.util.UUID outsider = java.util.UUID.randomUUID();
+            store.appendUses("other", threeUses("cp_cl_group", member));
+            store.appendUses("third", threeUses("cp_cl_group", outsider));
+            Cluster.pollNow();
+            if (RateLimiter.tryAcquire("cp_cl_group", member, 3, 60).allowed()) {
+                fail("A server named in the group shares its budget with this one.");
+            }
+            if (!RateLimiter.tryAcquire("cp_cl_group", outsider, 3, 60).allowed()) {
+                fail("A server outside the group keeps its own count.");
+            }
+
+            if (!RateLimitAdmin.set("cp_cl_local", 3, 60).success()) fail("Could not set the local rule.");
+            java.util.UUID local = java.util.UUID.randomUUID();
+            store.appendUses("other", threeUses("cp_cl_local", local));
+            Cluster.pollNow();
+            if (!RateLimiter.tryAcquire("cp_cl_local", local, 3, 60).allowed()) {
+                fail("server (the default): another server's uses do not count here.");
+            }
+            int before = store.usesAfter(0, 0, 500).size();
+            RateLimiter.tryAcquire("cp_cl_local", java.util.UUID.randomUUID(), 3, 60);
+            Cluster.pollNow();
+            if (store.usesAfter(0, 0, 500).size() != before) fail("A use of an unshared rule must not be sent.");
+
+            RateLimitAdmin.remove("cp_cl_net");
+            RateLimitAdmin.remove("cp_cl_group");
+            RateLimitAdmin.remove("cp_cl_local");
+        });
         helper.succeed();
+    }
+
+    private static List<ClusterStore.Use> threeUses(String command, java.util.UUID player) {
+        long now = System.currentTimeMillis();
+        List<ClusterStore.Use> uses = new ArrayList<>();
+        for (int i = 0; i < 3; i++) uses.add(new ClusterStore.Use(command, player.toString(), now - 1000 + i));
+        return uses;
     }
 
     /** server=<name> is a context while a cluster runs: it holds on the server of that name only; outside a cluster it is refused. */

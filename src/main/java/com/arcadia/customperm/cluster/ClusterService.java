@@ -70,7 +70,6 @@ final class ClusterService {
     private long lastLogId;
     private final Map<Long, Long> seenLog = new HashMap<>();
     private long lastPurge;
-    private final boolean shareUses;
     private final ConcurrentLinkedQueue<ClusterStore.Use> pendingUses = new ConcurrentLinkedQueue<>();
     /** Worker thread only, like the log fields above. */
     private final List<ClusterStore.Use> unsentUses = new ArrayList<>();
@@ -86,7 +85,6 @@ final class ClusterService {
         this.instance = instance;
         this.server = server;
         this.shareLog = share.log;
-        this.shareUses = share.rateLimitCounters;
         var config = CustomPerm.configManager;
         if (share.grades) {
             add(new GradesCodec(), config::getGrades, () -> PermissionService.get().onConfigReload(config.getSnapshot()));
@@ -108,13 +106,14 @@ final class ClusterService {
     List<String> sharedParts() {
         List<String> names = new ArrayList<>(parts.stream().<String>map(PartSync::part).toList());
         if (shareLog) names.add("activity log");
-        if (shareUses) names.add("rate-limit counters");
+        names.add("rate-limit counters by rule scope");
         return names;
     }
 
     /** A use of a rate-limited command counted here, to share. Any thread. */
     void use(String command, UUID player, long time) {
-        if (shareUses) pendingUses.add(new ClusterStore.Use(command, player.toString(), time));
+        var rule = CustomPerm.configManager.getRateLimits().get(command);
+        if (rule != null && rule.shared(name)) pendingUses.add(new ClusterStore.Use(command, player.toString(), time));
     }
 
     /** An entry recorded here, to share. Any thread. */
@@ -136,7 +135,7 @@ final class ClusterService {
                         + "were replaced by it. The previous files are in the backup folder.", part.part());
             }
         }
-        if (shareUses) {
+        if (CustomPerm.configManager.getRateLimits().anyShared(name)) {
             // Uses the other servers counted within the longest window still apply here.
             long now = System.currentTimeMillis();
             showForeignUses(syncUses(now - longestWindowMillis()));
@@ -221,7 +220,7 @@ final class ClusterService {
         worker.shutdownNow();
         try {
             if (shareLog) syncLog();
-            if (shareUses) syncUses(System.currentTimeMillis());
+            syncUses(System.currentTimeMillis());
         } catch (ClusterStore.StoreException e) {
             CustomPerm.LOGGER.warn("[CustomPerm] Cluster: activity log entries not yet shared were dropped at stop: {}",
                     e.getMessage());
@@ -338,9 +337,10 @@ final class ClusterService {
 
     /** Sends the uses counted here and reads the others' from {@code sinceTime} on. Same threading as the log. */
     private synchronized List<ClusterStore.UseRow> syncUses(long sinceTime) throws ClusterStore.StoreException {
-        if (!shareUses) return List.of();
         ClusterStore.Use use;
         while ((use = pendingUses.poll()) != null) unsentUses.add(use);
+        // No rule shared from here, nothing waiting: no query at all, the usual case.
+        if (unsentUses.isEmpty() && !CustomPerm.configManager.getRateLimits().anyShared(name)) return List.of();
         if (unsentUses.size() > LOG_UNSENT_MAX) unsentUses.subList(0, unsentUses.size() - LOG_UNSENT_MAX).clear();
         if (!unsentUses.isEmpty()) {
             store.appendUses(name, List.copyOf(unsentUses));
@@ -362,8 +362,12 @@ final class ClusterService {
         return foreign;
     }
 
-    private static void showForeignUses(List<ClusterStore.UseRow> rows) {
+    /** Counts here the uses another server counted, for the rules whose scope joins the two servers. */
+    private void showForeignUses(List<ClusterStore.UseRow> rows) {
+        var limits = CustomPerm.configManager.getRateLimits();
         for (ClusterStore.UseRow row : rows) {
+            var rule = limits.get(row.use().command());
+            if (rule == null || !rule.sharedWith(name, row.server())) continue;
             try {
                 com.arcadia.customperm.command.RateLimiter.recordForeign(row.use().command(),
                         UUID.fromString(row.use().player()), row.use().time());

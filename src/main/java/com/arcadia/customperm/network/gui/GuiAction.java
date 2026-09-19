@@ -55,6 +55,8 @@ public enum GuiAction {
     RATELIMIT_REMOVE(1, GuiArea.RATE_LIMITS),
     /** {@code [name, "world_save"|"immediate"]} When the rule's usage history is written. */
     RATELIMIT_PERSISTENCE(2, GuiArea.RATE_LIMITS),
+    /** {@code [name, scope]} Who shares the rule's budget in cluster mode: server, network or server names. */
+    RATELIMIT_SCOPE(2, GuiArea.RATE_LIMITS),
 
     /** {@code [grade]} Creates an internal grade. */
     GRADE_CREATE(1, GuiArea.GRADES),

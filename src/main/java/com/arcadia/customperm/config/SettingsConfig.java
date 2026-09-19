@@ -183,8 +183,6 @@ public class SettingsConfig {
         public boolean commands = true;
         public boolean aliases = true;
         public boolean rateLimits = true;
-        /** Off by default: sharing them is a database write for every limited command use. */
-        public boolean rateLimitCounters = false;
         public boolean log = true;
     }
 

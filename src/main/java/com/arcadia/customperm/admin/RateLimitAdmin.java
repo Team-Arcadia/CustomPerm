@@ -50,7 +50,10 @@ public final class RateLimitAdmin {
         rule.windowSeconds = windowSeconds;
         // Redefining the numbers must not silently reset a persistence mode the admin chose.
         RateLimitsConfig.Rule previous = rules().get(name);
-        if (previous != null) rule.persistence = previous.persistence;
+        if (previous != null) {
+            rule.persistence = previous.persistence;
+            rule.scope = previous.scope;
+        }
         rule.normalize();
         rules().put(name, rule);
 
@@ -75,6 +78,28 @@ public final class RateLimitAdmin {
         return AdminResult.ok("Usage history of /" + name + " is now written "
                 + (rule.persistsImmediately() ? "after every accepted use (immediate)." : "with the world save (world_save)."))
                 .warn(ConfigAdmin.persist());
+    }
+
+    /** Who shares the rule's budget in cluster mode: server, network, or server names joined with a comma. */
+    public static AdminResult setScope(String name, String rawScope) {
+        RateLimitsConfig.Rule rule = rules().get(name);
+        if (rule == null) return noRule(name, true);
+        String scope = RateLimitsConfig.normalizeScope(rawScope);
+        if (scope == null) {
+            return AdminResult.fail("Unknown scope '" + rawScope.trim() + "'. Use server (each server counts its own), network "
+                    + "(one budget for the whole cluster) or server names joined with a comma, such as hub,survival.");
+        }
+        rule.scope = scope;
+        String what = switch (scope) {
+            case RateLimitsConfig.SCOPE_SERVER -> "counted by each server on its own.";
+            case RateLimitsConfig.SCOPE_NETWORK -> "counted once for every server of the cluster.";
+            default -> "counted once across " + scope.replace(",", ", ") + "; the other servers count on their own.";
+        };
+        AdminResult result = AdminResult.ok("Uses of /" + name + " are now " + what).warn(ConfigAdmin.persist());
+        if (!RateLimitsConfig.SCOPE_SERVER.equals(scope) && !com.arcadia.customperm.cluster.Cluster.running()) {
+            result = result.note("This server is in no cluster: it counts its own uses until cluster mode runs.");
+        }
+        return result;
     }
 
     public static AdminResult enable(String name) {

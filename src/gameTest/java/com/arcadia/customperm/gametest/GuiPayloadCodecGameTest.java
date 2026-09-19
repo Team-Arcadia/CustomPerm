@@ -74,8 +74,8 @@ public class GuiPayloadCodecGameTest {
                         new AliasesData.Alias("kit", List.of("give @s bread 8"), false, 0, 0, false)))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.DENY, 0, 2, true), new RateLimitsData(List.of(
-                        new RateLimitsData.Rule("gamemode", 3, 3600, true, false, RateLimitsData.Target.EXPOSED_COMMAND),
-                        new RateLimitsData.Rule("ghost", 1, 5, false, true, RateLimitsData.Target.NONE)),
+                        new RateLimitsData.Rule("gamemode", 3, 3600, true, false, RateLimitsData.Target.EXPOSED_COMMAND, "network"),
+                        new RateLimitsData.Rule("ghost", 1, 5, false, true, RateLimitsData.Target.NONE, "hub,survival")),
                         List.of("heal", "tp"))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0, true), new GradesData(List.of(

@@ -29,8 +29,10 @@ public record RateLimitsData(List<Rule> rules, List<String> unlimited) implement
      * One rule.
      *
      * @param immediate usage history written after every accepted use instead of with the world save
+     * @param scope     who shares the budget in cluster mode: server, network or server names
      */
-    public record Rule(String name, int max, int windowSeconds, boolean enabled, boolean immediate, Target target) {
+    public record Rule(String name, int max, int windowSeconds, boolean enabled, boolean immediate, Target target,
+                       String scope) {
 
         public static final StreamCodec<ByteBuf, Rule> CODEC = StreamCodec.of(
                 (buf, r) -> {
@@ -40,6 +42,7 @@ public record RateLimitsData(List<Rule> rules, List<String> unlimited) implement
                     ByteBufCodecs.BOOL.encode(buf, r.enabled);
                     ByteBufCodecs.BOOL.encode(buf, r.immediate);
                     GuiCodecs.enumByName(Target.class).encode(buf, r.target);
+                    GuiCodecs.TEXT.encode(buf, r.scope);
                 },
                 buf -> new Rule(
                         GuiCodecs.TEXT.decode(buf),
@@ -47,7 +50,8 @@ public record RateLimitsData(List<Rule> rules, List<String> unlimited) implement
                         ByteBufCodecs.VAR_INT.decode(buf),
                         ByteBufCodecs.BOOL.decode(buf),
                         ByteBufCodecs.BOOL.decode(buf),
-                        GuiCodecs.enumByName(Target.class).decode(buf)));
+                        GuiCodecs.enumByName(Target.class).decode(buf),
+                        GuiCodecs.TEXT.decode(buf)));
     }
 
     public static final StreamCodec<ByteBuf, RateLimitsData> CODEC = StreamCodec.composite(
