@@ -182,6 +182,19 @@ class SqlPartSyncTest extends PartSyncContract {
         assertEquals(1, store.logAfter(0, Long.MAX_VALUE, 100).size());
     }
 
+    @Test
+    void sharedUsesAreReadBackAndPurged() throws Exception {
+        SqlStore store = sql();
+        String steve = UUID.randomUUID().toString();
+        store.appendUses("hub", List.of(new ClusterStore.Use("home", steve, 1_000L), new ClusterStore.Use("home", steve, 5_000L)));
+        List<ClusterStore.UseRow> rows = store.usesAfter(0, Long.MAX_VALUE, 10);
+        assertEquals(2, rows.size());
+        assertEquals("hub", rows.get(0).server());
+        assertEquals(steve, rows.get(1).use().player());
+        assertEquals(1, store.purgeUses(2_000L));
+        assertEquals(1, store.usesAfter(0, Long.MAX_VALUE, 10).size());
+    }
+
     /** H2 needs no server, but the connection it hands out must be closed like a pooled one. */
     @Test
     void connectionsAreGivenBack() throws Exception {

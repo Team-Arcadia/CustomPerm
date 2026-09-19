@@ -70,6 +70,13 @@ final class ClusterService {
     private long lastLogId;
     private final Map<Long, Long> seenLog = new HashMap<>();
     private long lastPurge;
+    private final boolean shareUses;
+    private final ConcurrentLinkedQueue<ClusterStore.Use> pendingUses = new ConcurrentLinkedQueue<>();
+    /** Worker thread only, like the log fields above. */
+    private final List<ClusterStore.Use> unsentUses = new ArrayList<>();
+    private long lastUseId;
+    private final Map<Long, Long> seenUses = new HashMap<>();
+    private long lastUsePurge;
 
     ClusterService(ClusterStore store, String name, String instance, MinecraftServer server, SettingsConfig.Share share) {
         this.store = store;
@@ -77,6 +84,7 @@ final class ClusterService {
         this.instance = instance;
         this.server = server;
         this.shareLog = share.log;
+        this.shareUses = share.rateLimitCounters;
         var config = CustomPerm.configManager;
         if (share.grades) {
             add(new GradesCodec(), config::getGrades, () -> PermissionService.get().onConfigReload(config.getSnapshot()));
@@ -94,7 +102,13 @@ final class ClusterService {
     List<String> sharedParts() {
         List<String> names = new ArrayList<>(parts.stream().<String>map(PartSync::part).toList());
         if (shareLog) names.add("activity log");
+        if (shareUses) names.add("rate-limit counters");
         return names;
+    }
+
+    /** A use of a rate-limited command counted here, to share. Any thread. */
+    void use(String command, UUID player, long time) {
+        if (shareUses) pendingUses.add(new ClusterStore.Use(command, player.toString(), time));
     }
 
     /** An entry recorded here, to share. Any thread. */
@@ -115,6 +129,11 @@ final class ClusterService {
                 case ADOPTED_REPLACED -> CustomPerm.LOGGER.warn("[CustomPerm] Cluster: this server's {} differed from the store and "
                         + "were replaced by it. The previous files are in the backup folder.", part.part());
             }
+        }
+        if (shareUses) {
+            // Uses the other servers counted within the longest window still apply here.
+            long now = System.currentTimeMillis();
+            showForeignUses(syncUses(now - longestWindowMillis()));
         }
         if (shareLog) {
             // What the other servers recorded lately, shown beside this server's own from its files.
@@ -158,12 +177,14 @@ final class ClusterService {
         worker.execute(() -> {
             try {
                 List<ClusterStore.LogRow> foreignLog = syncLog();
+                List<ClusterStore.UseRow> foreignUses = syncUses(System.currentTimeMillis() - LOG_LOOKBACK_MILLIS);
                 List<List<ClusterStore.Row>> fetched = new ArrayList<>();
                 for (PartSync<?> part : parts) fetched.add(part.fetch());
                 server.execute(() -> {
                     try {
                         for (int i = 0; i < parts.size(); i++) parts.get(i).apply(fetched.get(i));
                         showForeign(foreignLog);
+                        showForeignUses(foreignUses);
                         recovered();
                     } finally {
                         polling.set(false);
@@ -184,6 +205,7 @@ final class ClusterService {
         boolean changed = false;
         for (PartSync<?> part : parts) changed |= part.apply(part.fetch());
         showForeign(syncLog());
+        showForeignUses(syncUses(System.currentTimeMillis() - LOG_LOOKBACK_MILLIS));
         recovered();
         return changed;
     }
@@ -193,6 +215,7 @@ final class ClusterService {
         worker.shutdownNow();
         try {
             if (shareLog) syncLog();
+            if (shareUses) syncUses(System.currentTimeMillis());
         } catch (ClusterStore.StoreException e) {
             CustomPerm.LOGGER.warn("[CustomPerm] Cluster: activity log entries not yet shared were dropped at stop: {}",
                     e.getMessage());
@@ -303,6 +326,54 @@ final class ClusterService {
     private static LogEntry foreign(ClusterStore.LogRow row) {
         LogEntry e = row.entry();
         return new LogEntry(e.time(), e.actor(), e.actorId(), e.source(), e.action(), e.success(), e.result(), row.server());
+    }
+
+    // ------------------------------------------------------------------ rate-limit counters
+
+    /** Sends the uses counted here and reads the others' from {@code sinceTime} on. Same threading as the log. */
+    private synchronized List<ClusterStore.UseRow> syncUses(long sinceTime) throws ClusterStore.StoreException {
+        if (!shareUses) return List.of();
+        ClusterStore.Use use;
+        while ((use = pendingUses.poll()) != null) unsentUses.add(use);
+        if (unsentUses.size() > LOG_UNSENT_MAX) unsentUses.subList(0, unsentUses.size() - LOG_UNSENT_MAX).clear();
+        if (!unsentUses.isEmpty()) {
+            store.appendUses(name, List.copyOf(unsentUses));
+            unsentUses.clear();
+        }
+        long now = System.currentTimeMillis();
+        List<ClusterStore.UseRow> foreign = new ArrayList<>();
+        for (ClusterStore.UseRow row : store.usesAfter(lastUseId, sinceTime, LOG_READ_MAX * 5)) {
+            if (seenUses.containsKey(row.id())) continue;
+            seenUses.put(row.id(), row.use().time());
+            if (row.id() > lastUseId) lastUseId = row.id();
+            if (!row.server().equals(name)) foreign.add(row);
+        }
+        seenUses.values().removeIf(time -> time < now - 2 * LOG_LOOKBACK_MILLIS);
+        if (now - lastUsePurge > LOG_PURGE_EVERY_MILLIS) {
+            lastUsePurge = now;
+            store.purgeUses(now - longestWindowMillis());
+        }
+        return foreign;
+    }
+
+    private static void showForeignUses(List<ClusterStore.UseRow> rows) {
+        for (ClusterStore.UseRow row : rows) {
+            try {
+                com.arcadia.customperm.command.RateLimiter.recordForeign(row.use().command(),
+                        UUID.fromString(row.use().player()), row.use().time());
+            } catch (IllegalArgumentException e) {
+                // Not a UUID: written by something else than CustomPerm, nothing to count.
+            }
+        }
+    }
+
+    /** The longest window of any rule, at least an hour, which is how long a counted use can matter. */
+    private static long longestWindowMillis() {
+        long longest = 3600_000L;
+        for (var rule : CustomPerm.configManager.getRateLimits().rules.values()) {
+            longest = Math.max(longest, rule.windowSeconds * 1000L);
+        }
+        return longest;
     }
 
     // ------------------------------------------------------------------ health

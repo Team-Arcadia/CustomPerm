@@ -91,8 +91,33 @@ public final class RateLimiter {
             }
             timestamps.addLast(now);
         }
-        if (!INTERNAL_WINDOWS.containsKey(commandName)) dirty = true;
+        if (!INTERNAL_WINDOWS.containsKey(commandName)) {
+            dirty = true;
+            com.arcadia.customperm.cluster.Cluster.use(commandName, player, now);
+        }
         return new Result(true, 0L);
+    }
+
+    /**
+     * A use another server of the cluster counted, so a player limited to 3 uses an hour gets 3 across the network,
+     * not 3 per server. Put in time order; counted by the next {@link #tryAcquire} like a use made here.
+     */
+    public static void recordForeign(String commandName, UUID player, long time) {
+        if (INTERNAL_WINDOWS.containsKey(commandName)) return;
+        Deque<Long> timestamps = HISTORY.computeIfAbsent(commandName, k -> new ConcurrentHashMap<>())
+                .computeIfAbsent(player, k -> new ArrayDeque<>());
+        synchronized (timestamps) {
+            if (timestamps.isEmpty() || timestamps.peekLast() <= time) {
+                timestamps.addLast(time);
+            } else {
+                List<Long> sorted = new ArrayList<>(timestamps);
+                sorted.add(time);
+                sorted.sort(null);
+                timestamps.clear();
+                timestamps.addAll(sorted);
+            }
+        }
+        dirty = true;
     }
 
     /**

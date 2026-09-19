@@ -133,6 +133,12 @@ public final class Cluster {
         if (running != null) running.log(kind, entry);
     }
 
+    /** A rate-limited use counted here, shared when a cluster runs with {@code share.rateLimitCounters}. Any thread. */
+    public static void use(String command, java.util.UUID player, long time) {
+        ClusterService running = service;
+        if (running != null) running.use(command, player, time);
+    }
+
     public static void onServerTick(ServerTickEvent.Post event) {
         ClusterService running = service;
         if (running != null) running.tick();

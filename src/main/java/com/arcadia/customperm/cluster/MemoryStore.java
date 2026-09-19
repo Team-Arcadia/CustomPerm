@@ -28,8 +28,10 @@ public final class MemoryStore implements ClusterStore {
     private final Map<String, Map<String, Long>> heartbeats = new HashMap<>();
     private final LongSupplier clock;
     private final List<LogRow> log = new ArrayList<>();
+    private final List<UseRow> uses = new ArrayList<>();
     private long seq;
     private long logId;
+    private long useId;
     private boolean down;
 
     public MemoryStore() {
@@ -140,6 +142,31 @@ public final class MemoryStore implements ClusterStore {
         int before = log.size();
         log.removeIf(row -> row.entry().time() < beforeTime);
         return before - log.size();
+    }
+
+    @Override
+    public synchronized void appendUses(String server, List<Use> added) throws StoreException {
+        check();
+        for (Use use : added) uses.add(new UseRow(++useId, server, use));
+    }
+
+    @Override
+    public synchronized List<UseRow> usesAfter(long afterId, long sinceTime, int limit) throws StoreException {
+        check();
+        List<UseRow> rows = new ArrayList<>();
+        for (UseRow row : uses) {
+            if (row.id() > afterId || row.use().time() >= sinceTime) rows.add(row);
+            if (rows.size() >= limit) break;
+        }
+        return rows;
+    }
+
+    @Override
+    public synchronized int purgeUses(long beforeTime) throws StoreException {
+        check();
+        int before = uses.size();
+        uses.removeIf(row -> row.use().time() < beforeTime);
+        return before - uses.size();
     }
 
     /** Entries as stored, for tests. */

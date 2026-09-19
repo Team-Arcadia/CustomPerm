@@ -82,6 +82,21 @@ public interface ClusterStore {
     /** Removes entries recorded before {@code beforeTime}; answers how many. */
     int purgeLog(long beforeTime) throws StoreException;
 
+    /** A counted use of a rate-limited command. */
+    record Use(String command, String player, long time) {}
+
+    /** A counted use as stored, numbered, with the server that counted it. */
+    record UseRow(long id, String server, Use use) {}
+
+    /** Adds uses this server counted. */
+    void appendUses(String server, List<Use> uses) throws StoreException;
+
+    /** Uses numbered after {@code afterId}, and every use at or after {@code sinceTime}; see {@link #logAfter}. */
+    List<UseRow> usesAfter(long afterId, long sinceTime, int limit) throws StoreException;
+
+    /** Removes uses counted before {@code beforeTime}. */
+    int purgeUses(long beforeTime) throws StoreException;
+
     /** The store could not be reached or refused the operation. */
     class StoreException extends Exception {
         public StoreException(String message, Throwable cause) {

@@ -25,10 +25,10 @@ import java.util.concurrent.Callable;
 import java.util.function.LongSupplier;
 
 /**
- * The store in MySQL (or MariaDB), through connections Arcadia Lib lends. Four tables:
+ * The store in MySQL (or MariaDB), through connections Arcadia Lib lends. Five tables:
  * {@code customperm_rows} (one row per holder, tombstones included), {@code customperm_seq} (the one counter every
  * write takes its number from), {@code customperm_servers} (heartbeats, to catch two servers under one name) and
- * {@code customperm_log} (the shared activity log).
+ * {@code customperm_log} (the shared activity log), and {@code customperm_uses} (rate-limited uses, when shared).
  *
  * <p>Every write starts by bumping the counter, which locks its row until the transaction ends: writers run one
  * after another, so numbers are committed in order and a server reading "after N" never misses a row. The SQL keeps
@@ -40,6 +40,7 @@ public final class SqlStore implements ClusterStore {
     private static final String SEQ = "customperm_seq";
     private static final String SERVERS = "customperm_servers";
     private static final String LOG = "customperm_log";
+    private static final String USES = "customperm_uses";
     /** Longest text kept in a log column; the activity log caps its own text well below. */
     private static final int LOG_TEXT_MAX = 2000;
     /** Heartbeats older than this are removed when a server beats. */
@@ -76,6 +77,9 @@ public final class SqlStore implements ClusterStore {
                     + "time BIGINT NOT NULL, actor VARCHAR(191) NOT NULL, actor_id VARCHAR(64) NOT NULL, "
                     + "source VARCHAR(32) NOT NULL, action TEXT NOT NULL, success BOOLEAN NOT NULL, result TEXT NOT NULL, "
                     + "KEY customperm_log_time (time))" + charset);
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS " + USES + " ("
+                    + "id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, server VARCHAR(64) NOT NULL, command VARCHAR(191) NOT NULL, "
+                    + "player VARCHAR(64) NOT NULL, time BIGINT NOT NULL, KEY customperm_uses_time (time))" + charset);
             try {
                 st.executeUpdate("INSERT INTO " + SEQ + " (id, seq) VALUES (1, 0)");
             } catch (SQLIntegrityConstraintViolationException exists) {
@@ -263,6 +267,54 @@ public final class SqlStore implements ClusterStore {
             return ps.executeUpdate();
         } catch (SQLException e) {
             throw new StoreException("purging the shared activity log failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public void appendUses(String server, List<Use> uses) throws StoreException {
+        if (uses.isEmpty()) return;
+        try (Connection c = open();
+             PreparedStatement ps = c.prepareStatement("INSERT INTO " + USES + " (server, command, player, time) VALUES (?, ?, ?, ?)")) {
+            for (Use use : uses) {
+                ps.setString(1, server);
+                ps.setString(2, cut(use.command(), 191));
+                ps.setString(3, use.player());
+                ps.setLong(4, use.time());
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        } catch (SQLException e) {
+            throw new StoreException("writing shared rate-limit uses failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public List<UseRow> usesAfter(long afterId, long sinceTime, int limit) throws StoreException {
+        try (Connection c = open();
+             PreparedStatement ps = c.prepareStatement("SELECT id, server, command, player, time FROM " + USES
+                     + " WHERE id > ? OR time >= ? ORDER BY id LIMIT " + Math.max(1, limit))) {
+            ps.setLong(1, afterId);
+            ps.setLong(2, sinceTime);
+            List<UseRow> rows = new ArrayList<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    rows.add(new UseRow(rs.getLong(1), rs.getString(2), new Use(rs.getString(3), rs.getString(4), rs.getLong(5))));
+                }
+            }
+            return rows;
+        } catch (SQLException e) {
+            throw new StoreException("reading shared rate-limit uses failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public int purgeUses(long beforeTime) throws StoreException {
+        try (Connection c = open();
+             PreparedStatement ps = c.prepareStatement("DELETE FROM " + USES + " WHERE time < ?")) {
+            ps.setLong(1, beforeTime);
+            return ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new StoreException("purging shared rate-limit uses failed: " + e.getMessage(), e);
         }
     }
 

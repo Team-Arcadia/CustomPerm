@@ -21,6 +21,7 @@ import com.arcadia.customperm.cluster.CommandsCodec;
 import com.arcadia.customperm.cluster.GradesCodec;
 import com.arcadia.customperm.cluster.MemoryStore;
 import com.arcadia.customperm.cluster.PartCodec;
+import com.arcadia.customperm.command.RateLimiter;
 import com.arcadia.customperm.cluster.PartSync;
 import com.arcadia.customperm.cluster.RateLimitsCodec;
 import com.arcadia.customperm.config.AliasesConfig;
@@ -218,6 +219,44 @@ public class ClusterGameTest {
                     .anyMatch(e -> e.action().equals("cp_cl_here") && !e.server().isEmpty());
             if (echoed) fail("This server's own entries must not come back from the store as another server's.");
         });
+        helper.succeed();
+    }
+
+    /** With the counters shared, uses counted on the other server count here: a limit of 3 holds across the network. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_uses")
+    public static void sharedCountersLimitAcrossServers(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        MemoryStore store = new MemoryStore();
+        var share = CustomPerm.configManager.getSettings().cluster.share;
+        java.util.UUID player = java.util.UUID.randomUUID();
+        share.rateLimitCounters = true;
+        try {
+            inCluster(server, store, () -> {
+                if (!RateLimitAdmin.set("cp_cl_limited", 3, 60).success()) fail("Could not set the rule.");
+                long now = System.currentTimeMillis();
+                List<ClusterStore.Use> uses = new ArrayList<>();
+                for (int i = 0; i < 3; i++) uses.add(new ClusterStore.Use("cp_cl_limited", player.toString(), now - 1000 + i));
+                store.appendUses("other", uses);
+                Cluster.pollNow();
+                if (RateLimiter.tryAcquire("cp_cl_limited", player, 3, 60).allowed()) {
+                    fail("Three uses on the other server must use up a limit of three here.");
+                }
+
+                java.util.UUID fresh = java.util.UUID.randomUUID();
+                if (!RateLimiter.tryAcquire("cp_cl_limited", fresh, 3, 60).allowed()) fail("A fresh player has uses left.");
+                Cluster.pollNow();
+                boolean sent = store.usesAfter(0, 0, 100).stream()
+                        .anyMatch(r -> r.server().equals("gametest") && r.use().player().equals(fresh.toString()));
+                if (!sent) fail("A use counted here must reach the store under this server's name.");
+                RateLimitAdmin.remove("cp_cl_limited");
+            });
+        } finally {
+            // Saves made during the test wrote the switch to settings.json: put the file back too, or the next
+            // reload reads it and reports a changed cluster setting.
+            share.rateLimitCounters = false;
+            CustomPerm.configManager.save();
+        }
         helper.succeed();
     }
 
