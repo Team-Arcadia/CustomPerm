@@ -48,8 +48,6 @@ final class ClusterService {
     /** Seconds between two heartbeats. */
     static final int HEARTBEAT_SECONDS = 10;
     private static final int HEARTBEAT_TICKS = HEARTBEAT_SECONDS * 20;
-    /** How far back each read of the shared log looks again, for entries that committed late. */
-    private static final long LOG_LOOKBACK_MILLIS = 60_000;
     private static final int LOG_READ_MAX = 2000;
     /** Entries kept for a retry when the store refused them, at most. */
     private static final int LOG_UNSENT_MAX = 10_000;
@@ -74,14 +72,14 @@ final class ClusterService {
     private final ConcurrentLinkedQueue<ClusterStore.LogLine> pendingLog = new ConcurrentLinkedQueue<>();
     /** Worker thread only: entries not yet accepted by the store, the newest log number read, what was read lately. */
     private final List<ClusterStore.LogLine> unsentLog = new ArrayList<>();
-    private long lastLogId;
-    private final Map<Long, Long> seenLog = new HashMap<>();
+    private final GapReader logReader = new GapReader();
     private long lastPurge;
     private final ConcurrentLinkedQueue<ClusterStore.Use> pendingUses = new ConcurrentLinkedQueue<>();
     /** Worker thread only, like the log fields above. */
     private final List<ClusterStore.Use> unsentUses = new ArrayList<>();
-    private long lastUseId;
-    private final Map<Long, Long> seenUses = new HashMap<>();
+    private final GapReader useReader = new GapReader();
+    /** Worker thread: the number every shared part has been read up to, one query for them all. */
+    private volatile long partsCursor;
     private long lastUsePurge;
     /** Other servers and seconds since each was last heard, from the latest heartbeat; for the dashboard. */
     private volatile Map<String, Long> peers = Map.of();
@@ -131,6 +129,10 @@ final class ClusterService {
     /** First contact, on the server thread. A part the store already holds replaces this server's, backed up first. */
     void start() throws ClusterStore.StoreException {
         CustomPerm.configManager.backupNow();
+        // Read before the parts start: every row numbered up to it is committed and seen by their start, and a row
+        // written meanwhile carries a higher number, read at the next poll. The highest number the starts read would
+        // skip a row written to one part while another was starting.
+        long cursor = store.currentSeq();
         for (PartSync<?> part : parts) {
             PartSync.Start start = part.start();
             switch (start) {
@@ -142,21 +144,27 @@ final class ClusterService {
                         + "were replaced by it. The previous files are in the backup folder.", part.part());
             }
         }
+        partsCursor = cursor;
+        // Uses the other servers counted still apply here: the table only holds those within the longest window.
+        List<ClusterStore.UseRow> uses = store.usesAfter(0, List.of(), Integer.MAX_VALUE);
+        long lastUse = 0;
+        for (ClusterStore.UseRow row : uses) lastUse = Math.max(lastUse, row.id());
+        useReader.startAfter(lastUse);
         if (CustomPerm.configManager.getRateLimits().anyShared(name)) {
-            // Uses the other servers counted within the longest window still apply here.
-            long now = System.currentTimeMillis();
-            showForeignUses(syncUses(now - longestWindowMillis()));
+            showForeignUses(uses.stream().filter(r -> !r.server().equals(name)).toList());
         }
         if (shareLog) {
             // What the other servers recorded lately, shown beside this server's own from its files.
+            long lastLog = 0;
             for (LogKind kind : LogKind.values()) {
                 List<ClusterStore.LogRow> recent = new ArrayList<>(store.recentLog(kind.name(), LogsData.ENTRIES_MAX));
                 java.util.Collections.reverse(recent);
                 for (ClusterStore.LogRow row : recent) {
-                    remember(row);
+                    lastLog = Math.max(lastLog, row.id());
                     if (!row.server().equals(name)) ActivityLog.addForeign(kind, foreign(row));
                 }
             }
+            logReader.startAfter(lastLog);
         }
     }
 
@@ -195,12 +203,11 @@ final class ClusterService {
         worker.execute(() -> {
             try {
                 List<ClusterStore.LogRow> foreignLog = syncLog();
-                List<ClusterStore.UseRow> foreignUses = syncUses(System.currentTimeMillis() - LOG_LOOKBACK_MILLIS);
-                List<List<ClusterStore.Row>> fetched = new ArrayList<>();
-                for (PartSync<?> part : parts) fetched.add(part.fetch());
+                List<ClusterStore.UseRow> foreignUses = syncUses();
+                Map<String, List<ClusterStore.Row>> fetched = fetchParts();
                 server.execute(() -> {
                     try {
-                        for (int i = 0; i < parts.size(); i++) parts.get(i).apply(fetched.get(i));
+                        applyParts(fetched);
                         showForeign(foreignLog);
                         showForeignUses(foreignUses);
                         recovered();
@@ -220,10 +227,9 @@ final class ClusterService {
 
     /** Reads and applies what changed, now, on the calling thread (the server thread). */
     boolean pollNow() throws ClusterStore.StoreException {
-        boolean changed = false;
-        for (PartSync<?> part : parts) changed |= part.apply(part.fetch());
+        boolean changed = applyParts(fetchParts());
         showForeign(syncLog());
-        showForeignUses(syncUses(System.currentTimeMillis() - LOG_LOOKBACK_MILLIS));
+        showForeignUses(syncUses());
         recovered();
         return changed;
     }
@@ -233,7 +239,7 @@ final class ClusterService {
         worker.shutdownNow();
         try {
             if (shareLog) syncLog();
-            syncUses(System.currentTimeMillis());
+            syncUses();
         } catch (ClusterStore.StoreException e) {
             CustomPerm.LOGGER.warn("[CustomPerm] Cluster: activity log entries not yet shared were dropped at stop: {}",
                     e.getMessage());
@@ -246,6 +252,30 @@ final class ClusterService {
     }
 
     // ------------------------------------------------------------------ parts
+
+    /** Every shared part's new rows in one query, from the shared cursor. Worker thread, or the server thread. */
+    private synchronized Map<String, List<ClusterStore.Row>> fetchParts() throws ClusterStore.StoreException {
+        if (parts.isEmpty()) return Map.of();
+        Map<String, List<ClusterStore.Row>> rows = store.changesSince(sharedPartNames(), partsCursor);
+        for (List<ClusterStore.Row> some : rows.values()) {
+            for (ClusterStore.Row row : some) partsCursor = Math.max(partsCursor, row.seq());
+        }
+        return rows;
+    }
+
+    /** Server thread. True when something changed here. */
+    private boolean applyParts(Map<String, List<ClusterStore.Row>> rows) {
+        boolean changed = false;
+        for (PartSync<?> part : parts) {
+            List<ClusterStore.Row> some = rows.get(part.part());
+            if (some != null) changed |= part.apply(some);
+        }
+        return changed;
+    }
+
+    private List<String> sharedPartNames() {
+        return parts.stream().<String>map(PartSync::part).toList();
+    }
 
     private <T> void add(PartCodec<T> codec, Supplier<T> current, Runnable onChanged) {
         parts.add(new PartSync<>(codec, store, name, new PartSync.Host<T>() {
@@ -309,23 +339,16 @@ final class ClusterService {
         }
         long now = System.currentTimeMillis();
         List<ClusterStore.LogRow> foreign = new ArrayList<>();
-        for (ClusterStore.LogRow row : store.logAfter(lastLogId, now - LOG_LOOKBACK_MILLIS, LOG_READ_MAX)) {
-            if (seenLog.containsKey(row.id())) continue;
-            remember(row);
-            if (!row.server().equals(name)) foreign.add(row);
+        for (ClusterStore.LogRow row : store.logAfter(logReader.last(), List.copyOf(logReader.missing()), LOG_READ_MAX)) {
+            if (logReader.accept(row.id(), now) && !row.server().equals(name)) foreign.add(row);
         }
-        seenLog.values().removeIf(time -> time < now - 2 * LOG_LOOKBACK_MILLIS);
+        logReader.prune(now);
         int days = CustomPerm.configManager.getSettings().logRetentionDays;
         if (days > 0 && now - lastPurge > LOG_PURGE_EVERY_MILLIS) {
             lastPurge = now;
             store.purgeLog(now - days * 86_400_000L);
         }
         return foreign;
-    }
-
-    private void remember(ClusterStore.LogRow row) {
-        seenLog.put(row.id(), row.entry().time());
-        if (row.id() > lastLogId) lastLogId = row.id();
     }
 
     /** Server thread. */
@@ -348,8 +371,8 @@ final class ClusterService {
 
     // ------------------------------------------------------------------ rate-limit counters
 
-    /** Sends the uses counted here and reads the others' from {@code sinceTime} on. Same threading as the log. */
-    private synchronized List<ClusterStore.UseRow> syncUses(long sinceTime) throws ClusterStore.StoreException {
+    /** Sends the uses counted here and reads the others'. Same threading as the log. */
+    private synchronized List<ClusterStore.UseRow> syncUses() throws ClusterStore.StoreException {
         ClusterStore.Use use;
         while ((use = pendingUses.poll()) != null) unsentUses.add(use);
         // No rule shared from here, nothing waiting: no query at all, the usual case.
@@ -361,13 +384,10 @@ final class ClusterService {
         }
         long now = System.currentTimeMillis();
         List<ClusterStore.UseRow> foreign = new ArrayList<>();
-        for (ClusterStore.UseRow row : store.usesAfter(lastUseId, sinceTime, LOG_READ_MAX * 5)) {
-            if (seenUses.containsKey(row.id())) continue;
-            seenUses.put(row.id(), row.use().time());
-            if (row.id() > lastUseId) lastUseId = row.id();
-            if (!row.server().equals(name)) foreign.add(row);
+        for (ClusterStore.UseRow row : store.usesAfter(useReader.last(), List.copyOf(useReader.missing()), LOG_READ_MAX * 5)) {
+            if (useReader.accept(row.id(), now) && !row.server().equals(name)) foreign.add(row);
         }
-        seenUses.values().removeIf(time -> time < now - 2 * LOG_LOOKBACK_MILLIS);
+        useReader.prune(now);
         if (now - lastUsePurge > LOG_PURGE_EVERY_MILLIS) {
             lastUsePurge = now;
             store.purgeUses(now - longestWindowMillis());

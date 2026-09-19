@@ -45,6 +45,19 @@ public interface ClusterStore {
     /** Rows of {@code part} numbered after {@code afterSeq}, tombstones included, in number order. */
     List<Row> changesSince(String part, long afterSeq) throws StoreException;
 
+    /**
+     * The same for several parts in one read, the rows grouped by part, each group in number order. The number is
+     * shared by every part, so one cursor serves them all: what a poll asks the database when nothing changed is one
+     * query, not one per part.
+     */
+    Map<String, List<Row>> changesSince(java.util.Collection<String> parts, long afterSeq) throws StoreException;
+
+    /**
+     * The last number handed out and committed. Every row numbered up to it is readable; a write still in progress
+     * carries a higher one.
+     */
+    long currentSeq() throws StoreException;
+
     /** Writes all of {@code changes} or none of them. */
     WriteResult write(String part, List<Change> changes, String server) throws StoreException;
 
@@ -71,11 +84,10 @@ public interface ClusterStore {
     void appendLog(String server, List<LogLine> lines) throws StoreException;
 
     /**
-     * Entries numbered after {@code afterId}, and every entry recorded at or after {@code sinceTime} whatever its
-     * number: numbers are handed out when an entry is inserted, not when it commits, so a late commit can carry a
-     * lower number than one already read. The caller drops what it has already seen.
+     * Entries numbered after {@code afterId}, and those numbered {@code alsoIds}: numbers skipped earlier that a late
+     * commit may still fill (see {@link GapReader}). In number order.
      */
-    List<LogRow> logAfter(long afterId, long sinceTime, int limit) throws StoreException;
+    List<LogRow> logAfter(long afterId, java.util.Collection<Long> alsoIds, int limit) throws StoreException;
 
     /** The latest entries of one tab, newest first. */
     List<LogRow> recentLog(String kind, int limit) throws StoreException;
@@ -92,8 +104,8 @@ public interface ClusterStore {
     /** Adds uses this server counted. */
     void appendUses(String server, List<Use> uses) throws StoreException;
 
-    /** Uses numbered after {@code afterId}, and every use at or after {@code sinceTime}; see {@link #logAfter}. */
-    List<UseRow> usesAfter(long afterId, long sinceTime, int limit) throws StoreException;
+    /** Uses numbered after {@code afterId}, and those numbered {@code alsoIds}; see {@link #logAfter}. */
+    List<UseRow> usesAfter(long afterId, java.util.Collection<Long> alsoIds, int limit) throws StoreException;
 
     /** Removes uses counted before {@code beforeTime}. */
     int purgeUses(long beforeTime) throws StoreException;

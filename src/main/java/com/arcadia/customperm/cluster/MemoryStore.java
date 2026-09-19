@@ -60,6 +60,24 @@ public final class MemoryStore implements ClusterStore {
     }
 
     @Override
+    public synchronized Map<String, List<Row>> changesSince(java.util.Collection<String> wanted, long afterSeq)
+            throws StoreException {
+        check();
+        Map<String, List<Row>> rows = new HashMap<>();
+        for (String part : wanted) {
+            List<Row> some = changesSince(part, afterSeq);
+            if (!some.isEmpty()) rows.put(part, some);
+        }
+        return rows;
+    }
+
+    @Override
+    public synchronized long currentSeq() throws StoreException {
+        check();
+        return seq;
+    }
+
+    @Override
     public synchronized WriteResult write(String part, List<Change> changes, String server) throws StoreException {
         writeCalls++;
         check();
@@ -118,11 +136,12 @@ public final class MemoryStore implements ClusterStore {
     }
 
     @Override
-    public synchronized List<LogRow> logAfter(long afterId, long sinceTime, int limit) throws StoreException {
+    public synchronized List<LogRow> logAfter(long afterId, java.util.Collection<Long> alsoIds, int limit)
+            throws StoreException {
         check();
         List<LogRow> rows = new ArrayList<>();
         for (LogRow row : log) {
-            if (row.id() > afterId || row.entry().time() >= sinceTime) rows.add(row);
+            if (row.id() > afterId || alsoIds.contains(row.id())) rows.add(row);
             if (rows.size() >= limit) break;
         }
         return rows;
@@ -153,11 +172,12 @@ public final class MemoryStore implements ClusterStore {
     }
 
     @Override
-    public synchronized List<UseRow> usesAfter(long afterId, long sinceTime, int limit) throws StoreException {
+    public synchronized List<UseRow> usesAfter(long afterId, java.util.Collection<Long> alsoIds, int limit)
+            throws StoreException {
         check();
         List<UseRow> rows = new ArrayList<>();
         for (UseRow row : uses) {
-            if (row.id() > afterId || row.use().time() >= sinceTime) rows.add(row);
+            if (row.id() > afterId || alsoIds.contains(row.id())) rows.add(row);
             if (rows.size() >= limit) break;
         }
         return rows;

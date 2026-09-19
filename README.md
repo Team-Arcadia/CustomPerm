@@ -846,6 +846,10 @@ Each part can be shared or kept local, in `settings.json`:
 - The first server to join fills the database from its files. A server joining a filled database takes what the
   database holds; its previous files are copied to `backup/` first.
 - Permission checks never wait on the database: they read memory, as on a single server.
+- Load on the database, per server at rest: one query every `pollSeconds` for all shared parts, one for the log, one
+  for rate-limit uses when a rule is shared, and a heartbeat every 10 seconds; nothing is read twice. Measured on
+  MariaDB: about 2 queries a second and under 1 KB/s per server. The tables are `customperm_rows`, `customperm_seq`,
+  `customperm_servers`, `customperm_log` and `customperm_uses`, created in the configured database at first start.
 
 **`server=` context**
 

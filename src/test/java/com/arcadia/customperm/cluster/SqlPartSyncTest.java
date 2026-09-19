@@ -170,17 +170,18 @@ class SqlPartSyncTest extends PartSyncContract {
         LogEntry recent = new LogEntry(90_000L, "Steve", "", "player", "/home", true, "");
         store.appendLog("hub", List.of(new ClusterStore.LogLine("ADMIN", old), new ClusterStore.LogLine("PLAYERS", recent)));
 
-        List<ClusterStore.LogRow> all = store.logAfter(0, Long.MAX_VALUE, 100);
+        List<ClusterStore.LogRow> all = store.logAfter(0, List.of(), 100);
         assertEquals(2, all.size());
         assertEquals("hub", all.get(0).server());
         assertEquals("hub", all.get(0).entry().server());
         long lastId = all.get(1).id();
-        assertTrue(store.logAfter(lastId, Long.MAX_VALUE, 100).isEmpty());
-        assertEquals(1, store.logAfter(lastId, 60_000L, 100).size(), "entries in the look-back window are read again");
+        assertTrue(store.logAfter(lastId, List.of(), 100).isEmpty(), "nothing is read twice");
+        assertEquals(List.of(all.get(0).id()), store.logAfter(lastId, List.of(all.get(0).id()), 100).stream()
+                .map(ClusterStore.LogRow::id).toList(), "a number waited for is asked by number");
 
         assertEquals("grade create vip", store.recentLog("ADMIN", 10).get(0).entry().action());
         assertEquals(1, store.purgeLog(50_000L));
-        assertEquals(1, store.logAfter(0, Long.MAX_VALUE, 100).size());
+        assertEquals(1, store.logAfter(0, List.of(), 100).size());
     }
 
     @Test
@@ -188,12 +189,71 @@ class SqlPartSyncTest extends PartSyncContract {
         SqlStore store = sql();
         String steve = UUID.randomUUID().toString();
         store.appendUses("hub", List.of(new ClusterStore.Use("home", steve, 1_000L), new ClusterStore.Use("home", steve, 5_000L)));
-        List<ClusterStore.UseRow> rows = store.usesAfter(0, Long.MAX_VALUE, 10);
+        List<ClusterStore.UseRow> rows = store.usesAfter(0, List.of(), 10);
         assertEquals(2, rows.size());
         assertEquals("hub", rows.get(0).server());
         assertEquals(steve, rows.get(1).use().player());
         assertEquals(1, store.purgeUses(2_000L));
-        assertEquals(1, store.usesAfter(0, Long.MAX_VALUE, 10).size());
+        assertEquals(1, store.usesAfter(0, List.of(), 10).size());
+    }
+
+    @Test
+    void severalPartsAreReadInOneQueryGroupedByPart() throws Exception {
+        SqlStore store = sql();
+        long before = store.currentSeq();
+        store.write("grades", List.of(new Change("grade:vip", 0, "{}")), "a");
+        store.write("commands", List.of(new Change("command:home", 0, "{}")), "a");
+        store.write("aliases", List.of(new Change("alias:heal", 0, "[]")), "a");
+        var rows = store.changesSince(List.of("grades", "commands"), before);
+        assertEquals(java.util.Set.of("grades", "commands"), rows.keySet(), "only the parts asked for");
+        assertEquals("grade:vip", rows.get("grades").get(0).holder());
+        assertEquals(before + 3, store.currentSeq());
+        assertTrue(store.changesSince(List.of("grades", "commands"), store.currentSeq()).isEmpty());
+    }
+
+    /**
+     * Two servers appending to the shared log while a third reads it the way the cluster does: only new numbers and
+     * the ones still waited for. Every entry must reach the reader, none twice.
+     */
+    @Test
+    void concurrentLogWritersNeverHideAnEntryFromTheGapReader() throws Exception {
+        int perWriter = 80;
+        ExecutorService pool = Executors.newFixedThreadPool(3);
+        AtomicBoolean writing = new AtomicBoolean(true);
+        java.util.List<Long> read = java.util.Collections.synchronizedList(new ArrayList<>());
+        GapReader gaps = new GapReader();
+        try {
+            List<Future<?>> writers = new ArrayList<>();
+            for (String server : List.of("a", "b")) {
+                SqlStore store = sql();
+                writers.add(pool.submit(() -> {
+                    for (int i = 0; i < perWriter; i++) {
+                        store.appendLog(server, List.of(new ClusterStore.LogLine("ADMIN",
+                                new LogEntry(i, server, "", "command", "x" + i, true, ""))));
+                    }
+                    return null;
+                }));
+            }
+            SqlStore reader = sql();
+            Future<?> reading = pool.submit(() -> {
+                while (writing.get()) {
+                    for (var row : reader.logAfter(gaps.last(), List.copyOf(gaps.missing()), 1000)) {
+                        if (gaps.accept(row.id(), 0)) read.add(row.id());
+                    }
+                }
+                return null;
+            });
+            for (Future<?> writer : writers) writer.get(60, TimeUnit.SECONDS);
+            writing.set(false);
+            reading.get(60, TimeUnit.SECONDS);
+            for (var row : reader.logAfter(gaps.last(), List.copyOf(gaps.missing()), 1000)) {
+                if (gaps.accept(row.id(), 0)) read.add(row.id());
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+        assertEquals(2 * perWriter, read.size(), "entries missed or read twice");
+        assertEquals(2 * perWriter, new java.util.HashSet<>(read).size());
     }
 
     /** H2 needs no server, but the connection it hands out must be closed like a pooled one. */

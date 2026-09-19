@@ -110,6 +110,38 @@ public final class SqlStore implements ClusterStore {
     }
 
     @Override
+    public Map<String, List<Row>> changesSince(java.util.Collection<String> parts, long afterSeq) throws StoreException {
+        if (parts.isEmpty()) return Map.of();
+        try (Connection c = open();
+             PreparedStatement ps = c.prepareStatement("SELECT part, holder, version, body, updated_by, seq FROM " + ROWS
+                     + " WHERE seq > ? AND part IN (" + placeholders(parts.size()) + ") ORDER BY seq")) {
+            ps.setLong(1, afterSeq);
+            int i = 2;
+            for (String part : parts) ps.setString(i++, part);
+            Map<String, List<Row>> rows = new HashMap<>();
+            try (ResultSet rs = ps.executeQuery()) {
+                while (rs.next()) {
+                    rows.computeIfAbsent(rs.getString(1), p -> new ArrayList<>()).add(new Row(rs.getString(2),
+                            rs.getLong(3), rs.getString(4), rs.getString(5), rs.getLong(6)));
+                }
+            }
+            return rows;
+        } catch (SQLException e) {
+            throw new StoreException("reading the cluster store failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public long currentSeq() throws StoreException {
+        try (Connection c = open(); Statement st = c.createStatement();
+             ResultSet rs = st.executeQuery("SELECT seq FROM " + SEQ + " WHERE id = 1")) {
+            return rs.next() ? rs.getLong(1) : 0;
+        } catch (SQLException e) {
+            throw new StoreException("reading the cluster counter failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
     public WriteResult write(String part, List<Change> changes, String server) throws StoreException {
         try (Connection c = open()) {
             boolean autoCommit = c.getAutoCommit();
@@ -235,12 +267,13 @@ public final class SqlStore implements ClusterStore {
     }
 
     @Override
-    public List<LogRow> logAfter(long afterId, long sinceTime, int limit) throws StoreException {
+    public List<LogRow> logAfter(long afterId, java.util.Collection<Long> alsoIds, int limit) throws StoreException {
         try (Connection c = open();
              PreparedStatement ps = c.prepareStatement("SELECT id, server, kind, time, actor, actor_id, source, action, "
-                     + "success, result FROM " + LOG + " WHERE id > ? OR time >= ? ORDER BY id LIMIT " + Math.max(1, limit))) {
+                     + "success, result FROM " + LOG + " WHERE id > ?" + alsoIn(alsoIds) + " ORDER BY id LIMIT "
+                     + Math.max(1, limit))) {
             ps.setLong(1, afterId);
-            ps.setLong(2, sinceTime);
+            bindIds(ps, 2, alsoIds);
             return logRows(ps);
         } catch (SQLException e) {
             throw new StoreException("reading the shared activity log failed: " + e.getMessage(), e);
@@ -289,12 +322,12 @@ public final class SqlStore implements ClusterStore {
     }
 
     @Override
-    public List<UseRow> usesAfter(long afterId, long sinceTime, int limit) throws StoreException {
+    public List<UseRow> usesAfter(long afterId, java.util.Collection<Long> alsoIds, int limit) throws StoreException {
         try (Connection c = open();
              PreparedStatement ps = c.prepareStatement("SELECT id, server, command, player, time FROM " + USES
-                     + " WHERE id > ? OR time >= ? ORDER BY id LIMIT " + Math.max(1, limit))) {
+                     + " WHERE id > ?" + alsoIn(alsoIds) + " ORDER BY id LIMIT " + Math.max(1, limit))) {
             ps.setLong(1, afterId);
-            ps.setLong(2, sinceTime);
+            bindIds(ps, 2, alsoIds);
             List<UseRow> rows = new ArrayList<>();
             try (ResultSet rs = ps.executeQuery()) {
                 while (rs.next()) {
@@ -328,6 +361,20 @@ public final class SqlStore implements ClusterStore {
             }
         }
         return rows;
+    }
+
+    private static String placeholders(int count) {
+        return String.join(", ", java.util.Collections.nCopies(count, "?"));
+    }
+
+    /** {@code OR id IN (...)} for the numbers still waited for, nothing when there are none (the usual case). */
+    private static String alsoIn(java.util.Collection<Long> ids) {
+        return ids.isEmpty() ? "" : " OR id IN (" + placeholders(ids.size()) + ")";
+    }
+
+    private static void bindIds(PreparedStatement ps, int first, java.util.Collection<Long> ids) throws SQLException {
+        int i = first;
+        for (long id : ids) ps.setLong(i++, id);
     }
 
     private static String cut(String text, int max) {

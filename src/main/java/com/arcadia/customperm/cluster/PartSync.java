@@ -155,6 +155,7 @@ public final class PartSync<T> {
         return store.changesSince(codec.part(), lastSeq);
     }
 
+
     /** Applies fetched rows. The thread that owns the configuration. True when something changed here. */
     public boolean apply(List<Row> rows) {
         Set<String> changed = new LinkedHashSet<>();

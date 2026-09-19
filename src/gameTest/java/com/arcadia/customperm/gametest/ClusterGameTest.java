@@ -212,7 +212,7 @@ public class ClusterGameTest {
             boolean shown = ActivityLog.recent(LogKind.ADMIN, 50).stream()
                     .anyMatch(e -> e.action().equals("grade create cp_cl_logged") && e.server().equals("other"));
             if (!shown) fail("The other server's entry must show here, with its server name.");
-            boolean sent = store.logAfter(0, 0, 500).stream()
+            boolean sent = store.logAfter(0, List.of(), 500).stream()
                     .anyMatch(r -> r.entry().action().equals("cp_cl_here") && r.server().equals("gametest"));
             if (!sent) fail("An entry recorded here must reach the shared log under this server's name.");
             boolean echoed = ActivityLog.recent(LogKind.ADMIN, 50).stream()
@@ -243,7 +243,7 @@ public class ClusterGameTest {
             java.util.UUID fresh = java.util.UUID.randomUUID();
             if (!RateLimiter.tryAcquire("cp_cl_net", fresh, 3, 60).allowed()) fail("A fresh player has uses left.");
             Cluster.pollNow();
-            boolean sent = store.usesAfter(0, 0, 100).stream()
+            boolean sent = store.usesAfter(0, List.of(), 100).stream()
                     .anyMatch(r -> r.server().equals("gametest") && r.use().player().equals(fresh.toString()));
             if (!sent) fail("network: a use counted here must reach the store under this server's name.");
 
@@ -268,10 +268,10 @@ public class ClusterGameTest {
             if (!RateLimiter.tryAcquire("cp_cl_local", local, 3, 60).allowed()) {
                 fail("server (the default): another server's uses do not count here.");
             }
-            int before = store.usesAfter(0, 0, 500).size();
+            int before = store.usesAfter(0, List.of(), 500).size();
             RateLimiter.tryAcquire("cp_cl_local", java.util.UUID.randomUUID(), 3, 60);
             Cluster.pollNow();
-            if (store.usesAfter(0, 0, 500).size() != before) fail("A use of an unshared rule must not be sent.");
+            if (store.usesAfter(0, List.of(), 500).size() != before) fail("A use of an unshared rule must not be sent.");
 
             RateLimitAdmin.remove("cp_cl_net");
             RateLimitAdmin.remove("cp_cl_group");
