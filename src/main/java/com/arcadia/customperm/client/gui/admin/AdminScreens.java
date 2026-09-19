@@ -19,6 +19,7 @@ import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPageData;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
+import com.arcadia.customperm.network.gui.HelpData;
 import com.arcadia.customperm.network.gui.ImportData;
 import com.arcadia.customperm.network.gui.LogsData;
 import com.arcadia.customperm.network.gui.PlayersData;
@@ -68,6 +69,7 @@ public final class AdminScreens {
             entries.add(new NavEntry(GuiPage.IMPORT, "Import", Icon.REFRESH));
         }
         entries.add(new NavEntry(GuiPage.LOGS, "Logs", Icon.LOG));
+        entries.add(new NavEntry(GuiPage.HELP, "Help", Icon.INFO));
         return entries;
     }
 
@@ -108,6 +110,7 @@ public final class AdminScreens {
             case LuckPermsData d -> new LuckPermsScreen(context, d);
             case ImportData d -> new ImportScreen(context, d);
             case LogsData d -> new LogsScreen(context, d);
+            case HelpData d -> new HelpScreen(context);
         };
     }
 }

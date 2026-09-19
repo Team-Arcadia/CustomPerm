@@ -64,6 +64,8 @@ public class GuiPayloadCodecGameTest {
                 "Cluster \"hub\", with pvp (3 s ago). Sharing grades.");
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.INTERNAL_FALLBACK, GuiArea.ALIASES.bit() | GuiArea.GRADES.bit(), 1, false), data));
+        expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
+                new GuiContext(BackendKind.INTERNAL, 0, 0, false), com.arcadia.customperm.network.gui.HelpData.INSTANCE));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
                 new GuiContext(BackendKind.LUCKPERMS, 0, 0, true), new CommandsData(List.of(
                         new CommandsData.Row("gamemode", true, true, false, true, false),

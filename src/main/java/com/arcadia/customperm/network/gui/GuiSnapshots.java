@@ -49,6 +49,7 @@ public final class GuiSnapshots {
             case LUCKPERMS -> new LuckPermsData(LuckPermsData.GROUPS);
             case IMPORT -> importPage(player);
             case LOGS -> logs();
+            case HELP -> HelpData.INSTANCE;
         };
     }
 

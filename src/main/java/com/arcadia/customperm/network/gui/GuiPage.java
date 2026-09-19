@@ -23,7 +23,8 @@ public enum GuiPage {
     PLAYERS,
     LUCKPERMS,
     IMPORT,
-    LOGS;
+    LOGS,
+    HELP;
 
     /** Name used on the wire and as the {@code /customperm gui <page>} argument. */
     public String id() {

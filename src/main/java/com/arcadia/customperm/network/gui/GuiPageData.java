@@ -17,7 +17,7 @@ import net.minecraft.network.codec.StreamCodec;
  * record with its page on the wire so {@link GuiPagePayload} needs a single channel for all pages.
  */
 public sealed interface GuiPageData permits DashboardData, CommandsData, AliasesData, RateLimitsData, GradesData,
-        PlayersData, LuckPermsData, ImportData, LogsData {
+        PlayersData, LuckPermsData, ImportData, LogsData, HelpData {
 
     GuiPage page();
 
@@ -34,6 +34,7 @@ public sealed interface GuiPageData permits DashboardData, CommandsData, Aliases
                     case LuckPermsData d -> LuckPermsData.CODEC.encode(buf, d);
                     case ImportData d -> ImportData.CODEC.encode(buf, d);
                     case LogsData d -> LogsData.CODEC.encode(buf, d);
+                    case HelpData d -> HelpData.CODEC.encode(buf, d);
                 }
             },
             buf -> {
@@ -50,6 +51,7 @@ public sealed interface GuiPageData permits DashboardData, CommandsData, Aliases
                     case LUCKPERMS -> LuckPermsData.CODEC.decode(buf);
                     case IMPORT -> ImportData.CODEC.decode(buf);
                     case LOGS -> LogsData.CODEC.decode(buf);
+                    case HELP -> HelpData.CODEC.decode(buf);
                 };
             });
 }
