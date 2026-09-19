@@ -226,8 +226,8 @@ public final class LuckPermsImport {
                 return Scope.left("LuckPerms' world context is the save's name on NeoForge, not a dimension "
                         + "(that one is dimension-type): nothing here would match it");
             }
-            if (key.equals(com.arcadia.customperm.perm.Contexts.SERVER)) {
-                return Scope.left("A server context waits for cluster mode");
+            if (key.equals(com.arcadia.customperm.perm.Contexts.SERVER) && !com.arcadia.customperm.cluster.Cluster.running()) {
+                return Scope.left("A server context needs cluster mode, which is not running here");
             }
             if (!raw.isEmpty()) raw.append(',');
             raw.append(key).append('=').append(context.getValue());
@@ -235,7 +235,8 @@ public final class LuckPermsImport {
         String parsed = com.arcadia.customperm.perm.Contexts.parse(raw.toString());
         if (parsed == null) return Scope.left("A context this version cannot read (" + raw + ")");
         String undeclared = com.arcadia.customperm.perm.Contexts.undeclared(parsed,
-                com.arcadia.customperm.CustomPerm.configManager.getSettings().staticContexts);
+                com.arcadia.customperm.cluster.Cluster.declared(
+                        com.arcadia.customperm.CustomPerm.configManager.getSettings().staticContexts));
         if (undeclared != null) {
             return Scope.left("No static context sets '" + undeclared + "' here (/customperm contexts set), so "
                     + "an entry limited to it would apply nowhere");

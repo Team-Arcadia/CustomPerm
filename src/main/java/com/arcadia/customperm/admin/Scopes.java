@@ -36,14 +36,22 @@ final class Scopes {
         if (raw == null || raw.isBlank()) return null;
         String parsed = Contexts.parse(raw);
         if (parsed == null) return INVALID;
-        return Contexts.undeclared(parsed, com.arcadia.customperm.CustomPerm.configManager.getSettings().staticContexts) == null
-                ? parsed : INVALID;
+        return Contexts.undeclared(parsed, declared()) == null ? parsed : INVALID;
+    }
+
+    private static java.util.Map<String, String> declared() {
+        return com.arcadia.customperm.cluster.Cluster.declared(
+                com.arcadia.customperm.CustomPerm.configManager.getSettings().staticContexts);
     }
 
     static AdminResult invalid(String raw) {
         String parsed = Contexts.parse(raw);
         if (parsed != null) {
-            String key = Contexts.undeclared(parsed, com.arcadia.customperm.CustomPerm.configManager.getSettings().staticContexts);
+            String key = Contexts.undeclared(parsed, declared());
+            if (Contexts.SERVER.equals(key)) {
+                return AdminResult.fail("server= names a server of a cluster, and this server is in none: an entry "
+                        + "limited to it would apply nowhere. See cluster mode in the README.");
+            }
             return AdminResult.fail("Nothing on this server sets '" + key + "': an entry limited to it would apply "
                     + "nowhere. Set it first with /customperm contexts set " + key + " <value>.");
         }

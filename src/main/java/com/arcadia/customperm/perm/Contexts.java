@@ -149,8 +149,8 @@ public final class Contexts {
      * The stored form of a context typed by an admin or read from a file, or {@code null} when it is not
      * one: {@code world=the_nether} becomes {@code world=minecraft:the_nether}. Keys and values are
      * lowercased, sorted, and a pair named twice counts once; {@code dimension-type} is read as {@code world}.
-     * A malformed pair, {@code server} or a game mode that does not exist is refused. A key this method
-     * accepts but no static context sets matches nothing: see {@link #undeclared}.
+     * A malformed pair or a game mode that does not exist is refused. A key this method accepts but nothing
+     * sets here matches nothing: see {@link #undeclared}; {@code server} is set only while a cluster runs.
      */
     public static String parse(String text) {
         if (text == null) return null;
@@ -179,7 +179,6 @@ public final class Contexts {
         return switch (key) {
             case WORLD -> dimension(value);
             case GAMEMODE -> GAMEMODES.contains(value) ? value : null;
-            case SERVER -> null;
             default -> KEY.matcher(key).matches() && VALUE.matcher(value).matches() ? value : null;
         };
     }

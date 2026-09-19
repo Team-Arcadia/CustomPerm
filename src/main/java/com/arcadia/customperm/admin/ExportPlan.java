@@ -278,7 +278,8 @@ public record ExportPlan(List<Group> groups, List<Player> players, List<Track> t
 
     /**
      * Whether a stored context has a LuckPerms form: one this version reads. A key written by hand for a newer
-     * version, {@code server} until cluster mode, has none and matches nothing here either.
+     * version has none and matches nothing here either. {@code server} is written as LuckPerms' own server
+     * context, which matches when the LuckPerms servers carry the same names as the cluster's.
      */
     private static boolean exportable(String raw) {
         return com.arcadia.customperm.perm.Contexts.parse(raw) != null;

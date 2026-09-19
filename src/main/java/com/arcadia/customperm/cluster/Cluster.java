@@ -100,6 +100,8 @@ public final class Cluster {
     private static void attach(ClusterStore store, String name, String instance, MinecraftServer server)
             throws ClusterStore.StoreException {
         detach();
+        // The name first: joining may already store entries limited to server=<name>.
+        serverName = name;
         ClusterService started = new ClusterService(store, name, instance, server,
                 CustomPerm.configManager.getSettings().cluster.share);
         started.start();
@@ -109,6 +111,7 @@ public final class Cluster {
     public static void detach() {
         ClusterService running = service;
         service = null;
+        if (state != ClusterGate.State.READY) serverName = null;
         if (running != null) running.stop();
     }
 
@@ -127,6 +130,29 @@ public final class Cluster {
         return running != null && running.pollNow();
     }
 
+    /**
+     * The contexts set on this server beyond the world and the game mode: {@code statics}, plus {@code server=<name>}
+     * while a cluster runs. What an entry's context is checked against before it is stored, and what every player
+     * carries. The same map instance comes back while nothing changed, for the callers that cache on it.
+     */
+    public static java.util.Map<String, String> declared(java.util.Map<String, String> statics) {
+        String name = serverName();
+        if (service == null || name == null) return statics;
+        java.util.Map<String, String> cached = declaredCache;
+        if (cached != null && declaredFrom == statics && name.equals(declaredName)) return cached;
+        java.util.TreeMap<String, String> all = new java.util.TreeMap<>(statics);
+        all.put(com.arcadia.customperm.perm.Contexts.SERVER, name.toLowerCase(java.util.Locale.ROOT));
+        java.util.Map<String, String> made = java.util.Collections.unmodifiableMap(all);
+        declaredFrom = statics;
+        declaredName = name;
+        declaredCache = made;
+        return made;
+    }
+
+    private static volatile java.util.Map<String, String> declaredCache;
+    private static volatile java.util.Map<String, String> declaredFrom;
+    private static volatile String declaredName;
+
     /** An activity log entry recorded here, shared when a cluster runs with {@code share.log}. Any thread. */
     public static void log(com.arcadia.customperm.log.LogKind kind, com.arcadia.customperm.log.LogEntry entry) {
         ClusterService running = service;
@@ -142,6 +168,25 @@ public final class Cluster {
     public static void onServerTick(ServerTickEvent.Post event) {
         ClusterService running = service;
         if (running != null) running.tick();
+    }
+
+    /**
+     * One line for the dashboard: this server's name, what it shares and which servers it hears; why it runs alone
+     * when cluster mode is on; empty when cluster mode is off or LuckPerms decides.
+     */
+    public static String summary() {
+        ClusterService running = service;
+        if (running != null) {
+            java.util.Map<String, Long> peers = running.peers();
+            String others = peers.isEmpty() ? "no other server heard yet"
+                    : "with " + String.join(", ", new java.util.TreeMap<>(peers).entrySet().stream()
+                            .map(e -> e.getKey() + " (" + e.getValue() + " s ago)").toList());
+            return "Cluster \"" + running.name() + "\", " + others + ". Sharing " + String.join(", ", running.sharedParts()) + ".";
+        }
+        return switch (state) {
+            case OFF, LUCKPERMS -> "";
+            default -> "Cluster mode is on, but this server runs alone: see the alert.";
+        };
     }
 
     /** A line for the reload answer when the {@code cluster} settings changed; null otherwise. */

@@ -75,7 +75,8 @@ public final class ContextAdmin {
     /** What holds for {@code player} now, as the resolver sees it: world, game mode and the static contexts. */
     public static List<String> of(ServerPlayer player) {
         return Contexts.of(player.level().dimension().location().toString(),
-                player.gameMode.getGameModeForPlayer().getName(), statics()).pairs();
+                player.gameMode.getGameModeForPlayer().getName(),
+                com.arcadia.customperm.cluster.Cluster.declared(statics())).pairs();
     }
 
     private static AdminResult luckPermsNote(AdminResult result) {

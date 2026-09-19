@@ -260,6 +260,34 @@ public class ClusterGameTest {
         helper.succeed();
     }
 
+    /** server=<name> is a context while a cluster runs: it holds on the server of that name only; outside a cluster it is refused. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_server_context")
+    public static void theServerContextHoldsOnThatServerOnly(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        if (GradeAdmin.addNode(server, "cp_cl_nowhere", "x", false, 0, "server=gametest").success()) {
+            fail("Outside a cluster, server= must be refused: it would apply nowhere.");
+        }
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_cl_ctx", 0)) {
+            inCluster(server, new MemoryStore(), () -> {
+                if (!GradeAdmin.create("cp_cl_ctx").success()) fail("Could not create the grade.");
+                if (!GradeAdmin.assign(server, player.player().getGameProfile(), "cp_cl_ctx").success()) {
+                    fail("Could not assign the grade.");
+                }
+                AdminResult here = GradeAdmin.addNode(server, "cp_cl_ctx", "cp.cluster.here", false, 0, "server=gametest");
+                AdminResult there = GradeAdmin.addNode(server, "cp_cl_ctx", "cp.cluster.there", false, 0, "server=other");
+                if (!here.success() || !there.success()) fail("In a cluster, server= must be accepted: " + here.message());
+                if (!PermissionService.get().hasGrantedNode(player.source(), "cp.cluster.here")) {
+                    fail("A node limited to this server's name must hold here.");
+                }
+                if (PermissionService.get().hasGrantedNode(player.source(), "cp.cluster.there")) {
+                    fail("A node limited to another server must not hold here.");
+                }
+            });
+        }
+        helper.succeed();
+    }
+
     /** A grade and an assignment made on the other server give the player the node here, and the reverse. */
     @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_propagate")
     public static void aChangeOnOneServerAppliesOnTheOther(GameTestHelper helper) throws Exception {

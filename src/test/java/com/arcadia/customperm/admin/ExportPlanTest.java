@@ -257,11 +257,12 @@ class ExportPlanTest {
 
         ExportPlan plan = ExportPlan.of(config, "");
 
-        assertEquals(List.of(new ScopedGrant("world=minecraft:the_nether", ScopedGrant.DENY, "customperm.command.home")),
-                group(plan, "base").scoped(), "a context that is not a single world has nothing to be written under");
+        assertEquals(List.of(new ScopedGrant("server=lobby", ScopedGrant.ALLOW, "customperm.command.fly"),
+                        new ScopedGrant("world=minecraft:the_nether", ScopedGrant.DENY, "customperm.command.home")),
+                group(plan, "base").scoped(), "a server context is written as LuckPerms' own server context");
         assertEquals(List.of(new ScopedGrant("world=minecraft:the_end", ScopedGrant.GRADE, "base")),
                 plan.players().get(0).scoped(), "a grade that is not exported is not held anywhere");
-        assertEquals(2, plan.dropped());
+        assertEquals(1, plan.dropped(), "only the grade that does not exist is left behind");
 
         GradesConfig back = plan.asConfig();
         UUID player = UUID.fromString(PLAYER);
@@ -293,8 +294,9 @@ class ExportPlanTest {
         ExportPlan.Group vip = group(plan, "vip");
         assertEquals(List.of(new ScopedGrant("world=minecraft:the_nether", ScopedGrant.PARENT, "base"),
                 new ScopedGrant("world=minecraft:the_nether", ScopedGrant.REFUSED, "staff")), vip.scoped());
-        assertEquals(List.of(new ChatGrant(false, 5, "[Hot]", 0, "world=minecraft:the_nether")), vip.chat(),
-                "a prefix limited to a server has no LuckPerms form written here");
+        assertEquals(List.of(new ChatGrant(false, 5, "[Lobby]", 0, "server=lobby"),
+                        new ChatGrant(false, 5, "[Hot]", 0, "world=minecraft:the_nether")), vip.chat(),
+                "a prefix limited to a server is written with LuckPerms' server context");
         assertEquals(List.of(new ScopedGrant("world=minecraft:the_end", ScopedGrant.REFUSED, "vip")),
                 plan.players().get(0).scoped());
 

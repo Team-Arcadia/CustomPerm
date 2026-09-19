@@ -52,7 +52,9 @@ class ContextsTest {
         assertNull(Contexts.parse("=the_nether"));
         assertNull(Contexts.parse("world="));
         assertNull(Contexts.parse("world=bad name"));
-        assertNull(Contexts.parse("server=lobby"), "server waits for cluster mode");
+        assertEquals("server=lobby", Contexts.parse("server=Lobby"), "read here, refused by undeclared() outside a cluster");
+        assertEquals("server", Contexts.undeclared("server=lobby", java.util.Map.of()));
+        assertNull(Contexts.undeclared("server=lobby", java.util.Map.of("server", "lobby")));
         assertNull(Contexts.parse("gamemode=flying"));
         assertNull(Contexts.parse("bad key=x"));
     }

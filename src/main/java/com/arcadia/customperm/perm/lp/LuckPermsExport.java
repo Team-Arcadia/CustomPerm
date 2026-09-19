@@ -357,13 +357,12 @@ public final class LuckPermsExport {
 
     /**
      * A node CustomPerm could have written: no expiry, and no context or only contexts it writes, which are
-     * never LuckPerms' {@code world} (the save's name) nor {@code server}.
+     * never LuckPerms' {@code world} (the save's name). {@code server} is one it writes, since cluster mode.
      */
     private static boolean decidedHere(Node node) {
         if (node.hasExpiry()) return false;
         for (var context : node.getContexts()) {
-            String key = context.getKey().toLowerCase(java.util.Locale.ROOT);
-            if (key.equals(com.arcadia.customperm.perm.Contexts.WORLD) || key.equals(com.arcadia.customperm.perm.Contexts.SERVER)) {
+            if (context.getKey().toLowerCase(java.util.Locale.ROOT).equals(com.arcadia.customperm.perm.Contexts.WORLD)) {
                 return false;
             }
         }

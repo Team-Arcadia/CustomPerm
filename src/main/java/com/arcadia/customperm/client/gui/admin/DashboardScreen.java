@@ -146,10 +146,12 @@ public final class DashboardScreen extends AdminScreen {
         renderBackendCard(g);
         sectionTitle(g, "Alerts (" + data.alerts().size() + ")", alertsTitle());
 
-        if (data.luckPermsInstalled()) {
+        // Cluster mode never runs with LuckPerms, so the two never compete for this line.
+        String footer = !data.cluster().isEmpty() ? data.cluster()
+                : data.luckPermsInstalled() ? "LuckPerms fallback: " + data.fallbackMode() : "";
+        if (!footer.isEmpty()) {
             Rect bar = actionBar();
-            Skin.text(g, font, "LuckPerms fallback: " + data.fallbackMode(),
-                    bar.x(), bar.y() + (bar.h() - 8) / 2, bar.w() - reloadWidth - GAP, Palette.TEXT_MUTE);
+            Skin.text(g, font, footer, bar.x(), bar.y() + (bar.h() - 8) / 2, bar.w() - reloadWidth - GAP, Palette.TEXT_MUTE);
         }
     }
 

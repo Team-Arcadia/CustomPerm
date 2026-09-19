@@ -77,6 +77,8 @@ final class ClusterService {
     private long lastUseId;
     private final Map<Long, Long> seenUses = new HashMap<>();
     private long lastUsePurge;
+    /** Other servers and seconds since each was last heard, from the latest heartbeat; for the dashboard. */
+    private volatile Map<String, Long> peers = Map.of();
 
     ClusterService(ClusterStore store, String name, String instance, MinecraftServer server, SettingsConfig.Share share) {
         this.store = store;
@@ -96,6 +98,10 @@ final class ClusterService {
 
     String name() {
         return name;
+    }
+
+    Map<String, Long> peers() {
+        return peers;
     }
 
     /** Names of the parts shared, for the log and the dashboard. */
@@ -381,6 +387,10 @@ final class ClusterService {
     private void beat() {
         try {
             List<String> others = store.heartbeat(name, instance, LIVE_SECONDS);
+            Map<String, Long> servers = new HashMap<>(store.servers());
+            servers.remove(name);
+            servers.values().removeIf(age -> age > LIVE_SECONDS);
+            peers = Map.copyOf(servers);
             if (!others.isEmpty()) {
                 server.execute(() -> AdminNotifier.raise(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "Another running server "
                         + "now uses this server's name \"" + name + "\" in the cluster. Give each server its own "

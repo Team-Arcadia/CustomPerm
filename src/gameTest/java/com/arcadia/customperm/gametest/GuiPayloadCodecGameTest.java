@@ -60,7 +60,8 @@ public class GuiPayloadCodecGameTest {
     @GameTest(template = TEMPLATE)
     public static void everyPayloadRoundTrips(GameTestHelper helper) {
         DashboardData data = new DashboardData("internal", true, 140, 3, 2, 4, 1, 5, 7, true,
-                List.of(new DashboardData.Alert("CONFIG_LOAD_FAILED", "grades.json is invalid")));
+                List.of(new DashboardData.Alert("CONFIG_LOAD_FAILED", "grades.json is invalid")),
+                "Cluster \"hub\", with pvp (3 s ago). Sharing grades.");
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.INTERNAL_FALLBACK, GuiArea.ALIASES.bit() | GuiArea.GRADES.bit(), 1, false), data));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,

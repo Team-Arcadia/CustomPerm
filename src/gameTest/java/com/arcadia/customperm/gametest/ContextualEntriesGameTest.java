@@ -63,7 +63,7 @@ public class ContextualEntriesGameTest {
             expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " world=Bad!"),
                     "Invalid context 'world=Bad!'");
             expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " server=lobby"),
-                    "Invalid context 'server=lobby'");
+                    "server= names a server of a cluster, and this server is in none");
             expect(ServerCommands.run(server, "customperm grade addperm " + GRADE + " " + NODE + " world=the_nether"),
                     "Added " + NODE + " -> " + GRADE + " in the_nether");
             check(grades.grades.get(GRADE).contexts.get(NETHER).permissions.contains(NODE),

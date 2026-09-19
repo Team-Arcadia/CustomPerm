@@ -24,7 +24,7 @@ import java.util.List;
 public record DashboardData(String fallbackMode, boolean luckPermsInstalled, int dispatcherCommands,
                             int exposedCommands, int aliases, int rateLimits, int rateLimitsEnabled,
                             int grades, int playersWithGrades, boolean savesSuspended,
-                            List<Alert> alerts) implements GuiPageData {
+                            List<Alert> alerts, String cluster) implements GuiPageData {
 
     /** One active admin alert. {@code key} is the {@code AdminAlerts.Key} name. */
     public record Alert(String key, String message) {
@@ -47,6 +47,7 @@ public record DashboardData(String fallbackMode, boolean luckPermsInstalled, int
                 ByteBufCodecs.VAR_INT.encode(buf, d.playersWithGrades);
                 ByteBufCodecs.BOOL.encode(buf, d.savesSuspended);
                 GuiCodecs.list(Alert.CODEC, GuiCodecs.ALERTS_MAX).encode(buf, d.alerts);
+                GuiCodecs.TEXT.encode(buf, d.cluster);
             },
             buf -> new DashboardData(
                     GuiCodecs.TEXT.decode(buf),
@@ -59,7 +60,8 @@ public record DashboardData(String fallbackMode, boolean luckPermsInstalled, int
                     ByteBufCodecs.VAR_INT.decode(buf),
                     ByteBufCodecs.VAR_INT.decode(buf),
                     ByteBufCodecs.BOOL.decode(buf),
-                    GuiCodecs.list(Alert.CODEC, GuiCodecs.ALERTS_MAX).decode(buf)));
+                    GuiCodecs.list(Alert.CODEC, GuiCodecs.ALERTS_MAX).decode(buf),
+                    GuiCodecs.TEXT.decode(buf)));
 
     @Override
     public GuiPage page() {

@@ -368,6 +368,7 @@ public final class GuiSnapshots {
                 config.getGrades().grades.size(),
                 config.getGrades().userGrades.size(),
                 !config.isDiskWritable(),
-                alerts);
+                alerts,
+                com.arcadia.customperm.cluster.Cluster.summary());
     }
 }

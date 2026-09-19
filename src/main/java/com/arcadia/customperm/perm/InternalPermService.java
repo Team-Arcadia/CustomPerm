@@ -45,7 +45,7 @@ public class InternalPermService implements PermissionService {
      * Their dimension, their game mode, and the server's static contexts.
      */
     public Contexts contexts(ServerPlayer player) {
-        Map<String, String> statics = config.getSettings().staticContexts;
+        Map<String, String> statics = com.arcadia.customperm.cluster.Cluster.declared(config.getSettings().staticContexts);
         if (statics != builtFrom) {
             byWorld.clear();
             builtFrom = statics;
