@@ -26,8 +26,10 @@ public final class AdminAlerts {
         LUCKPERMS_UNAVAILABLE,
         /** A config file could not be loaded; saves are suspended. */
         CONFIG_LOAD_FAILED,
-        /** Cluster mode is switched on but this server runs alone; the message says why. */
-        CLUSTER_UNAVAILABLE
+        /** Cluster mode is switched on but this server runs alone, or its store is unreachable; the message says which. */
+        CLUSTER_UNAVAILABLE,
+        /** Another running server of the cluster uses this server's name. */
+        CLUSTER_NAME_TAKEN
     }
 
     private final Map<Key, String> active = new ConcurrentHashMap<>();

@@ -63,6 +63,8 @@ final class ClusterService {
     private final AtomicBoolean polling = new AtomicBoolean();
     private int ticks;
     private int heartbeatTicks;
+    /** Server thread: an outage is under way, its cause already logged. */
+    private boolean outage;
     private final boolean shareLog;
     private final ConcurrentLinkedQueue<ClusterStore.LogLine> pendingLog = new ConcurrentLinkedQueue<>();
     /** Worker thread only: entries not yet accepted by the store, the newest log number read, what was read lately. */
@@ -395,22 +397,38 @@ final class ClusterService {
             servers.remove(name);
             servers.values().removeIf(age -> age > LIVE_SECONDS);
             peers = Map.copyOf(servers);
-            if (!others.isEmpty()) {
-                server.execute(() -> AdminNotifier.raise(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "Another running server "
-                        + "now uses this server's name \"" + name + "\" in the cluster. Give each server its own "
-                        + "server_id in <world>/serverconfig/arcadia/lib/server.toml and restart one of them."));
-            }
+            server.execute(() -> {
+                if (!others.isEmpty()) {
+                    AdminNotifier.raise(AdminAlerts.Key.CLUSTER_NAME_TAKEN, "Another running server now uses this "
+                            + "server's name \"" + name + "\" in the cluster. Give each server its own name ("
+                            + ClusterGate.NAME_SETTING + ") and restart one of them.");
+                } else if (AdminNotifier.isActive(AdminAlerts.Key.CLUSTER_NAME_TAKEN)) {
+                    AdminNotifier.clear(AdminAlerts.Key.CLUSTER_NAME_TAKEN, "no other server uses this name any more.");
+                }
+            });
         } catch (ClusterStore.StoreException e) {
             server.execute(() -> lost(e.getMessage()));
         }
     }
 
+    /**
+     * The alert's text stays the same for the whole outage: an alert is sent again whenever its text changes, and
+     * the failing operation (heartbeat, log, write) changes every few seconds. The cause goes to the log, once.
+     * Server thread.
+     */
     private void lost(String reason) {
-        AdminNotifier.raise(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "The cluster storage is unreachable (" + reason
-                + "). This server keeps the configuration it last read and refuses changes until it is back.");
+        if (!outage) {
+            outage = true;
+            CustomPerm.LOGGER.warn("[CustomPerm] Cluster: the store is unreachable: {}", reason);
+        }
+        AdminNotifier.raise(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "The cluster storage is unreachable. This server keeps "
+                + "the configuration it last read and refuses changes until it is back; the server log has the cause.");
     }
 
+    /** Ends an outage; anything else the alert may say is not this method's to clear. Server thread. */
     private void recovered() {
+        if (!outage) return;
+        outage = false;
         if (AdminNotifier.isActive(AdminAlerts.Key.CLUSTER_UNAVAILABLE)) {
             AdminNotifier.clear(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "the cluster storage is reachable again.");
         }

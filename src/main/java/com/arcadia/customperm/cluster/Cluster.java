@@ -93,6 +93,10 @@ public final class Cluster {
             List<String> others = store.heartbeat(serverName, instance, ClusterService.LIVE_SECONDS);
             if (!others.isEmpty()) {
                 state = ClusterGate.State.DUPLICATE_NAME;
+                // The heartbeat just written would make the server that owns the name believe it has a double.
+                store.leave(serverName, instance);
+                serverName = null;
+                closeDirect();
                 return;
             }
             attach(store, serverName, instance, server);
