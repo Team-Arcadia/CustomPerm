@@ -62,6 +62,13 @@ public class CpEditBox extends EditBox {
         setHint(Component.literal(text).withColor(Palette.TEXT_MUTE));
     }
 
+    /** A value set by the page, not typed, shows from its start: a long one otherwise reads as its tail. */
+    @Override
+    public void setValue(String text) {
+        super.setValue(text);
+        if (!isFocused()) moveCursorToStart(false);
+    }
+
     public CpEditBox onChange(Consumer<String> listener) {
         setResponder(listener);
         return this;

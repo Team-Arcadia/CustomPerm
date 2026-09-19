@@ -77,29 +77,34 @@ final class MetaFields {
 
     /** The key box, then the value, world and duration boxes on the right of the row. */
     Rect keyRect(Rect row) {
-        return row.beforeRight(VALUE_FIELD + WORLD_FIELD + DURATION_FIELD + 12);
+        return boxes(row)[0];
     }
 
     Rect valueRect(Rect row) {
-        return row.right(VALUE_FIELD + WORLD_FIELD + DURATION_FIELD + 8).left(VALUE_FIELD);
+        return boxes(row)[1];
     }
 
     Rect worldRect(Rect row) {
-        return row.right(WORLD_FIELD + DURATION_FIELD + 4).left(WORLD_FIELD);
+        return boxes(row)[2];
     }
 
     Rect durationRect(Rect row) {
-        return row.right(DURATION_FIELD);
+        return boxes(row)[3];
+    }
+
+    private static Rect[] boxes(Rect row) {
+        return row.split(4, VALUE_FIELD, WORLD_FIELD, DURATION_FIELD);
     }
 
     private void renderLine(GuiGraphics g, Font font, MetaLine line, Rect r, boolean hovered, boolean selected) {
         String left = GradesScreen.label(line.context(), line.remaining());
-        int lw = left.isEmpty() ? 0 : font.width(left) + 8;
-        if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
+        String value = "= " + line.value();
+        int y = r.y() + (r.h() - 8) / 2;
         int x = r.x() + 6;
-        int keyWidth = Math.min(font.width(line.key()), (r.w() - lw) / 2);
-        Skin.text(g, font, line.key(), x, r.y() + (r.h() - 8) / 2, keyWidth, Palette.TEXT);
+        int end = GradesScreen.trailing(g, font, left, r, x, font.width(line.key()) + 6 + font.width(value));
+        int keyWidth = Math.min(font.width(line.key()), (end - x) / 2);
+        Skin.text(g, font, line.key(), x, y, keyWidth, Palette.TEXT);
         x += keyWidth + 6;
-        Skin.text(g, font, "= " + line.value(), x, r.y() + (r.h() - 8) / 2, r.right() - lw - x - 4, Palette.TEXT_MUTE);
+        Skin.text(g, font, value, x, y, end - x, Palette.TEXT_MUTE);
     }
 }

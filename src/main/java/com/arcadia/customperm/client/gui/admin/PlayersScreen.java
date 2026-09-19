@@ -98,8 +98,12 @@ public final class PlayersScreen extends AdminScreen {
         this.worldField = new CpEditBox(Component.literal("World"), 128)
                 .hint(Component.literal("in, e.g. the_nether"))
                 .onChange(text -> {
-                    // On the Tracks tab the world box says which rungs are read: follow it as it is typed.
-                    if (tab == Tab.TRACKS) fillTracks();
+                    // On the Tracks tab the world box says which rungs are read: follow it as it is typed, and
+                    // rebuild so Promote and Demote follow the rung read there, not the one read everywhere.
+                    if (tab == Tab.TRACKS) {
+                        fillTracks();
+                        rebuild();
+                    }
                 });
         this.search = new CpEditBox(Component.literal("Search players"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
@@ -313,7 +317,7 @@ public final class PlayersScreen extends AdminScreen {
         nickField.setEditable(canEdit(GuiArea.GRADES));
         if (!nickField.isFocused()) nickField.setValue(data.nickname(player.uuid()));
         placeButtonRow(tabRow(), 8, false, List.of(
-                CpButton.ghost(Component.literal("Nodes (" + (player.allow().size() + player.deny().size()) + ")"),
+                CpButton.ghost(Component.literal("Nodes (" + nodeList.items().size() + ")"),
                         () -> setTab(Tab.NODES)).icon(Icon.LOCK).selected(tab == Tab.NODES),
                 CpButton.ghost(Component.literal("Chat"), () -> setTab(Tab.CHAT)).icon(Icon.EDIT).selected(tab == Tab.CHAT),
                 CpButton.ghost(Component.literal("Meta"), () -> setTab(Tab.META)).icon(Icon.EDIT).selected(tab == Tab.META),
@@ -372,10 +376,10 @@ public final class PlayersScreen extends AdminScreen {
             return;
         }
         addRenderableWidget(nodeList.at(list));
-        addRenderableWidget(nodeField.at(fieldRow.beforeRight(DURATION_FIELD + GradesScreen.WORLD_FIELD + 8)));
-        addRenderableWidget(worldField.at(fieldRow.right(DURATION_FIELD + GradesScreen.WORLD_FIELD + 4)
-                .left(GradesScreen.WORLD_FIELD)));
-        addRenderableWidget(durationField.at(fieldRow.right(DURATION_FIELD)));
+        Rect[] boxes = fieldRow.split(4, GradesScreen.WORLD_FIELD, DURATION_FIELD);
+        addRenderableWidget(nodeField.at(boxes[0]));
+        addRenderableWidget(worldField.at(boxes[1]));
+        addRenderableWidget(durationField.at(boxes[2]));
         nodeField.setEditable(editable);
         worldField.setEditable(editable);
         durationField.setEditable(editable);
@@ -550,9 +554,8 @@ public final class PlayersScreen extends AdminScreen {
         PlayersData.Player player = playerList.getSelected();
         String left = !row.context().isEmpty() ? GradesScreen.label(row.context(), row.remaining())
                 : player == null ? "" : GradesScreen.timeLeft(player.remaining(row.deny() ? "deny" : "allow", row.node()));
-        int lw = left.isEmpty() ? 0 : font.width(left) + 8;
-        if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
-        Skin.text(g, font, row.node(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4 - lw, Palette.TEXT);
+        int end = GradesScreen.trailing(g, font, left, r, x, font.width(row.node()));
+        Skin.text(g, font, row.node(), x, r.y() + (r.h() - 8) / 2, end - x, Palette.TEXT);
     }
 
     @Override

@@ -94,26 +94,45 @@ final class ChatFields {
         duration.setValue("");
     }
 
+    /** Height of the preview's first line, which carries the name settings beside its label. */
+    static final int PREVIEW_HEADER = 14;
+
     /** The list, above the preview. */
     Rect listRect(Rect area) {
-        return area.aboveBottom(PREVIEW);
+        return area.aboveBottom(previewRect(area).h());
+    }
+
+    /** The preview under the list: whole when there is room, else what leaves the list one row, header first. */
+    Rect previewRect(Rect area) {
+        return area.bottom(Math.max(Math.min(PREVIEW, area.h() - 14), Math.min(area.h(), PREVIEW_HEADER + 2)));
+    }
+
+    /** Where the name setting buttons go: the preview's first line, after its label. */
+    Rect settingsRow(Rect area, Font font) {
+        Rect preview = previewRect(area);
+        int labelW = font.width("Preview") + 6;
+        return new Rect(preview.x() + labelW, preview.y() + 1, preview.w() - labelW, PREVIEW_HEADER - 2);
     }
 
     /** The text box, then the priority, world and duration boxes on the right of the row. */
     Rect textRect(Rect row) {
-        return row.beforeRight(PRIORITY_FIELD + WORLD_FIELD + DURATION_FIELD + 12);
+        return boxes(row)[0];
     }
 
     Rect priorityRect(Rect row) {
-        return row.right(PRIORITY_FIELD + WORLD_FIELD + DURATION_FIELD + 8).left(PRIORITY_FIELD);
+        return boxes(row)[1];
     }
 
     Rect worldRect(Rect row) {
-        return row.right(WORLD_FIELD + DURATION_FIELD + 4).left(WORLD_FIELD);
+        return boxes(row)[2];
     }
 
     Rect durationRect(Rect row) {
-        return row.right(DURATION_FIELD);
+        return boxes(row)[3];
+    }
+
+    private static Rect[] boxes(Rect row) {
+        return row.split(4, PRIORITY_FIELD, WORLD_FIELD, DURATION_FIELD);
     }
 
     private void renderLine(GuiGraphics g, Font font, ChatLine line, Rect r, boolean hovered, boolean selected) {
@@ -124,11 +143,11 @@ final class ChatFields {
         Skin.text(g, font, where, x, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
         x += Math.max(font.width(where), font.width("000")) + 8;
         String left = GradesScreen.label(line.context(), line.remaining());
-        int lw = left.isEmpty() ? 0 : font.width(left) + 8;
-        if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
+        Component shownText = LegacyText.parse(line.text());
+        int end = GradesScreen.trailing(g, font, left, r, x, font.width(shownText));
         // Drawn with its codes applied, as players will see it; the box above shows the raw text.
-        g.enableScissor(x, r.y(), r.right() - lw - 4, r.bottom());
-        g.drawString(font, LegacyText.parse(line.text()), x, r.y() + (r.h() - 8) / 2, Palette.TEXT, false);
+        g.enableScissor(x, r.y(), end, r.bottom());
+        g.drawString(font, shownText, x, r.y() + (r.h() - 8) / 2, Palette.TEXT, false);
         g.disableScissor();
     }
 
@@ -138,23 +157,26 @@ final class ChatFields {
      * setting that works. Only this holder's entries show: a player's grades add theirs on the server.
      */
     void renderPreview(GuiGraphics g, Font font, Rect listArea, String name, NameSettings names) {
-        Rect area = listArea.bottom(PREVIEW);
-        int y = area.y() + 4;
+        Rect area = previewRect(listArea);
+        int y = area.y() + 3;
         Skin.text(g, font, "Preview", area.x(), y, Palette.TEXT_MUTE);
+        // Lines that do not fit are left out rather than drawn over the boxes under the list.
+        if (area.h() < 26) return;
         List<ChatLine> lines = list.items();
         String prefix = ChatStack.format(ChatLine.texts(lines, false), names.prefix().settings());
         String suffix = ChatStack.format(ChatLine.texts(lines, true), names.suffix().settings());
         MutableComponent line = Component.literal("<")
                 .append(NameDecoration.format(names.format(), prefix, Component.literal(name), suffix))
                 .append("> Hello!");
-        g.drawString(font, line, area.x(), y + 14, Palette.TEXT, false);
+        g.drawString(font, line, area.x(), y + 15, Palette.TEXT, false);
+        if (area.h() < 38) return;
         String problem = LegacyText.problem(text.getValue());
         String note = problem != null ? "Text: " + problem
                 : typedPriority() == null ? "A priority is a whole number: the highest shows first."
                 : names.decorate() ? "Codes: &0-&f colours, &l bold, &o italic, &r reset, &#RRGGBB any colour."
-                : "Names are not decorated yet: nobody sees this until it is turned on below, or with "
-                        + "/customperm names on.";
-        Skin.text(g, font, Skin.ellipsize(font, note, area.w()), area.x(), y + 30,
+                : "Names are not decorated yet: nobody sees this until Names is on, on the Grades page's "
+                        + "Chat tab, or /customperm names on.";
+        Skin.text(g, font, Skin.ellipsize(font, note, area.w()), area.x(), y + 28,
                 problem != null || typedPriority() == null || !names.decorate() ? Palette.WARN : Palette.TEXT_MUTE);
     }
 }

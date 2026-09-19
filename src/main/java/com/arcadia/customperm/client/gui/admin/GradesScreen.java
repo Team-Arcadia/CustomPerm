@@ -55,6 +55,8 @@ public final class GradesScreen extends AdminScreen {
     private static final int WEIGHT_FIELD = 40;
     /** Widest the display name box grows in the header; it gives way to the grade's name on a narrow panel. */
     private static final int DISPLAY_FIELD = 110;
+    /** Narrowest the title and the display name box may get on one header row before the boxes move under it. */
+    private static final int HEADER_MIN = 70;
     /** Width of the duration box beside a node or a player name: enough for "1d12h" and its hint cut short. */
     private static final int DURATION_FIELD = 64;
     /** Width of the world box beside it: enough for "the_nether". */
@@ -92,8 +94,10 @@ public final class GradesScreen extends AdminScreen {
     private final CpEditBox playerField;
     private final CpEditBox weightField;
     private final CpEditBox displayField;
-    /** Width the display name box took in the header at the last layout, which the title is clipped around. */
-    private int displayW;
+    /** Width left to the grade's title in the header at the last layout. */
+    private int titleW;
+    /** Height of the header at the last layout: one row, or two once the boxes move under the title. */
+    private int headerH = 24;
     private final ChatFields chat;
     private final MetaFields meta;
     /** How long what is added lasts, shared by the node and player fields; empty for good. */
@@ -300,7 +304,7 @@ public final class GradesScreen extends AdminScreen {
     /** Area between the tab row and the editing rows. */
     private Rect listArea() {
         Rect in = inner();
-        int top = in.y() + 24 + FIELD + 4;
+        int top = in.y() + headerH + FIELD + 4;
         int bottom = in.bottom() - (FIELD + 4 + BUTTON + 4);
         return new Rect(in.x(), top, in.w(), bottom - top);
     }
@@ -336,24 +340,41 @@ public final class GradesScreen extends AdminScreen {
                         : "Apply this grade to every player, below their own grades, operators included."));
         int defaultW = makeDefault.preferredWidth(font, 6);
         addRenderableWidget(makeDefault.at(new Rect(in.right() - FIELD - 4 - defaultW, in.y(), defaultW, FIELD)));
-        addRenderableWidget(weightField.at(new Rect(in.right() - FIELD - 4 - defaultW - 4 - WEIGHT_FIELD, in.y(),
-                WEIGHT_FIELD, FIELD)));
+        // One row when the title and the display name box both keep a readable width beside the weight and
+        // the buttons; otherwise the two boxes take a second row, and the title the whole first one.
+        int besideButtons = in.w() - FIELD - 4 - defaultW - 4;
+        int shared = besideButtons - WEIGHT_FIELD - 4 - 4;
+        boolean oneRow = shared >= 2 * HEADER_MIN;
+        Rect weightAt;
+        Rect displayAt;
+        if (oneRow) {
+            // Whatever the header has left beside the name, up to a cap: the name keeps at least as much.
+            int displayW = Math.min(DISPLAY_FIELD, shared / 2);
+            weightAt = new Rect(in.right() - FIELD - 4 - defaultW - 4 - WEIGHT_FIELD, in.y(), WEIGHT_FIELD, FIELD);
+            displayAt = new Rect(weightAt.x() - 4 - displayW, in.y(), displayW, FIELD);
+            titleW = displayAt.x() - 4 - in.x();
+            headerH = 24;
+        } else {
+            int y = in.y() + FIELD + 4;
+            weightAt = new Rect(in.right() - WEIGHT_FIELD, y, WEIGHT_FIELD, FIELD);
+            displayAt = new Rect(in.x(), y, in.w() - WEIGHT_FIELD - 4, FIELD);
+            titleW = besideButtons - 4;
+            headerH = 2 * FIELD + 8;
+        }
+        addRenderableWidget(weightField.at(weightAt));
         weightField.setEditable(editable);
         // The box shows the weight in force. Set here rather than only when the selection changes: the first
         // selection after the page opens left it empty, and a placed widget must not disagree with the data.
         if (!weightField.isFocused()) weightField.setValue(String.valueOf(grade.weight()));
-        // Whatever the header has left beside the name, up to a cap: the name keeps at least as much.
-        int headerLeft = in.w() - FIELD - 4 - defaultW - 4 - WEIGHT_FIELD - 4;
-        displayW = Math.min(DISPLAY_FIELD, headerLeft / 2);
-        addRenderableWidget(displayField.at(new Rect(in.right() - FIELD - 4 - defaultW - 4 - WEIGHT_FIELD - 4 - displayW,
-                in.y(), displayW, FIELD)));
+        addRenderableWidget(displayField.at(displayAt));
         displayField.setEditable(editable);
         if (!displayField.isFocused()) displayField.setValue(grade.header().displayName());
 
-        Rect tabs = new Rect(in.x(), in.y() + 24, in.w(), FIELD);
-        String nodesTab = "Nodes (" + (grade.allow().size() + grade.deny().size()) + ")";
-        String parentsTab = "Parents (" + (grade.parents().size() + grade.deniedParents().size()) + ")";
-        String playersTab = "Players (" + (grade.members().size() + grade.refusers().size()) + ")";
+        Rect tabs = new Rect(in.x(), in.y() + headerH, in.w(), FIELD);
+        // Counted from the lists, so entries limited to a world count like the rows they show as.
+        String nodesTab = "Nodes (" + nodeList.items().size() + ")";
+        String parentsTab = "Parents (" + parentList.items().size() + ")";
+        String playersTab = "Players (" + memberList.items().size() + ")";
         String chatTab = "Chat";
         String metaTab = "Meta";
         // Five tabs do not always fit. A bare name reads better than a count clipped to "Nodes (", so the
@@ -381,9 +402,10 @@ public final class GradesScreen extends AdminScreen {
         Rect buttonRow = new Rect(in.x(), fieldRow.bottom() + 4, in.w(), BUTTON);
         if (tab == Tab.NODES) {
             addRenderableWidget(nodeList.at(list));
-            addRenderableWidget(nodeField.at(fieldRow.beforeRight(DURATION_FIELD + WORLD_FIELD + 8)));
-            addRenderableWidget(worldField.at(fieldRow.right(DURATION_FIELD + WORLD_FIELD + 4).left(WORLD_FIELD)));
-            addRenderableWidget(durationField.at(fieldRow.right(DURATION_FIELD)));
+            Rect[] boxes = fieldRow.split(4, WORLD_FIELD, DURATION_FIELD);
+            addRenderableWidget(nodeField.at(boxes[0]));
+            addRenderableWidget(worldField.at(boxes[1]));
+            addRenderableWidget(durationField.at(boxes[2]));
             nodeField.setEditable(editable);
             worldField.setEditable(editable);
             durationField.setEditable(editable);
@@ -397,9 +419,10 @@ public final class GradesScreen extends AdminScreen {
                             .enabled(editable && selected != null)));
         } else if (tab == Tab.PARENTS) {
             addRenderableWidget(parentList.at(list));
-            addRenderableWidget(parentField.at(fieldRow.beforeRight(DURATION_FIELD + WORLD_FIELD + 8)));
-            addRenderableWidget(worldField.at(fieldRow.right(DURATION_FIELD + WORLD_FIELD + 4).left(WORLD_FIELD)));
-            addRenderableWidget(durationField.at(fieldRow.right(DURATION_FIELD)));
+            Rect[] boxes = fieldRow.split(4, WORLD_FIELD, DURATION_FIELD);
+            addRenderableWidget(parentField.at(boxes[0]));
+            addRenderableWidget(worldField.at(boxes[1]));
+            addRenderableWidget(durationField.at(boxes[2]));
             parentField.setEditable(editable);
             worldField.setEditable(editable);
             durationField.setEditable(editable);
@@ -442,7 +465,9 @@ public final class GradesScreen extends AdminScreen {
                                     + "then the heaviest grade.")),
                     CpButton.accent(Component.literal("Suffix"), () -> addChat(true)).icon(Icon.PLUS).enabled(editable),
                     CpButton.neutral(Component.literal("Remove"), this::removeChat).icon(Icon.MINUS)
-                            .enabled(editable && chat.list.getSelected() != null),
+                            .enabled(editable && chat.list.getSelected() != null)));
+            // Server-wide name settings, beside the preview they change rather than among this grade's buttons.
+            placeButtonRow(chat.settingsRow(list, font), 4, true, List.of(
                     CpButton.ghost(Component.literal(stacked ? "Stacked" : "Highest"),
                                     () -> act(GuiAction.NAMES_STACK, stacked ? "highest" : "stacked"))
                             .icon(stacked ? Icon.CHECK : Icon.CROSS).selected(stacked)
@@ -459,9 +484,10 @@ public final class GradesScreen extends AdminScreen {
                                     + GuiArea.CONFIG.node() + "."))));
         } else {
             addRenderableWidget(memberList.at(list));
-            addRenderableWidget(playerField.at(fieldRow.beforeRight(DURATION_FIELD + WORLD_FIELD + 8)));
-            addRenderableWidget(worldField.at(fieldRow.right(DURATION_FIELD + WORLD_FIELD + 4).left(WORLD_FIELD)));
-            addRenderableWidget(durationField.at(fieldRow.right(DURATION_FIELD)));
+            Rect[] boxes = fieldRow.split(4, WORLD_FIELD, DURATION_FIELD);
+            addRenderableWidget(playerField.at(boxes[0]));
+            addRenderableWidget(worldField.at(boxes[1]));
+            addRenderableWidget(durationField.at(boxes[2]));
             playerField.setEditable(editable);
             worldField.setEditable(editable);
             durationField.setEditable(editable);
@@ -732,9 +758,9 @@ public final class GradesScreen extends AdminScreen {
         GradesData.Grade grade = gradeList.getSelected();
         String left = !row.context().isEmpty() ? label(row.context(), row.remaining())
                 : grade == null ? "" : timeLeft(grade.remaining(row.refused() ? "refusedParent" : "parent", row.grade()));
-        int lw = left.isEmpty() ? 0 : font.width(left) + 8;
-        if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
-        Skin.text(g, font, shown(row.grade()), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4 - lw, Palette.TEXT);
+        String name = shown(row.grade());
+        int end = trailing(g, font, left, r, x, font.width(name));
+        Skin.text(g, font, name, x, r.y() + (r.h() - 8) / 2, end - x, Palette.TEXT);
     }
 
     private void renderNode(GuiGraphics g, Font font, NodeRow row, Rect r, boolean hovered, boolean selected) {
@@ -744,9 +770,21 @@ public final class GradesScreen extends AdminScreen {
         GradesData.Grade grade = gradeList.getSelected();
         String left = !row.context().isEmpty() ? label(row.context(), row.remaining())
                 : grade == null ? "" : timeLeft(grade.remaining(row.deny() ? "deny" : "allow", row.node()));
-        int lw = left.isEmpty() ? 0 : font.width(left) + 8;
-        if (!left.isEmpty()) Skin.text(g, font, left, r.right() - lw + 4, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
-        Skin.text(g, font, row.node(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4 - lw, Palette.TEXT);
+        int end = trailing(g, font, left, r, x, font.width(row.node()));
+        Skin.text(g, font, row.node(), x, r.y() + (r.h() - 8) / 2, end - x, Palette.TEXT);
+    }
+
+    /**
+     * Draws {@code text} muted against the right of a list row and returns where the row's main text must
+     * stop. The main text, {@code mainW} wide from {@code x}, comes first: the trailing text gets what it
+     * leaves, and a third of the room at least, so neither is cut to nothing.
+     */
+    static int trailing(GuiGraphics g, Font font, String text, Rect r, int x, int mainW) {
+        if (text.isEmpty()) return r.right() - 4;
+        int room = r.right() - 6 - x;
+        int w = Math.min(font.width(text), Math.max(room - mainW - 8, room / 3));
+        Skin.text(g, font, text, r.right() - 6 - w, r.y() + (r.h() - 8) / 2, w, Palette.TEXT_MUTE);
+        return r.right() - 6 - w - 8;
     }
 
     /** {@code in the_nether}, or nothing for an entry that applies everywhere. */
@@ -795,18 +833,24 @@ public final class GradesScreen extends AdminScreen {
             return;
         }
         boolean isDefault = grade.name().equals(data.defaultGrade());
-        int headerW = in.w() - FIELD - 10 - font.width("Default") - 26 - WEIGHT_FIELD - 4 - displayW - 4;
         String title = grade.shown().equals(grade.name()) ? grade.name() : grade.shown() + " (" + grade.name() + ")";
-        Skin.text(g, font, title, in.x(), in.y(), headerW, Palette.TEXT);
-        // Player and node totals are on the tabs: keep this line short enough for the Default button beside it.
-        // Ordered by what is said nowhere else on the page: the weight has its own box and the counts are
-        // on the tabs, so they go last, where a narrow panel clips them.
-        String sub = (isDefault ? "every player, " : "")
-                + (grade.parents().isEmpty() ? "" : "inherits " + String.join(" ", grade.parents().stream().map(this::shown).toList()) + ", ")
-                + (grade.deniedParents().isEmpty() ? "" : "refuses " + String.join(" ", grade.deniedParents().stream().map(this::shown).toList()) + ", ")
-                + grade.allow().size() + " allow, " + grade.deny().size() + " deny"
-                + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
-        Skin.text(g, font, sub, in.x(), in.y() + 11, headerW, Palette.TEXT_MUTE);
+        boolean oneRow = headerH <= 24;
+        // The subtitle carries the read-only notice on one row; on two, the title says it first.
+        if (!oneRow && !canEdit(GuiArea.GRADES)) title = "Read-only: " + title;
+        // Alone on its row, the title is centred on the buttons beside it rather than set above a subtitle.
+        Skin.text(g, font, title, in.x(), oneRow ? in.y() : in.y() + (FIELD - 8) / 2, titleW, Palette.TEXT);
+        // On two rows the boxes take the subtitle's place: what it says is on the tabs and the Default button.
+        if (oneRow) {
+            // Player and node totals are on the tabs: keep this line short enough for the Default button beside it.
+            // Ordered by what is said nowhere else on the page: the weight has its own box and the counts are
+            // on the tabs, so they go last, where a narrow panel clips them.
+            String sub = (isDefault ? "every player, " : "")
+                    + (grade.parents().isEmpty() ? "" : "inherits " + String.join(" ", grade.parents().stream().map(this::shown).toList()) + ", ")
+                    + (grade.deniedParents().isEmpty() ? "" : "refuses " + String.join(" ", grade.deniedParents().stream().map(this::shown).toList()) + ", ")
+                    + grade.allow().size() + " allow, " + grade.deny().size() + " deny"
+                    + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
+            Skin.text(g, font, sub, in.x(), in.y() + 11, titleW, Palette.TEXT_MUTE);
+        }
         if (tab == Tab.CHAT) chat.renderPreview(g, font, listArea(), previewName(), data.names());
     }
 

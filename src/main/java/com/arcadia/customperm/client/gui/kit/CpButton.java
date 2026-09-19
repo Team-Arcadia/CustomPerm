@@ -27,6 +27,8 @@ import net.minecraft.network.chat.Component;
 public class CpButton extends AbstractButton {
 
     private static final int ICON_GAP = 4;
+    /** Least room kept between a label and the edges of its button, the selected bar included. */
+    public static final int MIN_PADDING = 2;
 
     private final Skin.Variant variant;
     private final Runnable action;
@@ -129,8 +131,9 @@ public class CpButton extends AbstractButton {
             int contentW = font.width(label) + (icon != null ? Atlas.ICON_SIZE + ICON_GAP : 0);
             int x;
             if (variant == Skin.Variant.GHOST) {
-                // Ghost buttons are navigation entries: left-aligned so a column of them lines up.
-                x = r.x() + 6;
+                // Ghost buttons are navigation entries: left-aligned so a column of them lines up, closer to
+                // the edge when a tight row gave the button no more than its label.
+                x = r.x() + Math.min(6, Math.max(MIN_PADDING, (r.w() - contentW) / 2));
             } else {
                 x = r.x() + Math.max(3, (r.w() - contentW) / 2);
             }
@@ -138,7 +141,7 @@ public class CpButton extends AbstractButton {
                 Skin.icon(g, icon, x, iconY, color);
                 x += Atlas.ICON_SIZE + ICON_GAP;
             }
-            Skin.text(g, font, label, x, r.y() + (r.h() - 8) / 2, r.right() - x - 3, color);
+            Skin.text(g, font, label, x, r.y() + (r.h() - 8) / 2, r.right() - x - Math.min(3, x - r.x()), color);
         }
         if (isFocused() && Minecraft.getInstance().getLastInputType().isKeyboard()) {
             Skin.focusRing(g, r);

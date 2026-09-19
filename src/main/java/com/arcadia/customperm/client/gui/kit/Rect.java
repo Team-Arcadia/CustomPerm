@@ -94,6 +94,28 @@ public record Rect(int x, int y, int w, int h) {
         return new Rect(x, y, w - Math.min(w, width), h);
     }
 
+    /**
+     * A row of boxes {@code gap} apart: the first takes what the others leave, the others their {@code widths}.
+     * When that would leave the first narrower than an equal share, every box gets an equal share instead, so
+     * no box of a narrow row shrinks to nothing or overlaps its neighbour.
+     */
+    public Rect[] split(int gap, int... widths) {
+        int count = widths.length + 1;
+        int free = w - gap * widths.length;
+        int fixed = 0;
+        for (int width : widths) fixed += width;
+        boolean shared = free - fixed < free / count;
+        Rect[] boxes = new Rect[count];
+        int left = x;
+        for (int i = 0; i < count; i++) {
+            int width = shared ? free / count : i == 0 ? free - fixed : widths[i - 1];
+            if (i == count - 1) width = x + w - left;
+            boxes[i] = new Rect(left, y, width, h);
+            left += width + gap;
+        }
+        return boxes;
+    }
+
     /** A rectangle of the given size centred in this one. */
     public Rect centered(int width, int height) {
         int ww = Math.min(w, width);
