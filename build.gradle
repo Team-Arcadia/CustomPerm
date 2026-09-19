@@ -15,7 +15,12 @@ java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 repositories {
     maven { name = 'LuckPerms';  url = 'https://repo.lucko.me/' }
     maven { name = 'ParchmentMC'; url = 'https://maven.parchmentmc.org' }
-    maven { name = 'CurseMaven'; url = 'https://cursemaven.com' }
+    maven {
+        name = 'CurseMaven'
+        url = 'https://cursemaven.com'
+        // Serves CurseForge files only: never let it answer for another group.
+        content { includeGroup 'curse.maven' }
+    }
 }
 
 configurations {
@@ -76,6 +81,11 @@ neoForge {
 dependencies {
     // LuckPerms is a soft dependency — present at compile, not required at runtime.
     compileOnly "net.luckperms:api:${luckperms_api_version}"
+
+    // Arcadia Lib 1.3.0 for 1.21.1 (CurseForge file 8713651), cluster mode's MySQL connection. Optional at runtime:
+    // only cluster/ArcadiaLibBridge touches it, and only once the mod is loaded. Same jar as the GitHub release
+    // asset v1.3.0 (sha256 575fc6a4191849116ce3e1e846c8440b4a97112a84adbc3d66228a454e3fde5b).
+    compileOnly("curse.maven:arcadia-lib-1493170:8713651") { transitive = false }
 
     // GameTest source set depends on main output
     gameTestImplementation sourceSets.main.output

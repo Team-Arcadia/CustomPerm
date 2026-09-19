@@ -152,6 +152,42 @@ public class SettingsConfig {
      */
     public Map<String, String> staticContexts = new TreeMap<>();
 
+    /**
+     * Several servers on the internal backend sharing one MySQL database through Arcadia Lib. Local to each
+     * server by nature, like the rest of this file. Off by default: a single server behaves as it always has.
+     */
+    public Cluster cluster = new Cluster();
+
+    public static class Cluster {
+        public static final String WHEN_LOST_LAST_KNOWN = "last-known";
+        public static final int POLL_SECONDS_MIN = 1;
+        public static final int POLL_SECONDS_MAX = 60;
+
+        public boolean enabled = false;
+        /** Which parts this server shares with the others; a part not shared stays in this server's files. */
+        public Share share = new Share();
+        /** How often the database is asked what changed. */
+        public int pollSeconds = 2;
+        /** What decides while the database is unreachable: the last state read, admin changes refused. */
+        public String whenDatabaseLost = WHEN_LOST_LAST_KNOWN;
+
+        public void normalize() {
+            if (share == null) share = new Share();
+            pollSeconds = Math.max(POLL_SECONDS_MIN, Math.min(POLL_SECONDS_MAX, pollSeconds));
+            whenDatabaseLost = WHEN_LOST_LAST_KNOWN;
+        }
+    }
+
+    public static class Share {
+        public boolean grades = true;
+        public boolean commands = true;
+        public boolean aliases = true;
+        public boolean rateLimits = true;
+        /** Off by default: sharing them is a database write for every limited command use. */
+        public boolean rateLimitCounters = false;
+        public boolean log = true;
+    }
+
     public void normalize() {
         defaultGrade = defaultGrade == null ? "" : defaultGrade.trim();
         if (maskedCommands == null) maskedCommands = new ArrayList<>(DEFAULT_MASKED_COMMANDS);
@@ -182,6 +218,8 @@ public class SettingsConfig {
             }
         });
         staticContexts = statics;
+        if (cluster == null) cluster = new Cluster();
+        cluster.normalize();
         if (luckPermsFallbackMode == null) {
             luckPermsFallbackMode = LUCKPERMS_FALLBACK_DENY;
             return;

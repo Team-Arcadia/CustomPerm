@@ -71,6 +71,7 @@ public final class ConfigAdmin {
         }
 
         CustomPerm.LOGGER.info("[CustomPerm] Configuration reloaded successfully");
-        return AdminResult.ok("Configuration reloaded successfully.");
+        String clusterNote = com.arcadia.customperm.cluster.Cluster.reloadNote();
+        return AdminResult.ok("Configuration reloaded successfully." + (clusterNote == null ? "" : " " + clusterNote));
     }
 }

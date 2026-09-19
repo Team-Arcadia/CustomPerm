@@ -25,7 +25,9 @@ public final class AdminAlerts {
         /** LuckPerms is installed but CustomPerm stopped using it until restart. */
         LUCKPERMS_UNAVAILABLE,
         /** A config file could not be loaded; saves are suspended. */
-        CONFIG_LOAD_FAILED
+        CONFIG_LOAD_FAILED,
+        /** Cluster mode is switched on but this server runs alone; the message says why. */
+        CLUSTER_UNAVAILABLE
     }
 
     private final Map<Key, String> active = new ConcurrentHashMap<>();

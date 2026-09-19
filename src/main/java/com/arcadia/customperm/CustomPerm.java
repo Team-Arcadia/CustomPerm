@@ -111,6 +111,8 @@ public class CustomPerm {
         NeoForge.EVENT_BUS.addListener(RateLimitPersistence::onServerStarted);
         NeoForge.EVENT_BUS.addListener(RateLimitPersistence::onLevelSave);
         NeoForge.EVENT_BUS.addListener(RateLimitPersistence::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.cluster.Cluster::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.cluster.Cluster::onServerStopped);
         NeoForge.EVENT_BUS.addListener(ActivityLog::onServerStarted);
         NeoForge.EVENT_BUS.addListener(ActivityLog::onServerStopped);
         // Lowest: a command another mod cancels is not recorded as used.
