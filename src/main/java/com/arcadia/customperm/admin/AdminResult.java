@@ -41,6 +41,8 @@ public record AdminResult(boolean success, String message, List<String> warnings
     /** The same result with a warning appended; {@code null} leaves it unchanged. */
     public AdminResult warn(String warning) {
         if (warning == null) return this;
+        // The change was undone: whatever this result said happened did not.
+        if (ConfigAdmin.isRefusal(warning)) return fail(warning);
         List<String> all = new ArrayList<>(warnings);
         all.add(warning);
         return new AdminResult(success, message, all, notes);

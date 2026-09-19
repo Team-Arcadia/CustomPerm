@@ -9,10 +9,20 @@
 package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.admin.AdminResult;
+import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.cluster.Cluster;
 import com.arcadia.customperm.cluster.ClusterGate;
+import com.arcadia.customperm.cluster.ClusterStore;
+import com.arcadia.customperm.cluster.GradesCodec;
+import com.arcadia.customperm.cluster.MemoryStore;
+import com.arcadia.customperm.cluster.PartSync;
+import com.arcadia.customperm.config.GradesConfig;
+import com.arcadia.customperm.gametest.support.Modes;
+import com.arcadia.customperm.gametest.support.TestPlayer;
 import com.arcadia.customperm.notify.AdminAlerts;
 import com.arcadia.customperm.notify.AdminNotifier;
+import com.arcadia.customperm.perm.PermissionService;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
 import net.minecraft.gametest.framework.GameTestHelper;
@@ -20,6 +30,11 @@ import net.minecraft.server.MinecraftServer;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Cluster mode as far as a single GameTest server can see it: switched on without what it needs, the server
@@ -54,6 +69,170 @@ public class ClusterGameTest {
         }
         if (Cluster.state() != ClusterGate.State.OFF) fail("Switched off again, cluster mode must be OFF.");
         if (AdminNotifier.isActive(AdminAlerts.Key.CLUSTER_UNAVAILABLE)) fail("Switched off, the cluster alert must go.");
+        helper.succeed();
+    }
+
+    // ------------------------------------------------------------------ two servers, one store
+
+    private static final GradesCodec CODEC = new GradesCodec();
+
+    /**
+     * The second server of these tests: a configuration of its own, kept in step with the same store as the
+     * GameTest server, which plays the first.
+     */
+    private static final class OtherServer implements PartSync.Host<GradesConfig> {
+        final GradesConfig config = CODEC.empty();
+        final PartSync<GradesConfig> sync;
+
+        OtherServer(ClusterStore store) throws ClusterStore.StoreException {
+            sync = new PartSync<>(CODEC, store, "other", this);
+            sync.start();
+        }
+
+        @Override public GradesConfig current() { return config; }
+        @Override public void changed(GradesConfig c, Set<String> holders) {}
+        @Override public String label(String holder) { return holder; }
+
+        void poll() throws ClusterStore.StoreException {
+            sync.apply(sync.fetch());
+        }
+    }
+
+    private interface ThrowingRunnable {
+        void run() throws Exception;
+    }
+
+    /** Runs {@code body} with this server in a cluster over {@code store}, then puts its grades back as they were. */
+    private static void inCluster(MinecraftServer server, MemoryStore store, ThrowingRunnable body) throws Exception {
+        Map<String, String> saved = CODEC.split(CustomPerm.configManager.getGrades());
+        try {
+            Cluster.attach(store, "gametest", server);
+            body.run();
+        } finally {
+            Cluster.detach();
+            GradesConfig live = CustomPerm.configManager.getGrades();
+            for (String holder : new ArrayList<>(CODEC.split(live).keySet())) CODEC.patch(live, holder, null);
+            saved.forEach((holder, text) -> CODEC.patch(live, holder, text));
+            CODEC.afterPatch(live);
+            PermissionService.get().onConfigReload(CustomPerm.configManager.getSnapshot());
+            CustomPerm.configManager.save();
+            if (AdminNotifier.isActive(AdminAlerts.Key.CLUSTER_UNAVAILABLE)) {
+                AdminNotifier.clear(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "cluster test finished.");
+            }
+        }
+    }
+
+    /** A grade and an assignment made on the other server give the player the node here, and the reverse. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_propagate")
+    public static void aChangeOnOneServerAppliesOnTheOther(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        MemoryStore store = new MemoryStore();
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_cl_prop", 0)) {
+            String uuid = player.player().getUUID().toString();
+            inCluster(server, store, () -> {
+                OtherServer other = new OtherServer(store);
+                GradesConfig.Grade grade = new GradesConfig.Grade();
+                grade.name = "cp_cl_vip";
+                grade.permissions.add("cp.cluster.fly");
+                other.config.grades.put(grade.name, grade);
+                other.config.userGrades.put(uuid, new ArrayList<>(List.of(grade.name)));
+                if (other.sync.publish() != null) fail("The other server's write was refused.");
+
+                if (PermissionService.get().hasGrantedNode(player.source(), "cp.cluster.fly")) {
+                    fail("Before polling, this server cannot know yet.");
+                }
+                Cluster.pollNow();
+                if (!PermissionService.get().hasGrantedNode(player.source(), "cp.cluster.fly")) {
+                    fail("After polling, the grade made on the other server must grant its node here.");
+                }
+
+                AdminResult added = GradeAdmin.addNode(server, "cp_cl_vip", "cp.cluster.walk", false);
+                if (!added.success()) fail("Adding a node here failed: " + added.message());
+                other.poll();
+                if (!other.config.grades.get("cp_cl_vip").permissions.contains("cp.cluster.walk")) {
+                    fail("A node added here must reach the other server.");
+                }
+
+                AdminResult deleted = GradeAdmin.delete(server, "cp_cl_vip");
+                if (!deleted.success()) fail("Deleting here failed: " + deleted.message());
+                other.poll();
+                if (other.config.grades.containsKey("cp_cl_vip")) fail("A grade deleted here must go on the other server.");
+                if (other.config.userGrades.containsKey(uuid)) {
+                    fail("Deleting a grade unassigns it everywhere, the other server included.");
+                }
+            });
+        }
+        helper.succeed();
+    }
+
+    /** Both servers change one grade from the same version: the one that writes second is refused and shown the first. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_conflict")
+    public static void theSecondOfTwoChangesToOneGradeIsRefused(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        MemoryStore store = new MemoryStore();
+        inCluster(server, store, () -> {
+            if (!GradeAdmin.create("cp_cl_same").success()) fail("Could not create the grade.");
+            OtherServer other = new OtherServer(store);
+            other.config.grades.get("cp_cl_same").permissions.add("cp.cluster.other");
+            if (other.sync.publish() != null) fail("The other server wrote first and must be accepted.");
+
+            AdminResult here = GradeAdmin.addNode(server, "cp_cl_same", "cp.cluster.here", false);
+            if (here.success()) fail("Written second from an old version, the change must be refused: " + here.message());
+            if (!here.message().contains("changed on other")) fail("The refusal must name the other server: " + here.message());
+            var grade = CustomPerm.configManager.getGrades().grades.get("cp_cl_same");
+            if (grade.permissions.contains("cp.cluster.here")) fail("The refused change must be undone here.");
+            if (!grade.permissions.contains("cp.cluster.other")) fail("This server must now show the other server's change.");
+
+            AdminResult retry = GradeAdmin.addNode(server, "cp_cl_same", "cp.cluster.here", false);
+            if (!retry.success()) fail("Retried on the current version, the change must go through: " + retry.message());
+        });
+        helper.succeed();
+    }
+
+    /** Store unreachable: changes are refused and undone, rights stay as last read, the alert says so and then goes. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_outage")
+    public static void anUnreachableStoreRefusesChangesAndKeepsTheLastRights(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        MemoryStore store = new MemoryStore();
+        inCluster(server, store, () -> {
+            if (!GradeAdmin.create("cp_cl_kept").success()) fail("Could not create the grade.");
+            store.setDown(true);
+            AdminResult created = GradeAdmin.create("cp_cl_lost");
+            if (created.success()) fail("With the store down, a change must be refused.");
+            if (CustomPerm.configManager.getGrades().grades.containsKey("cp_cl_lost")) fail("The refused grade must not exist.");
+            if (!CustomPerm.configManager.getGrades().grades.containsKey("cp_cl_kept")) fail("What was read before stays.");
+            if (!AdminNotifier.isActive(AdminAlerts.Key.CLUSTER_UNAVAILABLE)) fail("Admins must be told the store is down.");
+
+            store.setDown(false);
+            Cluster.pollNow();
+            if (AdminNotifier.isActive(AdminAlerts.Key.CLUSTER_UNAVAILABLE)) fail("The alert must go once the store answers.");
+            if (!GradeAdmin.create("cp_cl_lost").success()) fail("Back up, the change must go through.");
+        });
+        helper.succeed();
+    }
+
+    /** Joining a store another server already filled: the store wins over this server's grades. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_adopt")
+    public static void joiningAFilledStoreAdoptsIt(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        MemoryStore store = new MemoryStore();
+        OtherServer first = new OtherServer(store);
+        GradesConfig.Grade grade = new GradesConfig.Grade();
+        grade.name = "cp_cl_network";
+        first.config.grades.put(grade.name, grade);
+        if (first.sync.publish() != null) fail("The first server's write was refused.");
+        if (!GradeAdmin.create("cp_cl_local_only").success()) fail("Could not create the local grade.");
+
+        inCluster(server, store, () -> {
+            var grades = CustomPerm.configManager.getGrades().grades;
+            if (!grades.containsKey("cp_cl_network")) fail("The store's grade must be adopted.");
+            if (grades.containsKey("cp_cl_local_only")) fail("A grade the store does not hold must go: the store wins.");
+        });
+        GradeAdmin.delete(server, "cp_cl_local_only");
         helper.succeed();
     }
 

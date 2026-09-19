@@ -109,6 +109,12 @@ public final class ExpirySweeper {
 
         String warning = ConfigAdmin.persist();
         ConfigAdmin.resyncCommands(server);
+        if (ConfigAdmin.isRefusal(warning)) {
+            // Another server changed one of these holders meanwhile, or the cluster is unreachable: the removal was
+            // undone, and the next sweep runs again on what the store holds.
+            CustomPerm.LOGGER.debug("[CustomPerm] Expiry sweep deferred: {}", warning);
+            return List.of();
+        }
         for (String line : removed) {
             CustomPerm.LOGGER.info("[CustomPerm] Expired: {}.", line);
             ActivityLog.admin("CustomPerm", "", LogEntry.SOURCE_EXPIRY, line, true, "expired");

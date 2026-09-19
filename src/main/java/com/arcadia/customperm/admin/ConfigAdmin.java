@@ -24,13 +24,27 @@ public final class ConfigAdmin {
     }
 
     /**
+     * Starts a {@link #persist()} answer when the cluster refused the change, which was undone. {@link AdminResult}
+     * turns such a warning into a failure: the change did not happen.
+     */
+    public static final String REFUSED = "[CustomPerm] Refused: ";
+
+    public static boolean isRefusal(String warning) {
+        return warning != null && warning.startsWith(REFUSED);
+    }
+
+    /**
      * Saves the config after a change. The change stays live in memory either way; what the admin
      * must know is that it will not survive a restart, and that a reload will discard it.
      *
      * @return {@code null} when saved, otherwise the warning to show
      */
     public static String persist() {
-        if (CustomPerm.configManager.save()) return null;
+        // Written to the cluster first: a refusal undoes the change, and the files then keep what was accepted.
+        String refusal = com.arcadia.customperm.cluster.Cluster.publish();
+        boolean saved = CustomPerm.configManager.save();
+        if (refusal != null) return REFUSED + refusal;
+        if (saved) return null;
         String reason = CustomPerm.configManager.isDiskWritable()
                 ? "disk error, see the server log"
                 : "a config file on disk is invalid; fix it, then run /customperm reload";

@@ -12,9 +12,11 @@ import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.SettingsConfig;
 import com.arcadia.customperm.notify.AdminAlerts;
 import com.arcadia.customperm.notify.AdminNotifier;
+import net.minecraft.server.MinecraftServer;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -31,6 +33,8 @@ public final class Cluster {
     private static volatile String serverName;
     /** The settings the state was decided with, to tell an admin when a reload changed them. */
     private static volatile String decidedWith;
+    /** The running cluster, null while this server runs alone. */
+    private static volatile ClusterService service;
 
     private Cluster() {}
 
@@ -54,9 +58,52 @@ public final class Cluster {
     }
 
     public static void onServerStopped(ServerStoppedEvent event) {
+        detach();
         state = ClusterGate.State.OFF;
         serverName = null;
         decidedWith = null;
+    }
+
+    /** Whether this server is in step with a cluster store. */
+    public static boolean running() {
+        return service != null;
+    }
+
+    /**
+     * Joins {@code store} as {@code name}: an empty store is filled from this server's grades, a filled one
+     * replaces them. On the server thread. Public for the GameTests, which run two servers against one store.
+     */
+    public static void attach(ClusterStore store, String name, MinecraftServer server) throws ClusterStore.StoreException {
+        detach();
+        ClusterService started = new ClusterService(store, name, server);
+        started.start();
+        service = started;
+    }
+
+    public static void detach() {
+        ClusterService running = service;
+        service = null;
+        if (running != null) running.stop();
+    }
+
+    /**
+     * Writes the change just made to the configuration, when a cluster runs. Null when written or when no
+     * cluster runs; otherwise the reason it was refused, the change having been undone.
+     */
+    public static String publish() {
+        ClusterService running = service;
+        return running == null ? null : running.publish();
+    }
+
+    /** Reads and applies what the other servers changed, now. The server thread; for the GameTests. */
+    public static boolean pollNow() throws ClusterStore.StoreException {
+        ClusterService running = service;
+        return running != null && running.pollNow();
+    }
+
+    public static void onServerTick(ServerTickEvent.Post event) {
+        ClusterService running = service;
+        if (running != null) running.tick();
     }
 
     /** A line for the reload answer when the {@code cluster} settings changed; null otherwise. */
