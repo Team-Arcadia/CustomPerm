@@ -19,9 +19,16 @@ package com.arcadia.customperm.log;
  * @param action  what was done: the command typed, or the interface action and its arguments
  * @param success whether it was applied; player commands are recorded before they run and are always true
  * @param result  the message the admin saw, or the LuckPerms target; empty for player commands
+ * @param server  the cluster server it happened on, empty for this server
  */
 public record LogEntry(long time, String actor, String actorId, String source, String action, boolean success,
-                       String result) {
+                       String result, String server) {
+
+    /** An entry of this server. */
+    public LogEntry(long time, String actor, String actorId, String source, String action, boolean success,
+                    String result) {
+        this(time, actor, actorId, source, action, success, result, "");
+    }
 
     public static final String SOURCE_COMMAND = "command";
     public static final String SOURCE_INTERFACE = "interface";

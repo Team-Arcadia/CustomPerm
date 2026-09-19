@@ -171,10 +171,30 @@ public final class ActivityLog {
             entries.addLast(entry);
             while (entries.size() > MEMORY_MAX) entries.removeFirst();
         }
+        com.arcadia.customperm.cluster.Cluster.log(kind, entry);
         try {
             current.execute(() -> append(dir, kind, entry));
         } catch (java.util.concurrent.RejectedExecutionException e) {
             // The server is stopping: the entry stays in memory only.
+        }
+    }
+
+    /**
+     * An entry another server of the cluster recorded: shown with this server's own, never written to this
+     * server's files, which keep what happened here.
+     */
+    public static void addForeign(LogKind kind, LogEntry entry) {
+        synchronized (MEMORY) {
+            Deque<LogEntry> entries = MEMORY.get(kind);
+            LogEntry last = entries.peekLast();
+            entries.addLast(entry);
+            if (last != null && entry.time() < last.time()) {
+                List<LogEntry> sorted = new ArrayList<>(entries);
+                sorted.sort(java.util.Comparator.comparingLong(LogEntry::time));
+                entries.clear();
+                entries.addAll(sorted);
+            }
+            while (entries.size() > MEMORY_MAX) entries.removeFirst();
         }
     }
 

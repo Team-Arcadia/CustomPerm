@@ -115,8 +115,8 @@ public class GuiPayloadCodecGameTest {
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.LOGS.bit(), 0, false), new LogsData(
                         List.of(new LogsData.Entry(1_789_000_000_000L, "Alex", "interface", "ALIAS_DELETE heal", false,
-                                "You do not have customperm.manage.aliases.")),
-                        List.of(new LogsData.Entry(1_789_000_000_001L, "Steve", "player", "/msg [masked]", true, "")),
+                                "You do not have customperm.manage.aliases.", "")),
+                        List.of(new LogsData.Entry(1_789_000_000_001L, "Steve", "player", "/msg [masked]", true, "", "survival")),
                         true, false, 30)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.LUCKPERMS, GuiArea.GRADES.bit(), 0, true),

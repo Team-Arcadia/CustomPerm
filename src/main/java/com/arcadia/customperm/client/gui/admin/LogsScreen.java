@@ -64,8 +64,8 @@ public final class LogsScreen extends AdminScreen {
                 .onChange(text -> refilter());
         this.list = new CpList<LogsData.Entry>(Component.literal("Log entries"), ROW)
                 .renderer(this::renderEntry)
-                .label(e -> e.actor() + ", " + e.action() + (e.success() ? "" : ", refused"))
-                .identity(e -> e.time() + "|" + e.actor() + "|" + e.action())
+                .label(e -> e.who() + ", " + e.action() + (e.success() ? "" : ", refused"))
+                .identity(e -> e.time() + "|" + e.server() + "|" + e.actor() + "|" + e.action())
                 .onSelect(e -> { });
         refilter();
     }
@@ -111,7 +111,7 @@ public final class LogsScreen extends AdminScreen {
     }
 
     private static boolean matches(LogsData.Entry e, String query) {
-        return e.actor().toLowerCase(Locale.ROOT).contains(query)
+        return e.who().toLowerCase(Locale.ROOT).contains(query)
                 || e.action().toLowerCase(Locale.ROOT).contains(query)
                 || e.result().toLowerCase(Locale.ROOT).contains(query)
                 || e.source().toLowerCase(Locale.ROOT).contains(query);
@@ -219,8 +219,8 @@ public final class LogsScreen extends AdminScreen {
         int x = r.x() + 4 + font.width("00-00 00:00") + 6;
         Skin.dot(g, x, r.centerY(), e.success() ? Palette.GOOD : Palette.DANGER);
         x += 10;
-        int actorW = Math.min(96, font.width(e.actor()));
-        Skin.text(g, font, e.actor(), x, y, 96, Palette.TEXT);
+        int actorW = Math.min(96, font.width(e.who()));
+        Skin.text(g, font, e.who(), x, y, 96, Palette.TEXT);
         x += actorW + 6;
         Skin.text(g, font, e.action(), x, y, r.right() - x - 4, e.success() ? Palette.TEXT_DIM : Palette.DANGER);
     }
@@ -244,7 +244,7 @@ public final class LogsScreen extends AdminScreen {
                     : data.retentionDays() + " day(s)."), in, in.y(), Palette.TEXT_MUTE);
             return;
         }
-        String head = FULL.format(Instant.ofEpochMilli(e.time()).atZone(ZoneId.systemDefault())) + "  " + e.actor()
+        String head = FULL.format(Instant.ofEpochMilli(e.time()).atZone(ZoneId.systemDefault())) + "  " + e.who()
                 + "  (" + e.source() + ")" + (e.success() ? "" : "  refused");
         Skin.text(g, font, head, in.x(), in.y(), in.w(), e.success() ? Palette.TEXT : Palette.DANGER);
         int y = paragraph(g, e.action(), in, in.y() + 11, Palette.TEXT_DIM);

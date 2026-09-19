@@ -8,6 +8,8 @@
  */
 package com.arcadia.customperm.cluster;
 
+import com.arcadia.customperm.log.LogEntry;
+
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
@@ -23,9 +25,10 @@ import java.util.concurrent.Callable;
 import java.util.function.LongSupplier;
 
 /**
- * The store in MySQL (or MariaDB), through connections Arcadia Lib lends. Three tables:
+ * The store in MySQL (or MariaDB), through connections Arcadia Lib lends. Four tables:
  * {@code customperm_rows} (one row per holder, tombstones included), {@code customperm_seq} (the one counter every
- * write takes its number from), {@code customperm_servers} (heartbeats, to catch two servers under one name).
+ * write takes its number from), {@code customperm_servers} (heartbeats, to catch two servers under one name) and
+ * {@code customperm_log} (the shared activity log).
  *
  * <p>Every write starts by bumping the counter, which locks its row until the transaction ends: writers run one
  * after another, so numbers are committed in order and a server reading "after N" never misses a row. The SQL keeps
@@ -36,6 +39,9 @@ public final class SqlStore implements ClusterStore {
     private static final String ROWS = "customperm_rows";
     private static final String SEQ = "customperm_seq";
     private static final String SERVERS = "customperm_servers";
+    private static final String LOG = "customperm_log";
+    /** Longest text kept in a log column; the activity log caps its own text well below. */
+    private static final int LOG_TEXT_MAX = 2000;
     /** Heartbeats older than this are removed when a server beats. */
     private static final long FORGET_AFTER_MILLIS = 24L * 3600 * 1000;
 
@@ -65,6 +71,11 @@ public final class SqlStore implements ClusterStore {
             st.executeUpdate("CREATE TABLE IF NOT EXISTS " + SERVERS + " ("
                     + "server VARCHAR(64) NOT NULL, instance VARCHAR(64) NOT NULL, seen BIGINT NOT NULL, "
                     + "PRIMARY KEY (server, instance))" + charset);
+            st.executeUpdate("CREATE TABLE IF NOT EXISTS " + LOG + " ("
+                    + "id BIGINT NOT NULL AUTO_INCREMENT PRIMARY KEY, server VARCHAR(64) NOT NULL, kind VARCHAR(16) NOT NULL, "
+                    + "time BIGINT NOT NULL, actor VARCHAR(191) NOT NULL, actor_id VARCHAR(64) NOT NULL, "
+                    + "source VARCHAR(32) NOT NULL, action TEXT NOT NULL, success BOOLEAN NOT NULL, result TEXT NOT NULL, "
+                    + "KEY customperm_log_time (time))" + charset);
             try {
                 st.executeUpdate("INSERT INTO " + SEQ + " (id, seq) VALUES (1, 0)");
             } catch (SQLIntegrityConstraintViolationException exists) {
@@ -192,6 +203,84 @@ public final class SqlStore implements ClusterStore {
         } catch (SQLException e) {
             throw new StoreException("reading the cluster servers failed: " + e.getMessage(), e);
         }
+    }
+
+    @Override
+    public void appendLog(String server, List<LogLine> lines) throws StoreException {
+        if (lines.isEmpty()) return;
+        try (Connection c = open();
+             PreparedStatement ps = c.prepareStatement("INSERT INTO " + LOG
+                     + " (server, kind, time, actor, actor_id, source, action, success, result) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)")) {
+            for (LogLine line : lines) {
+                LogEntry e = line.entry();
+                ps.setString(1, server);
+                ps.setString(2, line.kind());
+                ps.setLong(3, e.time());
+                ps.setString(4, cut(e.actor(), 191));
+                ps.setString(5, cut(e.actorId(), 64));
+                ps.setString(6, cut(e.source(), 32));
+                ps.setString(7, cut(e.action(), LOG_TEXT_MAX));
+                ps.setBoolean(8, e.success());
+                ps.setString(9, cut(e.result(), LOG_TEXT_MAX));
+                ps.addBatch();
+            }
+            ps.executeBatch();
+        } catch (SQLException e) {
+            throw new StoreException("writing the shared activity log failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public List<LogRow> logAfter(long afterId, long sinceTime, int limit) throws StoreException {
+        try (Connection c = open();
+             PreparedStatement ps = c.prepareStatement("SELECT id, server, kind, time, actor, actor_id, source, action, "
+                     + "success, result FROM " + LOG + " WHERE id > ? OR time >= ? ORDER BY id LIMIT " + Math.max(1, limit))) {
+            ps.setLong(1, afterId);
+            ps.setLong(2, sinceTime);
+            return logRows(ps);
+        } catch (SQLException e) {
+            throw new StoreException("reading the shared activity log failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public List<LogRow> recentLog(String kind, int limit) throws StoreException {
+        try (Connection c = open();
+             PreparedStatement ps = c.prepareStatement("SELECT id, server, kind, time, actor, actor_id, source, action, "
+                     + "success, result FROM " + LOG + " WHERE kind = ? ORDER BY id DESC LIMIT " + Math.max(1, limit))) {
+            ps.setString(1, kind);
+            return logRows(ps);
+        } catch (SQLException e) {
+            throw new StoreException("reading the shared activity log failed: " + e.getMessage(), e);
+        }
+    }
+
+    @Override
+    public int purgeLog(long beforeTime) throws StoreException {
+        try (Connection c = open();
+             PreparedStatement ps = c.prepareStatement("DELETE FROM " + LOG + " WHERE time < ?")) {
+            ps.setLong(1, beforeTime);
+            return ps.executeUpdate();
+        } catch (SQLException e) {
+            throw new StoreException("purging the shared activity log failed: " + e.getMessage(), e);
+        }
+    }
+
+    private static List<LogRow> logRows(PreparedStatement ps) throws SQLException {
+        List<LogRow> rows = new ArrayList<>();
+        try (ResultSet rs = ps.executeQuery()) {
+            while (rs.next()) {
+                rows.add(new LogRow(rs.getLong(1), rs.getString(2), rs.getString(3), new LogEntry(rs.getLong(4),
+                        rs.getString(5), rs.getString(6), rs.getString(7), rs.getString(8), rs.getBoolean(9),
+                        rs.getString(10), rs.getString(2))));
+            }
+        }
+        return rows;
+    }
+
+    private static String cut(String text, int max) {
+        if (text == null) return "";
+        return text.length() <= max ? text : text.substring(0, max);
     }
 
     /** Takes the next number, locking the counter until the transaction ends. */

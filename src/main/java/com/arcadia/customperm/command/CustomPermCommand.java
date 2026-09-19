@@ -856,7 +856,7 @@ public class CustomPermCommand {
         }
         for (LogEntry entry : entries) {
             String when = LOG_TIME.format(Instant.ofEpochMilli(entry.time()).atZone(ZoneId.systemDefault()));
-            String line = "[" + when + "] " + entry.actor()
+            String line = "[" + when + "] " + entry.actor() + (entry.server().isEmpty() ? "" : " @" + entry.server())
                 + (kind == LogKind.ADMIN ? " (" + entry.source() + ")" : "") + " " + sanitizePlain(entry.action())
                 + (entry.result().isEmpty() ? "" : " -> " + sanitizePlain(entry.result()));
             ChatFormatting color = entry.success() ? ChatFormatting.WHITE : ChatFormatting.RED;

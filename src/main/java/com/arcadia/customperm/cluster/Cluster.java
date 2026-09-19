@@ -127,6 +127,12 @@ public final class Cluster {
         return running != null && running.pollNow();
     }
 
+    /** An activity log entry recorded here, shared when a cluster runs with {@code share.log}. Any thread. */
+    public static void log(com.arcadia.customperm.log.LogKind kind, com.arcadia.customperm.log.LogEntry entry) {
+        ClusterService running = service;
+        if (running != null) running.log(kind, entry);
+    }
+
     public static void onServerTick(ServerTickEvent.Post event) {
         ClusterService running = service;
         if (running != null) running.tick();

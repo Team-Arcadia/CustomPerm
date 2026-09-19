@@ -11,6 +11,10 @@ package com.arcadia.customperm.cluster;
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.ConfigAdmin;
 import com.arcadia.customperm.config.SettingsConfig;
+import com.arcadia.customperm.log.ActivityLog;
+import com.arcadia.customperm.log.LogEntry;
+import com.arcadia.customperm.log.LogKind;
+import com.arcadia.customperm.network.gui.LogsData;
 import com.arcadia.customperm.notify.AdminAlerts;
 import com.arcadia.customperm.notify.AdminNotifier;
 import com.arcadia.customperm.perm.PermissionService;
@@ -18,9 +22,12 @@ import net.minecraft.server.MinecraftServer;
 import net.neoforged.neoforge.common.UsernameCache;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -36,6 +43,12 @@ final class ClusterService {
     /** How long a server may stay silent before it no longer counts as running. */
     static final int LIVE_SECONDS = 45;
     private static final int HEARTBEAT_TICKS = 10 * 20;
+    /** How far back each read of the shared log looks again, for entries that committed late. */
+    private static final long LOG_LOOKBACK_MILLIS = 60_000;
+    private static final int LOG_READ_MAX = 2000;
+    /** Entries kept for a retry when the store refused them, at most. */
+    private static final int LOG_UNSENT_MAX = 10_000;
+    private static final long LOG_PURGE_EVERY_MILLIS = 3600_000;
 
     private final ClusterStore store;
     private final String name;
@@ -50,12 +63,20 @@ final class ClusterService {
     private final AtomicBoolean polling = new AtomicBoolean();
     private int ticks;
     private int heartbeatTicks;
+    private final boolean shareLog;
+    private final ConcurrentLinkedQueue<ClusterStore.LogLine> pendingLog = new ConcurrentLinkedQueue<>();
+    /** Worker thread only: entries not yet accepted by the store, the newest log number read, what was read lately. */
+    private final List<ClusterStore.LogLine> unsentLog = new ArrayList<>();
+    private long lastLogId;
+    private final Map<Long, Long> seenLog = new HashMap<>();
+    private long lastPurge;
 
     ClusterService(ClusterStore store, String name, String instance, MinecraftServer server, SettingsConfig.Share share) {
         this.store = store;
         this.name = name;
         this.instance = instance;
         this.server = server;
+        this.shareLog = share.log;
         var config = CustomPerm.configManager;
         if (share.grades) {
             add(new GradesCodec(), config::getGrades, () -> PermissionService.get().onConfigReload(config.getSnapshot()));
@@ -71,7 +92,14 @@ final class ClusterService {
 
     /** Names of the parts shared, for the log and the dashboard. */
     List<String> sharedParts() {
-        return parts.stream().<String>map(PartSync::part).toList();
+        List<String> names = new ArrayList<>(parts.stream().<String>map(PartSync::part).toList());
+        if (shareLog) names.add("activity log");
+        return names;
+    }
+
+    /** An entry recorded here, to share. Any thread. */
+    void log(LogKind kind, LogEntry entry) {
+        if (shareLog) pendingLog.add(new ClusterStore.LogLine(kind.name(), entry));
     }
 
     /** First contact, on the server thread. A part the store already holds replaces this server's, backed up first. */
@@ -86,6 +114,17 @@ final class ClusterService {
                         part.part());
                 case ADOPTED_REPLACED -> CustomPerm.LOGGER.warn("[CustomPerm] Cluster: this server's {} differed from the store and "
                         + "were replaced by it. The previous files are in the backup folder.", part.part());
+            }
+        }
+        if (shareLog) {
+            // What the other servers recorded lately, shown beside this server's own from its files.
+            for (LogKind kind : LogKind.values()) {
+                List<ClusterStore.LogRow> recent = new ArrayList<>(store.recentLog(kind.name(), LogsData.ENTRIES_MAX));
+                java.util.Collections.reverse(recent);
+                for (ClusterStore.LogRow row : recent) {
+                    remember(row);
+                    if (!row.server().equals(name)) ActivityLog.addForeign(kind, foreign(row));
+                }
             }
         }
     }
@@ -118,11 +157,13 @@ final class ClusterService {
         if (!polling.compareAndSet(false, true)) return;
         worker.execute(() -> {
             try {
+                List<ClusterStore.LogRow> foreignLog = syncLog();
                 List<List<ClusterStore.Row>> fetched = new ArrayList<>();
                 for (PartSync<?> part : parts) fetched.add(part.fetch());
                 server.execute(() -> {
                     try {
                         for (int i = 0; i < parts.size(); i++) parts.get(i).apply(fetched.get(i));
+                        showForeign(foreignLog);
                         recovered();
                     } finally {
                         polling.set(false);
@@ -142,6 +183,7 @@ final class ClusterService {
     boolean pollNow() throws ClusterStore.StoreException {
         boolean changed = false;
         for (PartSync<?> part : parts) changed |= part.apply(part.fetch());
+        showForeign(syncLog());
         recovered();
         return changed;
     }
@@ -149,6 +191,12 @@ final class ClusterService {
     /** Stops polling and, at a clean stop, takes this instance off the list of running servers. */
     void stop() {
         worker.shutdownNow();
+        try {
+            if (shareLog) syncLog();
+        } catch (ClusterStore.StoreException e) {
+            CustomPerm.LOGGER.warn("[CustomPerm] Cluster: activity log entries not yet shared were dropped at stop: {}",
+                    e.getMessage());
+        }
         try {
             store.leave(name, instance);
         } catch (ClusterStore.StoreException e) {
@@ -201,6 +249,60 @@ final class ClusterService {
             return "The rate limit on /" + holder.substring(RateLimitsCodec.RULE.length());
         }
         return "The tracks";
+    }
+
+    // ------------------------------------------------------------------ activity log
+
+    /**
+     * Sends what this server recorded and reads what the others did. Worker thread (or the server thread when the
+     * worker is not running). Entries the store refused are kept for the next round, up to a limit.
+     */
+    private synchronized List<ClusterStore.LogRow> syncLog() throws ClusterStore.StoreException {
+        if (!shareLog) return List.of();
+        ClusterStore.LogLine line;
+        while ((line = pendingLog.poll()) != null) unsentLog.add(line);
+        if (unsentLog.size() > LOG_UNSENT_MAX) unsentLog.subList(0, unsentLog.size() - LOG_UNSENT_MAX).clear();
+        if (!unsentLog.isEmpty()) {
+            store.appendLog(name, List.copyOf(unsentLog));
+            unsentLog.clear();
+        }
+        long now = System.currentTimeMillis();
+        List<ClusterStore.LogRow> foreign = new ArrayList<>();
+        for (ClusterStore.LogRow row : store.logAfter(lastLogId, now - LOG_LOOKBACK_MILLIS, LOG_READ_MAX)) {
+            if (seenLog.containsKey(row.id())) continue;
+            remember(row);
+            if (!row.server().equals(name)) foreign.add(row);
+        }
+        seenLog.values().removeIf(time -> time < now - 2 * LOG_LOOKBACK_MILLIS);
+        int days = CustomPerm.configManager.getSettings().logRetentionDays;
+        if (days > 0 && now - lastPurge > LOG_PURGE_EVERY_MILLIS) {
+            lastPurge = now;
+            store.purgeLog(now - days * 86_400_000L);
+        }
+        return foreign;
+    }
+
+    private void remember(ClusterStore.LogRow row) {
+        seenLog.put(row.id(), row.entry().time());
+        if (row.id() > lastLogId) lastLogId = row.id();
+    }
+
+    /** Server thread. */
+    private static void showForeign(List<ClusterStore.LogRow> rows) {
+        for (ClusterStore.LogRow row : rows) {
+            LogKind kind;
+            try {
+                kind = LogKind.valueOf(row.kind());
+            } catch (IllegalArgumentException e) {
+                continue;
+            }
+            ActivityLog.addForeign(kind, foreign(row));
+        }
+    }
+
+    private static LogEntry foreign(ClusterStore.LogRow row) {
+        LogEntry e = row.entry();
+        return new LogEntry(e.time(), e.actor(), e.actorId(), e.source(), e.action(), e.success(), e.result(), row.server());
     }
 
     // ------------------------------------------------------------------ health

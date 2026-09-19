@@ -10,6 +10,7 @@ package com.arcadia.customperm.cluster;
 
 import com.arcadia.customperm.cluster.ClusterStore.Change;
 import com.arcadia.customperm.cluster.ClusterStore.Row;
+import com.arcadia.customperm.log.LogEntry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -159,6 +160,26 @@ class SqlPartSyncTest extends PartSyncContract {
         now.addAndGet(25L * 3600 * 1000);
         store.heartbeat("pvp", "three", 30);
         assertEquals(Set.of("pvp"), store.servers().keySet(), "day-old heartbeats are forgotten");
+    }
+
+    @Test
+    void theSharedLogKeepsOrderReadsBackLateEntriesAndPurges() throws Exception {
+        SqlStore store = sql();
+        LogEntry old = new LogEntry(1_000L, "Alex", "", "command", "grade create vip", true, "Created grade vip");
+        LogEntry recent = new LogEntry(90_000L, "Steve", "", "player", "/home", true, "");
+        store.appendLog("hub", List.of(new ClusterStore.LogLine("ADMIN", old), new ClusterStore.LogLine("PLAYERS", recent)));
+
+        List<ClusterStore.LogRow> all = store.logAfter(0, Long.MAX_VALUE, 100);
+        assertEquals(2, all.size());
+        assertEquals("hub", all.get(0).server());
+        assertEquals("hub", all.get(0).entry().server());
+        long lastId = all.get(1).id();
+        assertTrue(store.logAfter(lastId, Long.MAX_VALUE, 100).isEmpty());
+        assertEquals(1, store.logAfter(lastId, 60_000L, 100).size(), "entries in the look-back window are read again");
+
+        assertEquals("grade create vip", store.recentLog("ADMIN", 10).get(0).entry().action());
+        assertEquals(1, store.purgeLog(50_000L));
+        assertEquals(1, store.logAfter(0, Long.MAX_VALUE, 100).size());
     }
 
     /** H2 needs no server, but the connection it hands out must be closed like a pooled one. */

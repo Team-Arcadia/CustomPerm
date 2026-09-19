@@ -8,6 +8,8 @@
  */
 package com.arcadia.customperm.cluster;
 
+import com.arcadia.customperm.log.LogEntry;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
@@ -25,7 +27,9 @@ public final class MemoryStore implements ClusterStore {
     private final Map<String, Map<String, Row>> parts = new HashMap<>();
     private final Map<String, Map<String, Long>> heartbeats = new HashMap<>();
     private final LongSupplier clock;
+    private final List<LogRow> log = new ArrayList<>();
     private long seq;
+    private long logId;
     private boolean down;
 
     public MemoryStore() {
@@ -101,6 +105,46 @@ public final class MemoryStore implements ClusterStore {
         heartbeats.forEach((server, instances) -> instances.values().stream().max(Long::compare)
                 .ifPresent(seen -> ages.put(server, (now - seen) / 1000)));
         return ages;
+    }
+
+    @Override
+    public synchronized void appendLog(String server, List<LogLine> lines) throws StoreException {
+        check();
+        for (LogLine line : lines) log.add(new LogRow(++logId, server, line.kind(), line.entry()));
+    }
+
+    @Override
+    public synchronized List<LogRow> logAfter(long afterId, long sinceTime, int limit) throws StoreException {
+        check();
+        List<LogRow> rows = new ArrayList<>();
+        for (LogRow row : log) {
+            if (row.id() > afterId || row.entry().time() >= sinceTime) rows.add(row);
+            if (rows.size() >= limit) break;
+        }
+        return rows;
+    }
+
+    @Override
+    public synchronized List<LogRow> recentLog(String kind, int limit) throws StoreException {
+        check();
+        List<LogRow> rows = new ArrayList<>();
+        for (int i = log.size() - 1; i >= 0 && rows.size() < limit; i--) {
+            if (log.get(i).kind().equals(kind)) rows.add(log.get(i));
+        }
+        return rows;
+    }
+
+    @Override
+    public synchronized int purgeLog(long beforeTime) throws StoreException {
+        check();
+        int before = log.size();
+        log.removeIf(row -> row.entry().time() < beforeTime);
+        return before - log.size();
+    }
+
+    /** Entries as stored, for tests. */
+    public synchronized List<LogEntry> logEntries() {
+        return log.stream().map(LogRow::entry).toList();
     }
 
     private void check() throws StoreException {

@@ -28,6 +28,9 @@ import com.arcadia.customperm.config.CommandsConfig;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.gametest.support.Modes;
+import com.arcadia.customperm.log.ActivityLog;
+import com.arcadia.customperm.log.LogEntry;
+import com.arcadia.customperm.log.LogKind;
 import com.arcadia.customperm.gametest.support.TestPlayer;
 import com.arcadia.customperm.notify.AdminAlerts;
 import com.arcadia.customperm.notify.AdminNotifier;
@@ -190,6 +193,32 @@ public class ClusterGameTest {
             @Override public void changed(T c, Set<String> holders) {}
             @Override public String label(String holder) { return holder; }
         };
+    }
+
+    /** Admin changes made here reach the shared log under this server's name; the other server's show here with its name. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_log")
+    public static void theActivityLogIsSharedWithTheServerName(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        MemoryStore store = new MemoryStore();
+        inCluster(server, store, () -> {
+            store.appendLog("other", List.of(new ClusterStore.LogLine(LogKind.ADMIN.name(), new LogEntry(
+                    System.currentTimeMillis(), "Alex", "", LogEntry.SOURCE_COMMAND, "grade create cp_cl_logged", true,
+                    "Created grade cp_cl_logged"))));
+            ActivityLog.admin("Tester", "", LogEntry.SOURCE_COMMAND, "cp_cl_here", true, "done");
+            Cluster.pollNow();
+
+            boolean shown = ActivityLog.recent(LogKind.ADMIN, 50).stream()
+                    .anyMatch(e -> e.action().equals("grade create cp_cl_logged") && e.server().equals("other"));
+            if (!shown) fail("The other server's entry must show here, with its server name.");
+            boolean sent = store.logAfter(0, 0, 500).stream()
+                    .anyMatch(r -> r.entry().action().equals("cp_cl_here") && r.server().equals("gametest"));
+            if (!sent) fail("An entry recorded here must reach the shared log under this server's name.");
+            boolean echoed = ActivityLog.recent(LogKind.ADMIN, 50).stream()
+                    .anyMatch(e -> e.action().equals("cp_cl_here") && !e.server().isEmpty());
+            if (echoed) fail("This server's own entries must not come back from the store as another server's.");
+        });
+        helper.succeed();
     }
 
     /** A grade and an assignment made on the other server give the player the node here, and the reverse. */

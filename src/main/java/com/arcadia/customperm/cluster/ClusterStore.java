@@ -8,6 +8,8 @@
  */
 package com.arcadia.customperm.cluster;
 
+import com.arcadia.customperm.log.LogEntry;
+
 import java.util.List;
 import java.util.Map;
 
@@ -57,6 +59,28 @@ public interface ClusterStore {
 
     /** For the dashboard: server name to seconds since its last heartbeat. */
     Map<String, Long> servers() throws StoreException;
+
+    /** An activity log entry to share, and which tab it belongs to. */
+    record LogLine(String kind, LogEntry entry) {}
+
+    /** A shared activity log entry, numbered by the store, with the server that recorded it. */
+    record LogRow(long id, String server, String kind, LogEntry entry) {}
+
+    /** Adds entries this server recorded. */
+    void appendLog(String server, List<LogLine> lines) throws StoreException;
+
+    /**
+     * Entries numbered after {@code afterId}, and every entry recorded at or after {@code sinceTime} whatever its
+     * number: numbers are handed out when an entry is inserted, not when it commits, so a late commit can carry a
+     * lower number than one already read. The caller drops what it has already seen.
+     */
+    List<LogRow> logAfter(long afterId, long sinceTime, int limit) throws StoreException;
+
+    /** The latest entries of one tab, newest first. */
+    List<LogRow> recentLog(String kind, int limit) throws StoreException;
+
+    /** Removes entries recorded before {@code beforeTime}; answers how many. */
+    int purgeLog(long beforeTime) throws StoreException;
 
     /** The store could not be reached or refused the operation. */
     class StoreException extends Exception {

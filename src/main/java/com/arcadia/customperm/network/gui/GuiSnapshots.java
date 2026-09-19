@@ -278,7 +278,7 @@ public final class GuiSnapshots {
 
     private static List<LogsData.Entry> entries(LogKind kind) {
         return ActivityLog.recent(kind, LogsData.ENTRIES_MAX).stream()
-                .map(e -> new LogsData.Entry(e.time(), e.actor(), e.source(), e.action(), e.success(), e.result()))
+                .map(e -> new LogsData.Entry(e.time(), e.actor(), e.source(), e.action(), e.success(), e.result(), e.server()))
                 .toList();
     }
 

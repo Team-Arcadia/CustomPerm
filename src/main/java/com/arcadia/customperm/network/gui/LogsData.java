@@ -27,15 +27,27 @@ public record LogsData(List<Entry> admin, List<Entry> players, boolean playerLog
     /** Most entries sent per tab; older ones stay in the files. */
     public static final int ENTRIES_MAX = 300;
 
-    public record Entry(long time, String actor, String source, String action, boolean success, String result) {
-        public static final StreamCodec<ByteBuf, Entry> CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_LONG, Entry::time,
-                GuiCodecs.TEXT, Entry::actor,
-                GuiCodecs.TEXT, Entry::source,
-                GuiCodecs.TEXT, Entry::action,
-                ByteBufCodecs.BOOL, Entry::success,
-                GuiCodecs.TEXT, Entry::result,
-                Entry::new);
+    /** {@code server}: the cluster server the entry comes from, empty for this server. */
+    public record Entry(long time, String actor, String source, String action, boolean success, String result,
+                        String server) {
+        public static final StreamCodec<ByteBuf, Entry> CODEC = StreamCodec.of(
+                (buf, e) -> {
+                    ByteBufCodecs.VAR_LONG.encode(buf, e.time());
+                    GuiCodecs.TEXT.encode(buf, e.actor());
+                    GuiCodecs.TEXT.encode(buf, e.source());
+                    GuiCodecs.TEXT.encode(buf, e.action());
+                    ByteBufCodecs.BOOL.encode(buf, e.success());
+                    GuiCodecs.TEXT.encode(buf, e.result());
+                    GuiCodecs.TEXT.encode(buf, e.server());
+                },
+                buf -> new Entry(ByteBufCodecs.VAR_LONG.decode(buf), GuiCodecs.TEXT.decode(buf),
+                        GuiCodecs.TEXT.decode(buf), GuiCodecs.TEXT.decode(buf), ByteBufCodecs.BOOL.decode(buf),
+                        GuiCodecs.TEXT.decode(buf), GuiCodecs.TEXT.decode(buf)));
+
+        /** The actor as shown: with the server it acted on when that is another one. */
+        public String who() {
+            return server.isEmpty() ? actor : actor + " @" + server;
+        }
     }
 
     public static final StreamCodec<ByteBuf, LogsData> CODEC = StreamCodec.composite(
