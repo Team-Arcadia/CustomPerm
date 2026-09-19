@@ -815,14 +815,16 @@ déjà son stockage entre serveurs, et CustomPerm le lit.
 
 **Ce qu'il faut**
 
-- Un serveur dédié (un monde solo ou LAN tourne toujours seul).
-- [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) 1.3.0 ou plus sur chaque serveur, connecté
-  à une même base MySQL ou MariaDB : `<monde>/serverconfig/arcadia/lib/database.toml` (le fichier d'Arcadia Lib,
-  `enabled`, `host`, `port`, `name`, `user`, `password`). CustomPerm n'embarque aucun pilote de base de données et
-  n'ouvre aucune connexion lui-même. Sans Arcadia Lib, CustomPerm charge et tourne comme d'habitude.
-- Un nom différent par serveur : `server_id` dans `<monde>/serverconfig/arcadia/lib/server.toml` (Arcadia Lib met
-  `server1` pour tout le monde par défaut). Un serveur dont le nom est déjà pris par un autre serveur en marche reste
-  hors du cluster et le dit.
+- Un serveur dédié (un monde solo ou LAN tourne toujours seul), et une même base MySQL ou MariaDB que chaque serveur
+  atteint. Deux façons de s'y connecter, choisies par `cluster.connection` :
+  - `"direct"` : CustomPerm se connecte lui-même, rien d'autre à installer. Remplir `cluster.serverName` (différent
+    sur chaque serveur) et `cluster.database` (`host`, `port`, `name`, `user`, `password`, `tls`) dans
+    `settings.json`. Le mot de passe est dans ce fichier : le garder lisible par le seul compte du serveur.
+  - `"arcadia"` (par défaut) : via [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) 1.3.0 ou
+    plus, pour les serveurs qui l'ont déjà. La base se règle dans `<monde>/serverconfig/arcadia/lib/database.toml`
+    d'Arcadia Lib, et le nom est son `server_id` dans `<monde>/serverconfig/arcadia/lib/server.toml` (Arcadia Lib met
+    `server1` pour tout le monde par défaut).
+- Un serveur dont le nom est déjà pris par un autre serveur en marche reste hors du cluster et le dit.
 - `"cluster": { "enabled": true }` dans le `settings.json` de chaque serveur, puis un redémarrage. Les réglages du
   cluster ne s'appliquent qu'au démarrage.
 
@@ -872,8 +874,13 @@ partagées et les autres serveurs entendus.
 
 **Sécurité**
 
-Arcadia Lib se connecte sans TLS. Gardez la base sur un réseau privé ou sur la même machine : quiconque peut lire
-ou modifier ce trafic peut lire ou changer toutes les permissions.
+`tls` (connexion directe) vaut `off` par défaut, la plupart des bases auto-hébergées n'ayant pas de certificat ;
+`trust` chiffre sans vérifier le certificat, `verify` chiffre et le vérifie. Arcadia Lib se connecte sans TLS. Dans
+les deux cas, sans `verify`, gardez la base sur un réseau privé ou sur la même machine : quiconque peut lire ou
+modifier ce trafic peut lire ou changer toutes les permissions.
+
+La connexion directe utilise MariaDB Connector/J, embarqué tel quel dans le jar de CustomPerm sous LGPL ; il parle
+aussi bien à MariaDB qu'à MySQL. Voir [NOTICE.md](NOTICE.md).
 
 ---
 

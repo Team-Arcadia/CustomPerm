@@ -160,10 +160,20 @@ public class SettingsConfig {
 
     public static class Cluster {
         public static final String WHEN_LOST_LAST_KNOWN = "last-known";
+        /** Through Arcadia Lib's connection and server name. */
+        public static final String CONNECTION_ARCADIA = "arcadia";
+        /** CustomPerm connects itself, with {@link #database} and {@link #serverName}. */
+        public static final String CONNECTION_DIRECT = "direct";
         public static final int POLL_SECONDS_MIN = 1;
         public static final int POLL_SECONDS_MAX = 60;
 
         public boolean enabled = false;
+        /** {@link #CONNECTION_ARCADIA} (the default) or {@link #CONNECTION_DIRECT}. */
+        public String connection = CONNECTION_ARCADIA;
+        /** This server's name in the cluster, with a direct connection; Arcadia Lib's server_id otherwise. */
+        public String serverName = "";
+        /** The MySQL or MariaDB database, with a direct connection. */
+        public Database database = new Database();
         /** Which parts this server shares with the others; a part not shared stays in this server's files. */
         public Share share = new Share();
         /** How often the database is asked what changed. */
@@ -175,6 +185,43 @@ public class SettingsConfig {
             if (share == null) share = new Share();
             pollSeconds = Math.max(POLL_SECONDS_MIN, Math.min(POLL_SECONDS_MAX, pollSeconds));
             whenDatabaseLost = WHEN_LOST_LAST_KNOWN;
+            connection = connection == null ? CONNECTION_ARCADIA : connection.trim().toLowerCase(Locale.ROOT);
+            if (!CONNECTION_DIRECT.equals(connection)) connection = CONNECTION_ARCADIA;
+            serverName = serverName == null ? "" : serverName.trim();
+            if (database == null) database = new Database();
+            database.normalize();
+        }
+
+        public boolean direct() {
+            return CONNECTION_DIRECT.equals(connection);
+        }
+    }
+
+    /**
+     * A MySQL or MariaDB database cluster mode connects to itself. The password sits in this file: keep it readable
+     * by the server's account only.
+     */
+    public static class Database {
+        public static final String TLS_OFF = "off";
+        public static final String TLS_TRUST = "trust";
+        public static final String TLS_VERIFY = "verify";
+
+        public String host = "localhost";
+        public int port = 3306;
+        public String name = "customperm";
+        public String user = "";
+        public String password = "";
+        /** off: plain; trust: encrypted, certificate not checked; verify: encrypted and the certificate checked. */
+        public String tls = TLS_OFF;
+
+        void normalize() {
+            host = host == null || host.isBlank() ? "localhost" : host.trim();
+            if (port < 1 || port > 65535) port = 3306;
+            name = name == null || name.isBlank() ? "customperm" : name.trim();
+            if (user == null) user = "";
+            if (password == null) password = "";
+            tls = tls == null ? TLS_OFF : tls.trim().toLowerCase(Locale.ROOT);
+            if (!TLS_TRUST.equals(tls) && !TLS_VERIFY.equals(tls)) tls = TLS_OFF;
         }
     }
 

@@ -87,6 +87,14 @@ dependencies {
     // asset v1.3.0 (sha256 575fc6a4191849116ce3e1e846c8440b4a97112a84adbc3d66228a454e3fde5b).
     compileOnly("curse.maven:arcadia-lib-1493170:8713651") { transitive = false }
 
+    // MariaDB Connector/J 3.5.10 (LGPL-2.1-or-later), cluster mode's own connection when Arcadia Lib is not used. Packed
+    // as a separate jar inside CustomPerm's (jar-in-jar), unmodified. Every dependency of its POM is optional, provided or
+    // test-only. Checked: the Maven Central jar (sha256 919b8c1c...abcb18b2) carries a valid signature from the MariaDB
+    // Enterprise Signing Key, fingerprint 4C47 0FFF EFC4 D3DC 5977 8655 CE1A 3DD5 E3C9 4F49.
+    implementation("org.mariadb.jdbc:mariadb-java-client:3.5.10") { transitive = false }
+    jarJar("org.mariadb.jdbc:mariadb-java-client:[3.5.10]") { transitive = false }
+    additionalRuntimeClasspath("org.mariadb.jdbc:mariadb-java-client:3.5.10") { transitive = false }
+
     // GameTest source set depends on main output
     gameTestImplementation sourceSets.main.output
 

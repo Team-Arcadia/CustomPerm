@@ -793,14 +793,16 @@ servers, and CustomPerm reads it.
 
 **What it needs**
 
-- A dedicated server (a singleplayer or LAN world always runs alone).
-- [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) 1.3.0 or later on every server, connected
-  to one MySQL or MariaDB database: `<world>/serverconfig/arcadia/lib/database.toml` (Arcadia Lib's file, `enabled`,
-  `host`, `port`, `name`, `user`, `password`). CustomPerm ships no database driver and opens no connection of its
-  own. Without Arcadia Lib, CustomPerm loads and runs as usual.
-- A different name per server: `server_id` in `<world>/serverconfig/arcadia/lib/server.toml` (Arcadia Lib's default
-  is `server1` for everyone). A server whose name another running server already uses stays out of the cluster and
-  says so.
+- A dedicated server (a singleplayer or LAN world always runs alone), and one MySQL or MariaDB database every
+  server reaches. Two ways to connect, chosen by `cluster.connection`:
+  - `"direct"`: CustomPerm connects itself, nothing else to install. Fill `cluster.serverName` (different on each
+    server) and `cluster.database` (`host`, `port`, `name`, `user`, `password`, `tls`) in `settings.json`. The
+    password sits in that file: keep it readable by the server's account only.
+  - `"arcadia"` (the default): through [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) 1.3.0
+    or later, for servers that already run it. The database is set in Arcadia Lib's
+    `<world>/serverconfig/arcadia/lib/database.toml`, and the name is its `server_id` in
+    `<world>/serverconfig/arcadia/lib/server.toml` (Arcadia Lib's default is `server1` for everyone).
+- A server whose name another running server already uses stays out of the cluster and says so.
 - `"cluster": { "enabled": true }` in each server's `settings.json`, then a restart. Cluster settings apply at
   start only.
 
@@ -811,6 +813,9 @@ Each part can be shared or kept local, in `settings.json`:
 ```json
 "cluster": {
   "enabled": false,
+  "connection": "arcadia",
+  "serverName": "",
+  "database": { "host": "localhost", "port": 3306, "name": "customperm", "user": "", "password": "", "tls": "off" },
   "share": { "grades": true, "commands": true, "aliases": true, "rateLimits": true,
              "log": true },
   "pollSeconds": 2,
@@ -856,8 +861,13 @@ state. The dashboard shows the cluster: this server's name, the parts it shares 
 
 **Security**
 
-Arcadia Lib connects without TLS. Keep the database on a private network or the same machine: anyone able to read
-or alter that traffic can read or change every permission.
+`tls` (direct connection) is `off` by default, since most self-hosted databases have no certificate; `trust`
+encrypts without checking the certificate, `verify` encrypts and checks it. Arcadia Lib connects without TLS. Either
+way, without `verify` keep the database on a private network or the same machine: anyone able to read or alter that
+traffic can read or change every permission.
+
+The direct connection uses MariaDB Connector/J, packed unmodified inside the CustomPerm jar under the LGPL; it
+talks to MariaDB and MySQL alike. See [NOTICE.md](NOTICE.md).
 
 ---
 

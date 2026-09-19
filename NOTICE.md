@@ -77,9 +77,22 @@ CustomPerm builds against, but does not include or redistribute, the following:
 | [NeoForge](https://neoforged.net/) | Mod loader / framework | Provided by the end user's installation, under its own license |
 | [LuckPerms API](https://luckperms.net/) | Optional integration (`compileOnly`) | Provided by the end user's installation, under its own license |
 | Brigadier (Mojang) | Command system | Part of Minecraft, under Mojang's terms |
+| [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) | Optional cluster-mode connection (`compileOnly`) | Provided by the end user's installation, under its own license |
 
-These are compile-time or runtime dependencies resolved on the user's side. No
-third-party code is bundled into the CustomPerm jar.
+These are compile-time or runtime dependencies resolved on the user's side.
+
+From the release that introduces cluster mode on, one third-party component is bundled:
+
+| Component | Role | Licensing |
+|-----------|------|-----------|
+| [MariaDB Connector/J](https://github.com/mariadb-corporation/mariadb-connector-j) 3.5.10 | Database driver for cluster mode's direct connection | GNU Lesser General Public License 2.1 or later |
+
+It ships unmodified, as its own jar inside the CustomPerm jar
+(`META-INF/jarjar/mariadb-java-client-3.5.10.jar`), so it can be replaced by
+another build of the same library. The license text is included at
+`META-INF/licenses/mariadb-java-client-LGPL-2.1.txt`; the source is published by
+MariaDB at the address above. CustomPerm's own license does not apply to it,
+and nothing in CustomPerm's license restricts the rights the LGPL grants over it.
 
 ## License history by version
 

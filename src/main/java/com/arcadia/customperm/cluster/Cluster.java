@@ -50,17 +50,43 @@ public final class Cluster {
     public static void onServerStarted(ServerStartedEvent event) {
         SettingsConfig.Cluster settings = CustomPerm.configManager.getSettings().cluster;
         String version = arcadiaLibVersion();
+        boolean direct = settings.direct();
         state = ClusterGate.decide(settings.enabled, CustomPerm.isLuckPermsActive(),
-                event.getServer().isDedicatedServer(), version, ArcadiaLibBridge::databaseActive);
+                event.getServer().isDedicatedServer(), direct, settings.serverName, settings.database.user, version,
+                ArcadiaLibBridge::databaseActive);
         decidedWith = fingerprint(settings);
-        serverName = state == ClusterGate.State.READY ? ArcadiaLibBridge.serverId() : null;
-        if (state == ClusterGate.State.READY) join(event.getServer());
-        report(version);
+        serverName = state != ClusterGate.State.READY ? null : direct ? settings.serverName : ArcadiaLibBridge.serverId();
+        if (state == ClusterGate.State.READY) {
+            join(event.getServer(), direct ? directStore(settings.database) : new SqlStore(ArcadiaLibBridge::connection));
+        }
+        report(direct ? "direct connection to " + settings.database.host + ":" + settings.database.port
+                + "/" + settings.database.name : "Arcadia Lib " + version, version);
     }
 
-    /** Opens the SQL store on Arcadia Lib's connections and joins it; any failure leaves this server alone. */
-    private static void join(MinecraftServer server) {
-        SqlStore store = new SqlStore(ArcadiaLibBridge::connection);
+    /** CustomPerm's own connections, closed with the server. */
+    private static volatile DirectConnections directConnections;
+
+    private static SqlStore directStore(com.arcadia.customperm.config.SettingsConfig.Database db) {
+        java.util.Properties props = new java.util.Properties();
+        props.setProperty("user", db.user);
+        props.setProperty("password", db.password);
+        props.setProperty("connectTimeout", "5000");
+        props.setProperty("socketTimeout", "10000");
+        props.setProperty("sslMode", switch (db.tls) {
+            case com.arcadia.customperm.config.SettingsConfig.Database.TLS_TRUST -> "trust";
+            case com.arcadia.customperm.config.SettingsConfig.Database.TLS_VERIFY -> "verify-full";
+            default -> "disable";
+        });
+        // IPv6 hosts are bracketed in a JDBC URL, or the colons read as the port separator.
+        String host = db.host.contains(":") && !db.host.startsWith("[") ? "[" + db.host + "]" : db.host;
+        DirectConnections connections = new DirectConnections(new org.mariadb.jdbc.Driver(),
+                "jdbc:mariadb://" + host + ":" + db.port + "/" + db.name, props);
+        directConnections = connections;
+        return new SqlStore(connections::get);
+    }
+
+    /** Opens {@code store} and joins it; any failure leaves this server alone. */
+    private static void join(MinecraftServer server, SqlStore store) {
         String instance = UUID.randomUUID().toString();
         try {
             store.createTables();
@@ -74,11 +100,21 @@ public final class Cluster {
             CustomPerm.LOGGER.error("[CustomPerm] Cluster: joining the store failed", e);
             state = ClusterGate.State.STORE_FAILED;
         }
-        if (state != ClusterGate.State.READY) serverName = null;
+        if (state != ClusterGate.State.READY) {
+            serverName = null;
+            closeDirect();
+        }
+    }
+
+    private static void closeDirect() {
+        DirectConnections open = directConnections;
+        directConnections = null;
+        if (open != null) open.close();
     }
 
     public static void onServerStopped(ServerStoppedEvent event) {
         detach();
+        closeDirect();
         state = ClusterGate.State.OFF;
         serverName = null;
         decidedWith = null;
@@ -197,14 +233,14 @@ public final class Cluster {
         return "Cluster settings changed: they apply at the next server start.";
     }
 
-    private static void report(String version) {
+    private static void report(String how, String version) {
         switch (state) {
             case OFF -> AdminNotifier.clear(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "cluster mode is off.");
             case LUCKPERMS -> CustomPerm.LOGGER.info("[CustomPerm] {}", ClusterGate.reason(state, version));
             case READY -> {
                 ClusterService running = service;
-                CustomPerm.LOGGER.info("[CustomPerm] Cluster mode: Arcadia Lib {} database connected, this server is \"{}\", "
-                        + "sharing {}.", version, serverName, running == null ? "nothing" : running.sharedParts());
+                CustomPerm.LOGGER.info("[CustomPerm] Cluster mode: {} connected, this server is \"{}\", sharing {}.",
+                        how, serverName, running == null ? "nothing" : running.sharedParts());
                 AdminNotifier.clear(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "cluster mode is connected.");
             }
             default -> AdminNotifier.raise(AdminAlerts.Key.CLUSTER_UNAVAILABLE,
@@ -221,7 +257,9 @@ public final class Cluster {
 
     private static String fingerprint(SettingsConfig.Cluster c) {
         SettingsConfig.Share s = c.share;
-        return c.enabled + "|" + c.pollSeconds + "|" + c.whenDatabaseLost + "|" + s.grades + s.commands + s.aliases
-                + s.rateLimits + s.log;
+        var db = c.database;
+        return c.enabled + "|" + c.connection + "|" + c.serverName + "|" + db.host + "|" + db.port + "|" + db.name + "|"
+                + db.user + "|" + db.password.hashCode() + "|" + db.tls + "|" + c.pollSeconds + "|" + c.whenDatabaseLost
+                + "|" + s.grades + s.commands + s.aliases + s.rateLimits + s.log;
     }
 }
