@@ -31,7 +31,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class ClusterService implements PartSync.Host<GradesConfig> {
 
+    /** How long a server may stay silent before it no longer counts as running. */
+    static final int LIVE_SECONDS = 45;
+    private static final int HEARTBEAT_TICKS = 10 * 20;
+
+    private final ClusterStore store;
     private final String name;
+    private final String instance;
     private final MinecraftServer server;
     private final PartSync<GradesConfig> grades;
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
@@ -41,9 +47,12 @@ final class ClusterService implements PartSync.Host<GradesConfig> {
     });
     private final AtomicBoolean polling = new AtomicBoolean();
     private int ticks;
+    private int heartbeatTicks;
 
-    ClusterService(ClusterStore store, String name, MinecraftServer server) {
+    ClusterService(ClusterStore store, String name, String instance, MinecraftServer server) {
+        this.store = store;
         this.name = name;
+        this.instance = instance;
         this.server = server;
         this.grades = new PartSync<>(new GradesCodec(), store, name, this);
     }
@@ -78,6 +87,10 @@ final class ClusterService implements PartSync.Host<GradesConfig> {
     }
 
     void tick() {
+        if (++heartbeatTicks >= HEARTBEAT_TICKS) {
+            heartbeatTicks = 0;
+            worker.execute(this::beat);
+        }
         int every = Math.max(1, CustomPerm.configManager.getSettings().cluster.pollSeconds) * 20;
         if (++ticks < every) return;
         ticks = 0;
@@ -110,8 +123,27 @@ final class ClusterService implements PartSync.Host<GradesConfig> {
         return changed;
     }
 
+    /** Stops polling and, at a clean stop, takes this instance off the list of running servers. */
     void stop() {
         worker.shutdownNow();
+        try {
+            store.leave(name, instance);
+        } catch (ClusterStore.StoreException e) {
+            CustomPerm.LOGGER.debug("[CustomPerm] Cluster: leaving the store failed: {}", e.getMessage());
+        }
+    }
+
+    private void beat() {
+        try {
+            List<String> others = store.heartbeat(name, instance, LIVE_SECONDS);
+            if (!others.isEmpty()) {
+                server.execute(() -> AdminNotifier.raise(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "Another running server "
+                        + "now uses this server's name \"" + name + "\" in the cluster. Give each server its own "
+                        + "server_id in config/arcadia/lib/server.toml and restart one of them."));
+            }
+        } catch (ClusterStore.StoreException e) {
+            server.execute(() -> lost(e.getMessage()));
+        }
     }
 
     // ------------------------------------------------------------------ PartSync.Host

@@ -18,8 +18,8 @@ import net.neoforged.neoforge.event.server.ServerStartedEvent;
 import net.neoforged.neoforge.event.server.ServerStoppedEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
-import java.sql.Connection;
-import java.sql.SQLException;
+import java.util.List;
+import java.util.UUID;
 
 /**
  * Cluster mode: several servers on the internal backend sharing their grades through Arcadia Lib's MySQL
@@ -54,7 +54,27 @@ public final class Cluster {
                 event.getServer().isDedicatedServer(), version, ArcadiaLibBridge::databaseActive);
         decidedWith = fingerprint(settings);
         serverName = state == ClusterGate.State.READY ? ArcadiaLibBridge.serverId() : null;
+        if (state == ClusterGate.State.READY) join(event.getServer());
         report(version);
+    }
+
+    /** Opens the SQL store on Arcadia Lib's connections and joins it; any failure leaves this server alone. */
+    private static void join(MinecraftServer server) {
+        SqlStore store = new SqlStore(ArcadiaLibBridge::connection);
+        String instance = UUID.randomUUID().toString();
+        try {
+            store.createTables();
+            List<String> others = store.heartbeat(serverName, instance, ClusterService.LIVE_SECONDS);
+            if (!others.isEmpty()) {
+                state = ClusterGate.State.DUPLICATE_NAME;
+                return;
+            }
+            attach(store, serverName, instance, server);
+        } catch (ClusterStore.StoreException | RuntimeException e) {
+            CustomPerm.LOGGER.error("[CustomPerm] Cluster: joining the store failed", e);
+            state = ClusterGate.State.STORE_FAILED;
+        }
+        if (state != ClusterGate.State.READY) serverName = null;
     }
 
     public static void onServerStopped(ServerStoppedEvent event) {
@@ -74,8 +94,13 @@ public final class Cluster {
      * replaces them. On the server thread. Public for the GameTests, which run two servers against one store.
      */
     public static void attach(ClusterStore store, String name, MinecraftServer server) throws ClusterStore.StoreException {
+        attach(store, name, UUID.randomUUID().toString(), server);
+    }
+
+    private static void attach(ClusterStore store, String name, String instance, MinecraftServer server)
+            throws ClusterStore.StoreException {
         detach();
-        ClusterService started = new ClusterService(store, name, server);
+        ClusterService started = new ClusterService(store, name, instance, server);
         started.start();
         service = started;
     }
@@ -112,12 +137,6 @@ public final class Cluster {
         if (before == null || before.equals(fingerprint(CustomPerm.configManager.getSettings().cluster))) return null;
         CustomPerm.LOGGER.info("[CustomPerm] Cluster settings changed; they apply at the next server start.");
         return "Cluster settings changed: they apply at the next server start.";
-    }
-
-    /** A connection from Arcadia Lib's pool, only while {@link ClusterGate.State#READY}. The caller closes it. */
-    static Connection connection() throws SQLException {
-        if (state != ClusterGate.State.READY) throw new SQLException("cluster mode is not running");
-        return ArcadiaLibBridge.connection();
     }
 
     private static void report(String version) {

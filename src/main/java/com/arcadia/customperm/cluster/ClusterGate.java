@@ -37,6 +37,10 @@ public final class ClusterGate {
         ARCADIA_LIB_INCOMPATIBLE,
         /** Arcadia Lib runs in memory: database disabled in its config, or unreachable at start. */
         NO_DATABASE,
+        /** Another running server already uses this server's name in the cluster. */
+        DUPLICATE_NAME,
+        /** The database answered Arcadia Lib but refused cluster mode's tables or first read. */
+        STORE_FAILED,
         READY
     }
 
@@ -78,6 +82,10 @@ public final class ClusterGate {
                     + "mode uses. This server runs alone; update CustomPerm.";
             case NO_DATABASE -> "Arcadia Lib has no database connection (disabled in its database config, or "
                     + "unreachable at start: see its log lines). This server runs alone.";
+            case DUPLICATE_NAME -> "another running server already uses this server's name. Give each server its own "
+                    + "server_id in config/arcadia/lib/server.toml (the default is server1). This server runs alone.";
+            case STORE_FAILED -> "the database refused cluster mode's tables or first read (see the server log). "
+                    + "This server runs alone on its own files.";
         };
     }
 }

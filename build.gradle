@@ -101,6 +101,9 @@ dependencies {
 
     // JUnit 5 — tests unitaires purs Java (sans NeoForge)
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.0'
+    // H2 in MySQL mode runs cluster mode's SQL in CI without a MySQL server. Tests only, never in the jar.
+    // 2.4.240: same sha256 on Maven Central and the h2database GitHub release (29b70e42...57ce0).
+    testImplementation 'com.h2database:h2:2.4.240'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
     // SLF4J pour tests unitaires (ConfigManager utilise LoggerFactory hors NeoForge)
