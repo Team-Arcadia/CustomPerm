@@ -346,12 +346,14 @@ public final class AliasesScreen extends AdminScreen {
         Skin.text(g, font, "NEW ALIAS", create.x(), create.y() - 10, create.w(), Palette.TEXT_MUTE);
 
         if (alias == null) {
-            paragraph(g, "Select an alias to edit its steps. An alias runs its steps in order, at op level 4, "
-                    + "for players holding customperm.alias.<name>.", inner, inner.y(), Palette.TEXT_MUTE);
+            // The read-only note first: it is what this admin needs, and the text under it wraps to any height.
+            int y = inner.y();
             if (!canEdit(GuiArea.ALIASES)) {
-                paragraph(g, "Read-only: editing aliases needs " + GuiArea.ALIASES.node() + ".", inner, inner.y() + 40,
-                        Palette.TEXT_MUTE);
+                y = paragraph(g, "Read-only: editing aliases needs " + GuiArea.ALIASES.node() + ".", inner, y,
+                        Palette.WARN) + 6;
             }
+            paragraph(g, "Select an alias to edit its steps. An alias runs its steps in order, at op level 4, "
+                    + "for players holding customperm.alias.<name>.", inner, y, Palette.TEXT_MUTE);
             return;
         }
         Skin.text(g, font, "/" + alias.name(), inner.x(), inner.y(), inner.w(), Palette.TEXT);

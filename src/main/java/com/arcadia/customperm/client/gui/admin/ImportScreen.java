@@ -24,7 +24,10 @@ import com.arcadia.customperm.network.gui.ImportData;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.FormattedText;
+import net.minecraft.network.chat.Style;
 
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -43,10 +46,13 @@ public final class ImportScreen extends AdminScreen {
     private static final int ROW = 12;
     private static final int BUTTON = Atlas.BUTTON_HEIGHT;
     private static final int GAP = 6;
-    private static final int INTRO = 34;
 
     private ImportData data;
     private final CpList<String> report;
+    /** The report as the server wrote it, one sentence a line, before wrapping to the list width. */
+    private List<String> reportLines = List.of();
+    /** Width the report lines were last wrapped to. */
+    private int reportWidth = Integer.MAX_VALUE;
     /** Which tab is shown: from LuckPerms, or to it. */
     private boolean toLuckPerms;
     /** Whether a translated {@code minecraft.command} node also exposes its command. */
@@ -89,14 +95,36 @@ public final class ImportScreen extends AdminScreen {
     private void showReport() {
         if (!toLuckPerms) {
             report.emptyText("Read LuckPerms to see what an import would do.");
-            report.setItems(data.report());
+            reportLines = data.report();
+        } else {
+            ImportData.Export export = data.export();
+            report.emptyText("Read the grades to see what an export would write.");
+            reportLines = export.exporting()
+                    ? List.of("Exporting: " + export.done() + " of " + export.total() + " holder(s) written.")
+                    : export.report();
+        }
+        fillReport();
+    }
+
+    /**
+     * Wraps each report sentence to the list width, continuation lines indented: cut at the edge, a line
+     * such as "3 command(s) also exposed, without which those nodes w..." loses what it was saying.
+     */
+    private void fillReport() {
+        // Before the first layout there is no font yet; buildPage wraps once the width is known.
+        if (font == null) {
+            report.setItems(reportLines);
             return;
         }
-        ImportData.Export export = data.export();
-        report.emptyText("Read the grades to see what an export would write.");
-        report.setItems(export.exporting()
-                ? List.of("Exporting: " + export.done() + " of " + export.total() + " holder(s) written.")
-                : export.report());
+        List<String> wrapped = new ArrayList<>();
+        for (String line : reportLines) {
+            boolean first = true;
+            for (FormattedText part : font.getSplitter().splitLines(line, reportWidth, Style.EMPTY)) {
+                wrapped.add(first ? part.getString() : "  " + part.getString());
+                first = false;
+            }
+        }
+        report.setItems(wrapped);
     }
 
     @Override
@@ -140,12 +168,16 @@ public final class ImportScreen extends AdminScreen {
         return layout.content().top(BUTTON);
     }
 
+    /** As tall as its text wraps to, so no sentence is cut on a narrow panel. */
     private Rect intro() {
-        return layout.content().belowTop(BUTTON + GAP).top(INTRO);
+        Rect below = layout.content().belowTop(BUTTON + GAP);
+        int lines = font.split(Component.literal(introText()), below.w()).size();
+        return below.top(Math.max(1, lines) * 10);
     }
 
     private Rect options() {
-        return layout.content().belowTop(BUTTON + GAP + INTRO + GAP).top(BUTTON);
+        Rect intro = intro();
+        return new Rect(intro.x(), intro.bottom() + GAP, intro.w(), BUTTON);
     }
 
     private Rect actionBar() {
@@ -167,7 +199,14 @@ public final class ImportScreen extends AdminScreen {
         } else {
             buildImport();
         }
-        addRenderableWidget(report.at(reportArea()));
+        Rect area = reportArea();
+        // The text inset of a row on each side, and the scrollbar.
+        int width = Math.max(40, area.w() - 12 - 6);
+        if (width != reportWidth) {
+            reportWidth = width;
+            fillReport();
+        }
+        addRenderableWidget(report.at(area));
     }
 
     private CpButton tab(String label, boolean export, String tooltip) {
@@ -279,12 +318,15 @@ public final class ImportScreen extends AdminScreen {
 
     @Override
     protected void renderContent(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        paragraph(g, toLuckPerms
+        paragraph(g, introText(), intro(), intro().y(), Palette.TEXT_MUTE);
+    }
+
+    private String introText() {
+        return toLuckPerms
                 ? "Writes the grades, their players and the default grade into LuckPerms as groups, users and "
                         + "nodes, as they are: nothing is translated. Reading changes nothing."
                 : "Reads the groups, the players and their nodes from LuckPerms and writes them as grades. "
                         + "Reading changes nothing: it answers with what it would do, including what it would "
-                        + "leave behind and why.",
-                intro(), intro().y(), Palette.TEXT_MUTE);
+                        + "leave behind and why.";
     }
 }

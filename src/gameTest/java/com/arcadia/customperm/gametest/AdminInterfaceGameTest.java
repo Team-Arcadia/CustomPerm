@@ -52,6 +52,19 @@ public class AdminInterfaceGameTest {
 
     private static final String TEMPLATE = "empty_3x3";
 
+    /** A page that needs the LuckPerms mod says so when it is missing, rather than doing nothing. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void importPageWithoutLuckPermsSaysWhy(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        try (TestPlayer op = TestPlayer.reader(helper.getLevel(), "cp_i_noimport", 2)) {
+            op.clearReceived();
+            op.type("customperm gui import");
+            if (!op.payloads(GuiPagePayload.class).isEmpty()) fail("No Import page exists without LuckPerms.");
+            if (!op.chatContains("LuckPerms mod is installed")) fail("Silent refusal, chat: " + op.chat());
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void guiCommandOpensTheDashboard(GameTestHelper helper) {
         try (TestPlayer op = TestPlayer.reader(helper.getLevel(), "cp_i_open", 2)) {

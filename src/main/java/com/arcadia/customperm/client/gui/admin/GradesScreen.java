@@ -823,20 +823,22 @@ public final class GradesScreen extends AdminScreen {
         Skin.panel(g, in.inset(-8));
         GradesData.Grade grade = gradeList.getSelected();
         if (grade == null) {
+            // The read-only note first: it is what this admin needs, and the text under it wraps to any height.
+            int y = in.y();
+            if (!canEdit(GuiArea.GRADES)) {
+                y = paragraph(g, "Read-only: editing grades needs " + GuiArea.GRADES.node() + ".", in, y, Palette.WARN) + 6;
+            }
             paragraph(g, "Select a grade to edit its nodes and players. A player can hold several grades: the most specific "
                     + "node wins (exact, then a.b.*, then *), the heaviest grade breaks a tie at the same level, a DENY wins "
                     + "between equal weights, and it applies to operators too.",
-                    in, in.y(), Palette.TEXT_MUTE);
-            if (!canEdit(GuiArea.GRADES)) {
-                paragraph(g, "Read-only: editing grades needs " + GuiArea.GRADES.node() + ".", in, in.y() + 44, Palette.TEXT_MUTE);
-            }
+                    in, y, Palette.TEXT_MUTE);
             return;
         }
         boolean isDefault = grade.name().equals(data.defaultGrade());
         String title = grade.shown().equals(grade.name()) ? grade.name() : grade.shown() + " (" + grade.name() + ")";
         boolean oneRow = headerH <= 24;
-        // The subtitle carries the read-only notice on one row; on two, the title says it first.
-        if (!oneRow && !canEdit(GuiArea.GRADES)) title = "Read-only: " + title;
+        // Said first, where a narrow panel cannot clip it; the disabled boxes alone do not say why.
+        if (!canEdit(GuiArea.GRADES)) title = "Read-only: " + title;
         // Alone on its row, the title is centred on the buttons beside it rather than set above a subtitle.
         Skin.text(g, font, title, in.x(), oneRow ? in.y() : in.y() + (FIELD - 8) / 2, titleW, Palette.TEXT);
         // On two rows the boxes take the subtitle's place: what it says is on the tabs and the Default button.
@@ -848,7 +850,7 @@ public final class GradesScreen extends AdminScreen {
                     + (grade.parents().isEmpty() ? "" : "inherits " + String.join(" ", grade.parents().stream().map(this::shown).toList()) + ", ")
                     + (grade.deniedParents().isEmpty() ? "" : "refuses " + String.join(" ", grade.deniedParents().stream().map(this::shown).toList()) + ", ")
                     + grade.allow().size() + " allow, " + grade.deny().size() + " deny"
-                    + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
+                    + (canEdit(GuiArea.GRADES) ? "" : "  |  editing needs " + GuiArea.GRADES.node());
             Skin.text(g, font, sub, in.x(), in.y() + 11, titleW, Palette.TEXT_MUTE);
         }
         if (tab == Tab.CHAT) chat.renderPreview(g, font, listArea(), previewName(), data.names());

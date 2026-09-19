@@ -897,6 +897,11 @@ public class CustomPermCommand {
     private static int openGui(CommandContext<CommandSourceStack> ctx, GuiPage page) {
         ServerPlayer player = guiPlayer(ctx);
         if (player == null) return 0;
+        if (!GuiRequestHandler.available(page)) {
+            ctx.getSource().sendFailure(Component.literal("The " + page.id()
+                + " page reads LuckPerms and is only there while the LuckPerms mod is installed."));
+            return 0;
+        }
         GuiRequestHandler.open(player, page);
         return 1;
     }

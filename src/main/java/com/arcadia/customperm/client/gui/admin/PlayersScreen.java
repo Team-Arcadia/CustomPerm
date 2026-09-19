@@ -564,17 +564,20 @@ public final class PlayersScreen extends AdminScreen {
         Skin.panel(g, in.inset(-8));
         PlayersData.Player player = playerList.getSelected();
         if (player == null) {
+            // The read-only note first: it is what this admin needs, and the text under it wraps to any height.
+            int y = in.y();
+            if (!canEdit(GuiArea.GRADES)) {
+                y = paragraph(g, "Read-only: editing these needs " + GuiArea.GRADES.node() + ".", in, y, Palette.WARN) + 6;
+            }
             paragraph(g, "Select a player to edit the nodes they carry themselves. Such a node wins over their "
                     + "grades at the same level, whatever a grade weighs, but a more specific grade node still "
-                    + "wins. Grades themselves are edited on the Grades page.", in, in.y(), Palette.TEXT_MUTE);
-            if (!canEdit(GuiArea.GRADES)) {
-                paragraph(g, "Read-only: editing these needs " + GuiArea.GRADES.node() + ".", in, in.y() + 44,
-                        Palette.TEXT_MUTE);
-            }
+                    + "wins. Grades themselves are edited on the Grades page.", in, y, Palette.TEXT_MUTE);
             return;
         }
         int textW = in.w() - nickWidth(in) - 6;
-        Skin.text(g, font, player.name(), in.x(), in.y(), textW, Palette.TEXT);
+        // Said first, where a narrow panel cannot clip it; the disabled boxes alone do not say why.
+        String title = canEdit(GuiArea.GRADES) ? player.name() : "Read-only: " + player.name();
+        Skin.text(g, font, title, in.x(), in.y(), textW, Palette.TEXT);
         // Grades and refusals first: they are said nowhere else on this page, while the node counts are the
         // list right below. A narrow panel then clips the counts rather than the refusals.
         // Under their display names: the grades are only read here, the Grades page shows both.
@@ -587,7 +590,7 @@ public final class PlayersScreen extends AdminScreen {
         String sub = (held.isEmpty() ? "no grade" : "grades: " + String.join(", ", held))
                 + (refused.isEmpty() ? "" : "  |  refuses: " + String.join(", ", refused))
                 + "  |  " + player.allow().size() + " allow, " + player.deny().size() + " deny"
-                + (canEdit(GuiArea.GRADES) ? "" : "  |  read-only: needs " + GuiArea.GRADES.node());
+                + (canEdit(GuiArea.GRADES) ? "" : "  |  editing needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, textW, Palette.TEXT_MUTE);
         if (tab == Tab.CHAT) chat.renderPreview(g, font, listArea(), player.name(), data.names());
     }
