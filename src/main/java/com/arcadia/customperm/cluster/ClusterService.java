@@ -10,26 +10,28 @@ package com.arcadia.customperm.cluster;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.ConfigAdmin;
-import com.arcadia.customperm.config.GradesConfig;
+import com.arcadia.customperm.config.SettingsConfig;
 import com.arcadia.customperm.notify.AdminAlerts;
 import com.arcadia.customperm.notify.AdminNotifier;
 import com.arcadia.customperm.perm.PermissionService;
 import net.minecraft.server.MinecraftServer;
 import net.neoforged.neoforge.common.UsernameCache;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Supplier;
 
 /**
- * Cluster mode running on this server: the grades kept in step with the store. Reads of the store run on one
- * thread of its own; everything that touches the configuration runs on the server thread, like every other
- * change to it. A change made here is written before the command answers, so a refusal is the answer.
+ * Cluster mode running on this server: the shared parts of the configuration kept in step with the store. Reads of
+ * the store run on one thread of its own; everything that touches the configuration runs on the server thread, like
+ * every other change to it. A change made here is written before the command answers, so a refusal is the answer.
  */
-final class ClusterService implements PartSync.Host<GradesConfig> {
+final class ClusterService {
 
     /** How long a server may stay silent before it no longer counts as running. */
     static final int LIVE_SECONDS = 45;
@@ -39,7 +41,7 @@ final class ClusterService implements PartSync.Host<GradesConfig> {
     private final String name;
     private final String instance;
     private final MinecraftServer server;
-    private final PartSync<GradesConfig> grades;
+    private final List<PartSync<?>> parts = new ArrayList<>();
     private final ExecutorService worker = Executors.newSingleThreadExecutor(r -> {
         Thread t = new Thread(r, "CustomPerm-Cluster");
         t.setDaemon(true);
@@ -49,40 +51,59 @@ final class ClusterService implements PartSync.Host<GradesConfig> {
     private int ticks;
     private int heartbeatTicks;
 
-    ClusterService(ClusterStore store, String name, String instance, MinecraftServer server) {
+    ClusterService(ClusterStore store, String name, String instance, MinecraftServer server, SettingsConfig.Share share) {
         this.store = store;
         this.name = name;
         this.instance = instance;
         this.server = server;
-        this.grades = new PartSync<>(new GradesCodec(), store, name, this);
+        var config = CustomPerm.configManager;
+        if (share.grades) {
+            add(new GradesCodec(), config::getGrades, () -> PermissionService.get().onConfigReload(config.getSnapshot()));
+        }
+        if (share.commands) add(new CommandsCodec(), config::getCommands, this::commandTreeChanged);
+        if (share.aliases) add(new AliasesCodec(), config::getAliases, this::commandTreeChanged);
+        if (share.rateLimits) add(new RateLimitsCodec(), config::getRateLimits, () -> { });
     }
 
     String name() {
         return name;
     }
 
-    /** First contact, on the server thread. A store already filled replaces this server's grades, backed up first. */
+    /** Names of the parts shared, for the log and the dashboard. */
+    List<String> sharedParts() {
+        return parts.stream().<String>map(PartSync::part).toList();
+    }
+
+    /** First contact, on the server thread. A part the store already holds replaces this server's, backed up first. */
     void start() throws ClusterStore.StoreException {
         CustomPerm.configManager.backupNow();
-        PartSync.Start start = grades.start();
-        switch (start) {
-            case SEEDED -> CustomPerm.LOGGER.info("[CustomPerm] Cluster: the store was empty; this server's grades were written to it.");
-            case ADOPTED_SAME -> CustomPerm.LOGGER.info("[CustomPerm] Cluster: this server's grades already match the store.");
-            case ADOPTED_REPLACED -> CustomPerm.LOGGER.warn("[CustomPerm] Cluster: this server's grades differed from the store and "
-                    + "were replaced by it. The previous files are in the backup folder.");
+        for (PartSync<?> part : parts) {
+            PartSync.Start start = part.start();
+            switch (start) {
+                case SEEDED -> CustomPerm.LOGGER.info("[CustomPerm] Cluster: the store held no {}; this server's were written to it.",
+                        part.part());
+                case ADOPTED_SAME -> CustomPerm.LOGGER.info("[CustomPerm] Cluster: this server's {} already match the store.",
+                        part.part());
+                case ADOPTED_REPLACED -> CustomPerm.LOGGER.warn("[CustomPerm] Cluster: this server's {} differed from the store and "
+                        + "were replaced by it. The previous files are in the backup folder.", part.part());
+            }
         }
     }
 
     /** After a change on the server thread: null when written, else the refusal, the change undone. */
     String publish() {
+        String refusal = null;
         try {
-            String refusal = grades.publish();
+            for (PartSync<?> part : parts) {
+                String refused = part.publish();
+                if (refusal == null) refusal = refused;
+            }
             recovered();
             return refusal;
         } catch (PartSync.Unreachable e) {
             lost(e.getMessage());
             return "the cluster storage is unreachable, so changes are refused until it is back. This server keeps "
-                    + "the rights it last read.";
+                    + "the configuration it last read.";
         }
     }
 
@@ -97,10 +118,11 @@ final class ClusterService implements PartSync.Host<GradesConfig> {
         if (!polling.compareAndSet(false, true)) return;
         worker.execute(() -> {
             try {
-                List<ClusterStore.Row> rows = grades.fetch();
+                List<List<ClusterStore.Row>> fetched = new ArrayList<>();
+                for (PartSync<?> part : parts) fetched.add(part.fetch());
                 server.execute(() -> {
                     try {
-                        grades.apply(rows);
+                        for (int i = 0; i < parts.size(); i++) parts.get(i).apply(fetched.get(i));
                         recovered();
                     } finally {
                         polling.set(false);
@@ -118,7 +140,8 @@ final class ClusterService implements PartSync.Host<GradesConfig> {
 
     /** Reads and applies what changed, now, on the calling thread (the server thread). */
     boolean pollNow() throws ClusterStore.StoreException {
-        boolean changed = grades.apply(grades.fetch());
+        boolean changed = false;
+        for (PartSync<?> part : parts) changed |= part.apply(part.fetch());
         recovered();
         return changed;
     }
@@ -133,6 +156,55 @@ final class ClusterService implements PartSync.Host<GradesConfig> {
         }
     }
 
+    // ------------------------------------------------------------------ parts
+
+    private <T> void add(PartCodec<T> codec, Supplier<T> current, Runnable onChanged) {
+        parts.add(new PartSync<>(codec, store, name, new PartSync.Host<T>() {
+            @Override
+            public T current() {
+                return current.get();
+            }
+
+            @Override
+            public void changed(T config, Set<String> holders) {
+                onChanged.run();
+                ConfigAdmin.resyncCommands(server);
+                // The local files are this server's copy of the store: what it starts from if the store is down then.
+                CustomPerm.configManager.save();
+            }
+
+            @Override
+            public String label(String holder) {
+                return ClusterService.label(holder);
+            }
+        }));
+    }
+
+    private void commandTreeChanged() {
+        CustomPerm.treeReloader.onConfigReload(CustomPerm.configManager.getSnapshot(), server);
+    }
+
+    static String label(String holder) {
+        if (holder.startsWith(GradesCodec.GRADE)) return "Grade " + holder.substring(GradesCodec.GRADE.length());
+        if (holder.startsWith(GradesCodec.PLAYER)) {
+            String id = holder.substring(GradesCodec.PLAYER.length());
+            try {
+                String known = UsernameCache.getLastKnownUsername(UUID.fromString(id));
+                return "Player " + (known == null ? id : known);
+            } catch (IllegalArgumentException e) {
+                return "Player " + id;
+            }
+        }
+        if (holder.startsWith(CommandsCodec.COMMAND)) return "Command /" + holder.substring(CommandsCodec.COMMAND.length());
+        if (holder.startsWith(AliasesCodec.ALIAS)) return "Alias /" + holder.substring(AliasesCodec.ALIAS.length());
+        if (holder.startsWith(RateLimitsCodec.RULE)) {
+            return "The rate limit on /" + holder.substring(RateLimitsCodec.RULE.length());
+        }
+        return "The tracks";
+    }
+
+    // ------------------------------------------------------------------ health
+
     private void beat() {
         try {
             List<String> others = store.heartbeat(name, instance, LIVE_SECONDS);
@@ -146,39 +218,9 @@ final class ClusterService implements PartSync.Host<GradesConfig> {
         }
     }
 
-    // ------------------------------------------------------------------ PartSync.Host
-
-    @Override
-    public GradesConfig current() {
-        return CustomPerm.configManager.getGrades();
-    }
-
-    @Override
-    public void changed(GradesConfig config, Set<String> holders) {
-        PermissionService.get().onConfigReload(CustomPerm.configManager.getSnapshot());
-        ConfigAdmin.resyncCommands(server);
-        // The local files are this server's copy of the store: what it starts from if the store is down then.
-        CustomPerm.configManager.save();
-    }
-
-    @Override
-    public String label(String holder) {
-        if (holder.startsWith(GradesCodec.GRADE)) return "Grade " + holder.substring(GradesCodec.GRADE.length());
-        if (holder.startsWith(GradesCodec.PLAYER)) {
-            String id = holder.substring(GradesCodec.PLAYER.length());
-            try {
-                String known = UsernameCache.getLastKnownUsername(UUID.fromString(id));
-                return "Player " + (known == null ? id : known);
-            } catch (IllegalArgumentException e) {
-                return "Player " + id;
-            }
-        }
-        return "The tracks";
-    }
-
     private void lost(String reason) {
         AdminNotifier.raise(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "The cluster storage is unreachable (" + reason
-                + "). This server keeps the rights it last read and refuses changes until it is back.");
+                + "). This server keeps the configuration it last read and refuses changes until it is back.");
     }
 
     private void recovered() {

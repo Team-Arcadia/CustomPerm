@@ -10,14 +10,23 @@ package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.AdminResult;
+import com.arcadia.customperm.admin.AliasAdmin;
 import com.arcadia.customperm.admin.GradeAdmin;
+import com.arcadia.customperm.admin.RateLimitAdmin;
+import com.arcadia.customperm.cluster.AliasesCodec;
 import com.arcadia.customperm.cluster.Cluster;
 import com.arcadia.customperm.cluster.ClusterGate;
 import com.arcadia.customperm.cluster.ClusterStore;
+import com.arcadia.customperm.cluster.CommandsCodec;
 import com.arcadia.customperm.cluster.GradesCodec;
 import com.arcadia.customperm.cluster.MemoryStore;
+import com.arcadia.customperm.cluster.PartCodec;
 import com.arcadia.customperm.cluster.PartSync;
+import com.arcadia.customperm.cluster.RateLimitsCodec;
+import com.arcadia.customperm.config.AliasesConfig;
+import com.arcadia.customperm.config.CommandsConfig;
 import com.arcadia.customperm.config.GradesConfig;
+import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.gametest.support.Modes;
 import com.arcadia.customperm.gametest.support.TestPlayer;
 import com.arcadia.customperm.notify.AdminAlerts;
@@ -102,24 +111,85 @@ public class ClusterGameTest {
         void run() throws Exception;
     }
 
-    /** Runs {@code body} with this server in a cluster over {@code store}, then puts its grades back as they were. */
+    /**
+     * Runs {@code body} with this server in a cluster over {@code store}, then puts its grades, commands, aliases
+     * and rate limits back as they were.
+     */
     private static void inCluster(MinecraftServer server, MemoryStore store, ThrowingRunnable body) throws Exception {
-        Map<String, String> saved = CODEC.split(CustomPerm.configManager.getGrades());
+        var config = CustomPerm.configManager;
+        Map<String, String> grades = CODEC.split(config.getGrades());
+        Map<String, String> commands = new CommandsCodec().split(config.getCommands());
+        Map<String, String> aliases = new AliasesCodec().split(config.getAliases());
+        Map<String, String> limits = new RateLimitsCodec().split(config.getRateLimits());
         try {
             Cluster.attach(store, "gametest", server);
             body.run();
         } finally {
             Cluster.detach();
-            GradesConfig live = CustomPerm.configManager.getGrades();
-            for (String holder : new ArrayList<>(CODEC.split(live).keySet())) CODEC.patch(live, holder, null);
-            saved.forEach((holder, text) -> CODEC.patch(live, holder, text));
-            CODEC.afterPatch(live);
-            PermissionService.get().onConfigReload(CustomPerm.configManager.getSnapshot());
-            CustomPerm.configManager.save();
+            restore(CODEC, config.getGrades(), grades);
+            restore(new CommandsCodec(), config.getCommands(), commands);
+            restore(new AliasesCodec(), config.getAliases(), aliases);
+            restore(new RateLimitsCodec(), config.getRateLimits(), limits);
+            PermissionService.get().onConfigReload(config.getSnapshot());
+            CustomPerm.treeReloader.onConfigReload(config.getSnapshot(), server);
+            config.save();
             if (AdminNotifier.isActive(AdminAlerts.Key.CLUSTER_UNAVAILABLE)) {
                 AdminNotifier.clear(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "cluster test finished.");
             }
         }
+    }
+
+    private static <T> void restore(PartCodec<T> codec, T live, Map<String, String> saved) {
+        for (String holder : new ArrayList<>(codec.split(live).keySet())) codec.patch(live, holder, null);
+        saved.forEach((holder, text) -> codec.patch(live, holder, text));
+        codec.afterPatch(live);
+    }
+
+    /** Exposed commands, aliases and rate limits travel like grades, each on its own row. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_parts")
+    public static void commandsAliasesAndRateLimitsAreSharedToo(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        MemoryStore store = new MemoryStore();
+        inCluster(server, store, () -> {
+            CommandsConfig otherCommands = new CommandsCodec().empty();
+            PartSync<CommandsConfig> commands = new PartSync<>(new CommandsCodec(), store, "other", host(otherCommands));
+            commands.start();
+            AliasesConfig otherAliases = new AliasesCodec().empty();
+            PartSync<AliasesConfig> aliases = new PartSync<>(new AliasesCodec(), store, "other", host(otherAliases));
+            aliases.start();
+            RateLimitsConfig otherLimits = new RateLimitsCodec().empty();
+            PartSync<RateLimitsConfig> limits = new PartSync<>(new RateLimitsCodec(), store, "other", host(otherLimits));
+            limits.start();
+
+            otherCommands.grantedCommands.add("seed");
+            if (commands.publish() != null) fail("The other server's exposure was refused.");
+            Cluster.pollNow();
+            if (!CustomPerm.configManager.getCommands().grantedCommands.contains("seed")) {
+                fail("A command exposed on the other server must be exposed here.");
+            }
+
+            if (!AliasAdmin.create(server, "cp_cl_alias", "say cluster").success()) fail("Could not create the alias here.");
+            if (!RateLimitAdmin.set("seed", 3, 60).success()) fail("Could not set the rate limit here.");
+            aliases.apply(aliases.fetch());
+            limits.apply(limits.fetch());
+            if (!List.of("say cluster").equals(otherAliases.aliases.get("cp_cl_alias"))) {
+                fail("An alias created here must reach the other server.");
+            }
+            var rule = otherLimits.rules.get("seed");
+            if (rule == null || rule.maxExecutions != 3 || rule.windowSeconds != 60) {
+                fail("A rate limit set here must reach the other server.");
+            }
+        });
+        helper.succeed();
+    }
+
+    private static <T> PartSync.Host<T> host(T config) {
+        return new PartSync.Host<>() {
+            @Override public T current() { return config; }
+            @Override public void changed(T c, Set<String> holders) {}
+            @Override public String label(String holder) { return holder; }
+        };
     }
 
     /** A grade and an assignment made on the other server give the player the node here, and the reverse. */

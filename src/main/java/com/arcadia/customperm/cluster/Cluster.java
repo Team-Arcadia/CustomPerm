@@ -100,7 +100,8 @@ public final class Cluster {
     private static void attach(ClusterStore store, String name, String instance, MinecraftServer server)
             throws ClusterStore.StoreException {
         detach();
-        ClusterService started = new ClusterService(store, name, instance, server);
+        ClusterService started = new ClusterService(store, name, instance, server,
+                CustomPerm.configManager.getSettings().cluster.share);
         started.start();
         service = started;
     }
@@ -144,8 +145,9 @@ public final class Cluster {
             case OFF -> AdminNotifier.clear(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "cluster mode is off.");
             case LUCKPERMS -> CustomPerm.LOGGER.info("[CustomPerm] {}", ClusterGate.reason(state, version));
             case READY -> {
-                CustomPerm.LOGGER.info("[CustomPerm] Cluster mode: Arcadia Lib {} database connected, this server is \"{}\".",
-                        version, serverName);
+                ClusterService running = service;
+                CustomPerm.LOGGER.info("[CustomPerm] Cluster mode: Arcadia Lib {} database connected, this server is \"{}\", "
+                        + "sharing {}.", version, serverName, running == null ? "nothing" : running.sharedParts());
                 AdminNotifier.clear(AdminAlerts.Key.CLUSTER_UNAVAILABLE, "cluster mode is connected.");
             }
             default -> AdminNotifier.raise(AdminAlerts.Key.CLUSTER_UNAVAILABLE,
