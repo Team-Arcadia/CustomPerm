@@ -164,6 +164,21 @@ abstract class PartSyncContract {
     }
 
     @Test
+    void revertUndoesWhatDiffersWithoutAskingTheStore() throws Exception {
+        Node a = new Node(store(), "a");
+        a.config.grades.put("vip", grade("vip"));
+        a.sync.start();
+        setDown(true);
+        a.config.grades.get("vip").permissions.add("undone");
+        a.config.grades.put("new", grade("new"));
+        assertTrue(a.sync.revert());
+        assertTrue(a.config.grades.get("vip").permissions.isEmpty());
+        assertFalse(a.config.grades.containsKey("new"));
+        assertFalse(a.sync.revert(), "nothing left to undo");
+        setDown(false);
+    }
+
+    @Test
     void ownRowsComingBackChangeNothing() throws Exception {
         Node a = new Node(store(), "a");
         a.sync.start();

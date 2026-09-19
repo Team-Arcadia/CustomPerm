@@ -49,10 +49,11 @@ public interface ClusterStore {
     WriteResult write(String part, List<Change> changes, String server) throws StoreException;
 
     /**
-     * Records that {@code server} runs as {@code instance}, and answers the other instances seen running under the
-     * same name within {@code liveSeconds}: a non-empty answer means two servers were given the same name.
+     * Records that {@code server} runs as {@code instance}, and answers the other instances seen under the same name
+     * within {@code liveSeconds}, each with when it was last seen (epoch milliseconds). One still beating means two
+     * servers were given the same name; one that stopped beating is an instance that ended without leaving.
      */
-    List<String> heartbeat(String server, String instance, int liveSeconds) throws StoreException;
+    Map<String, Long> heartbeat(String server, String instance, int liveSeconds) throws StoreException;
 
     /** Forgets this instance, at a clean stop. */
     void leave(String server, String instance) throws StoreException;

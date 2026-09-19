@@ -147,7 +147,7 @@ public final class SqlStore implements ClusterStore {
     }
 
     @Override
-    public List<String> heartbeat(String server, String instance, int liveSeconds) throws StoreException {
+    public Map<String, Long> heartbeat(String server, String instance, int liveSeconds) throws StoreException {
         long now = clock.getAsLong();
         try (Connection c = open()) {
             try (PreparedStatement up = c.prepareStatement("UPDATE " + SERVERS + " SET seen = ? WHERE server = ? AND instance = ?")) {
@@ -167,14 +167,14 @@ public final class SqlStore implements ClusterStore {
                 old.setLong(1, now - FORGET_AFTER_MILLIS);
                 old.executeUpdate();
             }
-            List<String> others = new ArrayList<>();
-            try (PreparedStatement ps = c.prepareStatement("SELECT instance FROM " + SERVERS
+            Map<String, Long> others = new HashMap<>();
+            try (PreparedStatement ps = c.prepareStatement("SELECT instance, seen FROM " + SERVERS
                     + " WHERE server = ? AND instance <> ? AND seen >= ?")) {
                 ps.setString(1, server);
                 ps.setString(2, instance);
                 ps.setLong(3, now - liveSeconds * 1000L);
                 try (ResultSet rs = ps.executeQuery()) {
-                    while (rs.next()) others.add(rs.getString(1));
+                    while (rs.next()) others.put(rs.getString(1), rs.getLong(2));
                 }
             }
             return others;

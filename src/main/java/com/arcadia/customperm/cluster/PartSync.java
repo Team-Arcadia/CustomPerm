@@ -100,14 +100,7 @@ public final class PartSync<T> {
      * refusal to show, the change having been undone.
      */
     public String publish() {
-        Map<String, String> local = codec.split(host.current());
-        List<Change> changes = new ArrayList<>();
-        local.forEach((holder, body) -> {
-            if (!body.equals(liveBody(holder))) changes.add(new Change(holder, version(holder), body));
-        });
-        synced.forEach((holder, row) -> {
-            if (row.body() != null && !local.containsKey(holder)) changes.add(new Change(holder, row.version(), null));
-        });
+        List<Change> changes = pending();
         if (changes.isEmpty()) return null;
         Set<String> touched = new LinkedHashSet<>();
         changes.forEach(c -> touched.add(c.holder()));
@@ -128,6 +121,33 @@ public final class PartSync<T> {
         String by = first.updatedBy() == null || first.updatedBy().isEmpty() ? "another server" : first.updatedBy();
         return host.label(first.holder()) + " was changed on " + by + " meanwhile. This server now shows that "
                 + "change; check it and try again.";
+    }
+
+    /**
+     * Undoes, without asking the store, what differs from it as last seen. The refusal while the store is known to be
+     * unreachable: asking again would hold the server thread for the connection timeout each time. True when
+     * something was undone.
+     */
+    public boolean revert() {
+        List<Change> changes = pending();
+        if (changes.isEmpty()) return false;
+        Set<String> touched = new LinkedHashSet<>();
+        changes.forEach(c -> touched.add(c.holder()));
+        restore(touched);
+        return true;
+    }
+
+    /** The holders that differ from the store as last seen, as changes against the versions seen. */
+    private List<Change> pending() {
+        Map<String, String> local = codec.split(host.current());
+        List<Change> changes = new ArrayList<>();
+        local.forEach((holder, body) -> {
+            if (!body.equals(liveBody(holder))) changes.add(new Change(holder, version(holder), body));
+        });
+        synced.forEach((holder, row) -> {
+            if (row.body() != null && !local.containsKey(holder)) changes.add(new Change(holder, row.version(), null));
+        });
+        return changes;
     }
 
     /** Rows written since the last ones applied. Any thread; one call at a time. */

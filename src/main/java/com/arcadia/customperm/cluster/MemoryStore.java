@@ -33,6 +33,7 @@ public final class MemoryStore implements ClusterStore {
     private long logId;
     private long useId;
     private boolean down;
+    private int writeCalls;
 
     public MemoryStore() {
         this(System::currentTimeMillis);
@@ -60,6 +61,7 @@ public final class MemoryStore implements ClusterStore {
 
     @Override
     public synchronized WriteResult write(String part, List<Change> changes, String server) throws StoreException {
+        writeCalls++;
         check();
         Map<String, Row> rows = parts.computeIfAbsent(part, p -> new HashMap<>());
         List<Row> conflicts = new ArrayList<>();
@@ -80,14 +82,14 @@ public final class MemoryStore implements ClusterStore {
     }
 
     @Override
-    public synchronized List<String> heartbeat(String server, String instance, int liveSeconds) throws StoreException {
+    public synchronized Map<String, Long> heartbeat(String server, String instance, int liveSeconds) throws StoreException {
         check();
         long now = clock.getAsLong();
         Map<String, Long> instances = heartbeats.computeIfAbsent(server, s -> new HashMap<>());
         instances.put(instance, now);
-        List<String> others = new ArrayList<>();
+        Map<String, Long> others = new HashMap<>();
         instances.forEach((other, seen) -> {
-            if (!other.equals(instance) && now - seen <= liveSeconds * 1000L) others.add(other);
+            if (!other.equals(instance) && now - seen <= liveSeconds * 1000L) others.put(other, seen);
         });
         return others;
     }
@@ -167,6 +169,11 @@ public final class MemoryStore implements ClusterStore {
         int before = uses.size();
         uses.removeIf(row -> row.use().time() < beforeTime);
         return before - uses.size();
+    }
+
+    /** How many writes were asked, failed ones included, for tests. */
+    public synchronized int writeCalls() {
+        return writeCalls;
     }
 
     /** Entries as stored, for tests. */

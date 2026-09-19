@@ -149,7 +149,8 @@ class SqlPartSyncTest extends PartSyncContract {
         AtomicLong now = new AtomicLong(1_000_000);
         SqlStore store = new SqlStore(() -> DriverManager.getConnection(url), now::get);
         assertTrue(store.heartbeat("hub", "one", 30).isEmpty());
-        assertEquals(List.of("one"), store.heartbeat("hub", "two", 30));
+        assertEquals(java.util.Map.of("one", 1_000_000L), store.heartbeat("hub", "two", 30),
+                "the other instance comes with when it was last seen");
         assertTrue(store.heartbeat("pvp", "three", 30).isEmpty(), "another name is not a duplicate");
 
         now.addAndGet(31_000);

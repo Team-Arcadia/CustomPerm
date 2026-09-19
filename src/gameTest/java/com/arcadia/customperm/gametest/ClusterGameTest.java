@@ -398,6 +398,11 @@ public class ClusterGameTest {
             if (CustomPerm.configManager.getGrades().grades.containsKey("cp_cl_lost")) fail("The refused grade must not exist.");
             if (!CustomPerm.configManager.getGrades().grades.containsKey("cp_cl_kept")) fail("What was read before stays.");
             if (!AdminNotifier.isActive(AdminAlerts.Key.CLUSTER_UNAVAILABLE)) fail("Admins must be told the store is down.");
+            int asked = store.writeCalls();
+            if (GradeAdmin.create("cp_cl_lost_again").success()) fail("While the outage lasts, changes stay refused.");
+            if (store.writeCalls() != asked) {
+                fail("Once the store is known down, a change is refused at once, without waiting on it again.");
+            }
 
             store.setDown(false);
             Cluster.pollNow();

@@ -90,7 +90,7 @@ public final class Cluster {
         String instance = UUID.randomUUID().toString();
         try {
             store.createTables();
-            List<String> others = store.heartbeat(serverName, instance, ClusterService.LIVE_SECONDS);
+            java.util.Map<String, Long> others = stillBeating(store, instance);
             if (!others.isEmpty()) {
                 state = ClusterGate.State.DUPLICATE_NAME;
                 // The heartbeat just written would make the server that owns the name believe it has a double.
@@ -110,10 +110,48 @@ public final class Cluster {
         }
     }
 
+    /**
+     * The other instances under this server's name that are still running. One found at start may be this very
+     * server's previous run, ended by a crash or a stop that could not leave: it is watched for one heartbeat, and
+     * only an instance that beats meanwhile counts. Blocks the start for that time, and only in that case.
+     */
+    private static java.util.Map<String, Long> stillBeating(SqlStore store, String instance) throws ClusterStore.StoreException {
+        java.util.Map<String, Long> first = store.heartbeat(serverName, instance, ClusterService.LIVE_SECONDS);
+        if (first.isEmpty()) return first;
+        CustomPerm.LOGGER.info("[CustomPerm] Cluster: \"{}\" was seen running {} s ago; waiting one heartbeat to tell a "
+                + "previous run from a second server under the same name.", serverName,
+                (System.currentTimeMillis() - java.util.Collections.max(first.values())) / 1000);
+        try {
+            Thread.sleep((ClusterService.HEARTBEAT_SECONDS + 2) * 1000L);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        java.util.Map<String, Long> second = store.heartbeat(serverName, instance, ClusterService.LIVE_SECONDS);
+        java.util.Map<String, Long> live = new java.util.HashMap<>();
+        second.forEach((other, seen) -> {
+            Long before = first.get(other);
+            if (before == null || seen > before) live.put(other, seen);
+        });
+        if (live.isEmpty()) {
+            CustomPerm.LOGGER.info("[CustomPerm] Cluster: the earlier \"{}\" stopped beating: it was a previous run, "
+                    + "this server takes its place.", serverName);
+            for (String gone : first.keySet()) store.leave(serverName, gone);
+        }
+        return live;
+    }
+
     private static void closeDirect() {
         DirectConnections open = directConnections;
         directConnections = null;
         if (open != null) open.close();
+    }
+
+    /**
+     * Leaves the cluster while the connection is still open: Arcadia Lib closes its pool on this same event, so this
+     * listener runs first (highest priority), or the heartbeat would stay and read as a second server at the next start.
+     */
+    public static void onServerStopping(net.neoforged.neoforge.event.server.ServerStoppingEvent event) {
+        detach();
     }
 
     public static void onServerStopped(ServerStoppedEvent event) {

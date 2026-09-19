@@ -112,6 +112,8 @@ public class CustomPerm {
         NeoForge.EVENT_BUS.addListener(RateLimitPersistence::onLevelSave);
         NeoForge.EVENT_BUS.addListener(RateLimitPersistence::onServerStopped);
         NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.cluster.Cluster::onServerStarted);
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST,
+                com.arcadia.customperm.cluster.Cluster::onServerStopping);
         NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.cluster.Cluster::onServerStopped);
         NeoForge.EVENT_BUS.addListener(com.arcadia.customperm.cluster.Cluster::onServerTick);
         NeoForge.EVENT_BUS.addListener(ActivityLog::onServerStarted);

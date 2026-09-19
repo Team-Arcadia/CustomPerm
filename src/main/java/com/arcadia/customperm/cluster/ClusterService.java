@@ -40,9 +40,14 @@ import java.util.function.Supplier;
  */
 final class ClusterService {
 
+    private static final String UNREACHABLE = "the cluster storage is unreachable, so changes are refused until it is "
+            + "back. This server keeps the configuration it last read.";
+
     /** How long a server may stay silent before it no longer counts as running. */
     static final int LIVE_SECONDS = 45;
-    private static final int HEARTBEAT_TICKS = 10 * 20;
+    /** Seconds between two heartbeats. */
+    static final int HEARTBEAT_SECONDS = 10;
+    private static final int HEARTBEAT_TICKS = HEARTBEAT_SECONDS * 20;
     /** How far back each read of the shared log looks again, for entries that committed late. */
     private static final long LOG_LOOKBACK_MILLIS = 60_000;
     private static final int LOG_READ_MAX = 2000;
@@ -157,6 +162,13 @@ final class ClusterService {
 
     /** After a change on the server thread: null when written, else the refusal, the change undone. */
     String publish() {
+        if (outage) {
+            // Known to be unreachable: refused at once rather than after a connection timeout on the server thread.
+            // The background poll finds the store again and ends the outage.
+            boolean undone = false;
+            for (PartSync<?> part : parts) undone |= part.revert();
+            return undone ? UNREACHABLE : null;
+        }
         String refusal = null;
         try {
             for (PartSync<?> part : parts) {
@@ -167,8 +179,7 @@ final class ClusterService {
             return refusal;
         } catch (PartSync.Unreachable e) {
             lost(e.getMessage());
-            return "the cluster storage is unreachable, so changes are refused until it is back. This server keeps "
-                    + "the configuration it last read.";
+            return UNREACHABLE;
         }
     }
 
@@ -392,7 +403,7 @@ final class ClusterService {
 
     private void beat() {
         try {
-            List<String> others = store.heartbeat(name, instance, LIVE_SECONDS);
+            Map<String, Long> others = store.heartbeat(name, instance, LIVE_SECONDS);
             Map<String, Long> servers = new HashMap<>(store.servers());
             servers.remove(name);
             servers.values().removeIf(age -> age > LIVE_SECONDS);
