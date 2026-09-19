@@ -131,6 +131,8 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Fixed
 
+- **`/function` and `/return` failed on every call** — CustomPerm wraps every command to apply its rate limits, and the wrapper hid the special executor vanilla uses for these two, so they answered "This function should not run" whatever the permissions. The wrapper now keeps that executor and still counts the use against a rate limit.
+
 - **LuckPerms import and export used the wrong context for a world** — on NeoForge, LuckPerms names the dimension `dimension-type` and gives `world` the save's name, the same in every dimension. The export wrote an entry limited to the Nether as `world=the_nether`, which LuckPerms never matched, and the import read LuckPerms' `world=` as a dimension while leaving its `dimension-type` nodes behind. The export now writes `dimension-type`, and the import reads `dimension-type` as a world and leaves LuckPerms' `world` behind with the reason; replacing no longer clears a node limited to LuckPerms' `world`, which CustomPerm never writes. A LuckPerms GameTest checks a real player against both contexts across dimensions. Entries already exported with `world=` stay in LuckPerms as they were: remove them there, or export again and clear the old ones by hand.
 
 - **Exposing a command no longer weakens LuckPerms for operators** — with LuckPerms, the exposure check let op level 2 through before asking LuckPerms, so an operator whose `customperm.command.<name>` was explicitly `false` could still run the exposed command. LuckPerms' `false` now refuses it.

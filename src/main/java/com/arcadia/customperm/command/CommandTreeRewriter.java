@@ -19,6 +19,7 @@ import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.execution.CustomCommandExecutor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
@@ -502,27 +503,41 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
      */
     private static Command<CommandSourceStack> wrapCommand(String rootName, Command<CommandSourceStack> original) {
         if (original == null) return null;
-        return ctx -> {
-            CommandSourceStack source = ctx.getSource();
-            // Amortised memory reclaim for the rate-limiter — self-throttled to once per interval.
-            // Piggybacked on command execution (single-threaded server tick) so idle players' history
-            // is evicted without a dedicated scheduled task. See RateLimiter#maybeSweep.
-            RateLimiter.maybeSweep(System.currentTimeMillis(), CommandTreeRewriter::rateLimitWindowMillis);
-            RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(rootName);
-            if (rule != null && rule.enabled && source.getEntity() instanceof ServerPlayer player) {
-                RateLimiter.Result result = RateLimiter.tryAcquire(
-                    rootName, player.getUUID(), rule.maxExecutions, rule.windowSeconds);
-                if (!result.allowed()) {
-                    source.sendFailure(Component.literal(
-                        "[CustomPerm] Rate limit reached for /" + rootName + " — try again in "
-                            + result.retryAfterSeconds() + "s (max " + rule.maxExecutions
-                            + " per " + rule.windowSeconds + "s)."));
-                    return 0;
+        // Vanilla runs a CustomCommandExecutor (/function, /return) through its own entry point and makes
+        // run(ctx) throw, so the wrapper must stay one or those commands fail on every call.
+        if (original instanceof CustomCommandExecutor<?> custom) {
+            @SuppressWarnings("unchecked")
+            CustomCommandExecutor<CommandSourceStack> executor = (CustomCommandExecutor<CommandSourceStack>) custom;
+            return (CustomCommandExecutor.CommandAdapter<CommandSourceStack>) (source, chain, modifiers, control) -> {
+                if (!withinRateLimit(rootName, source)) {
+                    source.callback().onFailure();
+                    return;
                 }
-                RateLimitPersistence.afterAcceptedUse(rule);
-            }
-            return original.run(ctx);
-        };
+                executor.run(source, chain, modifiers, control);
+            };
+        }
+        return ctx -> withinRateLimit(rootName, ctx.getSource()) ? original.run(ctx) : 0;
+    }
+
+    /** Counts one use of {@code rootName} and tells the player when the rate limit refuses it. */
+    private static boolean withinRateLimit(String rootName, CommandSourceStack source) {
+        // Amortised memory reclaim for the rate-limiter — self-throttled to once per interval.
+        // Piggybacked on command execution (single-threaded server tick) so idle players' history
+        // is evicted without a dedicated scheduled task. See RateLimiter#maybeSweep.
+        RateLimiter.maybeSweep(System.currentTimeMillis(), CommandTreeRewriter::rateLimitWindowMillis);
+        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(rootName);
+        if (rule == null || !rule.enabled || !(source.getEntity() instanceof ServerPlayer player)) return true;
+        RateLimiter.Result result = RateLimiter.tryAcquire(
+            rootName, player.getUUID(), rule.maxExecutions, rule.windowSeconds);
+        if (!result.allowed()) {
+            source.sendFailure(Component.literal(
+                "[CustomPerm] Rate limit reached for /" + rootName + " — try again in "
+                    + result.retryAfterSeconds() + "s (max " + rule.maxExecutions
+                    + " per " + rule.windowSeconds + "s)."));
+            return false;
+        }
+        RateLimitPersistence.afterAcceptedUse(rule);
+        return true;
     }
 
     /** Active window (ms) for {@code commandName}, or {@code <= 0} when no enabled rule exists. */

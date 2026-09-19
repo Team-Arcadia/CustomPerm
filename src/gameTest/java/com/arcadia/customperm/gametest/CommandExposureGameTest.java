@@ -139,6 +139,24 @@ public class CommandExposureGameTest {
         helper.succeed();
     }
 
+    /**
+     * Commands vanilla runs through its own executor (/return, /function) keep working once wrapped:
+     * the wrapper used to hide that executor, and every call failed with "This function should not run".
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100)
+    public static void wrappedCustomExecutorCommandsStillRun(GameTestHelper helper) {
+        MinecraftServer server = helper.getLevel().getServer();
+        int[] returned = {Integer.MIN_VALUE};
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_x_return", 4)) {
+            server.getCommands().performPrefixedCommand(
+                    player.source().withCallback((success, result) -> returned[0] = success ? result : -1),
+                    "return 7");
+            if (player.chatContains("should not run")) fail("Wrapped /return threw instead of running.");
+            if (returned[0] != 7) fail("Wrapped /return reported " + returned[0] + " instead of 7.");
+        }
+        helper.succeed();
+    }
+
     /** Procedure 1.0.5 B7.2: access granted to a player survives a disconnect and reconnect. */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)
     public static void accessSurvivesReconnection(GameTestHelper helper) {
