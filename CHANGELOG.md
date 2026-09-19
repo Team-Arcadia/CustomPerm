@@ -43,6 +43,8 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- **Help page in the interface** — the features were explained only in the README, away from the game. `/customperm gui help`, or Help in the sidebar, explains each one where it is used: what it does, when to use it, how, and the commands behind the page. Topics are searchable, their text included.
+
 - **Cluster mode** — several servers without LuckPerms had no way to share their configuration: each kept its own files, and a grade made on the hub had to be made again on every server. With `"cluster": { "enabled": true }` in `settings.json` and one MySQL or MariaDB database, reached either directly (`"connection": "direct"`, the database and a server name in `settings.json`) or through [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) 1.3.0 or later (the default), the servers share their grades and what players hold, exposed commands, aliases, rate-limit rules and the activity log, each part switchable. Rate-limit counters are shared rule by rule: `/customperm ratelimit scope <command> server|network|hub,survival`, or the Rate limits page; `server`, each server counting its own, is the default. Off by default, read at start; nothing changes for a server that does not turn it on, and nothing is done with LuckPerms, which shares its own storage.
   - Each grade, player, command, alias and rule is a row with a version. A change is written before the command answers; two servers changing the same holder at once, the second is refused, shown the first change and told which server made it. Nothing is overwritten in silence.
   - The others apply what changed every `pollSeconds` (2 by default). Permission checks read memory as before: no database access on that path.
