@@ -106,16 +106,23 @@ published, and therefore govern no released build yet.
 |---------|-----------|------------------------|----------------------|
 | 0.1.0, 0.9.0, 1.0.0 | 2026-05-10 → 05-18 | See the note below | `v0.1.0`, `v0.9.0`, `v1.0.0` |
 | 1.0.2 | 2026-06-05 | MIT | `v1.0.2` |
-| 1.0.3 | 2026-06-10 | MIT | `v1.0.3` |
-| 1.0.4 | 2026-06-11 | `GPL-3.0-only` | `v1.0.4` |
+| 1.0.3 | 2026-06-10 | MIT | `65ef813` |
+| 1.0.4 | 2026-06-11 | `GPL-3.0-only` | `ffc4624` |
 | 1.0.5 | 2026-07-08 | `GPL-3.0-only` | `v1.0.5` |
-| 1.0.6 onward | not yet released | `LicenseRef-CustomPerm-ARR` | — |
+| 1.1.0 onward | not yet released | `LicenseRef-CustomPerm-ARR` | — |
 
 **Note on 0.1.0, 0.9.0 and 1.0.0.** Those three releases carried two notices
 that did not agree: the `LICENSE` file held the GPL-3.0 text, while the jar
 metadata declared `MIT`. This was a packaging mistake, not a deliberate dual
 licensing. The author does not contest the more permissive reading: whoever
 received one of those builds may rely on the MIT terms.
+
+**Note on 1.0.3 and 1.0.4.** Their corresponding source is given as a commit
+hash rather than a tag. Both releases were marked immutable on GitHub, which
+locks their tags, and the history rewrite of 2026-09-15 could only go through by
+deleting the releases and the `v1.0.3` and `v1.0.4` tags with them. The commits
+are unchanged in content and remain in the history; the hashes above are the
+ones they carry after the rewrite.
 
 **Note on 1.0.5.** The build published on 2026-07-08 declared `GPL-3.0-only`
 and was distributed on those terms. Its corresponding source is the `v1.0.5`
@@ -284,10 +291,10 @@ publication de la 1.0.5, et ne régissent donc encore aucun build publié.
 |---------|---------|-----------------------|-----------------------|
 | 0.1.0, 0.9.0, 1.0.0 | 2026-05-10 → 05-18 | Voir la note ci-dessous | `v0.1.0`, `v0.9.0`, `v1.0.0` |
 | 1.0.2 | 2026-06-05 | MIT | `v1.0.2` |
-| 1.0.3 | 2026-06-10 | MIT | `v1.0.3` |
-| 1.0.4 | 2026-06-11 | `GPL-3.0-only` | `v1.0.4` |
+| 1.0.3 | 2026-06-10 | MIT | `65ef813` |
+| 1.0.4 | 2026-06-11 | `GPL-3.0-only` | `ffc4624` |
 | 1.0.5 | 2026-07-08 | `GPL-3.0-only` | `v1.0.5` |
-| 1.0.6 et suivantes | pas encore publiée | `LicenseRef-CustomPerm-ARR` | — |
+| 1.1.0 et suivantes | pas encore publiée | `LicenseRef-CustomPerm-ARR` | — |
 
 **Note sur 0.1.0, 0.9.0 et 1.0.0.** Ces trois versions portaient deux mentions
 divergentes : le fichier `LICENSE` contenait le texte GPL-3.0, tandis que les
@@ -295,6 +302,14 @@ métadonnées du jar déclaraient `MIT`. Il s'agit d'une erreur d'empaquetage, p
 d'une double licence délibérée. L'auteur ne conteste pas la lecture la plus
 permissive : quiconque a reçu l'un de ces builds peut se prévaloir des termes
 MIT.
+
+**Note sur la 1.0.3 et la 1.0.4.** Leur source correspondante est donnée par un
+hash de commit et non par un tag. Les deux versions étaient marquées immuables
+sur GitHub, ce qui verrouille leurs tags, et la réécriture d'historique du
+2026-09-15 n'a pu aboutir qu'en supprimant les releases et, avec elles, les tags
+`v1.0.3` et `v1.0.4`. Le contenu des commits est inchangé et ils sont toujours
+dans l'historique ; les hashes ci-dessus sont ceux qu'ils portent après la
+réécriture.
 
 **Note sur la 1.0.5.** Le build publié le 2026-07-08 déclarait `GPL-3.0-only` et
 a été distribué à ces conditions. Sa source correspondante est le tag `v1.0.5`,
