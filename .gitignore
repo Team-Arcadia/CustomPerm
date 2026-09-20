@@ -115,6 +115,8 @@ docs/*
 !docs/LUCKPERMS_COMPATIBILITY_AUDIT.md
 !docs/WEB_ADMIN_PANEL_DESIGN.md
 !docs/PLANNED_FEATURES.md
+!docs/TESTING_GUIDE.md
+!docs/TESTING_GUIDE.fr.md
 
 # ============================================================
 # BlueJ
