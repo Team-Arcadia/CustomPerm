@@ -46,7 +46,7 @@ public class CustomPerm {
 
     public static ConfigManager configManager;
     public static PermissionService permissions;
-    /** CommandTreeRewriter câblé comme ICommandTreeReloader — implémentation É2.6. */
+    /** CommandTreeRewriter, wired in as the ICommandTreeReloader. */
     public static ICommandTreeReloader treeReloader = new CommandTreeRewriter();
 
     public CustomPerm(IEventBus modBus, ModContainer container) {
@@ -63,8 +63,8 @@ public class CustomPerm {
         }
         syncConfigAlert();
 
-        // P6 : instance partagée — évite de créer plusieurs InternalPermService sur le même configManager.
-        // Utilisée soit comme backend principal (sans LP), soit comme fallback interne de LuckPermsService.
+        // P6: one shared instance, rather than several InternalPermService on one configManager.
+        // It serves either as the main backend (no LuckPerms) or as LuckPermsService's fallback.
         InternalPermService internalBackend = new InternalPermService(configManager);
 
         // Backend selection: if LP is detected but its API blows up at instantiation
@@ -163,9 +163,8 @@ public class CustomPerm {
             lps.initServerHooks(event.getServer());
         }
 
-        // Filet de sécurité : wrappe les racines enregistrées par des handlers
-        // RegisterCommandsEvent exécutés après le nôtre — l'ordre inter-mods n'est pas
-        // garanti, même en EventPriority.LOWEST.
+        // Safety net: wrap the roots registered by RegisterCommandsEvent handlers that ran after
+        // ours. The order between mods is not guaranteed, EventPriority.LOWEST included.
         int lateWrapped = CommandTreeRewriter.repair(event.getServer());
         if (lateWrapped > 0) {
             LOGGER.info("[CustomPerm] Wrapped {} late-registered command(s) at server start.", lateWrapped);
@@ -207,9 +206,9 @@ public class CustomPerm {
     }
 
     private static void onServerStopped(ServerStoppedEvent event) {
-        // Le dispatcher de ce serveur disparaît avec lui : purger l'état statique évite de
-        // retenir l'ancien arbre de commandes (fuite) et d'utiliser des nœuds périmés au
-        // prochain démarrage dans la même JVM.
+        // This server's dispatcher goes with it: clearing the static state keeps the old command
+        // tree from being held (a leak) and from handing stale nodes to the next start in the
+        // same JVM.
         CommandTreeRewriter.clearServerState();
         AliasManager.clearServerState();
         if (permissions instanceof LuckPermsService lps) {

@@ -41,7 +41,7 @@ class GradesConfigCrudTest {
         assertTrue(cfg.grades.get("admin").permissions.isEmpty());
     }
 
-    // T2.2 — AC2 : refus de doublon (la condition containsKey empêche l'écrasement)
+    // T2.2, AC2: a duplicate is refused, the containsKey check preventing the overwrite
     @Test
     void shouldNotOverwriteGrade_whenNameAlreadyExists() {
         GradesConfig cfg = freshConfig();
@@ -51,7 +51,7 @@ class GradesConfigCrudTest {
         original.permissions.add("customperm.command.tp");
         cfg.grades.put("mod", original);
 
-        // Simuler la condition handler : containsKey → ne pas put
+        // Mirrors the handler's check: containsKey means no put
         boolean alreadyExists = cfg.grades.containsKey("mod");
         if (!alreadyExists) {
             GradesConfig.Grade duplicate = new GradesConfig.Grade();
@@ -60,11 +60,11 @@ class GradesConfigCrudTest {
         }
 
         assertTrue(alreadyExists);
-        // Le grade original avec sa permission est intact
+        // The original grade and its permission are untouched
         assertTrue(cfg.grades.get("mod").permissions.contains("customperm.command.tp"));
     }
 
-    // T2.3 — AC3 : suppression avec désassignation en cascade sur plusieurs joueurs
+    // T2.3, AC3: deleting a grade takes it off every player holding it
     @Test
     void shouldDeleteGrade_andCascadeRemoveFromAllUserGrades() {
         GradesConfig cfg = freshConfig();
@@ -89,7 +89,7 @@ class GradesConfigCrudTest {
         assertFalse(cfg.userGrades.get(player2.toString()).contains("admin"));
     }
 
-    // T2.4 — AC3 : le second grade d'un joueur survit à la suppression du premier
+    // T2.4, AC3: a player's second grade survives the deletion of the first
     @Test
     void shouldPreserveOtherGrade_whenOneOfTwoIsDeleted() {
         GradesConfig cfg = freshConfig();
@@ -115,7 +115,7 @@ class GradesConfigCrudTest {
         assertTrue(cfg.grades.containsKey("mod"));
     }
 
-    // T2.5 — AC3 + FR2 : le joueur perd toutes les perms custom après suppression de son seul grade
+    // T2.5, AC3 and FR2: deleting a player's only grade takes every custom node with it
     @Test
     void shouldPlayerLoseAllPermissions_afterSoleGradeDeleted() {
         GradesConfig cfg = freshConfig();
@@ -129,18 +129,18 @@ class GradesConfigCrudTest {
         cfg.userGrades.put(player.toString(), new ArrayList<>());
         cfg.userGrades.get(player.toString()).add("admin");
 
-        // Avant suppression : le joueur a la permission
+        // Before the deletion: the player holds the node
         assertTrue(PermissionResolver.resolve(cfg, player, "customperm.command.tp"));
 
         // Simuler gradeDelete
         cfg.grades.remove("admin");
         cfg.userGrades.values().forEach(list -> list.remove("admin"));
 
-        // Après suppression : plus aucune permission custom (FR2)
+        // After the deletion: no custom node left (FR2)
         assertFalse(PermissionResolver.resolve(cfg, player, "customperm.command.tp"));
     }
 
-    // T2.6 — AC4 : listage de tous les grades définis
+    // T2.6, AC4: listing every grade defined
     @Test
     void shouldListAllGradeNames() {
         GradesConfig cfg = freshConfig();

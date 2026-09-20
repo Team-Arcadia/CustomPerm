@@ -19,7 +19,7 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests unitaires pour PermissionResolver — pur Java, zéro import Minecraft/NeoForge (AR8).
+ * Unit tests of PermissionResolver: pure Java, no Minecraft or NeoForge import (AR8).
  *
  * Covers most-specific-wins, INVARIANT-101 (DENY wins at the same specificity), INVARIANT-102
  * (cumulative union), FR2 (no grade = nothing granted), the default grade layer, wildcards and edge cases.
@@ -45,15 +45,15 @@ class PermissionResolverTest {
 
     @Test
     void shouldReturnFalse_whenNoGradeAssigned() {
-        // Joueur sans grade → FR2
+        // A player holding no grade, FR2
         createGrade("staff", Set.of("tp"), Set.of());
-        // Ne pas assigner le grade au joueur
+        // The grade is deliberately not assigned
         assertFalse(PermissionResolver.resolve(grades, player, "tp"));
     }
 
     @Test
     void shouldReturnFalse_whenAssignedGradeDoesNotExist() {
-        // Grade assigné mais supprimé de la map
+        // A grade held by the player but gone from the map
         grades.userGrades.put(player.toString(), java.util.List.of("ghost"));
         assertFalse(PermissionResolver.resolve(grades, player, "tp"));
     }
@@ -197,7 +197,7 @@ class PermissionResolverTest {
 
     @Test
     void shouldCumulatePermissions_acrossMultipleGrades() {
-        // Grade A : ALLOW cmd.foo | Grade B : ALLOW cmd.bar → les deux accordés (INVARIANT-102, FR3)
+        // Grade A allows cmd.foo, grade B allows cmd.bar, so both are granted (INVARIANT-102, FR3)
         GradesConfig.Grade gradeA = createGrade("gradeA", Set.of("cmd.foo"), Set.of());
         GradesConfig.Grade gradeB = createGrade("gradeB", Set.of("cmd.bar"), Set.of());
         grades.userGrades.put(player.toString(), java.util.List.of("gradeA", "gradeB"));
@@ -218,19 +218,19 @@ class PermissionResolverTest {
         grades.userGrades.put(player.toString(), java.util.List.of("gradeA", "gradeB"));
 
         assertFalse(PermissionResolver.resolve(grades, player, "cmd.foo"),
-            "DENY dans gradeB doit l'emporter sur ALLOW dans gradeA");
+            "a DENY in gradeB must beat an ALLOW in gradeA");
     }
 
     @Test
     void shouldDenyOverrideAllow_whenGradeBAllowsAndGradeADenies() {
-        // Même invariant, ordre inversé — vérifie que l'ordre d'itération ne change pas le résultat
+        // The same invariant the other way round, so iteration order cannot change the answer
         createGrade("gradeA", Set.of(), Set.of("cmd.foo"));  // DENY
         createGrade("gradeB", Set.of("cmd.foo"), Set.of());  // ALLOW
         // Ordre : B d'abord (ALLOW), A ensuite (DENY)
         grades.userGrades.put(player.toString(), java.util.List.of("gradeB", "gradeA"));
 
         assertFalse(PermissionResolver.resolve(grades, player, "cmd.foo"),
-            "DENY dans gradeA doit l'emporter même si gradeB est itéré en premier");
+            "a DENY in gradeA must win even when gradeB is read first");
     }
 
     @Test
@@ -241,17 +241,17 @@ class PermissionResolverTest {
         assertFalse(PermissionResolver.resolve(grades, player, "ban"));
     }
 
-    // ─── Wildcard dans DENY ────────────────────────────────────────────────────
+    // ─── Wildcard in a DENY ───────────────────────────────────────────────────
 
     @Test
     void shouldApplyWildcardToDenied_whenPrefixWildcardInDenied() {
         // Wildcard DENY : interdit tout customperm.command.*
         createGrade("restricted", Set.of("customperm.command.*"), Set.of("customperm.command.*"));
-        // DENY sur wildcard l'emporte sur le ALLOW wildcard
+        // A wildcard DENY beats a wildcard ALLOW
         grades.userGrades.put(player.toString(), java.util.List.of("restricted"));
 
         assertFalse(PermissionResolver.resolve(grades, player, "customperm.command.gamemode"),
-            "Wildcard DENY doit couvrir les nœuds descendants");
+            "a wildcard DENY must cover the nodes below it");
     }
 
     // ─── Poids de grade (départage à spécificité égale) ───────────────────────
@@ -325,7 +325,7 @@ class PermissionResolverTest {
         assertEquals(Tristate.ALLOW, PermissionResolver.check(grades, player, "customperm.command.tp", "everyone"));
     }
 
-    // ─── Nœuds portés par le joueur ───────────────────────────────────────────
+    // ─── Nodes held by the player ─────────────────────────────────────────────
 
     @Test
     void ownNodeWinsOverAGradeAtTheSameLevel() {

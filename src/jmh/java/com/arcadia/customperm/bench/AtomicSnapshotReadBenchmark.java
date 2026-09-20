@@ -19,9 +19,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Benchmark de lecture concurrente du snapshot config (story 6-3 — AR1).
+ * Benchmark of concurrent reads of the config snapshot (story 6-3, AR1).
  *
- * <p>Modélise le hot path de production :</p>
+ * <p>Models the production hot path:</p>
  * <pre>
  *   configRef.get()   ← AtomicReference volatile read (non-bloquant)
  *       ↓
@@ -29,8 +29,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * </pre>
  *
  * <p>{@code @Threads(200)} simule 200 joueurs simultanés (NFR4).
- * Le score throughput doit rester positif sans dégradation disproportionnée —
- * preuves qu'aucun {@code synchronized} ni lock ne bloque le hot path (AR1).</p>
+ * The throughput score must stay positive with no disproportionate drop, which is the
+ * evidence that no {@code synchronized} and no lock sits on the hot path (AR1).</p>
  */
 @BenchmarkMode(Mode.Throughput)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
@@ -47,8 +47,8 @@ public class AtomicSnapshotReadBenchmark {
     private static final String NODE = "customperm.command.fly";
 
     /**
-     * Setup : AtomicReference pré-rempli avec un GradesConfig représentatif
-     * (1 grade, 1 permission ALLOW sur NODE).
+     * Setup: an AtomicReference preloaded with a representative GradesConfig
+     * (1 grade, 1 ALLOW permission on NODE).
      */
     @Setup(Level.Trial)
     public void setup() {
@@ -64,11 +64,11 @@ public class AtomicSnapshotReadBenchmark {
     }
 
     /**
-     * AC3 — Lecture concurrente : {@code ref.get()} (volatile read, aucun lock)
+     * AC3, concurrent reads: {@code ref.get()} is a volatile read, with no lock
      * suivi de {@code resolve()} (pur Java, stateless).
      * <p>
-     * 200 threads s'exécutent simultanément. Aucun {@code synchronized} dans le
-     * chemin → throughput doit scaler sans contention (AR1).
+     * 200 threads run at once. With no {@code synchronized} on the path, throughput
+     * must scale without contention (AR1).
      * </p>
      */
     @Benchmark

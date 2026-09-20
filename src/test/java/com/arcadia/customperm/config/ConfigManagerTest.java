@@ -53,17 +53,17 @@ class ConfigManagerTest {
         ExecutorService exec = Executors.newFixedThreadPool(threadCount);
         List<Future<ConfigSnapshot>> futures = new ArrayList<>();
 
-        // Act — 50 threads lisent getSnapshot() simultanément
+        // Act: 50 threads read getSnapshot() at once
         for (int i = 0; i < threadCount; i++) {
             futures.add(exec.submit(mgr::getSnapshot));
         }
         exec.shutdown();
         assertTrue(exec.awaitTermination(5, TimeUnit.SECONDS));
 
-        // Assert — tous les threads voient la même instance (AtomicReference garantit ça)
+        // Assert: every thread sees the same instance, which the AtomicReference guarantees
         for (Future<ConfigSnapshot> f : futures) {
             assertSame(expected, f.get(),
-                "Tous les threads doivent obtenir la même instance de snapshot");
+                "every thread must get the same snapshot instance");
         }
     }
 
@@ -82,13 +82,13 @@ class ConfigManagerTest {
         assertTrue(exec.awaitTermination(10, TimeUnit.SECONDS));
 
         for (Future<Boolean> future : futures) {
-            assertTrue(future.get(), "Toutes les sauvegardes concurrentes doivent réussir");
+            assertTrue(future.get(), "every concurrent save must succeed");
         }
-        assertTrue(mgr.load(), "Les fichiers produits doivent rester lisibles après les sauvegardes");
+        assertTrue(mgr.load(), "the files written must still be readable afterwards");
 
         try (var stream = Files.list(tempDir)) {
             assertFalse(stream.anyMatch(path -> path.getFileName().toString().endsWith(".tmp")),
-                    "Aucun fichier temporaire ne doit rester après une sauvegarde réussie");
+                    "a successful save must leave no temporary file behind");
         }
     }
 
@@ -98,52 +98,58 @@ class ConfigManagerTest {
         ConfigManager mgr = new ConfigManager(tempDir);
         mgr.load();
 
-        // Simuler un reload déjà en cours en positionnant le flag manuellement
-        // (accès package-private depuis le même package)
+        // Stand in for a reload already running by setting the flag by hand
+        // (package-private, this test being in the same package)
         mgr.reloading.set(true);
 
-        // Act — tenter un second reload pendant que le premier est "en cours"
+        // Act: a second reload while the first one is "running"
         boolean result = mgr.load();
 
         // Assert
-        assertFalse(result, "Le reload doit être rejeté si un reload est déjà en cours");
+        assertFalse(result, "a reload must be refused while another one is running");
 
-        // Cleanup — remettre le flag à false pour ne pas bloquer d'autres opérations
+        // Cleanup: clear the flag so it blocks nothing else
         mgr.reloading.set(false);
     }
 
     @Test
     void shouldRetainPreviousSnapshot_afterFailedReload() throws Exception {
-        // Arrange — charger une config initiale valide
+        // Arrange: a valid config holding a grade, loaded from disk
+        Files.writeString(tempDir.resolve("grades.json"),
+                "{\"grades\":{\"vip\":{\"permissions\":[\"customperm.test\"]}}}");
         ConfigManager mgr = new ConfigManager(tempDir);
-        mgr.load();
+        assertTrue(mgr.load());
         ConfigSnapshot before = mgr.getSnapshot();
 
-        // Valide que le snapshot reste stable sans appel à load()
-        // (le test de rollback complet avec JSON corrompu sera ajouté en É6.1 avec Mockito)
-        ConfigSnapshot after = mgr.getSnapshot();
-        assertSame(before, after, "Le snapshot ne doit pas changer sans reload réussi");
+        // Act: another file becomes unparseable, so the next load fails
+        Files.writeString(tempDir.resolve("aliases.json"), "{ nope");
+        assertFalse(mgr.load(), "an unparseable aliases.json must fail the load");
+
+        // Assert: the previous snapshot is kept, instance and content alike (INVARIANT-401)
+        assertSame(before, mgr.getSnapshot(), "a failed reload must not replace the snapshot");
+        assertTrue(mgr.getGrades().grades.containsKey("vip"),
+                "the grades loaded before the failure must still answer");
     }
 
-    // ─── Tests H1.4 : backup automatique & restauration config invalide ──────────
+    // ─── H1.4: automatic backup and recovery from an invalid config ─────────────
 
     @Test
     void shouldRollbackSnapshot_whenGradesJsonIsInvalid() throws Exception {
-        // Arrange — charger une config initiale valide
+        // Arrange: load a valid config first
         ConfigManager mgr = new ConfigManager(tempDir);
         mgr.load();
         ConfigSnapshot before = mgr.getSnapshot();
 
-        // Corrompre grades.json avec du JSON invalide (JsonSyntaxException)
+        // Corrupt grades.json with invalid JSON (JsonSyntaxException)
         Files.writeString(tempDir.resolve("grades.json"), "{ INVALID JSON !!!");
 
         // Act
         boolean result = mgr.load();
 
-        // Assert — INVARIANT-401 : snapshot inchangé, load() retourne false
-        assertFalse(result, "load() doit retourner false si un fichier JSON est invalide");
+        // Assert, INVARIANT-401: the snapshot is unchanged and load() returns false
+        assertFalse(result, "load() must return false when a JSON file is invalid");
         assertSame(before, mgr.getSnapshot(),
-                "Le snapshot doit rester inchangé après un reload échoué (INVARIANT-401)");
+                "the snapshot must survive a failed reload unchanged (INVARIANT-401)");
     }
 
     @Test
@@ -196,13 +202,13 @@ class ConfigManagerTest {
 
     @Test
     void shouldCreateBackupFiles_afterSuccessfulLoad() throws Exception {
-        // Arrange & Act — un load() réussi doit créer un .bak par fichier de config dans backup/
+        // Arrange and act: a successful load() writes one .bak per config file into backup/
         ConfigManager mgr = new ConfigManager(tempDir);
         mgr.load();
 
         // Assert
         Path backupDir = tempDir.resolve("backup");
-        assertTrue(Files.isDirectory(backupDir), "Le répertoire backup/ doit exister après un load réussi");
+        assertTrue(Files.isDirectory(backupDir), "backup/ must exist after a successful load");
 
         long backupCount;
         try (var stream = Files.list(backupDir)) {
@@ -211,7 +217,7 @@ class ConfigManagerTest {
                     .count();
         }
         assertEquals(5L, backupCount,
-                "Exactement 5 fichiers .bak doivent être créés (grades, aliases, commands, settings, ratelimits)");
+                "exactly 5 .bak files must be written (grades, aliases, commands, settings, ratelimits)");
     }
 
     @Test
@@ -227,32 +233,32 @@ class ConfigManagerTest {
 
         ConfigManager mgr = new ConfigManager(newDir, legacyDir);
 
-        assertTrue(mgr.load(), "load() doit migrer l'ancien dossier de configuration");
-        assertTrue(Files.exists(newDir.resolve("grades.json")), "grades.json doit être copié vers le nouveau dossier");
-        assertTrue(Files.exists(newDir.resolve("settings.json")), "settings.json doit être copié vers le nouveau dossier");
-        assertTrue(Files.exists(legacyDir.resolve("grades.json")), "la migration ne doit pas supprimer l'ancien fichier");
-        assertTrue(mgr.getGrades().grades.containsKey("vip"), "la config migrée doit être chargée");
-        assertTrue(mgr.getCommands().grantedCommands.contains("spawn"), "commands.json migré doit être chargé");
-        assertEquals("internal", mgr.getSettings().luckPermsFallbackMode, "settings.json migré doit être chargé");
+        assertTrue(mgr.load(), "load() must migrate the legacy config directory");
+        assertTrue(Files.exists(newDir.resolve("grades.json")), "grades.json must be copied to the new directory");
+        assertTrue(Files.exists(newDir.resolve("settings.json")), "settings.json must be copied to the new directory");
+        assertTrue(Files.exists(legacyDir.resolve("grades.json")), "the migration must not delete the old file");
+        assertTrue(mgr.getGrades().grades.containsKey("vip"), "the migrated config must be loaded");
+        assertTrue(mgr.getCommands().grantedCommands.contains("spawn"), "the migrated commands.json must be loaded");
+        assertEquals("internal", mgr.getSettings().luckPermsFallbackMode, "the migrated settings.json must be loaded");
     }
 
     @Test
     void shouldRetainOnlyThreeBackups_whenRotationLimitExceeded() throws Exception {
-        // Arrange — créer le répertoire backup/ et y placer des backups "anciennes"
+        // Arrange: create backup/ and drop older backups into it
         ConfigManager mgr = new ConfigManager(tempDir);
-        mgr.load();   // crée le premier jeu de backups (1 bak par fichier)
+        mgr.load();   // writes the first set of backups, one .bak per file
         Path backupDir = tempDir.resolve("backup");
 
-        // Ajouter 3 fausses backups supplémentaires pour grades.json (anciennes timestamps)
+        // Add 3 more fake backups of grades.json, with old timestamps
         Files.writeString(backupDir.resolve("grades.json.2020-01-01T00-00-01.bak"), "{}");
         Files.writeString(backupDir.resolve("grades.json.2020-01-01T00-00-02.bak"), "{}");
         Files.writeString(backupDir.resolve("grades.json.2020-01-01T00-00-03.bak"), "{}");
-        // On a maintenant 4 backups pour grades.json → rotateBackups doit en supprimer 1
+        // grades.json now has 4 backups, so rotateBackups must delete one
 
-        // Act — appeler directement rotateBackups (package-private, même package)
+        // Act: call rotateBackups directly (package-private, same package)
         mgr.rotateBackups(backupDir, "grades.json");
 
-        // Assert — exactement 3 backups grades.json restantes, les plus anciennes supprimées
+        // Assert: exactly 3 grades.json backups left, the oldest ones deleted
         long gradesBackups;
         try (var stream = Files.list(backupDir)) {
             gradesBackups = stream
@@ -263,8 +269,8 @@ class ConfigManagerTest {
                     .count();
         }
         assertEquals(3L, gradesBackups,
-                "La rotation doit conserver exactement 3 backups par fichier (AR10)");
+                "the rotation must keep exactly 3 backups per file (AR10)");
         assertFalse(Files.exists(backupDir.resolve("grades.json.2020-01-01T00-00-01.bak")),
-                "La backup la plus ancienne doit être supprimée");
+                "the oldest backup must be deleted");
     }
 }

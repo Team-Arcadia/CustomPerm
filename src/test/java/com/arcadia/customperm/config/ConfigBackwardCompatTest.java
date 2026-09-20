@@ -18,16 +18,16 @@ import java.nio.file.Path;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Rétrocompatibilité des fichiers de configuration (AC4 — NFR9, NFR10).
+ * Backward compatibility of the config files (AC4, NFR9, NFR10).
  *
- * <p>Vérifie que :</p>
+ * <p>Checks that:</p>
  * <ul>
- *   <li>un JSON vide {@code {}} est accepté pour chacun des fichiers</li>
- *   <li>des fichiers absents donnent des configs par défaut (collections vides, non null)</li>
- *   <li>des champs JSON inconnus (ajoutés dans une future version) sont ignorés sans erreur</li>
+ *   <li>an empty {@code {}} JSON is accepted for every file</li>
+ *   <li>missing files give default configs, with empty collections rather than null</li>
+ *   <li>unknown JSON fields, as a later version would add, are ignored without an error</li>
  * </ul>
  *
- * <p>Tous les tests sont purs Java — zéro import {@code net.minecraft.*} ou
+ * <p>Every test is pure Java, with no {@code net.minecraft.*} or
  * {@code net.neoforged.*} (AR8 / INVARIANT-504).</p>
  */
 class ConfigBackwardCompatTest {
@@ -36,41 +36,41 @@ class ConfigBackwardCompatTest {
     Path tempDir;
 
     // -------------------------------------------------------------------------
-    // Scénario : fichiers absents → défauts vides
+    // Case: the files are absent, so the defaults are empty
     // -------------------------------------------------------------------------
 
     @Test
     void shouldReturnEmptyCollections_whenConfigFilesAreMissing() throws Exception {
-        // Arrange — aucun fichier JSON dans tempDir
+        // Arrange: no JSON file in tempDir
         ConfigManager mgr = new ConfigManager(tempDir);
 
         // Act
         boolean loaded = mgr.load();
 
         // Assert
-        assertTrue(loaded, "load() doit retourner true même si les fichiers n'existent pas");
+        assertTrue(loaded, "load() must return true even when the files are absent");
 
         GradesConfig grades = mgr.getGrades();
-        assertNotNull(grades.grades, "grades.grades ne doit pas être null");
-        assertTrue(grades.grades.isEmpty(), "grades.grades doit être vide");
-        assertNotNull(grades.userGrades, "grades.userGrades ne doit pas être null");
-        assertTrue(grades.userGrades.isEmpty(), "grades.userGrades doit être vide");
+        assertNotNull(grades.grades, "grades.grades must not be null");
+        assertTrue(grades.grades.isEmpty(), "grades.grades must be empty");
+        assertNotNull(grades.userGrades, "grades.userGrades must not be null");
+        assertTrue(grades.userGrades.isEmpty(), "grades.userGrades must be empty");
 
         AliasesConfig aliases = mgr.getAliases();
-        assertNotNull(aliases.aliases, "aliases.aliases ne doit pas être null");
-        assertTrue(aliases.aliases.isEmpty(), "aliases.aliases doit être vide");
+        assertNotNull(aliases.aliases, "aliases.aliases must not be null");
+        assertTrue(aliases.aliases.isEmpty(), "aliases.aliases must be empty");
 
         CommandsConfig commands = mgr.getCommands();
-        assertNotNull(commands.grantedCommands, "commands.grantedCommands ne doit pas être null");
-        assertTrue(commands.grantedCommands.isEmpty(), "commands.grantedCommands doit être vide");
+        assertNotNull(commands.grantedCommands, "commands.grantedCommands must not be null");
+        assertTrue(commands.grantedCommands.isEmpty(), "commands.grantedCommands must be empty");
 
         SettingsConfig settings = mgr.getSettings();
         assertEquals("deny", settings.luckPermsFallbackMode,
-                "luckPermsFallbackMode doit être deny par défaut");
+                "luckPermsFallbackMode must default to deny");
 
         RateLimitsConfig rateLimits = mgr.getRateLimits();
-        assertNotNull(rateLimits.rules, "rateLimits.rules ne doit pas être null");
-        assertTrue(rateLimits.rules.isEmpty(), "rateLimits.rules doit être vide");
+        assertNotNull(rateLimits.rules, "rateLimits.rules must not be null");
+        assertTrue(rateLimits.rules.isEmpty(), "rateLimits.rules must be empty");
     }
 
     @Test
@@ -105,7 +105,7 @@ class ConfigBackwardCompatTest {
     }
 
     // -------------------------------------------------------------------------
-    // Scénario : JSON vide {} → rétrocompatibilité minimale
+    // Case: an empty {} JSON, the minimum of backward compatibility
     // -------------------------------------------------------------------------
 
     @Test
@@ -115,11 +115,11 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit retourner true pour grades.json = {}");
+        assertTrue(loaded, "load() must return true for grades.json = {}");
         GradesConfig grades = mgr.getGrades();
-        assertNotNull(grades.grades, "grades.grades ne doit pas être null après {}");
+        assertNotNull(grades.grades, "grades.grades must not be null after {}");
         assertTrue(grades.grades.isEmpty());
-        assertNotNull(grades.userGrades, "grades.userGrades ne doit pas être null après {}");
+        assertNotNull(grades.userGrades, "grades.userGrades must not be null after {}");
         assertTrue(grades.userGrades.isEmpty());
     }
 
@@ -130,9 +130,9 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit retourner true pour aliases.json = {}");
+        assertTrue(loaded, "load() must return true for aliases.json = {}");
         AliasesConfig aliases = mgr.getAliases();
-        assertNotNull(aliases.aliases, "aliases.aliases ne doit pas être null après {}");
+        assertNotNull(aliases.aliases, "aliases.aliases must not be null after {}");
         assertTrue(aliases.aliases.isEmpty());
     }
 
@@ -143,9 +143,9 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit normaliser aliases:null sans rejeter la config");
+        assertTrue(loaded, "load() must normalize aliases:null rather than reject the config");
         AliasesConfig aliases = mgr.getAliases();
-        assertNotNull(aliases.aliases, "aliases.aliases ne doit pas rester null après normalisation");
+        assertNotNull(aliases.aliases, "aliases.aliases must not stay null once normalized");
         assertTrue(aliases.aliases.isEmpty());
     }
 
@@ -156,9 +156,9 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit retourner true pour commands.json = {}");
+        assertTrue(loaded, "load() must return true for commands.json = {}");
         CommandsConfig commands = mgr.getCommands();
-        assertNotNull(commands.grantedCommands, "commands.grantedCommands ne doit pas être null après {}");
+        assertNotNull(commands.grantedCommands, "commands.grantedCommands must not be null after {}");
         assertTrue(commands.grantedCommands.isEmpty());
     }
 
@@ -169,9 +169,9 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit normaliser grantedCommands:null sans rejeter la config");
+        assertTrue(loaded, "load() must normalize grantedCommands:null rather than reject the config");
         CommandsConfig commands = mgr.getCommands();
-        assertNotNull(commands.grantedCommands, "commands.grantedCommands ne doit pas rester null après normalisation");
+        assertNotNull(commands.grantedCommands, "commands.grantedCommands must not stay null once normalized");
         assertTrue(commands.grantedCommands.isEmpty());
     }
 
@@ -183,7 +183,7 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit lire preserveOriginalRequires");
+        assertTrue(loaded, "load() must read preserveOriginalRequires");
         CommandsConfig commands = mgr.getCommands();
         assertFalse(commands.shouldPreserveOriginalRequires("gamemode"));
         assertTrue(commands.shouldPreserveOriginalRequires("adminpanel"));
@@ -196,7 +196,7 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit lire settings.json");
+        assertTrue(loaded, "load() must read settings.json");
         assertEquals("internal", mgr.getSettings().luckPermsFallbackMode);
     }
 
@@ -207,7 +207,7 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit normaliser un mode invalide sans rejeter la config");
+        assertTrue(loaded, "load() must normalize an invalid mode rather than reject the config");
         assertEquals("deny", mgr.getSettings().luckPermsFallbackMode);
     }
 
@@ -218,9 +218,9 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit retourner true pour ratelimits.json = {}");
+        assertTrue(loaded, "load() must return true for ratelimits.json = {}");
         RateLimitsConfig rateLimits = mgr.getRateLimits();
-        assertNotNull(rateLimits.rules, "rateLimits.rules ne doit pas être null après {}");
+        assertNotNull(rateLimits.rules, "rateLimits.rules must not be null after {}");
         assertTrue(rateLimits.rules.isEmpty());
     }
 
@@ -231,7 +231,7 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit normaliser rules:null sans rejeter la config");
+        assertTrue(loaded, "load() must normalize rules:null rather than reject the config");
         assertNotNull(mgr.getRateLimits().rules);
         assertTrue(mgr.getRateLimits().rules.isEmpty());
     }
@@ -244,7 +244,7 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit lire ratelimits.json");
+        assertTrue(loaded, "load() must read ratelimits.json");
         RateLimitsConfig.Rule rule = mgr.getRateLimits().rules.get("observable");
         assertNotNull(rule);
         assertTrue(rule.enabled);
@@ -253,12 +253,12 @@ class ConfigBackwardCompatTest {
     }
 
     // -------------------------------------------------------------------------
-    // Scénario : champs inconnus → ignorés (compat future version)
+    // Case: unknown fields are ignored, for compatibility with a later version
     // -------------------------------------------------------------------------
 
     @Test
     void shouldIgnoreUnknownFields_whenGradesJsonHasExtraKeys() throws Exception {
-        // Simule un grades.json produit par une version future qui aurait ajouté des champs
+        // A grades.json as a later version would write it, with fields added
         String futureJson = "{"
                 + "\"futureField\": \"someValue\","
                 + "\"grades\": {},"
@@ -269,7 +269,7 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit ignorer les champs inconnus (forward compat)");
+        assertTrue(loaded, "load() must ignore unknown fields, for forward compatibility");
         GradesConfig grades = mgr.getGrades();
         assertNotNull(grades.grades);
         assertTrue(grades.grades.isEmpty());
@@ -283,7 +283,7 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit ignorer les champs inconnus dans aliases.json");
+        assertTrue(loaded, "load() must ignore unknown fields in aliases.json");
         AliasesConfig aliases = mgr.getAliases();
         assertNotNull(aliases.aliases);
         assertTrue(aliases.aliases.isEmpty());
@@ -297,20 +297,20 @@ class ConfigBackwardCompatTest {
 
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit ignorer les champs inconnus dans commands.json");
+        assertTrue(loaded, "load() must ignore unknown fields in commands.json");
         CommandsConfig commands = mgr.getCommands();
         assertNotNull(commands.grantedCommands);
         assertTrue(commands.grantedCommands.contains("gamemode"),
-                "Le champ connu 'grantedCommands' doit être lu correctement");
+                "the known 'grantedCommands' field must still be read");
     }
 
     // -------------------------------------------------------------------------
-    // Scénario : upgrade simulé — configs existantes lues sans erreur
+    // Case: an upgrade, where the existing configs are read without an error
     // -------------------------------------------------------------------------
 
     @Test
     void shouldLoadAllThreeConfigs_whenAllFilesHavePartialData() throws Exception {
-        // Simule des fichiers de config existants sur un serveur upgrading vers nouvelle version
+        // The config files of a server being upgraded to a newer version
         Files.writeString(tempDir.resolve("grades.json"),
                 "{\"grades\":{\"vip\":{\"name\":\"vip\",\"permissions\":[\"customperm.command.gamemode\"]}},\"userGrades\":{}}");
         Files.writeString(tempDir.resolve("aliases.json"),
@@ -321,17 +321,17 @@ class ConfigBackwardCompatTest {
         ConfigManager mgr = new ConfigManager(tempDir);
         boolean loaded = mgr.load();
 
-        assertTrue(loaded, "load() doit réussir avec des fichiers de config partiels existants");
+        assertTrue(loaded, "load() must succeed on existing, partial config files");
 
         GradesConfig grades = mgr.getGrades();
-        assertEquals(1, grades.grades.size(), "vip grade doit être lu");
+        assertEquals(1, grades.grades.size(), "the vip grade must be read");
         assertTrue(grades.grades.get("vip").permissions.contains("customperm.command.gamemode"),
-                "La permission du grade vip doit être désérialisée correctement");
+                "the vip grade permission must be deserialized");
 
         AliasesConfig aliases = mgr.getAliases();
-        assertEquals(1, aliases.aliases.size(), "alias fly doit être lu");
+        assertEquals(1, aliases.aliases.size(), "the fly alias must be read");
         assertEquals("gamemode spectator", aliases.aliases.get("fly").get(0),
-                "Le step de l'alias fly doit être désérialisé correctement");
+                "the step of the fly alias must be deserialized");
 
         assertEquals(2, mgr.getCommands().grantedCommands.size(), "2 commandes exposées");
     }

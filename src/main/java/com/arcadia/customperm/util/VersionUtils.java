@@ -9,32 +9,32 @@
 package com.arcadia.customperm.util;
 
 /**
- * Utilitaires de comparaison de version sémantique.
- * Classe pure Java — aucune dépendance NeoForge/Minecraft/LuckPerms.
- * Testable en JUnit 5 sans runtime NeoForge.
+ * Semantic version comparison helpers.
+ * Pure Java, with no NeoForge, Minecraft or LuckPerms dependency, so JUnit 5 tests it without a
+ * NeoForge runtime.
  */
 public final class VersionUtils {
 
     private VersionUtils() {
-        // Classe utilitaire — pas d'instanciation
+        // Utility class, never instantiated.
     }
 
     /**
-     * Compare une version sémantique sous forme {@code "major.minor.patch"} à un seuil minimum.
+     * Compares a {@code "major.minor.patch"} semantic version against a minimum.
      *
-     * <p>Règles de parsing :
+     * <p>Parsing rules:
      * <ul>
-     *   <li>Split sur {@code [.\-]} — tolère les séparateurs point et tiret.</li>
-     *   <li>Patch absent → traité comme 0.</li>
-     *   <li>Toute partie non numérique (ex. {@code SNAPSHOT}) → retourne {@code false}.</li>
-     *   <li>{@code null} ou chaîne vide → retourne {@code false}.</li>
+     *   <li>Split on {@code [.\-]}, so a dot and a dash both separate.</li>
+     *   <li>A missing patch counts as 0.</li>
+     *   <li>Any non-numeric part (for example {@code SNAPSHOT}) returns {@code false}.</li>
+     *   <li>{@code null} or an empty string returns {@code false}.</li>
      * </ul>
      *
-     * @param version  chaîne de version à comparer (ex. {@code "5.4.150"})
-     * @param minMajor major minimum attendu
-     * @param minMinor minor minimum attendu
-     * @param minPatch patch minimum attendu (inclus)
-     * @return {@code true} si {@code version ≥ minMajor.minMinor.minPatch}
+     * @param version  the version string to compare (for example {@code "5.4.150"})
+     * @param minMajor the minimum major expected
+     * @param minMinor the minimum minor expected
+     * @param minPatch the minimum patch expected, inclusive
+     * @return {@code true} when {@code version} is at least {@code minMajor.minMinor.minPatch}
      */
     public static boolean isVersionAtLeast(String version, int minMajor, int minMinor, int minPatch) {
         if (version == null || version.isEmpty()) return false;

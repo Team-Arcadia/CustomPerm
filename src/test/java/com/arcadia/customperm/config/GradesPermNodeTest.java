@@ -36,7 +36,7 @@ class GradesPermNodeTest {
         cfg.userGrades.computeIfAbsent(player.toString(), k -> new ArrayList<>()).add(gradeName);
     }
 
-    // T3.1 — AC1 : ajout d'un nœud inexistant
+    // T3.1, AC1: adding a node the grade lacks
     @Test
     void shouldAddPermNode_whenNodeDoesNotExist() {
         GradesConfig cfg = freshConfig();
@@ -48,7 +48,7 @@ class GradesPermNodeTest {
         assertTrue(grade.permissions.contains("customperm.command.tp"));
     }
 
-    // T3.2 — AC5 : idempotence — Set.add() retourne false si nœud déjà présent
+    // T3.2, AC5 idempotence: Set.add() is false when the node is already there
     @Test
     void shouldBeIdempotent_whenAddingDuplicateNode() {
         GradesConfig cfg = freshConfig();
@@ -61,7 +61,7 @@ class GradesPermNodeTest {
         assertEquals(1, grade.permissions.size());
     }
 
-    // T3.3 — AC2 : retrait d'un nœud existant
+    // T3.3, AC2: removing a node the grade holds
     @Test
     void shouldRemovePermNode_whenNodeExists() {
         GradesConfig cfg = freshConfig();
@@ -74,7 +74,7 @@ class GradesPermNodeTest {
         assertTrue(grade.permissions.isEmpty());
     }
 
-    // T3.4 — AC2 : les autres nœuds survivent au retrait d'un seul
+    // T3.4, AC2: the other nodes survive the removal of one
     @Test
     void shouldPreserveOtherNodes_whenOneIsRemoved() {
         GradesConfig cfg = freshConfig();
@@ -89,7 +89,7 @@ class GradesPermNodeTest {
         assertEquals(1, grade.permissions.size());
     }
 
-    // T3.5 — AC3 : nœud wildcard stocké et résolu pour un descendant
+    // T3.5, AC3: a wildcard node is stored, and answers for a node below it
     @Test
     void shouldStoreWildcardNode_andResolveForDescendant() {
         GradesConfig cfg = freshConfig();
@@ -105,13 +105,13 @@ class GradesPermNodeTest {
         assertFalse(PermissionResolver.resolve(cfg, player, "other.node"));
     }
 
-    // T3.6 — AC4 : nœud stocké dans le Set même si commande non exposée (data-layer)
+    // T3.6, AC4: the node is stored even where the command is not exposed, at the data layer
     @Test
     void shouldStoreNode_regardlessOfCommandExposure() {
         GradesConfig cfg = freshConfig();
         GradesConfig.Grade grade = addGrade(cfg, "staff");
 
-        // Le nœud est stocké même sans exposition de commande (NFR5 = logique CommandTree)
+        // The node is stored with no command exposed (NFR5 lives in the command tree)
         grade.permissions.add("customperm.command.nonexistent");
 
         assertTrue(grade.permissions.contains("customperm.command.nonexistent"));
@@ -119,8 +119,8 @@ class GradesPermNodeTest {
         UUID player = UUID.randomUUID();
         assignPlayer(cfg, player, "staff");
 
-        // Le PermissionResolver retourne true — le nœud est accordé en data-layer
-        // L'absence d'accès effectif (NFR5) est garantie par CommandTreeRewriter, pas ici
+        // PermissionResolver answers true: the node is granted at the data layer.
+        // What actually refuses access (NFR5) is CommandTreeRewriter, not this.
         assertTrue(PermissionResolver.resolve(cfg, player, "customperm.command.nonexistent"));
     }
 }

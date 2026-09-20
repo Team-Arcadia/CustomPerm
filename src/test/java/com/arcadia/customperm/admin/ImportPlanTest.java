@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 class ImportPlanTest {
 
-    // ─── Traduction des nœuds ─────────────────────────────────────────────────
+    // ─── Node translation ─────────────────────────────────────────────────────
 
     @Test
     void customPermNodesCarryOverAsTheyAre() {

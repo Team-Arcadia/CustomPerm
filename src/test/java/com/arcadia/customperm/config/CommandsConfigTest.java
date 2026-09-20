@@ -14,8 +14,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests de la couche data pour l'exposition et le retrait des commandes vanilla.
- * Zéro import Minecraft — tests JUnit 5 purs sur CommandsConfig.
+ * Data-layer tests of exposing a vanilla command and hiding it again.
+ * No Minecraft import: pure JUnit 5 over CommandsConfig.
  * Couvre AC1-AC4 de l'histoire 2-5.
  */
 class CommandsConfigTest {
@@ -25,19 +25,19 @@ class CommandsConfigTest {
         // CommandsConfig initialise grantedCommands = new LinkedHashSet<>() — prêt à l'emploi
     }
 
-    // T2.1 — AC1 : exposition d'une nouvelle commande
+    // T2.1, AC1: exposing a new command
     @Test
     void shouldExposeCommand_whenCommandAdded() {
         CommandsConfig cfg = freshConfig();
 
         boolean added = cfg.grantedCommands.add("tp");
 
-        assertTrue(added, "Set.add() doit retourner true pour une nouvelle commande");
+        assertTrue(added, "Set.add() must return true for a command not exposed yet");
         assertTrue(cfg.grantedCommands.contains("tp"));
         assertEquals(1, cfg.grantedCommands.size());
     }
 
-    // T2.2 — AC1 idempotence : Set.add() retourne false si déjà exposé
+    // T2.2, AC1 idempotence: Set.add() is false when the command is already exposed
     @Test
     void shouldBeIdempotent_whenCommandAlreadyExposed() {
         CommandsConfig cfg = freshConfig();
@@ -45,11 +45,11 @@ class CommandsConfigTest {
         cfg.grantedCommands.add("gamemode");
         boolean addedAgain = cfg.grantedCommands.add("gamemode");
 
-        assertFalse(addedAgain, "Set.add() doit retourner false pour une commande déjà exposée");
-        assertEquals(1, cfg.grantedCommands.size(), "Pas de doublon dans grantedCommands");
+        assertFalse(addedAgain, "Set.add() must return false for a command already exposed");
+        assertEquals(1, cfg.grantedCommands.size(), "grantedCommands must hold no duplicate");
     }
 
-    // T2.3 — AC2 : retrait d'une commande exposée
+    // T2.3, AC2: hiding an exposed command
     @Test
     void shouldRemoveCommand_whenCommandExposed() {
         CommandsConfig cfg = freshConfig();
@@ -57,23 +57,23 @@ class CommandsConfigTest {
         cfg.grantedCommands.add("ban");
         boolean removed = cfg.grantedCommands.remove("ban");
 
-        assertTrue(removed, "Set.remove() doit retourner true pour une commande exposée");
+        assertTrue(removed, "Set.remove() must return true for an exposed command");
         assertFalse(cfg.grantedCommands.contains("ban"));
         assertTrue(cfg.grantedCommands.isEmpty());
     }
 
-    // T2.4 — AC2 guard : Set.remove() retourne false si commande non exposée
+    // T2.4, AC2 guard: Set.remove() is false for a command that was not exposed
     @Test
     void shouldBeNoOp_whenRemovingNonExposedCommand() {
         CommandsConfig cfg = freshConfig();
 
         boolean removed = cfg.grantedCommands.remove("tp");
 
-        assertFalse(removed, "Set.remove() doit retourner false pour une commande non exposée");
-        assertTrue(cfg.grantedCommands.isEmpty(), "La liste ne doit pas être altérée");
+        assertFalse(removed, "Set.remove() must return false for a command that was not exposed");
+        assertTrue(cfg.grantedCommands.isEmpty(), "the list must be left untouched");
     }
 
-    // T2.5 — AC3 : listage des commandes exposées (data-layer)
+    // T2.5, AC3: listing the exposed commands, at the data layer
     @Test
     void shouldListAllExposedCommands() {
         CommandsConfig cfg = freshConfig();
@@ -89,22 +89,22 @@ class CommandsConfigTest {
     }
 
     // T2.6 — AC4 proof-of-contract : commande non exposée → !grantedCommands.contains() = true
-    // C'est la guard exacte du wrapper dans CommandTreeRewriter.wrapRecursive() :
+    // This is the wrapper's own guard in CommandTreeRewriter.wrapRecursive():
     //   if (!grantedCommands.contains(rootName)) return false;
-    // Ce test prouve que supprimer une commande de grantedCommands déclenche le refus d'accès.
+    // The test shows that removing a command from grantedCommands is what refuses access.
     @Test
     void shouldDenyAccess_whenCommandNotInGrantedList() {
         CommandsConfig cfg = freshConfig();
 
         // Commande jamais exposée → guard déclenche
         assertFalse(cfg.grantedCommands.contains("tp"),
-                "Une commande non exposée ne doit pas être dans grantedCommands");
+                "a command that was never exposed must not be in grantedCommands");
 
-        // Commande exposée puis retirée → guard déclenche également
+        // A command exposed then hidden trips the same guard
         cfg.grantedCommands.add("ban");
         cfg.grantedCommands.remove("ban");
         assertFalse(cfg.grantedCommands.contains("ban"),
-                "Une commande retirée ne doit plus être dans grantedCommands");
+                "a command that was hidden must no longer be in grantedCommands");
     }
 
     @Test
@@ -112,7 +112,7 @@ class CommandsConfigTest {
         CommandsConfig cfg = freshConfig();
 
         assertFalse(cfg.shouldPreserveOriginalRequires("gamemode"),
-                "Sans override explicite, le comportement historique doit être conservé");
+                "with no explicit override, the historical behaviour must be kept");
     }
 
     @Test
@@ -135,6 +135,6 @@ class CommandsConfigTest {
         assertTrue(removed);
         assertFalse(cfg.grantedCommands.contains("gamemode"));
         assertFalse(cfg.preserveOriginalRequires.containsKey("gamemode"),
-                "Retirer une commande exposee doit aussi nettoyer son override preserveOriginalRequires");
+                "hiding an exposed command must also drop its preserveOriginalRequires override");
     }
 }

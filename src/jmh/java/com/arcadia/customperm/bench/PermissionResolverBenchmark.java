@@ -21,12 +21,12 @@ import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Microbenchmarks sur le hot path de résolution de permission (story 6-3).
+ * Microbenchmarks of the permission resolution hot path (story 6-3).
  *
  * <p>Cible : {@link PermissionResolver#resolve(GradesConfig, UUID, String)} — classe
- * 100 % Java pur, sans import Minecraft/NeoForge, instanciable dans un JVM autonome.</p>
+ * Pure Java, with no Minecraft or NeoForge import, so it runs in a standalone JVM.</p>
  *
- * <p>Seuil NFR1/NFR4 : tous les scores {@code avgt} doivent être
+ * <p>NFR1/NFR4 bound: every {@code avgt} score must be
  * {@code < 5 000 000 ns} (5 ms). En pratique attendu sub-microseconde (~200–800 ns).</p>
  */
 @BenchmarkMode(Mode.AverageTime)
@@ -54,7 +54,7 @@ public class PermissionResolverBenchmark {
      * Setup : 3 grades assignés, 10 permissions each (mirrors NFR scenario).
      * Grade 1 : 10 ALLOWs dont ALLOWED_NODE.
      * Grade 2 : 10 ALLOWs (autres nœuds).
-     * Grade 3 : DENY explicite sur DENIED_NODE (INVARIANT-101).
+     * Grade 3: an explicit DENY on DENIED_NODE (INVARIANT-101).
      */
     @Setup(Level.Trial)
     public void setup() {
@@ -75,7 +75,7 @@ public class PermissionResolverBenchmark {
         for (int i = 0; i < 10; i++) g2.permissions.add("customperm.member.perm" + i);
         grades.grades.put("member", g2);
 
-        // Grade 3 — restricted : DENY sur DENIED_NODE → short-circuit INVARIANT-101
+        // Grade 3, restricted: a DENY on DENIED_NODE, which short-circuits per INVARIANT-101
         GradesConfig.Grade g3 = new GradesConfig.Grade();
         g3.name = "restricted";
         g3.deniedPermissions.add(DENIED_NODE);
@@ -113,7 +113,7 @@ public class PermissionResolverBenchmark {
     }
 
     /**
-     * AC2 — Scénario ALLOW : nœud présent dans grade 1, résolution complète des 3 grades.
+     * AC2, the ALLOW case: the node is in grade 1, and all 3 grades are resolved.
      * Résultat attendu : {@code true}.
      */
     @Benchmark
@@ -123,7 +123,7 @@ public class PermissionResolverBenchmark {
 
     /**
      * AC2 — Scénario DENY short-circuit (INVARIANT-101) : grade 3 contient un DENY explicite.
-     * L'algorithme doit court-circuiter dès que le DENY est trouvé.
+     * The algorithm must short-circuit as soon as the DENY is found.
      * Résultat attendu : {@code false}.
      */
     @Benchmark
@@ -141,8 +141,8 @@ public class PermissionResolverBenchmark {
     }
 
     /**
-     * AC2 — Scénario nœud absent : parcourt tous les grades, aucun match, retourne false.
-     * Représente le cas pessimiste (scan complet sans early-exit).
+     * AC2, the missing-node case: every grade is walked, nothing matches, false is returned.
+     * This is the worst case, a full scan with no early exit.
      * Résultat attendu : {@code false}.
      */
     @Benchmark

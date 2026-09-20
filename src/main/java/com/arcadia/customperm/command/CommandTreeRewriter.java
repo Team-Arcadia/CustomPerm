@@ -92,44 +92,43 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
     }
 
     /**
-     * Appelée après chaque hot-reload réussi de la configuration (É2.6).
+     * Called after every successful config hot-reload.
      *
-     * <p>Les prédicats de {@code wrapRecursive} lisent {@code grantedCommands} dynamiquement
-     * à chaque évaluation — aucun re-wrapping structurel n'est nécessaire après un reload.
-     * Le push du {@code ClientboundCommandsPacket} est déjà géré par le reload handler
-     * ({@code CustomPermCommand.reload} étape 3) via {@code server.execute()} (INVARIANT-501) —
-     * ne pas le répliquer ici pour éviter un double envoi.</p>
+     * <p>The predicates built by {@code wrapRecursive} read {@code grantedCommands} at evaluation
+     * time, so a reload needs no structural re-wrapping. The {@code ClientboundCommandsPacket} is
+     * already pushed by the reload handler ({@code CustomPermCommand.reload}, step 3) through
+     * {@code server.execute()} (INVARIANT-501): do not repeat it here, it would send twice.</p>
      *
-     * @param snapshot Nouveau snapshot de configuration (déjà appliqué dans ConfigManager)
-     * @param server   Serveur Minecraft — peut être null si aucun serveur actif
+     * @param snapshot the new config snapshot, already applied in ConfigManager
+     * @param server   the Minecraft server, null when none is running
      */
     @Override
     public void onConfigReload(ConfigSnapshot snapshot, MinecraftServer server) {
         if (server != null) {
-            // Applique aussi les changements d'aliases.json au dispatcher live : ajouts,
-            // suppressions (avec restauration du nœud shadowé) et steps modifiés. Sans
-            // cela, /customperm reload ne touche que la config en mémoire et les alias
-            // continuent d'exécuter les anciens steps capturés dans leur closure.
+            // Apply the aliases.json changes to the live dispatcher too: additions, removals
+            // (restoring the shadowed node) and edited steps. Without this, /customperm reload
+            // only touches the in-memory config and an alias keeps running the steps its
+            // closure captured at registration.
             AliasManager.applyConfig(server.getCommands().getDispatcher());
         }
-        // repair APRÈS applyConfig : un nœud restauré par la suppression d'un alias
-        // redevient éligible au wrapping s'il est exposé.
+        // repair runs AFTER applyConfig: a node restored by an alias removal becomes eligible
+        // for wrapping again once it is exposed.
         int repaired = repair(server);
-        // Re-pose la vérification CustomPerm par-dessus une éventuelle injection LuckPerms.
+        // Re-apply CustomPerm's check on top of any LuckPerms injection.
         reassertExposedCommands(server);
         CustomPerm.LOGGER.info("[CustomPerm] CommandTreeRewriter.onConfigReload — repaired {} command wrapper(s).", repaired);
     }
 
-    // LOWEST : maximise la chance de passer après les handlers RegisterCommandsEvent des
-    // autres mods, pour que leurs commandes soient déjà dans le dispatcher au wrapping.
-    // (Filet de sécurité complémentaire : repair() au ServerStartedEvent.)
+    // LOWEST: the best chance of running after the other mods' RegisterCommandsEvent handlers,
+    // so their commands are already in the dispatcher when the wrapping happens.
+    // (Second safety net: repair() on ServerStartedEvent.)
     @SubscribeEvent(priority = EventPriority.LOWEST)
     public static void onRegisterCommands(RegisterCommandsEvent event) {
         CommandDispatcher<CommandSourceStack> dispatcher = event.getDispatcher();
 
-        // Nouveau dispatcher à chaque RegisterCommandsEvent (/reload vanilla, redémarrage
-        // dans la même JVM) : l'état statique référence l'ancien arbre et doit être purgé,
-        // sinon fuite mémoire + restauration de nœuds périmés côté AliasManager.
+        // Every RegisterCommandsEvent brings a new dispatcher (a vanilla /reload, a restart in
+        // the same JVM): the static state points at the old tree and must be cleared, or it
+        // leaks memory and AliasManager restores stale nodes.
         clearServerState();
         AliasManager.clearServerState();
 
@@ -163,7 +162,7 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
     }
 
     /**
-     * Purge l'état statique lié au dispatcher courant — voir onRegisterCommands.
+     * Clears the static state tied to the current dispatcher; see onRegisterCommands.
      * Rate-limit history is deliberately not cleared here: a vanilla /reload rebuilds the dispatcher,
      * and wiping the counters with it handed every player a fresh quota. RateLimitPersistence clears
      * it on server stop, after saving it.

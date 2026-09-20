@@ -43,7 +43,7 @@ public class ConfigManager {
     private final Path rateLimitsFile;
 
     private final AtomicReference<ConfigSnapshot> configRef;
-    // package-private pour accès depuis les tests unitaires (même package)
+    // package-private, read by the unit tests in the same package
     final AtomicBoolean reloading = new AtomicBoolean(false);
 
     /**
@@ -57,14 +57,14 @@ public class ConfigManager {
     /** What made the last load fail, for admin-facing messages; null after a successful load. */
     private volatile String lastLoadFailure;
 
-    /** Constructeur production — chemin résolu via FMLPaths. */
+    /** Production constructor; the path is resolved through FMLPaths. */
     public ConfigManager() {
         this(
                 FMLPaths.CONFIGDIR.get().resolve("arcadia").resolve("customperm"),
                 FMLPaths.CONFIGDIR.get().resolve("customperm"));
     }
 
-    /** Constructeur injectable pour tests unitaires (pas d'import NeoForge requis dans les tests). */
+    /** Injectable constructor for the unit tests, which must not import NeoForge. */
     ConfigManager(Path dir) {
         this(dir, null);
     }
@@ -77,18 +77,19 @@ public class ConfigManager {
         this.commandsFile    = dir.resolve("commands.json");
         this.settingsFile    = dir.resolve("settings.json");
         this.rateLimitsFile  = dir.resolve("ratelimits.json");
-        // snapshot vide initial — remplacé par load()
+        // Empty initial snapshot, replaced by load().
         this.configRef = new AtomicReference<>(
                 new ConfigSnapshot(new GradesConfig(), new AliasesConfig(), new CommandsConfig(), new SettingsConfig(), new RateLimitsConfig()));
     }
 
     /**
-     * Charge la config depuis le disque et remplace le snapshot atomiquement.
+     * Loads the config from disk and replaces the snapshot atomically.
      *
-     * <p>Transaction tout-ou-rien : si un seul fichier contient du JSON invalide,
-     * aucune config n'est appliquée et le snapshot précédent reste intact (INVARIANT-401).</p>
+     * <p>All or nothing: if a single file holds invalid JSON, nothing is applied and the previous
+     * snapshot stays intact (INVARIANT-401).</p>
      *
-     * @return true si le reload a réussi, false si rejeté (reload concurrent) ou si JSON invalide
+     * @return true when the reload succeeded, false when it was rejected (a reload already running)
+     *         or a file held invalid JSON
      */
     public boolean load() {
         if (!reloading.compareAndSet(false, true)) {
@@ -105,9 +106,8 @@ public class ConfigManager {
             SettingsConfig   settings   = new SettingsConfig();
             RateLimitsConfig rateLimits = new RateLimitsConfig();
 
-            // Parsing avec catch individuel par fichier — INVARIANT-401 :
-            // si un fichier est invalide, on retourne false AVANT configRef.set(),
-            // le snapshot précédent reste intact.
+            // One catch per file, INVARIANT-401: an invalid file returns false BEFORE
+            // configRef.set(), so the previous snapshot stays intact.
             List<String> invalidFiles = new ArrayList<>();
             if (Files.exists(gradesFile)) {
                 try {
@@ -188,7 +188,7 @@ public class ConfigManager {
                 return false;
             }
 
-            // Tous les fichiers sont valides — mise à jour atomique du snapshot
+            // Every file parsed: update the snapshot atomically.
             configRef.set(new ConfigSnapshot(grades, aliases, commands, settings, rateLimits));
             diskWritable = true;
             lastLoadFailure = null;
@@ -260,9 +260,9 @@ public class ConfigManager {
     }
 
     /**
-     * Écrit une backup horodatée des fichiers de config dans {@code backup/}.
-     * Non-fatale : un échec logge un WARN mais ne remet pas en cause le chargement.
-     * Appelée uniquement après un {@link #load()} réussi.
+     * Writes a timestamped backup of the config files into {@code backup/}.
+     * Non-fatal: a failure logs a WARN and never fails the load itself.
+     * Called only after a successful {@link #load()}.
      */
     private void writeBackup() {
         String timestamp = LocalDateTime.now().format(BACKUP_TIMESTAMP);
@@ -277,7 +277,7 @@ public class ConfigManager {
             Files.writeString(backupDir.resolve("settings.json."   + timestamp + ".bak"), GSON.toJson(snap.settings()));
             Files.writeString(backupDir.resolve("ratelimits.json." + timestamp + ".bak"), GSON.toJson(snap.rateLimits()));
 
-            // Rotation AR10 : conserver les 3 dernières backups par fichier
+            // Rotation AR10: keep the last 3 backups of each file.
             rotateBackups(backupDir, "grades.json");
             rotateBackups(backupDir, "aliases.json");
             rotateBackups(backupDir, "commands.json");
@@ -286,15 +286,15 @@ public class ConfigManager {
 
         } catch (IOException e) {
             LOGGER.warn("[CustomPerm] Failed to write config backup: {}", e.getMessage());
-            // Non-fatal : la config est chargée correctement, seul le backup a échoué
+            // Non-fatal: the config loaded, only the backup failed.
         }
     }
 
     /**
-     * Conserve les 3 dernières backups pour {@code baseName}, supprime les plus anciennes.
-     * Le tri lexicographique est équivalent au tri chronologique grâce au format ISO du timestamp.
+     * Keeps the last 3 backups of {@code baseName} and deletes the older ones.
+     * A lexicographic sort is a chronological one here, the timestamp being ISO formatted.
      *
-     * <p>Package-private pour accès depuis {@code ConfigManagerTest} (même package).</p>
+     * <p>Package-private for {@code ConfigManagerTest}, in the same package.</p>
      */
     void rotateBackups(Path backupDir, String baseName) throws IOException {
         List<Path> backups;
@@ -307,7 +307,7 @@ public class ConfigManager {
                     .sorted()   // tri lexicographique = ordre chronologique (format ISO)
                     .collect(Collectors.toList());
         }
-        // Supprimer toutes sauf les 3 plus récentes
+        // Delete all but the 3 most recent.
         int toDelete = backups.size() - 3;
         for (int i = 0; i < toDelete; i++) {
             Files.deleteIfExists(backups.get(i));
@@ -331,12 +331,12 @@ public class ConfigManager {
         lastLoadFailure = reason;
     }
 
-    /** Retourne le snapshot courant — lecture atomique, jamais null. */
+    /** The current snapshot; an atomic read, never null. */
     public ConfigSnapshot getSnapshot() {
         return configRef.get();
     }
 
-    // Getters de commodité — compatibles avec tous les appels existants sans modification des call-sites
+    // Convenience getters, so no existing call site has to change.
     public GradesConfig     getGrades()     { return configRef.get().grades(); }
     public AliasesConfig    getAliases()    { return configRef.get().aliases(); }
     public CommandsConfig   getCommands()   { return configRef.get().commands(); }

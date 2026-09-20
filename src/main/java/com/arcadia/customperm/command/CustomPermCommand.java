@@ -144,8 +144,8 @@ import java.util.stream.Collectors;
 public class CustomPermCommand {
 
     // ---------------- suggestion providers ----------------
-    // Toutes les données proviennent de la config vivante (configManager) ou du dispatcher :
-    // recalculées à chaque frappe, donc toujours à jour après add/remove/reload.
+    // Every suggestion comes from the live config (configManager) or from the dispatcher, and is
+    // recomputed on each keystroke, so it is current after an add, a remove or a reload.
 
     /** Grades existants. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRADES =
@@ -224,12 +224,12 @@ public class CustomPermCommand {
         (ctx, builder) -> SharedSuggestionProvider.suggest(
             CustomPerm.configManager.getRateLimits().rules.keySet(), builder);
 
-    /** Commandes actuellement exposées (pour dé-exposer). */
+    /** Currently exposed commands, for hiding one. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_EXPOSED_COMMANDS =
         (ctx, builder) -> SharedSuggestionProvider.suggest(
             CustomPerm.configManager.getCommands().grantedCommands, builder);
 
-    /** Racines du dispatcher pas encore exposées et hors /customperm (pour exposer). */
+    /** Dispatcher roots not exposed yet and outside /customperm, for exposing one. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_EXPOSABLE_COMMANDS =
         (ctx, builder) -> {
             var server = ctx.getSource().getServer();
@@ -242,7 +242,7 @@ public class CustomPermCommand {
             return SharedSuggestionProvider.suggest(names, builder);
         };
 
-    /** Union commandes exposées + alias — cibles plausibles d'une limite de débit. */
+    /** Exposed commands and aliases together: what a rate limit plausibly targets. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_EXPOSED_AND_ALIASES =
         (ctx, builder) -> {
             Set<String> union = new TreeSet<>(CustomPerm.configManager.getCommands().grantedCommands);
@@ -250,7 +250,7 @@ public class CustomPermCommand {
             return SharedSuggestionProvider.suggest(union, builder);
         };
 
-    /** Toutes les racines du dispatcher (debug/scan : inspection arbitraire). */
+    /** Every dispatcher root, for debug and scan, which inspect anything. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_ALL_COMMANDS =
         (ctx, builder) -> {
             var server = ctx.getSource().getServer();
@@ -261,7 +261,7 @@ public class CustomPermCommand {
             return SharedSuggestionProvider.suggest(names, builder);
         };
 
-    /** Joueurs en ligne, par nom (debug conserve StringArgument pour supporter l'offline). */
+    /** Online players by name; debug keeps a StringArgument so it also takes an offline one. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_ONLINE_PLAYERS =
         (ctx, builder) -> SharedSuggestionProvider.suggest(
             ctx.getSource().getOnlinePlayerNames(), builder);
@@ -294,7 +294,7 @@ public class CustomPermCommand {
             return SharedSuggestionProvider.suggest(nodes, builder);
         };
 
-    /** Perms déjà attribuées au grade nommé par l'argument "grade" (pour removeperm). */
+    /** Nodes already granted to the grade named by the "grade" argument, for removeperm. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRADE_PERMS =
         (ctx, builder) -> {
             String gradeName = StringArgumentType.getString(ctx, "grade");
@@ -402,7 +402,7 @@ public class CustomPermCommand {
             return SharedSuggestionProvider.suggest(GradeAdmin.knownPlayerNames(server), builder);
         };
 
-    /** Indices de steps valides (0..n-1) pour l'alias nommé par l'argument "name". */
+    /** Valid step indices (0..n-1) of the alias named by the "name" argument. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_ALIAS_STEP_INDEX =
         (ctx, builder) -> {
             String name = StringArgumentType.getString(ctx, "name");
@@ -1856,7 +1856,7 @@ public class CustomPermCommand {
 
         var server = ctx.getSource().getServer();
 
-        // P1 : guard explicite — server null = pas de contexte serveur (distinct de joueur offline)
+        // P1: explicit guard. A null server means no server context, which is not an offline player.
         if (server == null) {
             ctx.getSource().sendFailure(Component.literal("[CustomPerm] No server context available."));
             return 0;
@@ -1871,7 +1871,7 @@ public class CustomPermCommand {
         ServerPlayer player = server.getPlayerList().getPlayerByName(playerName);
 
         if (player == null) {
-            // AC3 : rapport partiel — joueur hors-ligne
+            // AC3: partial report, the player being offline.
             ctx.getSource().sendSuccess(() -> Component.literal(
                 "=== Debug for /" + cmd + " (" + playerName + ") [OFFLINE] ==="), false);
             ctx.getSource().sendSuccess(() -> Component.literal(
@@ -1884,7 +1884,7 @@ public class CustomPermCommand {
             return 1; // P2 : rapport partiel affiché avec succès → retourner 1
         }
 
-        // AC1/AC2 : rapport complet — joueur en ligne
+        // AC1/AC2: full report, the player being online.
         CommandSourceStack source = player.createCommandSourceStack();
         boolean op2 = source.hasPermission(2);
         boolean op4 = source.hasPermission(4);
@@ -1964,7 +1964,7 @@ public class CustomPermCommand {
     private static int status(CommandContext<CommandSourceStack> ctx) {
         var server = ctx.getSource().getServer();
 
-        // Snapshot unique pour éviter TOCTOU si isDegraded() bascule en cours d'exécution
+        // Read once: isDegraded() flipping mid-execution would otherwise be a TOCTOU.
         String backend = CustomPerm.backendLabel();
 
         int totalCmds = server == null ? 0 : server.getCommands().getDispatcher().getRoot().getChildren().size();
@@ -1985,7 +1985,8 @@ public class CustomPermCommand {
             ? "exposed commands (LuckPerms checks every command)"
             : CustomPerm.gatesAllCommands() ? "every command (gateAllCommands)" : "exposed commands only")), false);
 
-        // AC1 grades-fallback : afficher grades si Internal pur OU si fallback (InternalPermService actif dans les deux cas)
+        // AC1 grades fallback: show the grades on a pure internal backend and on a fallback alike,
+        // InternalPermService being what answers in both cases.
         boolean showGrades = !CustomPerm.isLuckPermsActive();
         if (showGrades) {
             ctx.getSource().sendSuccess(() -> Component.literal("  Internal grades    : " + grades), false);
@@ -2031,7 +2032,7 @@ public class CustomPermCommand {
         }
         rootNames.sort(String::compareTo);
 
-        // F1+F2 : hoist + Locale.ROOT pour éviter TOCTOU locale et allocations répétées
+        // F1+F2: hoisted, and Locale.ROOT, against a locale TOCTOU and repeated allocations.
         final String patternLower = (pattern != null) ? pattern.toLowerCase(Locale.ROOT) : null;
 
         int displayed = 0;

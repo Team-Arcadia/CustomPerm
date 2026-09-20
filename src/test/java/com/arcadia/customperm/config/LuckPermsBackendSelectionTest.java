@@ -20,60 +20,61 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests data-layer pour la sélection du backend (histoire 4-1).
- * Zéro import NeoForge/Minecraft — tests JUnit 5 purs.
+ * Data-layer tests of backend selection (story 4-1).
+ * No NeoForge or Minecraft import: pure JUnit 5.
  *
- * Limites intentionnelles (déférées à É6.2 GameTest) :
- *   - Instanciation réelle de LuckPermsService : LP API est compileOnly → absent du classpath test
- *   - Vérification via ServicesManager/ModList : requiert NeoForge runtime
- *   - Comportement warnIfLuckPerms : requiert CommandContext<CommandSourceStack>
- *   - Log messages au démarrage : requiert ServerStartingEvent
+ * Deliberately left to the GameTests:
+ *   - instantiating a real LuckPermsService: the LP API is compileOnly, absent from the test classpath
+ *   - checking through ServicesManager or ModList: needs the NeoForge runtime
+ *   - warnIfLuckPerms behaviour: needs a CommandContext&lt;CommandSourceStack&gt;
+ *   - the start-up log messages: need a ServerStartingEvent
  *
- * Couvre les aspects testables en pur Java :
- *   - Contrat PermissionService (interface + implémentation InternalPermService)
- *   - Simulation de la logique de sélection du backend
- *   - INVARIANT-502 : backend immuable une fois sélectionné (simulation AtomicReference)
+ * Covers what is testable in pure Java:
+ *   - the PermissionService contract (interface and InternalPermService implementation)
+ *   - the backend selection logic, simulated
+ *   - INVARIANT-502: the backend is fixed once selected (simulated with an AtomicReference)
  */
 class LuckPermsBackendSelectionTest {
 
     @TempDir
     Path tempDir;
 
-    // ── T3.2-a — Contrat interface PermissionService ─────────────────────────
+    // ── T3.2-a: the PermissionService contract ──────────────────────────────
 
-    // InternalPermService implémente bien PermissionService et est du bon type concret
+    // InternalPermService does implement PermissionService, with the right concrete type
     @Test
     void shouldImplementPermissionService_internalPermService() {
         ConfigManager cm = new ConfigManager(tempDir);
         InternalPermService svc = new InternalPermService(cm);
         assertInstanceOf(InternalPermService.class, svc,
-                "InternalPermService doit être instanciable comme implémentation concrète de PermissionService");
+                "InternalPermService must be instantiable as a concrete PermissionService");
     }
 
-    // onConfigReload est un no-op par défaut dans PermissionService
-    // InternalPermService lit dynamiquement depuis ConfigManager → pas de cache à invalider
+    // onConfigReload is a no-op by default in PermissionService: InternalPermService reads from
+    // ConfigManager at call time, so it holds no cache to invalidate
     @Test
     void shouldNotThrow_whenOnConfigReloadCalledWithNullSnapshot() {
         ConfigManager cm = new ConfigManager(tempDir);
         PermissionService svc = new InternalPermService(cm);
         assertDoesNotThrow(() -> svc.onConfigReload(null),
-                "onConfigReload doit être un no-op par défaut (InternalPermService lit dynamiquement)");
+                "onConfigReload must be a no-op by default, InternalPermService reading at call time");
     }
 
-    // ── T3.2-b — Simulation de la logique de sélection du backend ────────────
+    // ── T3.2-b: the backend selection logic, simulated ──────────────────────
 
     /**
-     * Vérifie que InternalPermService est instanciable et constitue un backend valide
-     * pour la branche "LuckPerms absent" du constructeur CustomPerm (FR28).
+     * InternalPermService can be instantiated and is a valid backend for the "LuckPerms absent"
+     * branch of the CustomPerm constructor (FR28).
      *
-     * Code production (branche testée) :
+     * The production branch under test:
      *   } else {
      *       permissions = new InternalPermService(configManager);
      *       LOGGER.info("[CustomPerm] LuckPerms not present — using internal JSON grade backend.");
      *   }
      *
-     * Note : la branche LP (ModList.isLoaded = true) ne peut pas être testée ici —
-     * LuckPermsService requiert LP API (compileOnly → absent du classpath test). Déféré à É6.2 GameTest.
+     * Note: the LuckPerms branch (ModList.isLoaded = true) cannot be tested here, LuckPermsService
+     * needing the LP API, which is compileOnly and absent from the test classpath. It is covered
+     * by the GameTests.
      */
     @Test
     void shouldSelectInternalBackend_whenLuckPermsNotLoaded() {
@@ -81,30 +82,30 @@ class LuckPermsBackendSelectionTest {
         InternalPermService backend = new InternalPermService(cm);
 
         assertInstanceOf(PermissionService.class, backend,
-                "Sans LuckPerms, InternalPermService doit être sélectionné et implémenter PermissionService (FR28)");
-        assertNotNull(backend, "Le backend interne ne doit pas être null");
+                "without LuckPerms, InternalPermService must be selected and implement PermissionService (FR28)");
+        assertNotNull(backend, "the internal backend must not be null");
     }
 
-    // ── T3.2-c — INVARIANT-502 : backend immuable une fois sélectionné ───────
+    // ── T3.2-c: INVARIANT-502, the backend is fixed once selected ───────────
 
     /**
-     * Simule l'immuabilité d'INVARIANT-502 via AtomicReference.
-     * En production : CustomPerm.permissions est un champ static écrit une seule fois
-     * dans le constructeur @Mod — aucun chemin de code ne le réécrit ensuite.
+     * Simulates INVARIANT-502 with an AtomicReference.
+     * In production CustomPerm.permissions is a static field written once, in the @Mod
+     * constructor, and no code path writes it again.
      */
     @Test
     void shouldNotReplaceBackend_onceSelected_invariant502() {
         ConfigManager cm = new ConfigManager(tempDir);
         PermissionService initialBackend = new InternalPermService(cm);
 
-        // AtomicReference simule CustomPerm.permissions — écrit une seule fois
+        // The AtomicReference stands in for CustomPerm.permissions, written once
         AtomicReference<PermissionService> backendRef = new AtomicReference<>(initialBackend);
 
-        // Tentative de re-sélection après initialisation : compareAndSet(null, x) est no-op si non null
+        // Selecting again after init: compareAndSet(null, x) does nothing once the value is set
         PermissionService secondAttempt = new InternalPermService(cm);
         backendRef.compareAndSet(null, secondAttempt);
 
         assertSame(initialBackend, backendRef.get(),
-                "INVARIANT-502 : le backend sélectionné au démarrage ne doit pas être remplacé en cours de session");
+                "INVARIANT-502: the backend selected at start-up must not be replaced mid-session");
     }
 }

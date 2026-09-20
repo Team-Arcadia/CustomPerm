@@ -9,10 +9,10 @@
 package com.arcadia.customperm.config;
 
 /**
- * Snapshot immutable de la configuration CustomPerm.
- * Obtenu via ConfigManager.getSnapshot() — jamais construit directement.
- * Les sous-configs (grades, aliases, commands) sont les mêmes objets GSON-désérialisés ;
- * ne pas les muter après construction du snapshot.
+ * Immutable snapshot of the CustomPerm configuration.
+ * Obtained through ConfigManager.getSnapshot(), never built directly.
+ * The sub-configs (grades, aliases, commands) are the GSON-deserialized objects themselves:
+ * do not mutate them once the snapshot exists.
  */
 public record ConfigSnapshot(
         GradesConfig grades,

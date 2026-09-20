@@ -51,9 +51,8 @@ public class AliasManager {
     private static final Set<String> REGISTERED_ALIASES = new HashSet<>();
 
     /**
-     * Profondeur maximale d'alias imbriqués. Sans cette garde, un alias qui s'invoque
-     * lui-même (ou un cycle a→b→a) part en récursion infinie avec une source élevée
-     * op-4 jusqu'au StackOverflowError.
+     * Maximum nesting depth of aliases. Without this guard, an alias that calls itself (or a
+     * cycle a to b to a) recurses forever on an op-4 elevated source until StackOverflowError.
      */
     static final int MAX_ALIAS_DEPTH = 8;
     private static final ThreadLocal<Integer> ALIAS_DEPTH = ThreadLocal.withInitial(() -> 0);
@@ -79,11 +78,11 @@ public class AliasManager {
     }
 
     /**
-     * Synchronise le dispatcher live avec l'état courant de la config (hot-reload É2.6).
-     * Couvre les trois cas qu'un simple registerAll raterait après édition d'aliases.json :
-     * alias ajoutés au fichier, alias supprimés (avec restauration du nœud shadowé), et
-     * steps modifiés — la closure d'exécution capture la liste de steps à l'enregistrement,
-     * donc un re-register est obligatoire pour qu'elle pointe sur les nouveaux steps.
+     * Brings the live dispatcher in step with the current config on a hot-reload.
+     * Covers the three cases a plain registerAll would miss after aliases.json was edited:
+     * aliases added to the file, aliases removed (restoring the shadowed node), and edited
+     * steps. The execution closure captures the step list at registration time, so a
+     * re-register is what makes it point at the new steps.
      */
     public static void applyConfig(CommandDispatcher<CommandSourceStack> dispatcher) {
         Set<String> names = new HashSet<>(CustomPerm.configManager.getAliases().aliases.keySet());
@@ -94,10 +93,10 @@ public class AliasManager {
     }
 
     /**
-     * Purge l'état statique lié au dispatcher courant. À appeler quand le dispatcher est
-     * remplacé (RegisterCommandsEvent — /reload, redémarrage) ou détruit (arrêt serveur) :
-     * sinon REGISTERED_ALIASES/SHADOWED_ORIGINALS retiennent des nœuds de l'ancien arbre
-     * (fuite mémoire) et une suppression d'alias restaurerait un nœud périmé.
+     * Clears the static state tied to the current dispatcher. Call it when the dispatcher is
+     * replaced (RegisterCommandsEvent: a /reload, a restart) or destroyed (server stop):
+     * otherwise REGISTERED_ALIASES and SHADOWED_ORIGINALS keep nodes of the old tree alive
+     * (a memory leak) and deleting an alias would restore a stale node.
      */
     /** Whether the live alias of this name replaced a real command, which comes back when the alias is deleted. */
     public static boolean shadowsCommand(String aliasName) {
@@ -200,7 +199,7 @@ public class AliasManager {
                         + " step failed: " + command + " (" + e.getMessage() + ")"));
                     CustomPerm.LOGGER.warn("[CustomPerm] alias /{} step `{}` failed: {}", alias, command, e.getMessage());
                 } catch (Throwable t) {
-                    // D1 : ne pas absorber les erreurs JVM fatales (OOM, SOE…) — même politique que LuckPermsService.
+                    // D1: never swallow a fatal JVM error (OOM, SOE), the same rule as LuckPermsService.
                     if (t instanceof Error e) throw e;
                     source.sendFailure(Component.literal("[CustomPerm] Alias /" + alias
                         + " step threw: " + command + " (" + t.getClass().getSimpleName() + ")"));
@@ -217,8 +216,8 @@ public class AliasManager {
         if (step == null) return "";
 
         String command = step.strip();
-        // Un seul slash optionnel : en retirer plusieurs casserait les commandes dont le
-        // littéral racine commence par "/" (style WorldEdit : step "//wand" → "/wand").
+        // One optional slash only: stripping more would break commands whose root literal
+        // starts with "/", WorldEdit style (step "//wand" means the "/wand" literal).
         if (command.startsWith("/")) {
             command = command.substring(1).strip();
         }

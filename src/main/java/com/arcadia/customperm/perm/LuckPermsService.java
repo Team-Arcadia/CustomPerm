@@ -26,21 +26,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 public class LuckPermsService implements PermissionService {
 
-    /** Fallback vers InternalPermService si LP devient défaillant (INVARIANT-301). */
+    /** Fallback to InternalPermService once LuckPerms fails (INVARIANT-301). */
     private final InternalPermService fallback;
 
     /**
-     * Flag de dégradation permanent. AtomicBoolean garantit que la bascule (false→true)
-     * n'a lieu qu'une seule fois même sous concurrence — et que le WARN AC2 n'est logué
-     * qu'une seule fois (compareAndSet gate).
+     * Permanent degradation flag. An AtomicBoolean makes the switch (false to true) happen once
+     * under concurrency, and the AC2 WARN be logged once, both gated by compareAndSet.
      */
     private final AtomicBoolean degraded = new AtomicBoolean(false);
 
     /**
-     * Abonnement LP actif — conservé pour pouvoir le fermer proprement à l'arrêt du serveur.
-     * Sans close(), l'abonnement survit au cycle de vie du serveur : la lambda garde une
-     * référence vers l'ancien MinecraftServer (fuite mémoire) et, au démarrage suivant dans
-     * la même JVM, le resync pointe vers un serveur mort.
+     * The live LuckPerms subscription, kept so it can be closed cleanly on server stop.
+     * Without close(), it outlives the server: the lambda holds the old MinecraftServer (a
+     * memory leak) and, on the next start in the same JVM, the resync points at a dead server.
      */
     private final Object hooksLock = new Object();
     private volatile ServerHooks serverHooks;
@@ -48,13 +46,13 @@ public class LuckPermsService implements PermissionService {
     private volatile EventSubscription<LogPublishEvent> logSubscription;
 
     public LuckPermsService(InternalPermService fallback) {
-        // P7 : fail-fast si fallback null — NPE tardif lors d'une vraie défaillance LP serait bien pire.
+        // P7: fail fast on a null fallback. A late NPE during a real LuckPerms failure is worse.
         this.fallback = Objects.requireNonNull(fallback, "fallback must not be null");
     }
 
     /**
-     * Retourne true si le backend LP est tombé en fallback permanent vers InternalPermService.
-     * Exposé pour la commande /customperm status (É5).
+     * True once the LuckPerms backend has fallen back permanently to InternalPermService.
+     * Read by /customperm status.
      */
     public boolean isDegraded() {
         return degraded.get();
@@ -118,7 +116,7 @@ public class LuckPermsService implements PermissionService {
      */
     private void markUnavailable(String reason, Throwable cause) {
         if (!degraded.compareAndSet(false, true)) return;
-        // P3 : throwable attaché pour que la cause LP soit visible dans les logs.
+        // P3: the throwable is attached so the LuckPerms cause shows in the logs.
         String mode = CustomPerm.configManager.getSettings().luckPermsFallbackMode;
         if (CustomPerm.configManager.getSettings().useInternalLuckPermsFallback()) {
             CustomPerm.LOGGER.warn("[CustomPerm] LuckPerms unavailable ({}) — switching permanently to internal backend (luckPermsFallbackMode=internal).", reason, cause);
@@ -213,9 +211,9 @@ public class LuckPermsService implements PermissionService {
     }
 
     /**
-     * Ferme l'abonnement LP au moment où le serveur s'arrête, pour que :
-     * 1) la lambda ne retienne pas l'ancien MinecraftServer (fuite mémoire),
-     * 2) un redémarrage de serveur dans la même JVM ré-abonne avec le bon serveur.
+     * Closes the LuckPerms subscription when the server stops, so that:
+     * 1) the lambda stops holding the old MinecraftServer (a memory leak),
+     * 2) a restart in the same JVM subscribes again against the right server.
      */
     public void closeServerHooks() {
         ServerHooks hooks;

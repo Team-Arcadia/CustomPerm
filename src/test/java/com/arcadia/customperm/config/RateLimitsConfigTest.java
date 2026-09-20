@@ -14,8 +14,8 @@ import org.junit.jupiter.api.Test;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests de la couche data pour les limites d'exécution par commande.
- * Zéro import Minecraft — tests JUnit 5 purs sur RateLimitsConfig.
+ * Data-layer tests of the per-command rate limits.
+ * No Minecraft import: pure JUnit 5 over RateLimitsConfig.
  */
 class RateLimitsConfigTest {
 
@@ -31,12 +31,12 @@ class RateLimitsConfigTest {
     @Test
     void shouldReportEnforced_onlyWhenRuleExistsAndIsEnabled() {
         RateLimitsConfig cfg = new RateLimitsConfig();
-        assertFalse(cfg.isEnforced("observable"), "Pas de règle -> pas d'application");
+        assertFalse(cfg.isEnforced("observable"), "no rule means nothing is enforced");
 
         RateLimitsConfig.Rule rule = new RateLimitsConfig.Rule();
         rule.enabled = false;
         cfg.rules.put("observable", rule);
-        assertFalse(cfg.isEnforced("observable"), "Règle désactivée -> pas d'application");
+        assertFalse(cfg.isEnforced("observable"), "a disabled rule enforces nothing");
 
         rule.enabled = true;
         assertTrue(cfg.isEnforced("observable"), "Règle activée -> appliquée");

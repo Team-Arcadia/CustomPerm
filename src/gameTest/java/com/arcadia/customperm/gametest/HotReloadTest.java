@@ -68,7 +68,7 @@ public class HotReloadTest {
 
     /**
      * INVARIANT-401 — rollback: corrupt grades.json must cause load() to return false
-     * AND leave the snapshot unchanged (transaction tout-ou-rien).
+     * AND leave the snapshot unchanged (all or nothing).
      *
      * This is the REAL test of {@code shouldRetainPreviousSnapshot_afterFailedReload()}
      * which was a placeholder in {@code ConfigManagerTest.java} (story 6-1 gap).

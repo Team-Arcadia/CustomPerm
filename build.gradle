@@ -103,22 +103,22 @@ dependencies {
     luckPermsGameTestMod "curse.maven:luckperms-431733:5971552"
 
     // JMH benchmarks depend on main compiled classes only (no transitive NeoForge deps).
-    // files() évite le conflit Gson entre testImplementation:2.11.0 et NeoForge:strictly 2.10.1.
-    // Les benchmarks n'utilisent que des classes pur-Java (PermissionResolver, GradesConfig).
+    // files() avoids the Gson conflict between testImplementation:2.11.0 and NeoForge strictly:2.10.1.
+    // The benchmarks only touch pure Java classes (PermissionResolver, GradesConfig).
     jmhImplementation files(sourceSets.main.output.classesDirs)
 
-    // JUnit 5 — tests unitaires purs Java (sans NeoForge)
+    // JUnit 5: pure Java unit tests, with no NeoForge.
     testImplementation 'org.junit.jupiter:junit-jupiter:5.11.0'
     // H2 in MySQL mode runs cluster mode's SQL in CI without a MySQL server. Tests only, never in the jar.
     // 2.4.240: same sha256 on Maven Central and the h2database GitHub release (29b70e42...57ce0).
     testImplementation 'com.h2database:h2:2.4.240'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
 
-    // SLF4J pour tests unitaires (ConfigManager utilise LoggerFactory hors NeoForge)
+    // SLF4J for the unit tests: ConfigManager uses LoggerFactory outside NeoForge.
     testImplementation 'org.slf4j:slf4j-api:2.0.9'
     testRuntimeOnly 'org.slf4j:slf4j-simple:2.0.9'
 
-    // Gson pour tests unitaires (transitive de NeoForge, pas exposée au classpath test)
+    // Gson for the unit tests: transitive through NeoForge, not exposed to the test classpath.
     testImplementation 'com.google.code.gson:gson:2.11.0'
 }
 
@@ -138,18 +138,18 @@ def prepareLuckPermsGameTestMods = tasks.register('prepareLuckPermsGameTestMods'
 tasks.matching { it.name == 'runGameTestServer' }.configureEach { dependsOn prepareInternalGameTestMods }
 tasks.matching { it.name == 'runGameTestServerLuckPerms' }.configureEach { dependsOn prepareLuckPermsGameTestMods }
 
-// jmhJar regroupe le runtime NeoForge (>65535 entries) — zip64 obligatoire.
+// jmhJar bundles the NeoForge runtime (over 65535 entries), so zip64 is required.
 tasks.named('jmhJar', Jar) { zip64 = true }
 
-// Résout le conflit Gson entre testImplementation:2.11.0 et NeoForge strictly:2.10.1
-// uniquement sur le classpath JMH (n'affecte pas les tests JUnit5).
+// Resolves the Gson conflict between testImplementation:2.11.0 and NeoForge strictly:2.10.1
+// on the JMH classpath only; the JUnit 5 tests are untouched.
 configurations.named('jmhRuntimeClasspath') {
     resolutionStrategy.force 'com.google.code.gson:gson:2.10.1'
 }
 
 // JMH microbenchmarks — hot paths (story 6-3 — NFR1, NFR4, AR1, AR11)
-// Ne PAS ajouter sourceSet sourceSets.jmh dans neoForge.mods : les benchmarks
-// tournent dans un JVM autonome sans NeoForge.
+// Do NOT add sourceSets.jmh to neoForge.mods: the benchmarks run in a standalone JVM
+// without NeoForge.
 jmh {
     jmhVersion       = '1.37'
     warmupIterations = 3

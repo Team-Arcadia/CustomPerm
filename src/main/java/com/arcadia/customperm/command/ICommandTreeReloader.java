@@ -12,22 +12,21 @@ import com.arcadia.customperm.config.ConfigSnapshot;
 import net.minecraft.server.MinecraftServer;
 
 /**
- * Point d'extension pour notifier le CommandTree d'un reload de configuration.
+ * Extension point telling the command tree that the configuration was reloaded.
  *
- * <p>Implémentation courante (H1.3) : {@link NoOpCommandTreeReloader} — no-op.
- * Les predicats de {@code CommandTreeRewriter} sont dynamiques et lisent
- * {@code configManager.getCommands()} à l'évaluation ; aucune action structurelle
- * n'est nécessaire pour la cohérence des permissions.</p>
+ * <p>{@link NoOpCommandTreeReloader} is enough on its own: the predicates of
+ * {@code CommandTreeRewriter} are dynamic and read {@code configManager.getCommands()} at
+ * evaluation time, so permissions stay coherent without any structural action.</p>
  *
- * <p>Implémentation É2.6 : {@code CommandTreeRewriter} implémentera cette interface
- * et réenregistrera les nœuds si la structure de l'arbre doit évoluer.</p>
+ * <p>{@code CommandTreeRewriter} implements this interface and re-registers nodes when the
+ * shape of the tree itself has to change.</p>
  */
 public interface ICommandTreeReloader {
     /**
-     * Appelée après chaque hot-reload réussi de la configuration.
+     * Called after every successful config hot-reload.
      *
-     * @param snapshot Le nouveau snapshot de configuration (déjà appliqué dans ConfigManager)
-     * @param server   Le serveur Minecraft — peut être null si aucun serveur actif
+     * @param snapshot the new config snapshot, already applied in ConfigManager
+     * @param server   the Minecraft server, null when none is running
      */
     void onConfigReload(ConfigSnapshot snapshot, MinecraftServer server);
 }

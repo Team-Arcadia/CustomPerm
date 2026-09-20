@@ -19,8 +19,8 @@ import java.util.stream.Collectors;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests de la couche data pour le CRUD des alias.
- * Zéro import Minecraft — tests JUnit 5 purs sur AliasesConfig.
+ * Data-layer tests of alias create, read, update and delete.
+ * No Minecraft import: pure JUnit 5 over AliasesConfig.
  * Couvre AC1-AC4 de l'histoire 3-1.
  */
 class AliasesConfigCrudTest {
@@ -31,7 +31,7 @@ class AliasesConfigCrudTest {
     }
 
     /**
-     * Reproduit la logique de parsing de CustomPermCommand.aliasAdd :
+     * Mirrors the parsing in CustomPermCommand.aliasAdd:
      *   Arrays.stream(raw.split(";")).map(String::trim).filter(s -> !s.isEmpty()).collect(...)
      */
     private List<String> parseSteps(String raw) {
@@ -49,8 +49,8 @@ class AliasesConfigCrudTest {
 
         cfg.aliases.put("heal", new ArrayList<>(steps));
 
-        assertTrue(cfg.aliases.containsKey("heal"), "L'alias doit être présent dans la map");
-        assertEquals(2, cfg.aliases.get("heal").size(), "L'alias doit avoir 2 étapes");
+        assertTrue(cfg.aliases.containsKey("heal"), "the alias must be in the map");
+        assertEquals(2, cfg.aliases.get("heal").size(), "the alias must hold 2 steps");
         assertEquals("effect give @s minecraft:instant_health 1 100", cfg.aliases.get("heal").get(0));
         assertEquals("say healed", cfg.aliases.get("heal").get(1));
     }
@@ -61,12 +61,12 @@ class AliasesConfigCrudTest {
         AliasesConfig cfg = freshConfig();
         cfg.aliases.put("greet", new ArrayList<>(List.of("say bonjour")));
 
-        // Seconde invocation avec steps différentes — Map.put écrase
+        // A second call with different steps: Map.put overwrites
         List<String> newSteps = new ArrayList<>(List.of("say hello", "say world"));
         cfg.aliases.put("greet", newSteps);
 
-        assertEquals(1, cfg.aliases.size(), "Il ne doit y avoir qu'une seule entrée pour 'greet'");
-        assertEquals(2, cfg.aliases.get("greet").size(), "Les nouvelles steps doivent remplacer les anciennes");
+        assertEquals(1, cfg.aliases.size(), "there must be a single entry for 'greet'");
+        assertEquals(2, cfg.aliases.get("greet").size(), "the new steps must replace the old ones");
         assertEquals("say hello", cfg.aliases.get("greet").get(0));
     }
 
@@ -78,23 +78,23 @@ class AliasesConfigCrudTest {
 
         List<String> removed = cfg.aliases.remove("alert");
 
-        assertNotNull(removed, "aliases.remove() doit retourner la liste d'étapes pour un alias existant");
-        assertFalse(cfg.aliases.containsKey("alert"), "L'alias supprimé ne doit plus être dans la map");
-        assertTrue(cfg.aliases.isEmpty(), "La map doit être vide après suppression du seul alias");
+        assertNotNull(removed, "aliases.remove() must return the step list of an alias that exists");
+        assertFalse(cfg.aliases.containsKey("alert"), "the deleted alias must be out of the map");
+        assertTrue(cfg.aliases.isEmpty(), "the map must be empty once the only alias is deleted");
     }
 
-    // T3.4 — AC3 guard : suppression d'un alias inexistant retourne null
+    // T3.4, AC3 guard: deleting an alias that does not exist returns null
     @Test
     void shouldReturnNull_whenRemovingNonexistentAlias() {
         AliasesConfig cfg = freshConfig();
 
-        List<String> removed = cfg.aliases.remove("inexistant");
+        List<String> removed = cfg.aliases.remove("missing");
 
-        assertNull(removed, "aliases.remove() doit retourner null pour un alias inexistant");
-        assertTrue(cfg.aliases.isEmpty(), "La map ne doit pas être altérée");
+        assertNull(removed, "aliases.remove() must return null for an alias that does not exist");
+        assertTrue(cfg.aliases.isEmpty(), "the map must be left untouched");
     }
 
-    // T3.5 — AC4 : listage des alias avec nombre d'étapes (data-layer)
+    // T3.5, AC4: listing the aliases with their step counts, at the data layer
     @Test
     void shouldListAliasNames_withStepCounts() {
         AliasesConfig cfg = freshConfig();
@@ -102,13 +102,13 @@ class AliasesConfigCrudTest {
         cfg.aliases.put("kit", new ArrayList<>(List.of("give @s diamond_sword 1", "give @s diamond_pickaxe 1", "give @s bread 64")));
 
         assertEquals(2, cfg.aliases.size());
-        assertEquals(1, cfg.aliases.get("heal").size(), "heal doit avoir 1 étape");
-        assertEquals(3, cfg.aliases.get("kit").size(), "kit doit avoir 3 étapes");
+        assertEquals(1, cfg.aliases.get("heal").size(), "heal must hold 1 step");
+        assertEquals(3, cfg.aliases.get("kit").size(), "kit must hold 3 steps");
         assertTrue(cfg.aliases.containsKey("heal"));
         assertTrue(cfg.aliases.containsKey("kit"));
     }
 
-    // T3.6 — AC1 : parsing des steps depuis une chaîne délimitée par ';'
+    // T3.6, AC1: parsing the steps out of a ';' separated string
     @Test
     void shouldParseMultipleSteps_fromSemicolonDelimited() {
         // Logique exacte de CustomPermCommand.aliasAdd
@@ -116,21 +116,21 @@ class AliasesConfigCrudTest {
 
         List<String> steps = parseSteps(raw);
 
-        assertEquals(3, steps.size(), "3 steps doivent être parsées");
+        assertEquals(3, steps.size(), "3 steps must be parsed");
         assertEquals("effect give @s minecraft:instant_health 1 100", steps.get(0));
         assertEquals("say healed", steps.get(1));
         assertEquals("playsound entity.player.levelup master @s", steps.get(2));
     }
 
-    // T3.6b — parsing : les steps vides après split sont filtrées
+    // T3.6b, parsing: the empty steps left by the split are filtered
     @Test
     void shouldIgnoreBlankSteps_inSemicolonDelimited() {
-        // Cas : "cmd1;;cmd2" ou "  ; cmd2" — blancs et vides filtrés
+        // Cases "cmd1;;cmd2" and "  ; cmd2": blank and empty steps are filtered
         String raw = "say hello;  ; say world ; ";
 
         List<String> steps = parseSteps(raw);
 
-        assertEquals(2, steps.size(), "Les steps vides/blanches doivent être filtrées");
+        assertEquals(2, steps.size(), "empty and blank steps must be filtered");
         assertEquals("say hello", steps.get(0));
         assertEquals("say world", steps.get(1));
     }
@@ -139,10 +139,10 @@ class AliasesConfigCrudTest {
     void shouldReturnNoSteps_whenInputContainsOnlySeparators() {
         List<String> steps = parseSteps(";;;  ;");
 
-        assertTrue(steps.isEmpty(), "Une chaîne composée uniquement de séparateurs ne doit produire aucune step");
+        assertTrue(steps.isEmpty(), "a string of separators alone must produce no step");
     }
 
-    // T3.7 — AC4 : LinkedHashMap préserve l'ordre d'insertion
+    // T3.7, AC4: a LinkedHashMap keeps the insertion order
     @Test
     void shouldPreserveInsertionOrder_withLinkedHashMap() {
         AliasesConfig cfg = freshConfig();
@@ -152,8 +152,8 @@ class AliasesConfigCrudTest {
 
         List<String> keys = new ArrayList<>(cfg.aliases.keySet());
 
-        assertEquals("alpha", keys.get(0), "Premier alias inséré doit être en tête");
+        assertEquals("alpha", keys.get(0), "the first alias inserted must come first");
         assertEquals("beta",  keys.get(1));
-        assertEquals("gamma", keys.get(2), "Dernier alias inséré doit être en queue");
+        assertEquals("gamma", keys.get(2), "the last alias inserted must come last");
     }
 }

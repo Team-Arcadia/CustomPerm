@@ -18,9 +18,9 @@ import java.util.UUID;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * Tests de la couche data pour l'assignation/désassignation des joueurs aux grades.
- * Zéro import Minecraft — tests JUnit 5 purs sur GradesConfig + PermissionResolver.
- * Couvre AC1-AC6 de l'histoire 2-4.
+ * Data-layer tests of assigning players to grades and taking them off again.
+ * No Minecraft import: pure JUnit 5 over GradesConfig and PermissionResolver.
+ * Covers AC1 to AC6 of story 2-4.
  */
 class GradesPlayerAssignTest {
 
@@ -37,7 +37,7 @@ class GradesPlayerAssignTest {
         return g;
     }
 
-    // T3.1 — AC1 : assignation d'un joueur à un grade (couche data)
+    // T3.1, AC1: assigning a player to a grade, at the data layer
     @Test
     void shouldAssignPlayerToGrade_whenGradeExists() {
         GradesConfig cfg = freshConfig();
@@ -51,7 +51,7 @@ class GradesPlayerAssignTest {
         assertEquals(1, cfg.userGrades.get(player.toString()).size());
     }
 
-    // T3.2 — AC5 : idempotence — list.contains() retourne true si déjà assigné
+    // T3.2, AC5 idempotence: list.contains() is true when the grade is already held
     @Test
     void shouldNotDuplicate_whenAssigningSameGradeTwice() {
         GradesConfig cfg = freshConfig();
@@ -61,15 +61,15 @@ class GradesPlayerAssignTest {
         var list = cfg.userGrades.computeIfAbsent(player.toString(), k -> new ArrayList<>());
         list.add("admin");
 
-        // Simule la vérification du handler corrigé : contains() avant add()
+        // Mirrors the handler's check: contains() before add()
         boolean alreadyAssigned = list.contains("admin");
-        assertTrue(alreadyAssigned, "list.contains() doit retourner true — le handler doit skipper l'add");
+        assertTrue(alreadyAssigned, "list.contains() must be true, so the handler skips the add");
 
-        // Pas d'add() — vérifier que la liste reste à 1 élément
+        // No add(): the list must still hold one element
         assertEquals(1, list.size());
     }
 
-    // T3.3 — AC3 : désassignation d'un joueur (couche data)
+    // T3.3, AC3: taking a grade off a player, at the data layer
     @Test
     void shouldUnassignPlayer_whenGradeAssigned() {
         GradesConfig cfg = freshConfig();
@@ -80,11 +80,11 @@ class GradesPlayerAssignTest {
         list.add("vip");
         boolean removed = list.remove("vip");
 
-        assertTrue(removed, "List.remove() doit retourner true pour un grade assigné");
+        assertTrue(removed, "List.remove() must be true for a grade the player holds");
         assertTrue(list.isEmpty());
     }
 
-    // T3.4 — AC2 : union multi-grade — PermissionResolver voit les deux grades
+    // T3.4, AC2: with several grades, PermissionResolver reads both
     @Test
     void shouldApplyUnionOfGrades_whenPlayerHasMultiple() {
         GradesConfig cfg = freshConfig();
@@ -100,51 +100,51 @@ class GradesPlayerAssignTest {
         list.add("mod");
         list.add("vip");
 
-        // L'union doit donner accès aux deux nœuds
+        // Both nodes must be granted
         assertTrue(PermissionResolver.resolve(cfg, player, "customperm.command.tp"),
-                "Grade mod doit accorder customperm.command.tp");
+                "the mod grade must grant customperm.command.tp");
         assertTrue(PermissionResolver.resolve(cfg, player, "customperm.command.kit"),
-                "Grade vip doit accorder customperm.command.kit");
+                "the vip grade must grant customperm.command.kit");
         assertFalse(PermissionResolver.resolve(cfg, player, "customperm.command.ban"),
-                "Nœud non accordé doit retourner false");
+                "a node granted by neither grade must be false");
     }
 
-    // T3.5 — AC4 : joueur sans grade → resolve retourne false pour tout nœud
+    // T3.5, AC4: a player with no grade resolves false on every node
     @Test
     void shouldReturnFalse_whenPlayerHasNoGrade() {
         GradesConfig cfg = freshConfig();
         addGrade(cfg, "admin");
 
         UUID player = UUID.randomUUID();
-        // Aucune entrée dans userGrades pour ce joueur
+        // No userGrades entry for this player
 
         assertFalse(PermissionResolver.resolve(cfg, player, "customperm.command.tp"),
-                "Joueur sans grade ne doit avoir aucun accès");
+                "a player holding no grade must be granted nothing");
         assertFalse(PermissionResolver.resolve(cfg, player, "customperm.*"),
-                "Wildcard ne doit pas accorder d'accès sans grade");
+                "a wildcard grants nothing to a player holding no grade");
     }
 
-    // T3.6 — AC6 : unassign sur grade non assigné → List.remove() retourne false (proof-of-contract)
+    // T3.6, AC6: unassigning a grade the player does not hold gives List.remove() == false
     @Test
     void shouldNotCrash_whenUnassigningGradeNotAssigned() {
         GradesConfig cfg = freshConfig();
         addGrade(cfg, "mod");
         UUID player = UUID.randomUUID();
 
-        // Joueur sans entrée dans userGrades
+        // A player with no userGrades entry
         var list = cfg.userGrades.get(player.toString());
 
-        // Simule la vérification du handler corrigé : list == null → removed = false
+        // Mirrors the handler's check: list == null means removed = false
         boolean removed = list != null && list.remove("mod");
 
-        assertFalse(removed, "removed doit être false si joueur sans assignation — handler doit no-op");
+        assertFalse(removed, "removed must be false for a player holding nothing, so the handler no-ops");
 
-        // Liste avec d'autres grades mais pas "mod"
+        // A list holding other grades, but not "mod"
         var list2 = cfg.userGrades.computeIfAbsent(player.toString(), k -> new ArrayList<>());
         list2.add("vip");
         boolean removedAbsent = list2.remove("mod");
 
-        assertFalse(removedAbsent, "List.remove() retourne false si le grade n'est pas dans la liste");
-        assertEquals(1, list2.size(), "La liste ne doit pas être altérée");
+        assertFalse(removedAbsent, "List.remove() is false when the grade is not in the list");
+        assertEquals(1, list2.size(), "the list must be left untouched");
     }
 }
