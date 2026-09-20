@@ -33,9 +33,10 @@ import java.util.Locale;
 import java.util.Objects;
 
 /**
- * Alias editor: the list of aliases with a creation form on the left, the selected alias's steps on
- * the right. Steps are reordered with Up and Down, replaced from the edit field, appended, or
- * removed; deleting an alias (or removing its last step, which deletes it) asks for confirmation.
+ * Alias editor: the list of aliases with a creation form on the left, the selected alias on the
+ * right, on two tabs. Steps are reordered with Up and Down, replaced from the edit field, appended,
+ * or removed; deleting an alias (or removing its last step, which deletes it) asks for confirmation.
+ * The Args tab declares what the alias takes, which its steps then reach with {@code ${name}}.
  */
 public final class AliasesScreen extends AdminScreen {
 
@@ -44,11 +45,17 @@ public final class AliasesScreen extends AdminScreen {
     private static final int FIELD = Atlas.INPUT_HEIGHT;
     private static final int GAP = 6;
 
+    private enum Tab { STEPS, ARGS }
+
+    /** The four argument types, in the order the Add button cycles through them. */
+    private static final String[] TYPES = {"word", "player", "integer", "text"};
+
     /** One step of the selected alias, with its position. */
     private record Step(int index, String command) {
     }
 
     private AliasesData data;
+    private Tab tab = Tab.STEPS;
 
     // Kept across rebuilds so typing, selection and scroll survive refreshes.
     private final CpEditBox search;
@@ -57,8 +64,15 @@ public final class AliasesScreen extends AdminScreen {
     private final CpEditBox newStep;
     private final CpList<Step> stepList;
     private final CpEditBox stepEdit;
+    private final CpList<AliasesData.Param> paramList;
+    private final CpEditBox paramName;
+    private final CpEditBox paramValue;
+    /** The type the Add button gives a new argument; cycled by its own button. */
+    private int newType;
     /** Step to select once the next refresh lands, e.g. where a moved step ended up. */
     private int pendingStep = -1;
+    /** Argument to select once the next refresh lands. */
+    private String pendingParam;
     /** Alias to select once the next refresh lands, after creating it. */
     private String pendingAlias;
 
@@ -68,6 +82,9 @@ public final class AliasesScreen extends AdminScreen {
         this.stepEdit = new CpEditBox(Component.literal("Step command"), GuiCodecs.CLIENT_ARG_MAX)
                 .hint(Component.literal("step command"))
                 .onSubmit(this::appendStep);
+        // Before the lists: their selection handlers clear it, and a blank final cannot be read first.
+        this.paramValue = new CpEditBox(Component.literal("Argument value"), GuiCodecs.CLIENT_ARG_MAX)
+                .hint(Component.literal("default, 1..5, or a,b,c"));
         this.search = new CpEditBox(Component.literal("Search aliases"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
                 .onChange(text -> refilter());
@@ -78,7 +95,9 @@ public final class AliasesScreen extends AdminScreen {
                 .emptyText("No alias yet: create one below.")
                 .onSelect(alias -> {
                     stepEdit.setValue("");
+                    paramValue.setValue("");
                     fillSteps();
+                    fillParams();
                     rebuild();
                 })
                 .onActivate(alias -> setFocused(stepEdit));
@@ -97,8 +116,22 @@ public final class AliasesScreen extends AdminScreen {
                     rebuild();
                 })
                 .onActivate(step -> setFocused(stepEdit));
+        this.paramName = new CpEditBox(Component.literal("New argument name"), 16)
+                .hint(Component.literal("argument"))
+                .onSubmit(this::addParam);
+        this.paramList = new CpList<AliasesData.Param>(Component.literal("Arguments"), STEP_ROW)
+                .renderer(this::renderParam)
+                .label(param -> param.slot() + ", " + param.type())
+                .identity(AliasesData.Param::name)
+                .emptyText("Select an alias.")
+                .onSelect(param -> {
+                    paramValue.setValue("");
+                    rebuild();
+                })
+                .onActivate(param -> setFocused(paramValue));
         refilter();
         fillSteps();
+        fillParams();
     }
 
     @Override
@@ -129,6 +162,9 @@ public final class AliasesScreen extends AdminScreen {
             if (step != null) stepEdit.setValue(step.command());
         }
         pendingStep = -1;
+        fillParams();
+        if (pendingParam != null) paramList.selectByKey(pendingParam);
+        pendingParam = null;
     }
 
     private void refilter() {
@@ -139,7 +175,9 @@ public final class AliasesScreen extends AdminScreen {
                 .toList());
         if (layout != null && !Objects.equals(name(before), name(aliasList.getSelected()))) {
             stepEdit.setValue("");
+            paramValue.setValue("");
             fillSteps();
+            fillParams();
             rebuild();
         }
     }
@@ -156,6 +194,13 @@ public final class AliasesScreen extends AdminScreen {
         }
         stepList.setItems(steps);
         stepList.emptyText(alias == null ? "Select an alias." : "No steps.");
+    }
+
+    private void fillParams() {
+        AliasesData.Alias alias = aliasList.getSelected();
+        paramList.setItems(alias == null ? List.of() : alias.params());
+        paramList.emptyText(alias == null ? "Select an alias."
+                : "No argument: /" + alias.name() + " takes none.");
     }
 
     // ------------------------------------------------------------------ layout
@@ -178,12 +223,24 @@ public final class AliasesScreen extends AdminScreen {
         return right().inset(8);
     }
 
-    /** Space under the alias header for the step list. */
+    /** The tab row, under the alias header. */
+    private Rect tabsRow() {
+        Rect inner = rightInner();
+        return new Rect(inner.x(), inner.y() + 36, inner.w(), FIELD);
+    }
+
+    /** Space under the tab row for the step list. */
     private Rect stepsArea() {
         Rect inner = rightInner();
-        int top = 36;
+        int top = 36 + FIELD + 4;
         int bottom = FIELD + 4 + FIELD + 4 + Atlas.BUTTON_HEIGHT + 4;
         return new Rect(inner.x(), inner.y() + top, inner.w(), inner.h() - top - bottom);
+    }
+
+    /** Space under the tab row for the argument list; one row lower than the steps, having one more. */
+    private Rect paramsArea() {
+        Rect steps = stepsArea();
+        return new Rect(steps.x(), steps.y(), steps.w(), steps.h() - FIELD - 4);
     }
 
     @Override
@@ -205,7 +262,20 @@ public final class AliasesScreen extends AdminScreen {
         newName.setEditable(editable);
         newStep.setEditable(editable);
 
-        buildStepEditor(editable);
+        AliasesData.Alias selected = aliasList.getSelected();
+        if (selected == null) return;
+        placeButtonRow(tabsRow(), 8, false, List.of(
+                CpButton.ghost(Component.literal("Steps (" + selected.steps().size() + ")"), () -> setTab(Tab.STEPS))
+                        .icon(Icon.ALIAS).selected(tab == Tab.STEPS),
+                CpButton.ghost(Component.literal("Args (" + selected.params().size() + ")"), () -> setTab(Tab.ARGS))
+                        .icon(Icon.EDIT).selected(tab == Tab.ARGS)));
+        if (tab == Tab.ARGS) buildParamEditor(editable);
+        else buildStepEditor(editable);
+    }
+
+    private void setTab(Tab wanted) {
+        this.tab = wanted;
+        rebuild();
     }
 
     private void buildStepEditor(boolean editable) {
@@ -240,6 +310,62 @@ public final class AliasesScreen extends AdminScreen {
         CpButton delete = CpButton.danger(Component.literal("Delete alias"), () -> confirmDelete(alias))
                 .iconOnly(Icon.TRASH).enabled(editable);
         addRenderableWidget(delete.at(bottom.right(Atlas.BUTTON_HEIGHT)));
+    }
+
+    private void buildParamEditor(boolean editable) {
+        AliasesData.Alias alias = aliasList.getSelected();
+        if (alias == null) return;
+        AliasesData.Param param = paramList.getSelected();
+        int index = param == null ? -1 : alias.params().indexOf(param);
+        Rect params = paramsArea();
+        addRenderableWidget(paramList.at(params));
+
+        Rect tools = new Rect(params.x(), params.bottom() + 4, params.w(), FIELD);
+        addRenderableWidget(CpButton.neutral(Component.literal("Move argument up"), () -> moveParam(index - 1))
+                .iconOnly(Icon.UP).enabled(editable && index > 0).at(tools.left(22)));
+        addRenderableWidget(CpButton.neutral(Component.literal("Move argument down"), () -> moveParam(index + 1))
+                .iconOnly(Icon.DOWN).enabled(editable && index >= 0 && index < alias.params().size() - 1)
+                .at(new Rect(tools.x() + 26, tools.y(), 22, tools.h())));
+        Rect toggles = tools.afterLeft(52);
+        placeButtonRow(toggles, 6, true, List.of(
+                CpButton.ghost(Component.literal(param != null && param.optional() ? "Optional" : "Required"),
+                                () -> editParam("optional", param == null || !param.optional() ? "true" : "false"))
+                        .enabled(editable && param != null).selected(param != null && param.optional()),
+                CpButton.ghost(Component.literal("Selectors"), () -> editParam("selectors",
+                                param != null && param.allowSelectors() ? "false" : "true"))
+                        .enabled(editable && param != null && selectable(param))
+                        .selected(param != null && param.allowSelectors()),
+                CpButton.danger(Component.literal("Remove"), () -> removeParam(param)).icon(Icon.MINUS)
+                        .enabled(editable && param != null)));
+
+        Rect value = new Rect(params.x(), tools.bottom() + 4, params.w(), FIELD);
+        addRenderableWidget(paramValue.at(value));
+        paramValue.setEditable(editable && param != null);
+
+        Rect apply = new Rect(params.x(), value.bottom() + 4, params.w(), Atlas.BUTTON_HEIGHT);
+        placeButtonRow(apply, 6, false, List.of(
+                CpButton.neutral(Component.literal("Default"), () -> editParam("default", paramValue.getValue().trim()))
+                        .enabled(editable && param != null),
+                CpButton.neutral(Component.literal("Range"), () -> editParam("range", paramValue.getValue().trim()))
+                        .enabled(editable && param != null && "integer".equals(param.type())),
+                CpButton.neutral(Component.literal("Choices"), () -> editParam("choices", paramValue.getValue().trim()))
+                        .enabled(editable && param != null && "word".equals(param.type()))));
+
+        Rect add = new Rect(params.x(), apply.bottom() + 4, params.w(), FIELD);
+        CpButton addButton = CpButton.accent(Component.literal("Add"), this::addParam).icon(Icon.PLUS)
+                .enabled(editable);
+        CpButton typeButton = CpButton.ghost(Component.literal(TYPES[newType]), this::cycleType).enabled(editable);
+        int addW = addButton.preferredWidth(font, 6);
+        int typeW = typeButton.preferredWidth(font, 6);
+        addRenderableWidget(paramName.at(add.beforeRight(addW + typeW + 8)));
+        addRenderableWidget(typeButton.at(new Rect(add.right() - addW - typeW - 4, add.y(), typeW, add.h())));
+        addRenderableWidget(addButton.at(add.right(addW)));
+        paramName.setEditable(editable);
+    }
+
+    /** Only a text argument can carry a selector; a word refuses the at sign, a player is resolved. */
+    private static boolean selectable(AliasesData.Param param) {
+        return "text".equals(param.type());
     }
 
     // ------------------------------------------------------------------ actions
@@ -296,6 +422,55 @@ public final class AliasesScreen extends AdminScreen {
         }
     }
 
+    private void addParam() {
+        AliasesData.Alias alias = aliasList.getSelected();
+        String name = paramName.getValue().trim().toLowerCase(Locale.ROOT);
+        if (alias == null || name.isEmpty()) {
+            status("A new argument needs a name.", false);
+            return;
+        }
+        pendingParam = name;
+        act(GuiAction.ALIAS_PARAM_ADD, alias.name(), name, TYPES[newType]);
+        paramName.setValue("");
+    }
+
+    private void cycleType() {
+        newType = (newType + 1) % TYPES.length;
+        rebuild();
+    }
+
+    private void moveParam(int to) {
+        AliasesData.Alias alias = aliasList.getSelected();
+        AliasesData.Param param = paramList.getSelected();
+        if (alias == null || param == null) return;
+        pendingParam = param.name();
+        act(GuiAction.ALIAS_PARAM_MOVE, alias.name(), param.name(), String.valueOf(to));
+    }
+
+    private void editParam(String field, String value) {
+        AliasesData.Alias alias = aliasList.getSelected();
+        AliasesData.Param param = paramList.getSelected();
+        if (alias == null || param == null) return;
+        pendingParam = param.name();
+        act(GuiAction.ALIAS_PARAM_EDIT, alias.name(), param.name(), field, value);
+        paramValue.setValue("");
+    }
+
+    private void removeParam(AliasesData.Param param) {
+        AliasesData.Alias alias = aliasList.getSelected();
+        if (alias == null || param == null) return;
+        Runnable remove = () -> act(GuiAction.ALIAS_PARAM_REMOVE, alias.name(), param.name());
+        boolean used = alias.steps().stream().anyMatch(step -> step.contains("${" + param.name() + "}"));
+        if (used) {
+            confirm("Remove " + param.slot(),
+                    "Steps of /" + alias.name() + " use ${" + param.name() + "}. Removing the argument leaves"
+                            + " that text in them as typed.",
+                    "Remove " + param.name(), remove);
+        } else {
+            remove.run();
+        }
+    }
+
     private void confirmDelete(AliasesData.Alias alias) {
         confirm("Delete /" + alias.name(),
                 "The alias and its " + alias.steps().size() + " step(s) are removed"
@@ -336,6 +511,18 @@ public final class AliasesScreen extends AdminScreen {
         Skin.text(g, font, "/" + step.command(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4, Palette.TEXT);
     }
 
+    private void renderParam(GuiGraphics g, Font font, AliasesData.Param param, Rect r, boolean hovered, boolean selected) {
+        String slot = param.slot();
+        Skin.text(g, font, slot, r.x() + 5, r.y() + (r.h() - 8) / 2, Palette.TEXT);
+        int x = r.x() + 5 + font.width(slot) + 6;
+        StringBuilder detail = new StringBuilder(param.type());
+        if (!param.range().isEmpty()) detail.append(' ').append(param.range());
+        if (!param.choices().isEmpty()) detail.append(" of ").append(String.join("|", param.choices()));
+        if (!param.defaultValue().isEmpty()) detail.append(" = ").append(param.defaultValue());
+        if (param.allowSelectors()) detail.append(" @");
+        Skin.text(g, font, detail.toString(), x, r.y() + (r.h() - 8) / 2, r.right() - x - 4, Palette.TEXT_MUTE);
+    }
+
     @Override
     protected void renderContent(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         Rect panel = right();
@@ -353,10 +540,12 @@ public final class AliasesScreen extends AdminScreen {
                         Palette.WARN) + 6;
             }
             paragraph(g, "Select an alias to edit its steps. An alias runs its steps in order, at op level 4, "
-                    + "for players holding customperm.alias.<name>.", inner, y, Palette.TEXT_MUTE);
+                    + "for players holding customperm.alias.<name>. A step reaches an argument with ${name}.",
+                    inner, y, Palette.TEXT_MUTE);
             return;
         }
-        Skin.text(g, font, "/" + alias.name(), inner.x(), inner.y(), inner.w(), Palette.TEXT);
+        String title = "/" + alias.name() + (alias.params().isEmpty() ? "" : " " + alias.usage());
+        Skin.text(g, font, title, inner.x(), inner.y(), inner.w(), Palette.TEXT);
         String info = "customperm.alias." + alias.name();
         if (alias.hasLimit()) {
             info += "  |  limit " + alias.limitMax() + " per " + alias.limitWindow() + "s"

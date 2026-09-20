@@ -9,6 +9,10 @@
 package com.arcadia.customperm.cluster;
 
 import com.arcadia.customperm.config.AliasesConfig;
+import com.arcadia.customperm.config.AliasesConfig.Parameter;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 
 import java.util.ArrayList;
@@ -16,11 +20,21 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/** {@code aliases.json} cut into rows, {@code alias:<name>} per alias, its steps in order. */
+/**
+ * {@code aliases.json} cut into rows, {@code alias:<name>} per alias, its steps in order and the
+ * arguments it takes.
+ *
+ * <p>A row is an object, {@code {"steps":[...],"params":[...]}}. A bare array is read as steps with
+ * no argument, which is what a server on a version from before the feature writes: a cluster whose
+ * servers are not all upgraded keeps working, the older ones simply ignoring the arguments.
+ */
 public final class AliasesCodec implements PartCodec<AliasesConfig> {
 
     public static final String PART = "aliases";
     public static final String ALIAS = "alias:";
+
+    private static final String STEPS = "steps";
+    private static final String PARAMS = "params";
 
     @Override
     public String part() {
@@ -31,7 +45,12 @@ public final class AliasesCodec implements PartCodec<AliasesConfig> {
     public Map<String, String> split(AliasesConfig config) {
         Map<String, String> rows = new HashMap<>();
         config.aliases.forEach((name, steps) -> {
-            if (steps != null && !steps.isEmpty()) rows.put(ALIAS + name, CanonicalJson.GSON.toJson(steps));
+            if (steps == null || steps.isEmpty()) return;
+            JsonObject row = new JsonObject();
+            row.add(STEPS, CanonicalJson.GSON.toJsonTree(steps));
+            List<Parameter> parameters = config.parameters(name);
+            if (!parameters.isEmpty()) row.add(PARAMS, CanonicalJson.GSON.toJsonTree(parameters));
+            rows.put(ALIAS + name, CanonicalJson.GSON.toJson(row));
         });
         return rows;
     }
@@ -42,11 +61,23 @@ public final class AliasesCodec implements PartCodec<AliasesConfig> {
         String name = holder.substring(ALIAS.length());
         if (body == null) {
             config.aliases.remove(name);
+            config.aliasParameters.remove(name);
             return;
         }
+        JsonElement row = JsonParser.parseString(body);
+        JsonArray rawSteps = row.isJsonArray() ? row.getAsJsonArray()
+                : row.getAsJsonObject().getAsJsonArray(STEPS);
         List<String> steps = new ArrayList<>();
-        JsonParser.parseString(body).getAsJsonArray().forEach(step -> steps.add(step.getAsString()));
+        if (rawSteps != null) rawSteps.forEach(step -> steps.add(step.getAsString()));
         config.aliases.put(name, steps);
+
+        List<Parameter> parameters = new ArrayList<>();
+        if (row.isJsonObject() && row.getAsJsonObject().has(PARAMS)) {
+            row.getAsJsonObject().getAsJsonArray(PARAMS).forEach(parameter ->
+                    parameters.add(CanonicalJson.GSON.fromJson(parameter, Parameter.class)));
+        }
+        if (parameters.isEmpty()) config.aliasParameters.remove(name);
+        else config.aliasParameters.put(name, parameters);
     }
 
     @Override

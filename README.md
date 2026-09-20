@@ -263,6 +263,15 @@ Create custom commands that run one or more inner commands. Steps execute with *
 | `/customperm alias steps <name>` | Shows all steps with their indices. |
 | `/customperm alias remove <name>` | Deletes the alias entirely. |
 | `/customperm alias list` | Lists all defined aliases. |
+| `/customperm alias param add <alias> <name> <player\|integer\|word\|text>` | Declares an argument, at the end of the list. A step reaches it with `${name}`. |
+| `/customperm alias param remove <alias> <name>` | Drops an argument. |
+| `/customperm alias param move <alias> <name> <index>` | Moves an argument to another 0-based position. |
+| `/customperm alias param optional <alias> <name> <true\|false>` | Whether the argument may be left out. |
+| `/customperm alias param default <alias> <name> [value]` | What a left-out argument substitutes; without a value, nothing. |
+| `/customperm alias param range <alias> <name> <min> <max>\|clear` | The bounds an integer argument accepts. |
+| `/customperm alias param choices <alias> <name> [a,b,c]` | What a word argument suggests, and the only values it then accepts. |
+| `/customperm alias param selectors <alias> <name> <true\|false>` | Whether a text argument may carry an entity selector. Off by default. |
+| `/customperm alias params <alias>` | Shows the arguments, in the order they are typed. |
 
 ### Grades (internal system, LuckPerms-less)
 
@@ -687,7 +696,9 @@ On load, history older than the rule's current window is dropped, so a window sh
 
 ### `aliases.json`
 
-Aliases with their steps.
+Aliases with their steps, and the arguments they take. An alias that takes none is absent from
+`aliasParameters`, which is what every file written before arguments existed looks like: it loads
+unchanged.
 
 ```json
 {
@@ -697,10 +708,20 @@ Aliases with their steps.
       "effect give @s minecraft:instant_health 10 100",
       "effect give @s minecraft:saturation 1 100",
       "say healed!"
+    ],
+    "warn": ["say [WARNING] ${target}: ${reason}"]
+  },
+  "aliasParameters": {
+    "warn": [
+      { "name": "target", "type": "player" },
+      { "name": "reason", "type": "text", "optional": true, "defaultValue": "no reason given" }
     ]
   }
 }
 ```
+
+An argument carries `name` and `type` (`player`, `integer`, `word` or `text`), and optionally
+`optional`, `defaultValue`, `min` and `max` (integer), `choices` (word) and `allowSelectors` (text).
 
 ### `grades.json` (Internal mode only)
 
@@ -971,9 +992,55 @@ customperm alias addstep heal say "You are healed!"
 customperm alias removestep heal 0    # remove the first step
 ```
 
+### Arguments
+
+An alias can take arguments, which its steps reach with `${name}`:
+
+```
+customperm alias add warn say [WARNING] ${target}: ${reason}
+customperm alias param add warn target player
+customperm alias param add warn reason text
+customperm alias params warn                   # <target> <reason>
+```
+
+`/warn Steve stop digging there` then runs `say [WARNING] Steve: stop digging there`. Tab completion
+offers what the type knows: a player argument suggests the online players, a word argument its declared
+choices.
+
+Four types:
+
+| Type | Accepts | Substituted with |
+|------|---------|------------------|
+| `player` | one online player, by name or by a selector resolving to one | that player's name |
+| `integer` | a whole number, inside the declared range | the number |
+| `word` | one word, no space; one of the declared choices when there are any | the word |
+| `text` | the rest of the line, spaces included; only the last argument may be one | the text |
+
+Each argument can be made optional and given a default, which is what it substitutes when left out:
+
+```
+customperm alias param add kit count integer
+customperm alias param range kit count 1 64
+customperm alias param default kit count 8     # optional from here on, 8 when left out
+```
+
+An argument that may be left out cannot be followed by one that may not, and nothing can follow a
+`text` argument: both are Brigadier's rules, and both are refused when you declare them.
+
+`${name}` is deliberate: no command syntax produces a dollar sign followed by a brace, so the NBT and
+JSON braces of a real step (`give @s diamond_sword{Enchantments:[]}`) are never mistaken for an
+argument. A `${name}` naming an argument the alias does not take is left in the step exactly as typed,
+and saying so is a warning rather than a refusal, since the step and the argument are declared in
+either order.
+
+**A value never carries an entity selector**, unless the argument says otherwise. Steps run at op
+level 4, so `@a` reaching one would act on everyone rather than on the player named. A `word` cannot
+hold an `@` at all (Brigadier refuses it), a `player` is resolved to a name before substitution, and a
+`text` refuses one until `customperm alias param selectors <alias> <name> true` says it may.
+
 ### Minecraft selectors
 
-Selectors (`@s`, `@p`, `@a`, etc.) work as expected. The source during execution is the player who invoked the alias.
+Selectors (`@s`, `@p`, `@a`, etc.) work as expected in the steps themselves. The source during execution is the player who invoked the alias.
 
 ### Error behaviour
 
@@ -1347,7 +1414,6 @@ LuckPerms stores and resolves both `customperm.command.*` and `customperm.alias.
 ## Known limitations
 
 - **No sub-command granularity**: `customperm.command.gamemode` covers every sub-mode (creative, spectator, etc.). To split, use aliases.
-- **No alias parameters**: an alias is a no-arg command. To build `/heal <player>`, write `/heal_target` using `effect give @p` etc., or create multiple aliases.
 - **LP contexts beyond worlds untested**: LuckPerms resolves its own contexts through `getCachedData()`. Per-world nodes are covered, the command tree being resent on a world change; per-server and custom contexts are passed through but not tested.
 - **The admin interface needs CustomPerm client-side**: without it, administration stays fully command-driven.
 - **The in-game LuckPerms editor is not the web editor**: it covers groups, users, tracks, nodes, meta and chat meta, but not bulk operations, node search across all holders, or the web editor's undo history. For those, `/lp editor` remains the tool.

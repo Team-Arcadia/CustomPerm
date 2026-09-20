@@ -21,6 +21,8 @@ import com.arcadia.customperm.admin.ImportPlan;
 import com.arcadia.customperm.admin.NameAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
 import com.arcadia.customperm.admin.UserAdmin;
+import com.arcadia.customperm.config.AliasParameters;
+import com.arcadia.customperm.config.AliasesConfig;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.admin.LogAdmin;
@@ -94,6 +96,15 @@ import java.util.stream.Collectors;
  *                     steps <name>                      # show steps
  *                     remove <name>
  *                     list
+ *                     param add <alias> <name> <player|integer|word|text>  # an argument the alias takes
+ *                     param remove|move <alias> <name> [index]             # drop it, or reorder
+ *                     param optional <alias> <name> <true|false>           # may be left out
+ *                     param default <alias> <name> [value]                 # substituted when left out
+ *                     param range <alias> <name> <min> <max> | clear       # integer bounds
+ *                     param choices <alias> <name> [a,b,c]                 # word: suggested and accepted
+ *                     param selectors <alias> <name> <true|false>          # allow @selectors in a value
+ *                     params <alias>                    # the arguments, in order
+ *                     # a step reaches an argument with ${name}
  * /customperm ratelimit set <name> <max> <windowSeconds>   # cap executions per player per window
  *                     persistence <name> <world_save|immediate>  # when usage history is written
  *                     scope <name> <server|network|hub,survival>  # who shares the budget in cluster mode
@@ -214,12 +225,12 @@ public class CustomPermCommand {
                 .filter(name -> !rungs.contains(name)).toList(), builder);
         };
 
-    /** Alias existants. */
+    /** Aliases that exist. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_ALIASES =
         (ctx, builder) -> SharedSuggestionProvider.suggest(
             CustomPerm.configManager.getAliases().aliases.keySet(), builder);
 
-    /** Limites de débit configurées. */
+    /** Rate limits that are configured. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_RATE_LIMITS =
         (ctx, builder) -> SharedSuggestionProvider.suggest(
             CustomPerm.configManager.getRateLimits().rules.keySet(), builder);
@@ -414,6 +425,16 @@ public class CustomPermCommand {
             }
             return SharedSuggestionProvider.suggest(indices, builder);
         };
+
+    /** The arguments declared by the alias named by the "alias" argument. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_ALIAS_PARAMS =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(
+            AliasAdmin.parameters(StringArgumentType.getString(ctx, "alias")).stream()
+                .map(parameter -> parameter.name).toList(), builder);
+
+    /** The four argument types an alias argument can have. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_PARAM_TYPES =
+        (ctx, builder) -> SharedSuggestionProvider.suggest(AliasesConfig.TYPES, builder);
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
         dispatcher.register(
@@ -741,6 +762,75 @@ public class CustomPermCommand {
                         .then(Commands.argument("name", StringArgumentType.word())
                             .suggests(SUGGEST_ALIASES)
                             .executes(CustomPermCommand::aliasRemove)))
+                    .then(Commands.literal("param").requires(AdminAccess.manage(PermissionNodes.MANAGE_ALIASES))
+                        .then(Commands.literal("add")
+                            .then(Commands.argument("alias", StringArgumentType.word())
+                                .suggests(SUGGEST_ALIASES)
+                                .then(Commands.argument("param", StringArgumentType.word())
+                                    .then(Commands.argument("type", StringArgumentType.word())
+                                        .suggests(SUGGEST_PARAM_TYPES)
+                                        .executes(CustomPermCommand::aliasParamAdd)))))
+                        .then(Commands.literal("remove")
+                            .then(Commands.argument("alias", StringArgumentType.word())
+                                .suggests(SUGGEST_ALIASES)
+                                .then(Commands.argument("param", StringArgumentType.word())
+                                    .suggests(SUGGEST_ALIAS_PARAMS)
+                                    .executes(CustomPermCommand::aliasParamRemove))))
+                        .then(Commands.literal("move")
+                            .then(Commands.argument("alias", StringArgumentType.word())
+                                .suggests(SUGGEST_ALIASES)
+                                .then(Commands.argument("param", StringArgumentType.word())
+                                    .suggests(SUGGEST_ALIAS_PARAMS)
+                                    .then(Commands.argument("index", IntegerArgumentType.integer(0))
+                                        .executes(CustomPermCommand::aliasParamMove)))))
+                        .then(Commands.literal("optional")
+                            .then(Commands.argument("alias", StringArgumentType.word())
+                                .suggests(SUGGEST_ALIASES)
+                                .then(Commands.argument("param", StringArgumentType.word())
+                                    .suggests(SUGGEST_ALIAS_PARAMS)
+                                    .then(Commands.argument("value", BoolArgumentType.bool())
+                                        .executes(CustomPermCommand::aliasParamOptional)))))
+                        .then(Commands.literal("default")
+                            .then(Commands.argument("alias", StringArgumentType.word())
+                                .suggests(SUGGEST_ALIASES)
+                                .then(Commands.argument("param", StringArgumentType.word())
+                                    .suggests(SUGGEST_ALIAS_PARAMS)
+                                    .executes(ctx -> aliasParamDefault(ctx, null))
+                                    .then(Commands.argument("value", StringArgumentType.greedyString())
+                                        .executes(ctx -> aliasParamDefault(ctx,
+                                            StringArgumentType.getString(ctx, "value")))))))
+                        .then(Commands.literal("range")
+                            .then(Commands.argument("alias", StringArgumentType.word())
+                                .suggests(SUGGEST_ALIASES)
+                                .then(Commands.argument("param", StringArgumentType.word())
+                                    .suggests(SUGGEST_ALIAS_PARAMS)
+                                    .then(Commands.literal("clear")
+                                        .executes(ctx -> aliasParamRange(ctx, null, null)))
+                                    .then(Commands.argument("min", IntegerArgumentType.integer())
+                                        .then(Commands.argument("max", IntegerArgumentType.integer())
+                                            .executes(ctx -> aliasParamRange(ctx,
+                                                IntegerArgumentType.getInteger(ctx, "min"),
+                                                IntegerArgumentType.getInteger(ctx, "max"))))))))
+                        .then(Commands.literal("choices")
+                            .then(Commands.argument("alias", StringArgumentType.word())
+                                .suggests(SUGGEST_ALIASES)
+                                .then(Commands.argument("param", StringArgumentType.word())
+                                    .suggests(SUGGEST_ALIAS_PARAMS)
+                                    .executes(ctx -> aliasParamChoices(ctx, ""))
+                                    .then(Commands.argument("values", StringArgumentType.greedyString())
+                                        .executes(ctx -> aliasParamChoices(ctx,
+                                            StringArgumentType.getString(ctx, "values")))))))
+                        .then(Commands.literal("selectors")
+                            .then(Commands.argument("alias", StringArgumentType.word())
+                                .suggests(SUGGEST_ALIASES)
+                                .then(Commands.argument("param", StringArgumentType.word())
+                                    .suggests(SUGGEST_ALIAS_PARAMS)
+                                    .then(Commands.argument("value", BoolArgumentType.bool())
+                                        .executes(CustomPermCommand::aliasParamSelectors))))))
+                    .then(Commands.literal("params")
+                        .then(Commands.argument("alias", StringArgumentType.word())
+                            .suggests(SUGGEST_ALIASES)
+                            .executes(CustomPermCommand::aliasParams)))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::aliasList)))
                 .then(Commands.literal("command")
@@ -1835,6 +1925,72 @@ public class CustomPermCommand {
 
     private static int aliasRemove(CommandContext<CommandSourceStack> ctx) {
         return report(ctx, AliasAdmin.remove(ctx.getSource().getServer(), StringArgumentType.getString(ctx, "name")));
+    }
+
+    private static int aliasParamAdd(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, AliasAdmin.addParameter(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "alias"), StringArgumentType.getString(ctx, "param"),
+            StringArgumentType.getString(ctx, "type")));
+    }
+
+    private static int aliasParamRemove(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, AliasAdmin.removeParameter(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "alias"), StringArgumentType.getString(ctx, "param")));
+    }
+
+    private static int aliasParamMove(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, AliasAdmin.moveParameter(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "alias"), StringArgumentType.getString(ctx, "param"),
+            IntegerArgumentType.getInteger(ctx, "index")));
+    }
+
+    private static int aliasParamOptional(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, AliasAdmin.setOptional(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "alias"), StringArgumentType.getString(ctx, "param"),
+            BoolArgumentType.getBool(ctx, "value")));
+    }
+
+    private static int aliasParamDefault(CommandContext<CommandSourceStack> ctx, String value) {
+        return report(ctx, AliasAdmin.setDefault(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "alias"), StringArgumentType.getString(ctx, "param"), value));
+    }
+
+    private static int aliasParamRange(CommandContext<CommandSourceStack> ctx, Integer min, Integer max) {
+        return report(ctx, AliasAdmin.setRange(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "alias"), StringArgumentType.getString(ctx, "param"), min, max));
+    }
+
+    private static int aliasParamChoices(CommandContext<CommandSourceStack> ctx, String raw) {
+        List<String> choices = raw.isBlank() ? List.of() : Arrays.asList(raw.split(","));
+        return report(ctx, AliasAdmin.setChoices(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "alias"), StringArgumentType.getString(ctx, "param"), choices));
+    }
+
+    private static int aliasParamSelectors(CommandContext<CommandSourceStack> ctx) {
+        return report(ctx, AliasAdmin.setSelectors(ctx.getSource().getServer(),
+            StringArgumentType.getString(ctx, "alias"), StringArgumentType.getString(ctx, "param"),
+            BoolArgumentType.getBool(ctx, "value")));
+    }
+
+    private static int aliasParams(CommandContext<CommandSourceStack> ctx) {
+        String alias = StringArgumentType.getString(ctx, "alias");
+        if (!CustomPerm.configManager.getAliases().aliases.containsKey(alias)) {
+            ctx.getSource().sendFailure(Component.literal("No such alias: " + alias));
+            return 0;
+        }
+        List<AliasesConfig.Parameter> parameters = AliasAdmin.parameters(alias);
+        if (parameters.isEmpty()) {
+            ctx.getSource().sendSuccess(() -> Component.literal("/" + alias + " takes no argument."), false);
+            return 1;
+        }
+        ctx.getSource().sendSuccess(() -> Component.literal(
+            "Arguments of /" + alias + ": " + AliasParameters.usage(parameters)), false);
+        for (int i = 0; i < parameters.size(); i++) {
+            final int index = i;
+            ctx.getSource().sendSuccess(() -> Component.literal(
+                "  #" + index + "  " + AliasParameters.describe(parameters.get(index))), false);
+        }
+        return 1;
     }
 
     private static int aliasList(CommandContext<CommandSourceStack> ctx) {

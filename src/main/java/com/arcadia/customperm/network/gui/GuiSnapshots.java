@@ -315,6 +315,14 @@ public final class GuiSnapshots {
             var rule = rules.get(name);
             aliases.add(new AliasesData.Alias(name,
                     List.copyOf(steps.subList(0, Math.min(steps.size(), AliasesData.STEPS_MAX))),
+                    config.getAliases().parameters(name).stream()
+                            .limit(AliasesData.PARAMS_MAX)
+                            .map(parameter -> new AliasesData.Param(parameter.name, parameter.type,
+                                    parameter.optional, parameter.fallback(),
+                                    parameter.min == null ? Integer.MIN_VALUE : parameter.min,
+                                    parameter.max == null ? Integer.MAX_VALUE : parameter.max,
+                                    List.copyOf(parameter.choices), parameter.allowSelectors))
+                            .toList(),
                     AliasManager.shadowsCommand(name),
                     rule == null ? 0 : rule.maxExecutions, rule == null ? 0 : rule.windowSeconds,
                     rule != null && rule.enabled));

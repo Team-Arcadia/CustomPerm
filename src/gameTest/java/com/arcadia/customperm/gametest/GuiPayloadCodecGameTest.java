@@ -72,8 +72,15 @@ public class GuiPayloadCodecGameTest {
                         new CommandsData.Row("oldmod", true, false, true, false, true)), true, true)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.ALIASES.bit(), 0, true), new AliasesData(List.of(
-                        new AliasesData.Alias("heal", List.of("effect give @s instant_health", "say healed"), true, 3, 60, true),
-                        new AliasesData.Alias("kit", List.of("give @s bread 8"), false, 0, 0, false)))));
+                        new AliasesData.Alias("heal", List.of("effect give ${target} instant_health", "say healed"),
+                                List.of(new AliasesData.Param("target", "player", false, "", Integer.MIN_VALUE,
+                                        Integer.MAX_VALUE, List.of(), false)),
+                                true, 3, 60, true),
+                        new AliasesData.Alias("kit", List.of("give @s bread ${count}"),
+                                List.of(new AliasesData.Param("count", "integer", true, "8", 1, 64, List.of(), false),
+                                        new AliasesData.Param("kind", "word", true, "", Integer.MIN_VALUE,
+                                                Integer.MAX_VALUE, List.of("bread", "steak"), true)),
+                                false, 0, 0, false)))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.DENY, 0, 2, true), new RateLimitsData(List.of(
                         new RateLimitsData.Rule("gamemode", 3, 3600, true, false, RateLimitsData.Target.EXPOSED_COMMAND, "network"),

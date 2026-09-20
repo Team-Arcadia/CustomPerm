@@ -9,16 +9,28 @@
 package com.arcadia.customperm.command;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.config.AliasParameters;
 import com.arcadia.customperm.config.AliasesConfig;
+import com.arcadia.customperm.config.AliasesConfig.Parameter;
 import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.perm.PermissionService;
 import com.mojang.brigadier.CommandDispatcher;
+import com.mojang.brigadier.arguments.ArgumentType;
+import com.mojang.brigadier.arguments.IntegerArgumentType;
+import com.mojang.brigadier.arguments.StringArgumentType;
+import com.mojang.brigadier.builder.ArgumentBuilder;
+import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.builder.RequiredArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.context.ParsedCommandNode;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.tree.ArgumentCommandNode;
 import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 
@@ -72,8 +84,8 @@ public class AliasManager {
 
     public static void registerAll(CommandDispatcher<CommandSourceStack> dispatcher) {
         AliasesConfig cfg = CustomPerm.configManager.getAliases();
-        for (Map.Entry<String, List<String>> entry : cfg.aliases.entrySet()) {
-            registerOrReplace(dispatcher, entry.getKey());
+        for (String name : new HashSet<>(cfg.aliases.keySet())) {
+            registerOrReplace(dispatcher, name);
         }
     }
 
@@ -141,32 +153,102 @@ public class AliasManager {
     private static void registerOne(CommandDispatcher<CommandSourceStack> dispatcher, String alias, List<String> steps) {
         if (steps == null || steps.isEmpty()) return;
         String permNode = "customperm.alias." + alias;
+        List<Parameter> parameters = CustomPerm.configManager.getAliases().parameters(alias);
 
-        dispatcher.register(
-            Commands.literal(alias)
+        LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal(alias)
                 // Explicit node first, operators included; op level 2 only when the node is not set.
-                .requires(src -> PermissionService.get().hasPermission(src, permNode))
-                .executes(ctx -> {
-                    CommandSourceStack source = ctx.getSource();
-                    RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(alias);
-                    if (rule != null && rule.enabled && source.getEntity() instanceof ServerPlayer player) {
-                        RateLimiter.Result result = RateLimiter.tryAcquire(
-                            alias, player.getUUID(), rule.maxExecutions, rule.windowSeconds);
-                        if (!result.allowed()) {
-                            source.sendFailure(Component.literal(
-                                "[CustomPerm] Rate limit reached for /" + alias + " — try again in "
-                                    + result.retryAfterSeconds() + "s (max " + rule.maxExecutions
-                                    + " per " + rule.windowSeconds + "s)."));
-                            return 0;
-                        }
-                        RateLimitPersistence.afterAcceptedUse(rule);
-                    }
-                    return executeAlias(source, alias, steps);
-                })
-        );
+                .requires(src -> PermissionService.get().hasPermission(src, permNode));
+
+        // Built from the last argument back, each node executing the alias when everything after it
+        // may be left out. Optional arguments are a suffix of the list, so that is the next one.
+        ArgumentBuilder<CommandSourceStack, ?> tail = null;
+        for (int i = parameters.size() - 1; i >= 0; i--) {
+            Parameter parameter = parameters.get(i);
+            RequiredArgumentBuilder<CommandSourceStack, ?> node =
+                    Commands.argument(parameter.name, argumentType(parameter));
+            if (!parameter.choices.isEmpty()) {
+                List<String> choices = List.copyOf(parameter.choices);
+                node.suggests((ctx, builder) -> SharedSuggestionProvider.suggest(choices, builder));
+            }
+            if (i == parameters.size() - 1 || parameters.get(i + 1).optional) {
+                node.executes(ctx -> run(ctx, alias, steps, parameters));
+            }
+            if (tail != null) node.then(tail);
+            tail = node;
+        }
+        if (tail != null) root.then(tail);
+        if (parameters.isEmpty() || parameters.get(0).optional) {
+            root.executes(ctx -> run(ctx, alias, steps, parameters));
+        }
+
+        dispatcher.register(root);
     }
 
-    static int executeAlias(CommandSourceStack source, String alias, List<String> steps) {
+    private static ArgumentType<?> argumentType(Parameter parameter) {
+        return switch (parameter.type) {
+            case AliasesConfig.TYPE_PLAYER -> EntityArgument.player();
+            case AliasesConfig.TYPE_INTEGER -> IntegerArgumentType.integer(
+                    parameter.min == null ? Integer.MIN_VALUE : parameter.min,
+                    parameter.max == null ? Integer.MAX_VALUE : parameter.max);
+            case AliasesConfig.TYPE_TEXT -> StringArgumentType.greedyString();
+            default -> StringArgumentType.word();
+        };
+    }
+
+    /** Rate limit, then the argument values, then the steps. */
+    private static int run(CommandContext<CommandSourceStack> ctx, String alias, List<String> steps,
+                           List<Parameter> parameters) throws CommandSyntaxException {
+        CommandSourceStack source = ctx.getSource();
+        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(alias);
+        if (rule != null && rule.enabled && source.getEntity() instanceof ServerPlayer player) {
+            RateLimiter.Result result = RateLimiter.tryAcquire(
+                alias, player.getUUID(), rule.maxExecutions, rule.windowSeconds);
+            if (!result.allowed()) {
+                source.sendFailure(Component.literal(
+                    "[CustomPerm] Rate limit reached for /" + alias + " — try again in "
+                        + result.retryAfterSeconds() + "s (max " + rule.maxExecutions
+                        + " per " + rule.windowSeconds + "s)."));
+                return 0;
+            }
+            RateLimitPersistence.afterAcceptedUse(rule);
+        }
+
+        Map<String, String> values = new HashMap<>();
+        for (Parameter parameter : parameters) {
+            String value = read(ctx, parameter);
+            String problem = AliasParameters.valueProblem(parameter, value);
+            if (problem != null) {
+                source.sendFailure(Component.literal("[CustomPerm] /" + alias + ": " + problem));
+                return 0;
+            }
+            values.put(parameter.name, value);
+        }
+        return executeAlias(source, alias, steps, values);
+    }
+
+    /** The value typed for this argument, or what it falls back to when it was left out. */
+    private static String read(CommandContext<CommandSourceStack> ctx, Parameter parameter)
+            throws CommandSyntaxException {
+        if (!provided(ctx, parameter.name)) return parameter.fallback();
+        return switch (parameter.type) {
+            // Resolved through the source, so what reaches a step is one online player's name and
+            // never the selector that found them.
+            case AliasesConfig.TYPE_PLAYER -> EntityArgument.getPlayer(ctx, parameter.name).getGameProfile().getName();
+            case AliasesConfig.TYPE_INTEGER -> String.valueOf(IntegerArgumentType.getInteger(ctx, parameter.name));
+            default -> StringArgumentType.getString(ctx, parameter.name);
+        };
+    }
+
+    /** Whether the player typed this argument; the optional ones at the end may be missing. */
+    private static boolean provided(CommandContext<CommandSourceStack> ctx, String name) {
+        for (ParsedCommandNode<CommandSourceStack> node : ctx.getNodes()) {
+            if (name.equals(node.getNode().getName())) return true;
+        }
+        return false;
+    }
+
+    static int executeAlias(CommandSourceStack source, String alias, List<String> steps,
+                            Map<String, String> values) {
         var server = source.getServer();
         if (server == null) {
             source.sendFailure(Component.literal("[CustomPerm] Alias /" + alias + " failed: no server context."));
@@ -186,7 +268,8 @@ public class AliasManager {
             var elevated = source.withPermission(4);
             int executed = 0;
             for (String step : steps) {
-                String command = normalizeStep(step);
+                // Substituted before the slash is stripped, so an argument may carry the whole step.
+                String command = normalizeStep(AliasParameters.substitute(step, values));
                 if (command.isEmpty()) continue;
 
                 try {

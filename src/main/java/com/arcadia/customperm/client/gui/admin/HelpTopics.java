@@ -64,9 +64,17 @@ final class HelpTopics {
                     "Selectors such as @s and @p mean the player running the alias. A failing step is logged and "
                             + "the next steps still run, as in a command block. An alias calling itself stops at "
                             + "depth 8.",
+                    "An alias can take arguments, declared on the Args tab and reached by a step with ${name}. "
+                            + "Four types: player, integer, word and text, the last reading the rest of the line. "
+                            + "An argument can be optional and carry a default, an integer a range, a word the only "
+                            + "words it accepts.",
+                    "A value never carries an entity selector unless a text argument is set to allow one: a step "
+                            + "runs at op level 4, so @a there would act on everyone rather than on the player named.",
                     "/customperm alias add <name> <cmd1; cmd2; ...>",
                     "/customperm alias addstep <name> <cmd>",
                     "/customperm alias steps <name>",
+                    "/customperm alias param add <alias> <name> <player|integer|word|text>",
+                    "/customperm alias params <alias>",
                     "/customperm alias remove <name>")),
             new Topic("Rate limits", List.of(
                     "A rate limit caps how many times one player may use an exposed command or an alias within a "

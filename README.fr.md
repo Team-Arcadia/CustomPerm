@@ -264,6 +264,15 @@ Crée des commandes personnalisées qui exécutent une ou plusieurs commandes. L
 | `/customperm alias steps <name>` | Affiche tous les steps d'un alias. |
 | `/customperm alias remove <name>` | Supprime entièrement un alias. |
 | `/customperm alias list` | Liste tous les aliases définis. |
+| `/customperm alias param add <alias> <name> <player\|integer\|word\|text>` | Déclare un argument, à la fin de la liste. Un step l'atteint avec `${name}`. |
+| `/customperm alias param remove <alias> <name>` | Retire un argument. |
+| `/customperm alias param move <alias> <name> <index>` | Déplace un argument à une autre position (0-based). |
+| `/customperm alias param optional <alias> <name> <true\|false>` | Si l'argument peut être omis. |
+| `/customperm alias param default <alias> <name> [valeur]` | Ce que substitue un argument omis ; sans valeur, rien. |
+| `/customperm alias param range <alias> <name> <min> <max>\|clear` | Les bornes acceptées par un argument entier. |
+| `/customperm alias param choices <alias> <name> [a,b,c]` | Ce que suggère un argument word, et les seules valeurs qu'il accepte alors. |
+| `/customperm alias param selectors <alias> <name> <true\|false>` | Si un argument text peut porter un sélecteur d'entités. Désactivé par défaut. |
+| `/customperm alias params <alias>` | Affiche les arguments, dans l'ordre où ils se tapent. |
 
 ### Grades (système interne, sans LuckPerms)
 
@@ -706,7 +715,9 @@ Au chargement, l'historique plus ancien que la fenêtre actuelle de la règle es
 
 ### `aliases.json`
 
-Aliases avec leurs steps.
+Aliases avec leurs steps, et les arguments qu'ils prennent. Un alias qui n'en prend aucun est absent
+d'`aliasParameters`, ce à quoi ressemble tout fichier écrit avant l'existence des arguments : il se
+charge sans changement.
 
 ```json
 {
@@ -716,10 +727,20 @@ Aliases avec leurs steps.
       "effect give @s minecraft:instant_health 10 100",
       "effect give @s minecraft:saturation 1 100",
       "say bien soigné !"
+    ],
+    "warn": ["say [ATTENTION] ${target} : ${reason}"]
+  },
+  "aliasParameters": {
+    "warn": [
+      { "name": "target", "type": "player" },
+      { "name": "reason", "type": "text", "optional": true, "defaultValue": "sans motif" }
     ]
   }
 }
 ```
+
+Un argument porte `name` et `type` (`player`, `integer`, `word` ou `text`), et en option `optional`,
+`defaultValue`, `min` et `max` (integer), `choices` (word) et `allowSelectors` (text).
 
 ### `grades.json` (mode Internal uniquement)
 
@@ -985,9 +1006,57 @@ customperm alias addstep heal say "Tu es soigné !"
 customperm alias removestep heal 0    # retire le premier step
 ```
 
+### Arguments
+
+Un alias peut prendre des arguments, que ses steps atteignent avec `${name}` :
+
+```
+customperm alias add warn say [ATTENTION] ${target} : ${reason}
+customperm alias param add warn target player
+customperm alias param add warn reason text
+customperm alias params warn                   # <target> <reason>
+```
+
+`/warn Steve arrête de creuser ici` exécute alors `say [ATTENTION] Steve : arrête de creuser ici`.
+La complétion propose ce que le type connaît : un argument player suggère les joueurs connectés, un
+argument word ses choix déclarés.
+
+Quatre types :
+
+| Type | Accepte | Substitué par |
+|------|---------|---------------|
+| `player` | un joueur connecté, par son nom ou par un sélecteur qui n'en désigne qu'un | le nom de ce joueur |
+| `integer` | un entier, dans les bornes déclarées | le nombre |
+| `word` | un mot, sans espace ; l'un des choix déclarés s'il y en a | le mot |
+| `text` | le reste de la ligne, espaces compris ; seul le dernier argument peut l'être | le texte |
+
+Chaque argument peut devenir facultatif et recevoir une valeur par défaut, qui est ce qu'il substitue
+quand il est omis :
+
+```
+customperm alias param add kit count integer
+customperm alias param range kit count 1 64
+customperm alias param default kit count 8     # facultatif dès lors, 8 si omis
+```
+
+Un argument qui peut être omis ne peut pas être suivi d'un argument obligatoire, et rien ne peut
+suivre un argument `text` : ce sont les règles de Brigadier, refusées à la déclaration.
+
+`${name}` est un choix délibéré : aucune syntaxe de commande ne produit un dollar suivi d'une
+accolade, donc les accolades NBT et JSON d'un vrai step (`give @s diamond_sword{Enchantments:[]}`) ne
+sont jamais prises pour un argument. Un `${name}` qui désigne un argument que l'alias ne prend pas
+reste dans le step tel quel, et c'est un avertissement plutôt qu'un refus, le step et l'argument
+pouvant se déclarer dans n'importe quel ordre.
+
+**Une valeur ne porte jamais de sélecteur d'entités**, sauf si l'argument l'autorise. Les steps
+s'exécutent en op level 4, donc un `@a` qui y arriverait agirait sur tout le monde au lieu du joueur
+désigné. Un `word` ne peut pas contenir d'`@` (Brigadier le refuse), un `player` est résolu en nom
+avant substitution, et un `text` le refuse tant que
+`customperm alias param selectors <alias> <name> true` ne l'autorise pas.
+
 ### Sélecteurs Minecraft
 
-Les sélecteurs (`@s`, `@p`, `@a`, etc.) fonctionnent normalement. La source pendant l'exécution est le joueur qui a invoqué l'alias.
+Les sélecteurs (`@s`, `@p`, `@a`, etc.) fonctionnent normalement dans les steps eux-mêmes. La source pendant l'exécution est le joueur qui a invoqué l'alias.
 
 ### Comportement en cas d'erreur
 
@@ -1364,7 +1433,6 @@ LuckPerms stocke et résout à la fois les nodes `customperm.command.*` et `cust
 ## Limitations connues
 
 - **Pas de granularité par sous-commande** : `customperm.command.gamemode` couvre tous les sous-modes (creative, spectator, etc.). Pour scinder, utilisez les aliases.
-- **Pas de paramètres dans les aliases** : un alias est une commande sans argument. Pour faire `/heal <player>`, écrivez `/heal_target` avec `effect give @p` etc., ou créez plusieurs aliases.
 - **Contextes LP au-delà des mondes non testés** : LuckPerms résout ses propres contextes via `getCachedData()`. Les nœuds par monde sont couverts, l'arbre de commandes étant renvoyé à chaque changement de monde ; les contextes par serveur et personnalisés passent tels quels mais ne sont pas testés.
 - **L'interface d'administration demande CustomPerm côté client** : sans lui, l'administration reste entièrement en commandes.
 - **L'éditeur LuckPerms en jeu n'est pas le web editor** : il couvre groupes, joueurs, tracks, nœuds, meta et chat meta, mais pas les opérations en masse, la recherche de nœud sur tous les détenteurs, ni l'historique d'annulation du web editor. Pour cela, `/lp editor` reste l'outil.

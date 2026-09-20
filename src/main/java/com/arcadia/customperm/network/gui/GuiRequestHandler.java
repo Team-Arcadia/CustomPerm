@@ -167,6 +167,11 @@ public final class GuiRequestHandler {
                     : AliasAdmin.moveStep(player.getServer(), args.get(0), index(args.get(1)), index(args.get(2)));
             case ALIAS_STEP_REMOVE -> index(args.get(1)) == null ? malformed(action)
                     : AliasAdmin.removeStep(player.getServer(), args.get(0), index(args.get(1)));
+            case ALIAS_PARAM_ADD -> AliasAdmin.addParameter(player.getServer(), args.get(0), args.get(1), args.get(2));
+            case ALIAS_PARAM_REMOVE -> AliasAdmin.removeParameter(player.getServer(), args.get(0), args.get(1));
+            case ALIAS_PARAM_MOVE -> index(args.get(2)) == null ? malformed(action)
+                    : AliasAdmin.moveParameter(player.getServer(), args.get(0), args.get(1), index(args.get(2)));
+            case ALIAS_PARAM_EDIT -> aliasParamEdit(player, action, args);
             case RATELIMIT_SET -> index(args.get(1)) == null || index(args.get(2)) == null ? malformed(action)
                     : RateLimitAdmin.set(args.get(0), index(args.get(1)), index(args.get(2)));
             case RATELIMIT_ENABLE -> RateLimitAdmin.enable(args.get(0));
@@ -488,6 +493,35 @@ public final class GuiRequestHandler {
 
     private static AdminResult malformed(GuiAction action) {
         return AdminResult.fail("Malformed request for " + action.name() + ".");
+    }
+
+    /** One property of an alias argument, the field naming which. An empty value clears what can be cleared. */
+    private static AdminResult aliasParamEdit(ServerPlayer player, GuiAction action, List<String> args) {
+        String alias = args.get(0);
+        String name = args.get(1);
+        String value = args.get(3);
+        return switch (args.get(2)) {
+            case "optional" -> bool(value) == null ? malformed(action)
+                    : AliasAdmin.setOptional(player.getServer(), alias, name, bool(value));
+            case "selectors" -> bool(value) == null ? malformed(action)
+                    : AliasAdmin.setSelectors(player.getServer(), alias, name, bool(value));
+            case "default" -> AliasAdmin.setDefault(player.getServer(), alias, name, value.isEmpty() ? null : value);
+            case "choices" -> AliasAdmin.setChoices(player.getServer(), alias, name,
+                    value.isBlank() ? List.of() : List.of(value.split(",")));
+            case "range" -> range(player, action, alias, name, value);
+            default -> malformed(action);
+        };
+    }
+
+    /** {@code <min>..<max>}, or an empty value to accept any number again. */
+    private static AdminResult range(ServerPlayer player, GuiAction action, String alias, String name, String value) {
+        if (value.isBlank()) return AliasAdmin.setRange(player.getServer(), alias, name, null, null);
+        int split = value.indexOf("..");
+        if (split < 0) return malformed(action);
+        Integer min = signed(value.substring(0, split));
+        Integer max = signed(value.substring(split + 2));
+        if (min == null || max == null) return malformed(action);
+        return AliasAdmin.setRange(player.getServer(), alias, name, min, max);
     }
 
     /** Strict non-negative index argument: plain decimal digits only, anything else is malformed. */

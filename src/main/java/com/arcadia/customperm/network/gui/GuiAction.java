@@ -44,6 +44,19 @@ public enum GuiAction {
     ALIAS_STEP_MOVE(3, GuiArea.ALIASES),
     /** {@code [alias, index]} Removes one step; the alias is deleted with its last step. */
     ALIAS_STEP_REMOVE(2, GuiArea.ALIASES),
+    /** {@code [alias, name, type]} Declares an argument at the end of the alias's list. */
+    ALIAS_PARAM_ADD(3, GuiArea.ALIASES),
+    /** {@code [alias, name]} Drops an argument. */
+    ALIAS_PARAM_REMOVE(2, GuiArea.ALIASES),
+    /** {@code [alias, name, index]} Moves an argument (0-based index). */
+    ALIAS_PARAM_MOVE(3, GuiArea.ALIASES),
+    /**
+     * {@code [alias, name, field, value]} Sets one property of an argument. Fields: {@code optional}
+     * and {@code selectors} take true or false, {@code default} a value or nothing to clear it,
+     * {@code range} {@code <min>..<max>} or nothing to clear it, {@code choices} a comma-separated
+     * list or nothing to clear it.
+     */
+    ALIAS_PARAM_EDIT(4, GuiArea.ALIASES),
 
     /** {@code [name, max, windowSeconds]} Creates or redefines a rule, enabled, keeping its persistence mode. */
     RATELIMIT_SET(3, GuiArea.RATE_LIMITS),

@@ -11,6 +11,7 @@ package com.arcadia.customperm.gametest;
 
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.command.AliasManager;
+import com.arcadia.customperm.config.AliasesConfig;
 import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import com.mojang.brigadier.tree.CommandNode;
 import net.minecraft.commands.CommandSourceStack;
@@ -319,6 +320,124 @@ public class AliasExecutionTest {
             aliasesCfg.aliases.remove(second);
             AliasManager.registerOrReplace(dispatcher, first);
             AliasManager.registerOrReplace(dispatcher, second);
+        }
+    }
+
+    // ── arguments ───────────────────────────────────────────────────────────
+
+    /** Declares an alias with one argument and registers it on the live dispatcher. */
+    private static void declare(GameTestHelper helper, String alias, String step, AliasesConfig.Parameter parameter) {
+        AliasesConfig config = CustomPerm.configManager.getAliases();
+        config.aliases.put(alias, new ArrayList<>(List.of(step)));
+        config.aliasParameters.put(alias, new ArrayList<>(List.of(parameter)));
+        config.normalize();
+        AliasManager.registerOrReplace(helper.getLevel().getServer().getCommands().getDispatcher(), alias);
+    }
+
+    private static void forget(GameTestHelper helper, String alias, String objective) {
+        AliasesConfig config = CustomPerm.configManager.getAliases();
+        config.aliases.remove(alias);
+        config.aliasParameters.remove(alias);
+        AliasManager.registerOrReplace(helper.getLevel().getServer().getCommands().getDispatcher(), alias);
+        var scoreboard = helper.getLevel().getServer().getScoreboard();
+        var existing = scoreboard.getObjective(objective);
+        if (existing != null) scoreboard.removeObjective(existing);
+    }
+
+    /**
+     * AC: a step reaches an argument through {@code ${name}}, and what the player typed is what
+     * the step runs with. The objective's name is the evidence: it can only exist if the
+     * substitution happened before the step was parsed.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void aliasSubstitutesAnArgumentIntoItsStep(GameTestHelper helper) {
+        String alias = "_gt_arg_sub";
+        String objective = "cp_gt_sub";
+        var server = helper.getLevel().getServer();
+        declare(helper, alias, "scoreboard objectives add ${obj} dummy",
+                new AliasesConfig.Parameter("obj", AliasesConfig.TYPE_WORD));
+        try {
+            server.getCommands().getDispatcher().execute(alias + " " + objective, server.createCommandSourceStack());
+            if (server.getScoreboard().getObjective(objective) == null) {
+                fail("The step did not run with the typed argument: no objective named " + objective + ".");
+            }
+            helper.succeed();
+        } catch (CommandSyntaxException e) {
+            fail("Alias with an argument failed to run: " + e.getMessage());
+        } finally {
+            forget(helper, alias, objective);
+        }
+    }
+
+    /** AC: an argument left out substitutes its default rather than nothing. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void aliasLeftWithoutAnOptionalArgumentUsesItsDefault(GameTestHelper helper) {
+        String alias = "_gt_arg_default";
+        String objective = "cp_gt_default";
+        var server = helper.getLevel().getServer();
+        AliasesConfig.Parameter parameter = new AliasesConfig.Parameter("obj", AliasesConfig.TYPE_WORD);
+        parameter.optional = true;
+        parameter.defaultValue = objective;
+        declare(helper, alias, "scoreboard objectives add ${obj} dummy", parameter);
+        try {
+            server.getCommands().getDispatcher().execute(alias, server.createCommandSourceStack());
+            if (server.getScoreboard().getObjective(objective) == null) {
+                fail("The default was not substituted: no objective named " + objective + ".");
+            }
+            helper.succeed();
+        } catch (CommandSyntaxException e) {
+            fail("Alias with an optional argument failed to run without it: " + e.getMessage());
+        } finally {
+            forget(helper, alias, objective);
+        }
+    }
+
+    /** AC: an integer outside the declared range is refused by Brigadier, before any step runs. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void aliasRefusesAnIntegerOutsideItsRange(GameTestHelper helper) {
+        String alias = "_gt_arg_range";
+        String objective = "cp_gt_range";
+        var server = helper.getLevel().getServer();
+        AliasesConfig.Parameter parameter = new AliasesConfig.Parameter("count", AliasesConfig.TYPE_INTEGER);
+        parameter.min = 1;
+        parameter.max = 5;
+        declare(helper, alias, "scoreboard objectives add " + objective + " dummy", parameter);
+        try {
+            server.getCommands().getDispatcher().execute(alias + " 9", server.createCommandSourceStack());
+            fail("An integer above the declared range must be refused.");
+        } catch (CommandSyntaxException expected) {
+            if (server.getScoreboard().getObjective(objective) != null) {
+                fail("A refused argument must not run the step.");
+            }
+            helper.succeed();
+        } finally {
+            forget(helper, alias, objective);
+        }
+    }
+
+    /**
+     * AC: a text argument refuses an entity selector unless it is declared to accept one. A step
+     * runs at op level 4, so a selector slipped into one would reach whatever it names.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void aliasRefusesASelectorInAnArgumentThatDoesNotAllowOne(GameTestHelper helper) {
+        String alias = "_gt_arg_selector";
+        String objective = "cp_gt_selector";
+        var server = helper.getLevel().getServer();
+        declare(helper, alias, "scoreboard objectives add " + objective + " ${kind}",
+                new AliasesConfig.Parameter("kind", AliasesConfig.TYPE_TEXT));
+        try {
+            int result = server.getCommands().getDispatcher()
+                    .execute(alias + " @e", server.createCommandSourceStack());
+            if (result != 0) fail("A selector in a word argument must be refused, got " + result + ".");
+            if (server.getScoreboard().getObjective(objective) != null) {
+                fail("A refused argument must not run the step.");
+            }
+            helper.succeed();
+        } catch (CommandSyntaxException e) {
+            fail("The alias must refuse the value itself, not fail to parse: " + e.getMessage());
+        } finally {
+            forget(helper, alias, objective);
         }
     }
 
