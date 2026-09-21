@@ -25,12 +25,14 @@ import net.minecraft.network.protocol.common.ClientboundCustomPayloadPacket;
 import net.minecraft.network.protocol.common.custom.CustomPacketPayload;
 import net.minecraft.network.protocol.game.ClientboundCommandsPacket;
 import net.minecraft.network.protocol.game.ClientboundSystemChatPacket;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.network.CommonListenerCookie;
 import net.minecraft.server.network.ConfigurationTask;
 import net.minecraft.world.entity.player.Player;
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.common.extensions.ICommonPacketListener;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.ChannelAttributes;
@@ -135,11 +137,26 @@ public final class TestPlayer implements AutoCloseable {
                     GuiPagePayload.TYPE.id(), GuiActionResultPayload.TYPE.id(),
                     LpSyncPayload.TYPE.id(), LpEditResultPayload.TYPE.id()));
         }
+        declareCompanionChannels(connection);
         if (CustomPerm.isLuckPermsActive()) {
             LuckPermsTestSupport.loadUser(profile);
         }
         server.getPlayerList().placeNewPlayer(connection, player, cookie);
         return new TestPlayer(server, player, channel);
+    }
+
+    /**
+     * Channels another mod on this server will write to on join, declared so the simulated connection accepts
+     * them. Arcadia Lib registers its own without {@code optional()} and sends one from its join handler without
+     * asking whether the channel is there, so a connection that does not declare them dies before any test runs.
+     * This mirrors the deployment CustomPerm documents for cluster mode: both mods on the server and on the
+     * client. It does not excuse the missing guard, it keeps the suite able to test anything at all.
+     */
+    private static void declareCompanionChannels(Connection connection) {
+        if (!ModList.get().isLoaded("arcadia_lib")) return;
+        ChannelAttributes.getOrCreateAdHocChannels(connection).addAll(List.of(
+                ResourceLocation.fromNamespaceAndPath("arcadia_lib", "hub_permissions"),
+                ResourceLocation.fromNamespaceAndPath("arcadia_lib", "open_hub")));
     }
 
     public ServerPlayer player() {

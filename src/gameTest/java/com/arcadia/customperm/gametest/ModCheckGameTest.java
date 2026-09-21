@@ -50,9 +50,12 @@ public class ModCheckGameTest {
                 "LuckPerms and CustomPerm must not be reported: " + report.findings());
         check(report.unreadable().isEmpty(), "every mod file must be readable: " + report.unreadable());
 
-        // The report is ready, so the command answers within this tick.
+        // The report is ready, so the command answers within this tick. What it says depends on what else is
+        // installed: alone it reports nobody, and in a run that carries a companion mod calling the API it
+        // names it. Asserting one wording would make this test fail on the mod set rather than on the check.
         List<String> lines = ServerCommands.run(helper.getLevel().getServer(), "customperm modcheck");
-        check(ServerCommands.contains(lines, "No installed mod calls LuckPerms' API directly"),
+        check(ServerCommands.contains(lines, "No installed mod calls LuckPerms' API directly")
+                        || ServerCommands.contains(lines, "call LuckPerms' API directly"),
                 "the command must give the report: " + lines);
         helper.succeed();
     }

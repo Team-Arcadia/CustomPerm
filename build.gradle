@@ -78,10 +78,10 @@ neoForge {
         gameTestServerArcadia {
             type = 'gameTestServer'
             gameDirectory = project.file('run/gametest-arcadia')
-            // Its own namespace, so this mode runs the driver tests and nothing else: Arcadia Lib sends a
-            // mandatory payload on every player join, and any test that joins a test player dies on its
-            // handler. That is its defect, not ours, and it must not take the suite down with it.
-            systemProperty 'neoforge.enabledGameTestNamespaces', 'customperm_driver'
+            // The whole suite plus the driver tests. The simulated connection declares Arcadia Lib's own
+            // channels (see TestPlayer), which is what its join handler writes to without asking, so this mode
+            // runs everything with both mods loaded and catches any interference between them.
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'customperm,customperm_driver'
             systemProperty 'customperm.gametest.luckperms', 'false'
             systemProperty 'customperm.gametest.arcadia', 'true'
         }
