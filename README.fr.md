@@ -906,6 +906,14 @@ partagées et les autres serveurs entendus.
 les deux cas, sans `verify`, gardez la base sur un réseau privé ou sur la même machine : quiconque peut lire ou
 modifier ce trafic peut lire ou changer toutes les permissions.
 
+`verify` ne réussit que si le certificat de la base remonte à une autorité que **le runtime Java connaît déjà**. Un
+certificat auto-signé, ou issu de votre propre autorité, n'en fait pas partie, et CustomPerm n'a aucun réglage pour
+désigner un fichier de CA : il faut le dire à la JVM du serveur, en ajoutant
+`-Djavax.net.ssl.trustStore=<truststore>` et `-Djavax.net.ssl.trustStorePassword=<motdepasse>` à ses arguments de
+démarrage, l'autorité étant importée dans ce truststore. Vérifié contre MariaDB 10.4 avec une autorité privée, sur
+les deux pilotes : `verify` échoue tant que l'autorité est inconnue du runtime, et réussit dès qu'elle est
+approuvée. Utilisez `trust` si vous voulez le chiffrement sans cette mise en place.
+
 La connexion directe a besoin d'un pilote JDBC MariaDB ou MySQL **déjà chargé par un autre mod du serveur** :
 CustomPerm n'en embarque aucun et instancie par son nom celui qu'il trouve. Arcadia Lib en apporte un, comme tout
 mod qui en porte un. Sur un serveur qui n'en a aucun, le mode cluster ne démarre pas et dit pourquoi. Voir

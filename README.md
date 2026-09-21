@@ -892,6 +892,14 @@ encrypts without checking the certificate, `verify` encrypts and checks it. Arca
 way, without `verify` keep the database on a private network or the same machine: anyone able to read or alter that
 traffic can read or change every permission.
 
+`verify` only succeeds when the database's certificate chains to a certificate authority the **Java runtime already
+trusts**. A self-signed certificate, or one from your own authority, is not, and CustomPerm has no setting for a CA
+file: the server's JVM has to be told, by adding `-Djavax.net.ssl.trustStore=<truststore>` and
+`-Djavax.net.ssl.trustStorePassword=<password>` to its start-up arguments, with the authority imported into that
+truststore. Checked against MariaDB 10.4 with a private authority, on both drivers: `verify` fails while the
+authority is unknown to the runtime, and succeeds as soon as it is trusted. Use `trust` when you want the traffic
+encrypted without that setup.
+
 The direct connection needs a JDBC driver for MariaDB or MySQL **already loaded by another mod on the server**:
 CustomPerm ships none, and instantiates by name whichever one it finds. Arcadia Lib brings one, and so does any
 mod that carries a driver. On a server carrying none, cluster mode does not start and says why. See
