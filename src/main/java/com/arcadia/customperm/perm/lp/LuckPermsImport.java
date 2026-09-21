@@ -226,8 +226,10 @@ public final class LuckPermsImport {
                 return Scope.left("LuckPerms' world context is the save's name on NeoForge, not a dimension "
                         + "(that one is dimension-type): nothing here would match it");
             }
-            if (key.equals(com.arcadia.customperm.perm.Contexts.SERVER) && !com.arcadia.customperm.cluster.Cluster.running()) {
-                return Scope.left("A server context needs cluster mode, which is not running here");
+            // The cluster set up is enough, not the cluster running: it never runs while LuckPerms is active, and
+            // LuckPerms must be active to be read, so asking for a running cluster left every server entry behind.
+            if (key.equals(com.arcadia.customperm.perm.Contexts.SERVER) && com.arcadia.customperm.cluster.Cluster.identity() == null) {
+                return Scope.left("A server context needs cluster mode set up (cluster.enabled and this server's name)");
             }
             if (!raw.isEmpty()) raw.append(',');
             raw.append(key).append('=').append(context.getValue());

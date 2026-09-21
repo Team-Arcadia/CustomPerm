@@ -142,6 +142,27 @@ public class LuckPermsImportGameTest {
                     new ScopedGrant(END, ScopedGrant.REFUSED, "default"))))
                 fail("A node limited to one world must arrive with it, one limited to a server be left behind: "
                         + vip.scoped());
+
+            // With cluster mode set up, which is how a network migrates, the server entry arrives although no cluster
+            // runs: none ever does while LuckPerms is active, and LuckPerms has to be active to be read.
+            var cluster = CustomPerm.configManager.getSettings().cluster;
+            boolean enabled = cluster.enabled;
+            String connection = cluster.connection;
+            String serverName = cluster.serverName;
+            try {
+                cluster.enabled = true;
+                cluster.connection = "direct";
+                cluster.serverName = "alpha";
+                ImportPlan named = LuckPermsTestSupport.await(LuckPermsImport.read(true));
+                if (!grade(named, VIP).scoped().contains(
+                        new ScopedGrant("server=lobby", ScopedGrant.ALLOW, "customperm.command.difficulty"))) {
+                    fail("With cluster mode set up, a node limited to a server must arrive with it: " + grade(named, VIP).scoped());
+                }
+            } finally {
+                cluster.enabled = enabled;
+                cluster.connection = connection;
+                cluster.serverName = serverName;
+            }
             long kickAt = vip.expiries().getOrDefault("allow:customperm.command.kick", 0L);
             if (Math.abs(kickAt - (com.arcadia.customperm.perm.Expiry.now() + 3600)) > 30)
                 fail("The temporary node must keep its expiry: " + vip.expiries());

@@ -511,7 +511,7 @@ a group's parent, a refusal, a prefix or suffix, and meta. On NeoForge LuckPerms
 static context sets it here. Tracks carry over with their
 groups in order; adding keeps a track that already exists here as it is, replacing takes LuckPerms' order.
 
-What is left behind, and said in the report rather than dropped in silence: LuckPerms' `world` context, which on NeoForge is the save's name and not a dimension, a `server=` context unless a cluster runs,
+What is left behind, and said in the report rather than dropped in silence: LuckPerms' `world` context, which on NeoForge is the save's name and not a dimension, a `server=` context unless cluster mode is set up (`cluster.enabled` and this server's name; the cluster need not run),
 and a key no static context sets here; a display name that is temporary, limited to a context or longer than 48
 characters, which a grade's cannot be; regular expression permissions; and the nodes other mods read without declaring them to NeoForge, which nothing here would
 read back. Adding keeps the display name of a grade that already has one. Nodes mods declared are imported as they are, on groups and players, since CustomPerm answers them. On players, only
@@ -952,7 +952,8 @@ A grade or a player can say where they may use a command, server by server, with
 
 In a cluster, `server=<name>` is a context like `world=`: `/customperm grade addperm vip customperm.command.fly
 server=creative` grants `/fly` on the server named `creative` only. Outside a cluster it is refused, since it would
-apply nowhere. Import from LuckPerms carries LuckPerms' `server=` nodes while a cluster runs, and export writes
+apply nowhere. Import from LuckPerms carries LuckPerms' `server=` nodes once cluster mode is set up, even while LuckPerms, still
+active, keeps the cluster from running, and export writes
 them back; both match only when LuckPerms' server names are the same as the cluster's.
 
 **When the database is lost**

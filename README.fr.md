@@ -526,7 +526,7 @@ Les tracks passent avec leurs groupes dans l'ordre ; ajouter garde tel quel un t
 remplacer prend l'ordre de LuckPerms.
 
 Ce qui est laissé derrière, et dit dans le rapport plutôt qu'abandonné en silence : le contexte `world` de LuckPerms, qui
-sur NeoForge est le nom de la sauvegarde et pas une dimension, un contexte `server=` hors cluster, et une clé qu'aucun
+sur NeoForge est le nom de la sauvegarde et pas une dimension, un contexte `server=` sans mode cluster configuré, et une clé qu'aucun
 contexte statique ne fixe ici ; un nom d'affichage temporaire, limité à un contexte ou de plus de 48
 caractères, ce que celui d'un grade ne peut pas être ; les permissions en expression régulière ; et les nœuds que d'autres mods lisent sans les déclarer à
 NeoForge, que plus rien ici ne lirait. Ajouter garde le nom d'affichage d'un grade qui en a déjà un. Les nœuds déclarés par les mods sont importés tels quels, sur les
@@ -968,7 +968,8 @@ limité à `server=<nom>`. L'ordre est commande, puis grade, puis joueur : chacu
 Dans un cluster, `server=<nom>` est un contexte comme `world=` : `/customperm grade addperm vip
 customperm.command.fly server=creative` n'accorde `/fly` que sur le serveur nommé `creative`. Hors cluster il est
 refusé, puisqu'il ne s'appliquerait nulle part. L'import depuis LuckPerms reprend les nœuds `server=` de LuckPerms
-quand un cluster tourne, et l'export les réécrit ; les deux ne correspondent que si les serveurs LuckPerms portent
+dès que le mode cluster est configuré (`cluster.enabled` et le nom du serveur), même si LuckPerms, encore actif, empêche
+le cluster de tourner, et l'export les réécrit ; les deux ne correspondent que si les serveurs LuckPerms portent
 les mêmes noms que ceux du cluster.
 
 **Quand la base est perdue**

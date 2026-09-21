@@ -188,6 +188,8 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Fixed
 
+- **Importing from LuckPerms always left `server=` entries behind** — the import asked for a running cluster, and none ever runs while LuckPerms is active, which it must be to be read. A network moving off LuckPerms therefore lost every per-server entry. The import now asks only for cluster mode to be set up (`cluster.enabled` and this server's name), like the server lists.
+
 - **`/customperm debug` knew nothing of server lists** — it computed its expected decision from the exposed list alone, so on a member a command's list leaves out it reported a `MISMATCH` against the real answer, and it could not show why a grade's entry opened the command there. It now reads the same rule as the command gate and prints where the command is exposed and what the entries naming this server say. Found on the two-server Arcadia Lib bench.
 
 - **A save could fail on Windows while an antivirus held the file** — replacing a config file retried three times 25 ms apart, 75 ms in all, and a scan can hold the file longer, which surfaced as "Change applied in memory but NOT saved (disk error)". It now tries six times, the wait doubling from 25 ms, about 0.8 s at worst and only while the file is held.
