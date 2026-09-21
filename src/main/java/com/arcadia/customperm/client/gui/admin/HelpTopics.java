@@ -226,7 +226,14 @@ final class HelpTopics {
                     "Two servers changing the same grade at once: the second is refused and shown the first change. "
                             + "Database unreachable: the server keeps the rights it last read and refuses changes "
                             + "until it is back. The Dashboard shows the cluster and the other servers heard.",
-                    "server=<name> becomes a context, and each rate limit chooses who shares its budget.")),
+                    "server=<name> becomes a context, and each rate limit chooses who shares its budget.",
+                    "# One command, alias or rate limit on some servers only",
+                    "Give it a list of servers: it is active on those members only, and on every member without a "
+                            + "list. Elsewhere a command keeps its original requirement and an alias does not exist. "
+                            + "A server that does not share that part keeps its own file and never sees the list.",
+                    "/customperm command servers <name> [servers|here|all]",
+                    "/customperm alias servers <name> [servers|here|all]",
+                    "/customperm ratelimit servers <name> [servers|here|all]")),
             new Topic("Activity log", List.of(
                     "Every admin change is recorded, with what the admin saw. Player commands are recorded too when "
                             + "turned on; arguments of private commands such as /msg are masked by default.",

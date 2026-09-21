@@ -249,7 +249,8 @@ This feature works with **either backend**. The `customperm.command.<name>` node
 | `/customperm command remove <name>` | Removes the command, reverts to vanilla behaviour. |
 | `/customperm command preserve <name> <true\|false>` | For an exposed command: `true` requires the node AND the command's original requirement, `false` (default) the node alone. Same as `preserveOriginalRequires` in `commands.json`. |
 | `/customperm command gateall <true\|false>` | Internal backend only. `true`: every command reads its `customperm.command.<name>` node, not only exposed ones. Same as `gateAllCommands` in `settings.json`. |
-| `/customperm command list` | Lists currently exposed commands. |
+| `/customperm command servers <name> [servers\|here\|all]` | In a cluster, the members an exposed command is active on, names separated by spaces or commas; `here` is this server, `all` every member (the default). Without a list, shows it. See [Cluster mode](#cluster-mode-several-servers). |
+| `/customperm command list` | Lists currently exposed commands, with their server list when they have one. |
 
 ### Aliases (macros)
 
@@ -264,7 +265,8 @@ Create custom commands that run one or more inner commands. Steps execute with *
 | `/customperm alias setstep <name> <index> <command>` | Replaces the step at the given 0-based index. |
 | `/customperm alias steps <name>` | Shows all steps with their indices. |
 | `/customperm alias remove <name>` | Deletes the alias entirely. |
-| `/customperm alias list` | Lists all defined aliases. |
+| `/customperm alias servers <name> [servers\|here\|all]` | In a cluster, the members an alias is active on, names separated by spaces or commas; `here` is this server, `all` every member (the default). Without a list, shows it. See [Cluster mode](#cluster-mode-several-servers). |
+| `/customperm alias list` | Lists all defined aliases, with their server list when they have one. |
 | `/customperm alias param add <alias> <name> <player\|integer\|word\|text>` | Declares an argument, at the end of the list. A step reaches it with `${name}`. |
 | `/customperm alias param remove <alias> <name>` | Drops an argument. |
 | `/customperm alias param move <alias> <name> <index>` | Moves an argument to another 0-based position. |
@@ -564,6 +566,7 @@ Cap how many times one player may run a command or an alias within a sliding win
 | `/customperm ratelimit set <name> <max> <windowSeconds>` | Allows `<max>` uses per player per `<windowSeconds>`. Redefining a rule keeps its persistence mode. |
 | `/customperm ratelimit persistence <name> <world_save\|immediate>` | Chooses when the usage history of that command is written to disk (see `ratelimits.json`). |
 | `/customperm ratelimit scope <name> <server\|network\|hub,survival>` | In cluster mode, who shares the budget: each server alone (default), every server, or the servers named. See [Cluster mode](#cluster-mode-several-servers). |
+| `/customperm ratelimit servers <name> [servers\|here\|all]` | In a cluster, the members a rule is active on, names separated by spaces or commas; `here` is this server, `all` every member (the default). Without a list, shows it. See [Cluster mode](#cluster-mode-several-servers). |
 | `/customperm ratelimit disable <name>` / `enable <name>` | Stops or resumes enforcing a rule without losing its numbers. |
 | `/customperm ratelimit remove <name>` | Deletes the rule. |
 | `/customperm ratelimit list` | Lists rules with their state and persistence mode. |
@@ -912,6 +915,10 @@ activates:
 - Not the same thing as a rate limit's scope either: the scope says which members count uses together, the list
   says where the rule applies at all.
 - A member still running an older CustomPerm ignores the list and keeps the element active; update every member.
+- Set it with `/customperm command servers tp hub`, `/customperm alias servers spawn hub survival` or
+  `/customperm ratelimit servers home survival`; `here` stands for the server you type on, `all` clears the list.
+  The answer says whether the element is active on this server, warns when this server does not share that part
+  (the list then stays in its own file), and names any server no member answers to right now.
 
 **`server=` context**
 

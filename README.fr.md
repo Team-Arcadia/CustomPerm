@@ -250,7 +250,8 @@ Définit quelles commandes sont éligibles au système de permissions. Une comma
 | `/customperm command remove <name>` | Retire la commande, retour au comportement vanilla. |
 | `/customperm command preserve <name> <true\|false>` | Pour une commande exposée : `true` exige le nœud ET l'exigence d'origine de la commande, `false` (défaut) le nœud seul. Équivaut à `preserveOriginalRequires` dans `commands.json`. |
 | `/customperm command gateall <true\|false>` | Backend interne uniquement. `true` : toutes les commandes lisent leur nœud `customperm.command.<nom>`, pas seulement les exposées. Équivaut à `gateAllCommands` dans `settings.json`. |
-| `/customperm command list` | Liste les commandes exposées. |
+| `/customperm command servers <name> [serveurs\|here\|all]` | En cluster, les membres sur lesquels une commande exposée est actif, noms séparés par des espaces ou des virgules ; `here` désigne ce serveur, `all` tous les membres (par défaut). Sans liste, l'affiche. Voir [Mode cluster](#mode-cluster-plusieurs-serveurs). |
+| `/customperm command list` | Liste les commandes exposées, avec leur liste de serveurs quand elles en ont une. |
 
 ### Aliases (macros)
 
@@ -265,7 +266,8 @@ Crée des commandes personnalisées qui exécutent une ou plusieurs commandes. L
 | `/customperm alias setstep <name> <index> <command>` | Remplace le step d'index donné (0-based). |
 | `/customperm alias steps <name>` | Affiche tous les steps d'un alias. |
 | `/customperm alias remove <name>` | Supprime entièrement un alias. |
-| `/customperm alias list` | Liste tous les aliases définis. |
+| `/customperm alias servers <name> [serveurs\|here\|all]` | En cluster, les membres sur lesquels un alias est actif, noms séparés par des espaces ou des virgules ; `here` désigne ce serveur, `all` tous les membres (par défaut). Sans liste, l'affiche. Voir [Mode cluster](#mode-cluster-plusieurs-serveurs). |
+| `/customperm alias list` | Liste tous les aliases définis, avec leur liste de serveurs quand ils en ont une. |
 | `/customperm alias param add <alias> <name> <player\|integer\|word\|text>` | Déclare un argument, à la fin de la liste. Un step l'atteint avec `${name}`. |
 | `/customperm alias param remove <alias> <name>` | Retire un argument. |
 | `/customperm alias param move <alias> <name> <index>` | Déplace un argument à une autre position (0-based). |
@@ -583,6 +585,7 @@ Plafonne le nombre d'utilisations d'une commande ou d'un alias par joueur sur un
 | `/customperm ratelimit set <name> <max> <windowSeconds>` | Autorise `<max>` utilisations par joueur toutes les `<windowSeconds>`. Redéfinir une règle conserve son mode de persistance. |
 | `/customperm ratelimit scope <name> <server\|network\|hub,survival>` | En mode cluster, qui partage le budget : chaque serveur seul (par défaut), tous les serveurs, ou ceux nommés. Voir [Mode cluster](#mode-cluster-plusieurs-serveurs). |
 | `/customperm ratelimit persistence <name> <world_save\|immediate>` | Choisit quand l'historique d'utilisation de cette commande est écrit sur le disque (voir `ratelimits.json`). |
+| `/customperm ratelimit servers <name> [serveurs\|here\|all]` | En cluster, les membres sur lesquels une règle est actif, noms séparés par des espaces ou des virgules ; `here` désigne ce serveur, `all` tous les membres (par défaut). Sans liste, l'affiche. Voir [Mode cluster](#mode-cluster-plusieurs-serveurs). |
 | `/customperm ratelimit disable <name>` / `enable <name>` | Suspend ou reprend l'application d'une règle sans perdre ses valeurs. |
 | `/customperm ratelimit remove <name>` | Supprime la règle. |
 | `/customperm ratelimit list` | Liste les règles avec leur état et leur mode de persistance. |
@@ -926,6 +929,10 @@ active :
   ensemble, la liste dit où la règle s'applique.
 - Un membre qui tourne encore un CustomPerm plus ancien ignore la liste et garde l'élément actif : mettez à jour
   tous les membres.
+- Se règle avec `/customperm command servers tp hub`, `/customperm alias servers spawn hub survival` ou
+  `/customperm ratelimit servers home survival` ; `here` désigne le serveur sur lequel on tape, `all` efface la
+  liste. La réponse dit si l'élément est actif sur ce serveur, avertit quand ce serveur ne partage pas cette partie
+  (la liste reste alors dans son propre fichier), et nomme tout serveur qu'aucun membre ne porte en ce moment.
 
 **Contexte `server=`**
 

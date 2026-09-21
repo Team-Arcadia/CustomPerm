@@ -20,6 +20,7 @@ import com.arcadia.customperm.admin.ImportAdmin;
 import com.arcadia.customperm.admin.ImportPlan;
 import com.arcadia.customperm.admin.NameAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
+import com.arcadia.customperm.admin.ServerListAdmin;
 import com.arcadia.customperm.admin.UserAdmin;
 import com.arcadia.customperm.config.AliasParameters;
 import com.arcadia.customperm.config.AliasesConfig;
@@ -197,6 +198,24 @@ public class CustomPermCommand {
     private static List<String> worldContexts(net.minecraft.server.MinecraftServer server) {
         return com.arcadia.customperm.admin.KnownNames.contexts(server);
     }
+
+    /**
+     * A list of cluster members, one word at a time: {@code all} or {@code here} first, then the members this server
+     * hears, those already typed left out.
+     */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_SERVER_LIST =
+        (ctx, builder) -> {
+            String typed = builder.getRemaining();
+            int cut = Math.max(typed.lastIndexOf(' '), typed.lastIndexOf(',')) + 1;
+            List<String> written = List.of(typed.substring(0, cut).trim().split("[,\\s]+"));
+            List<String> options = new java.util.ArrayList<>();
+            if (cut == 0) options.add(com.arcadia.customperm.config.ServerScope.ALL);
+            if (com.arcadia.customperm.cluster.Cluster.identity() != null && !written.contains(com.arcadia.customperm.config.ServerScope.HERE)) {
+                options.add(com.arcadia.customperm.config.ServerScope.HERE);
+            }
+            com.arcadia.customperm.cluster.Cluster.memberNames().stream().filter(n -> !written.contains(n)).forEach(options::add);
+            return SharedSuggestionProvider.suggest(options, builder.createOffset(builder.getStart() + cut));
+        };
 
     /** Existing tracks. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_TRACKS =
@@ -798,6 +817,16 @@ public class CustomPermCommand {
                         .then(Commands.argument("alias", StringArgumentType.word())
                             .suggests(SUGGEST_ALIASES)
                             .executes(CustomPermCommand::aliasParams)))
+                    .then(Commands.literal("servers").requires(AdminAccess.manage(PermissionNodes.MANAGE_ALIASES))
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_ALIASES)
+                            .executes(ctx -> report(ctx, ServerListAdmin.show(ServerListAdmin.Kind.ALIAS,
+                                StringArgumentType.getString(ctx, "name"))))
+                            .then(Commands.argument("servers", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_SERVER_LIST)
+                                .executes(ctx -> report(ctx, ServerListAdmin.set(ctx.getSource().getServer(),
+                                    ServerListAdmin.Kind.ALIAS, StringArgumentType.getString(ctx, "name"),
+                                    StringArgumentType.getString(ctx, "servers")))))))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::aliasList)))
                 .then(Commands.literal("command")
@@ -818,6 +847,16 @@ public class CustomPermCommand {
                         .then(Commands.argument("enabled", BoolArgumentType.bool())
                             .executes(ctx -> report(ctx, CommandAdmin.setGateAll(ctx.getSource().getServer(),
                                 BoolArgumentType.getBool(ctx, "enabled"))))))
+                    .then(Commands.literal("servers").requires(AdminAccess.manage(PermissionNodes.MANAGE_COMMANDS))
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_EXPOSED_COMMANDS)
+                            .executes(ctx -> report(ctx, ServerListAdmin.show(ServerListAdmin.Kind.COMMAND,
+                                StringArgumentType.getString(ctx, "name"))))
+                            .then(Commands.argument("servers", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_SERVER_LIST)
+                                .executes(ctx -> report(ctx, ServerListAdmin.set(ctx.getSource().getServer(),
+                                    ServerListAdmin.Kind.COMMAND, StringArgumentType.getString(ctx, "name"),
+                                    StringArgumentType.getString(ctx, "servers")))))))
                     .then(Commands.literal("list")
                         .executes(CustomPermCommand::commandList)))
                 .then(Commands.literal("ratelimit")
@@ -842,6 +881,16 @@ public class CustomPermCommand {
                                     List.of(RateLimitsConfig.SCOPE_SERVER, RateLimitsConfig.SCOPE_NETWORK), builder))
                                 .executes(ctx -> report(ctx, RateLimitAdmin.setScope(StringArgumentType.getString(ctx, "name"),
                                     StringArgumentType.getString(ctx, "scope")))))))
+                    .then(Commands.literal("servers").requires(AdminAccess.manage(PermissionNodes.MANAGE_RATELIMITS))
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_RATE_LIMITS)
+                            .executes(ctx -> report(ctx, ServerListAdmin.show(ServerListAdmin.Kind.RATE_LIMIT,
+                                StringArgumentType.getString(ctx, "name"))))
+                            .then(Commands.argument("servers", StringArgumentType.greedyString())
+                                .suggests(SUGGEST_SERVER_LIST)
+                                .executes(ctx -> report(ctx, ServerListAdmin.set(ctx.getSource().getServer(),
+                                    ServerListAdmin.Kind.RATE_LIMIT, StringArgumentType.getString(ctx, "name"),
+                                    StringArgumentType.getString(ctx, "servers")))))))
                     .then(Commands.literal("enable").requires(AdminAccess.manage(PermissionNodes.MANAGE_RATELIMITS))
                         .then(Commands.argument("name", StringArgumentType.word())
                             .suggests(SUGGEST_RATE_LIMITS)
@@ -1008,8 +1057,9 @@ public class CustomPermCommand {
             ctx.getSource().sendSuccess(() -> Component.literal(
                 "No commands exposed. Use /customperm command add <name> to expose one."), false);
         } else {
-            ctx.getSource().sendSuccess(() -> Component.literal(
-                "Exposed commands: " + String.join(", ", commands)), false);
+            // A command limited to some cluster members says so, and whether this server is one of them.
+            ctx.getSource().sendSuccess(() -> Component.literal("Exposed commands: " + String.join(", ", commands.stream()
+                .map(name -> name + ServerListAdmin.label(ServerListAdmin.Kind.COMMAND, name)).toList())), false);
         }
         return 1;
     }
@@ -1051,6 +1101,7 @@ public class CustomPermCommand {
             ctx.getSource().sendSuccess(() -> Component.literal(
                 "/" + name + "  " + rule.maxExecutions + " per " + rule.windowSeconds + "s  [" + status + "]"
                     + "  persistence=" + rule.persistence + "  scope=" + rule.scope
+                    + ServerListAdmin.label(ServerListAdmin.Kind.RATE_LIMIT, name)
             ).withStyle(color), false);
         });
         return 1;
@@ -1966,7 +2017,8 @@ public class CustomPermCommand {
             ctx.getSource().sendSuccess(() -> Component.literal("No aliases defined."), false);
         } else {
             map.forEach((k, v) ->
-                ctx.getSource().sendSuccess(() -> Component.literal("/" + k + "  (" + v.size() + " step" + (v.size() > 1 ? "s" : "") + ")"), false));
+                ctx.getSource().sendSuccess(() -> Component.literal("/" + k + "  (" + v.size() + " step" + (v.size() > 1 ? "s" : "") + ")"
+                    + ServerListAdmin.label(ServerListAdmin.Kind.ALIAS, k)), false));
         }
         return 1;
     }

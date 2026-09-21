@@ -190,7 +190,6 @@ public final class Cluster {
         closeDirect();
         state = ClusterGate.State.OFF;
         serverName = null;
-        identity = null;
         decidedWith = null;
     }
 
@@ -206,22 +205,25 @@ public final class Cluster {
      * <p>Known before the cluster is joined, from the settings or from Arcadia Lib's {@code server_id}, since the
      * command tree is built before {@code ServerStartedEvent}, and an unreachable store must not bring back on a
      * member what the cluster keeps away from it. Read on the command-check path only for an element that has a
-     * list, and cached once known: cluster settings apply at the next start anyway.
+     * list: a few field reads, and it always follows the settings as they are now.
      */
     public static String identity() {
         String running = serverName;
         if (running != null) return running.toLowerCase(java.util.Locale.ROOT);
-        String known = identity;
-        if (known != null) return known;
         SettingsConfig.Cluster settings = CustomPerm.configManager.getSettings().cluster;
         if (settings == null || !settings.enabled) return null;
-        String name = settings.direct() ? settings.serverName : arcadiaLibVersion() == null ? null : ArcadiaLibBridge.serverId();
-        if (name == null || name.isBlank()) return null;
-        identity = name.trim().toLowerCase(java.util.Locale.ROOT);
-        return identity;
+        String name = settings.direct() ? settings.serverName : arcadiaLibLoaded() ? ArcadiaLibBridge.serverId() : null;
+        return name == null || name.isBlank() ? null : name.trim().toLowerCase(java.util.Locale.ROOT);
     }
 
-    private static volatile String identity;
+    /** Whether Arcadia Lib is loaded; fixed for the life of the game, so asked of the mod list once. */
+    private static boolean arcadiaLibLoaded() {
+        Boolean known = arcadiaLibLoaded;
+        if (known == null) arcadiaLibLoaded = known = arcadiaLibVersion() != null;
+        return known;
+    }
+
+    private static volatile Boolean arcadiaLibLoaded;
 
     /** This server and the members it heard, sorted; empty when it is not in step with a cluster. */
     public static java.util.List<String> memberNames() {

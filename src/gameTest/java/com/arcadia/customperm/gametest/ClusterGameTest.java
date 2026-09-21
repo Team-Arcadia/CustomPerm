@@ -31,6 +31,7 @@ import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.gametest.support.Grants;
 import com.arcadia.customperm.gametest.support.Modes;
+import com.arcadia.customperm.gametest.support.ServerCommands;
 import com.arcadia.customperm.log.ActivityLog;
 import com.arcadia.customperm.log.LogEntry;
 import com.arcadia.customperm.log.LogKind;
@@ -328,6 +329,78 @@ public class ClusterGameTest {
                     fail("An alias without a list must exist on every member.");
                 }
             });
+        }
+        helper.succeed();
+    }
+
+    /**
+     * The text commands set a list and say what it does here: active or not, a member name no server answers to
+     * (kept), a part this member does not share (the list stays in its file), and {@code here} and {@code all}.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_server_lists_admin")
+    public static void serverListCommandsSayWhatTheListDoesHere(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        var share = CustomPerm.configManager.getSettings().cluster.share;
+        boolean sharedAliases = share.aliases;
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_cl_listcmd", 0);
+             Grants ignored = Grants.allow(player, "customperm.command.time")) {
+            inCluster(server, new MemoryStore(), () -> {
+                ServerCommands.run(server, "customperm command add time");
+                List<String> out = ServerCommands.run(server, "customperm command servers time other");
+                if (!ServerCommands.contains(out, "now active on other only") || !ServerCommands.contains(out, "Not active on this server (gametest)")
+                        || !ServerCommands.contains(out, "other is not a member heard right now")) {
+                    fail("Limiting a command to an unknown member must say so and keep it: " + out);
+                }
+                if (player.canUse("time")) fail("The command must stop being exposed here.");
+                out = ServerCommands.run(server, "customperm command list");
+                if (!ServerCommands.contains(out, "time  [other] (not on this server)")) fail("The list must show the servers: " + out);
+
+                out = ServerCommands.run(server, "customperm command servers time here,other");
+                if (!ServerCommands.contains(out, "gametest, other only") || !player.canUse("time")) {
+                    fail("here must stand for this member and expose the command again: " + out);
+                }
+                out = ServerCommands.run(server, "customperm command servers time all");
+                if (!ServerCommands.contains(out, "every member") || !CustomPerm.configManager.getCommands().commandServers.isEmpty()) {
+                    fail("all must clear the list: " + out);
+                }
+                out = ServerCommands.run(server, "customperm command servers time");
+                if (!ServerCommands.contains(out, "is active on every member") || !ServerCommands.contains(out, "This server is gametest")) {
+                    fail("Without a list the command must show where it applies: " + out);
+                }
+
+                share.aliases = false;
+                ServerCommands.run(server, "customperm alias add cp_cl_listalias say listed");
+                out = ServerCommands.run(server, "customperm alias servers cp_cl_listalias gametest");
+                if (!ServerCommands.contains(out, "does not share its aliases")) {
+                    fail("A list on a part this member keeps local must warn that it reaches no other member: " + out);
+                }
+                out = ServerCommands.run(server, "customperm ratelimit servers cp_cl_nothing hub");
+                if (!ServerCommands.contains(out, "No rate limit on /cp_cl_nothing")) fail("A missing rule must be named: " + out);
+            });
+        } finally {
+            share.aliases = sharedAliases;
+            AliasAdmin.remove(server, "cp_cl_listalias");
+        }
+        helper.succeed();
+    }
+
+    /** Outside a cluster a list is stored but read nowhere, and here has nothing to stand for. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100, batch = "cluster_server_lists_admin")
+    public static void outsideAClusterAListIsStoredAndIgnored(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        try {
+            ServerCommands.run(server, "customperm alias add cp_cl_alone say alone");
+            List<String> out = ServerCommands.run(server, "customperm alias servers cp_cl_alone here");
+            if (!ServerCommands.contains(out, "has no cluster name")) fail("here must be refused outside a cluster: " + out);
+            out = ServerCommands.run(server, "customperm alias servers cp_cl_alone other");
+            if (!ServerCommands.contains(out, "read once it runs in a cluster")) fail("The list must be said to be ignored here: " + out);
+            if (server.getCommands().getDispatcher().getRoot().getChild("cp_cl_alone") == null) {
+                fail("Outside a cluster an alias with a list must stay registered.");
+            }
+        } finally {
+            AliasAdmin.remove(server, "cp_cl_alone");
         }
         helper.succeed();
     }

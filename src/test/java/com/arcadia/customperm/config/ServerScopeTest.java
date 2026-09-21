@@ -43,6 +43,18 @@ class ServerScopeTest {
     }
 
     @Test
+    void aTypedListTakesSpacesCommasHereAndAll() {
+        assertEquals(List.of("demo-a", "hub"), ServerScope.parse("hub, Demo-A  hub", null).names());
+        assertEquals(List.of("alpha", "hub"), ServerScope.parse("here,hub", "alpha").names());
+        assertNull(ServerScope.parse("all", "alpha").names());
+        assertNull(ServerScope.parse("  ", "alpha").names());
+        assertNull(ServerScope.parse("all", "alpha").problem());
+        assertNotNull(ServerScope.parse("hub all", "alpha").problem(), "all cannot be narrowed.");
+        assertNotNull(ServerScope.parse("here", null).problem(), "here needs a cluster name.");
+        assertNotNull(ServerScope.parse("hub two!", "alpha").problem());
+    }
+
+    @Test
     void aCommandIsExposedOnlyOnTheMembersItsListNames() {
         CommandsConfig config = new CommandsConfig();
         config.grantedCommands.add("tp");

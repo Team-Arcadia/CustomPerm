@@ -56,6 +56,40 @@ public final class ServerScope {
         return clean.isEmpty() ? null : new ArrayList<>(clean);
     }
 
+    /** Typed by an admin in place of a list: every member, which stores no list. */
+    public static final String ALL = "all";
+    /** Typed by an admin for the server they are on. */
+    public static final String HERE = "here";
+
+    /** A list as an admin typed it: {@code names} null for every member, or the reason it was refused. */
+    public record Parsed(List<String> names, String problem) {
+    }
+
+    /**
+     * Reads names separated by spaces or commas. {@code all}, or nothing, means every member; {@code here} is the
+     * server named {@code here}, refused when it has no cluster name.
+     */
+    public static Parsed parse(String raw, String here) {
+        String text = raw == null ? "" : raw.trim();
+        if (text.isEmpty() || text.equalsIgnoreCase(ALL)) return new Parsed(null, null);
+        List<String> names = new ArrayList<>();
+        for (String part : text.split("[,\\s]+")) {
+            if (part.isEmpty()) continue;
+            if (part.equalsIgnoreCase(ALL)) {
+                return new Parsed(null, "'all' stands alone: it means every member, which no other name can narrow.");
+            }
+            String name = part;
+            if (part.equalsIgnoreCase(HERE)) {
+                if (here == null) return new Parsed(null, "'here' names this server in a cluster, and it has no cluster name.");
+                name = here;
+            }
+            String problem = problem(name);
+            if (problem != null) return new Parsed(null, "'" + part + "': " + problem);
+            names.add(name);
+        }
+        return new Parsed(normalize(names), null);
+    }
+
     /** Whether an element with this list is active on the server named {@code here}; null {@code here}: no cluster. */
     public static boolean appliesHere(List<String> servers, String here) {
         if (servers == null || servers.isEmpty() || here == null) return true;

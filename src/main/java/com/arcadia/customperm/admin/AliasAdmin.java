@@ -387,7 +387,7 @@ public final class AliasAdmin {
     }
 
     /** Re-registers the alias live, restores a command it stopped shadowing, and resends command trees. */
-    private static void refresh(MinecraftServer server, String name) {
+    static void refresh(MinecraftServer server, String name) {
         if (server != null) {
             AliasManager.registerOrReplace(server.getCommands().getDispatcher(), name);
             // A removed alias may have restored a shadowed command, which must be wrapped again at
