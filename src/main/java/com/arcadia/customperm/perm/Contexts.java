@@ -191,6 +191,11 @@ public final class Contexts {
         return namespace + ":" + path;
     }
 
+    /** Whether a stored context names a server, alone or with other keys: {@code server=hub,world=...}. */
+    public static boolean namesServer(String context) {
+        return context != null && (context.startsWith(SERVER + "=") || context.contains("," + SERVER + "="));
+    }
+
     /** Whether {@code key} is one a static context may set: not one the game decides, nor {@code server}. */
     public static boolean staticKey(String key) {
         return key != null && KEY.matcher(key).matches() && !key.equals(WORLD) && !key.equals(GAMEMODE)

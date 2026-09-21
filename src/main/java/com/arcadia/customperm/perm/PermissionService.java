@@ -16,6 +16,14 @@ import net.minecraft.server.level.ServerPlayer;
 public interface PermissionService {
 
     /**
+     * What the entries naming a server say about {@code node} for this source, see
+     * {@link PermissionResolver#checkServerScoped}. UNSET for a backend that does not keep such entries apart.
+     */
+    default Tristate checkServerScoped(net.minecraft.commands.CommandSourceStack source, String node) {
+        return Tristate.UNSET;
+    }
+
+    /**
      * Explicit value of {@code node} for the source's player, as stored by the backend, with no operator
      * logic. Sources that are not players (console, command blocks, functions) are always
      * {@link Tristate#UNSET}: the vanilla permission level decides for them, so the console can never be

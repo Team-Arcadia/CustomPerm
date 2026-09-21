@@ -53,6 +53,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- **Grades and players decide where they may use a command, server by server** — the order is command, then grade, then player, each with the last word over the one before. A grade's node limited to `server=<name>` closes a command there even when it is exposed everywhere, and opens it there even when the command's list leaves that member out; a player's own such node does the same over their grades. A node held everywhere does not open a command where its list says no, so the command's list keeps its meaning for the usual grade. The resolver gained a decision made of the entries naming a server alone (`PermissionResolver.checkServerScoped`), which only the command gate reads, for commands exposed elsewhere in the cluster. In the interface, the house button of the Nodes tab on the Grades and Players pages shows the selected node server by server, a click moving it from following the other entries to allowed, denied and back, in one change (`GRADE_NODE_SERVER`, `USER_NODE_SERVER`). Aliases are not opened this way.
+
+- **`server=` holds while the database is out of reach** — the context used to be set only while the cluster store answered, so an outage lifted a refusal limited to one member. It now follows the name the member knows from its settings or Arcadia Lib's `server_id`, like the server lists.
+
 - **`/customperm grade list <grade>` shows what a grade holds** — its allowed and denied nodes, parents and refused parents, each with where it applies and the time it has left, such as `cp.zone.staff (server=demo-a, 29d left)`. Before, nothing but `grades.json` showed a grade's nodes. `user list <player>` now writes each of the player's own nodes the same way, rather than in separate `in <context>` lines.
 
 - **`server=here` names the server you type on** — wherever a context is taken, in a cluster, so an admin does not have to remember what the current member is called. Refused with a clear message outside a cluster.

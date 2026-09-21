@@ -425,6 +425,107 @@ public class ClusterGameTest {
         helper.succeed();
     }
 
+    /**
+     * Command, then grade, then player: the command's list decides where it is exposed, a grade's entry naming a
+     * server has the last word there over the list, both ways, and the player's own entry over the grade. A node
+     * held everywhere opens nothing where the list says no.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_server_priority")
+    public static void commandThenGradeThenPlayerDecideOnAServer(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        String grade = "cp_cl_prio";
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_cl_prio", 0)) {
+            inCluster(server, new MemoryStore(), () -> {
+                GradeAdmin.create(grade);
+                GradeAdmin.assign(server, player.player().getGameProfile(), grade);
+                ServerCommands.run(server, "customperm command add time");
+
+                // The command everywhere, the grade holding the node everywhere: open.
+                ServerCommands.run(server, "customperm grade addperm " + grade + " customperm.command.time");
+                if (!player.canUse("time")) fail("The grade's node must open an exposed command.");
+                // The grade says not on this server: closed here, whatever the command's list says.
+                ServerCommands.run(server, "customperm grade adddeny " + grade + " customperm.command.time server=here");
+                if (player.canUse("time")) fail("A grade's refusal naming this server must win over the command being exposed everywhere.");
+                // The player says yes here: they have the last word over their grade.
+                ServerCommands.run(server, "customperm user addperm cp_cl_prio customperm.command.time server=here");
+                if (!player.canUse("time")) fail("The player's own entry naming this server must win over their grade.");
+                ServerCommands.run(server, "customperm user removeperm cp_cl_prio customperm.command.time server=here");
+                ServerCommands.run(server, "customperm grade removedeny " + grade + " customperm.command.time server=here");
+
+                // The command limited to another member: the node held everywhere does not open it here.
+                ServerCommands.run(server, "customperm command servers time other");
+                if (player.canUse("time")) fail("A node held everywhere must not undo the command's list.");
+                // The grade names this server: it opens the command here for its members.
+                var result = com.arcadia.customperm.admin.NodeServerAdmin.forGrade(server, grade, "customperm.command.time",
+                        "gametest", com.arcadia.customperm.admin.NodeServerAdmin.ALLOW);
+                if (!result.success() || !player.canUse("time")) {
+                    fail("A grade's entry naming this server must open a command the list leaves out: " + result.summary());
+                }
+                // The player says no here: over their grade again.
+                com.arcadia.customperm.admin.NodeServerAdmin.forPlayer(server, player.uuid(), "cp_cl_prio",
+                        "customperm.command.time", "gametest", com.arcadia.customperm.admin.NodeServerAdmin.DENY);
+                if (player.canUse("time")) fail("The player's refusal naming this server must win over their grade's.");
+                // Back to following: the grade's word applies again, then nothing once it is taken back.
+                com.arcadia.customperm.admin.NodeServerAdmin.forPlayer(server, player.uuid(), "cp_cl_prio",
+                        "customperm.command.time", "gametest", com.arcadia.customperm.admin.NodeServerAdmin.INHERIT);
+                if (!player.canUse("time")) fail("Following again must give the grade's word back.");
+                com.arcadia.customperm.admin.NodeServerAdmin.forGrade(server, grade, "customperm.command.time",
+                        "gametest", com.arcadia.customperm.admin.NodeServerAdmin.INHERIT);
+                if (player.canUse("time")) fail("Without an entry naming this server the command's list decides again.");
+                var scopes = CustomPerm.configManager.getGrades().grades.get(grade).contexts.get("server=gametest");
+                if (scopes != null && (!scopes.permissions.isEmpty() || !scopes.deniedPermissions.isEmpty())) {
+                    fail("Following again must leave no entry behind.");
+                }
+            });
+        } finally {
+            GradeAdmin.delete(server, grade);
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A member whose database cannot be reached still knows its name, and entries naming it keep applying: an
+     * outage must not lift a refusal limited to this server.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_server_outage_name")
+    public static void anEntryNamingThisServerHoldsWithoutTheStore(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        var config = CustomPerm.configManager;
+        var cluster = config.getSettings().cluster;
+        boolean enabled = cluster.enabled;
+        String connection = cluster.connection;
+        String name = cluster.serverName;
+        boolean exposedBefore = config.getCommands().grantedCommands.contains("time");
+        String grade = "cp_cl_outage";
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_cl_outage", 0)) {
+            // Cluster mode on, this member named, no store joined: what a member sees while its database is down.
+            cluster.enabled = true;
+            cluster.connection = "direct";
+            cluster.serverName = "alpha";
+            if (Cluster.running() || !"alpha".equals(Cluster.identity())) fail("The member must know its name without a store.");
+            GradeAdmin.create(grade);
+            GradeAdmin.assign(server, player.player().getGameProfile(), grade);
+            ServerCommands.run(server, "customperm command add time");
+            ServerCommands.run(server, "customperm grade addperm " + grade + " customperm.command.time");
+            List<String> out = ServerCommands.run(server, "customperm grade adddeny " + grade + " customperm.command.time server=here");
+            var scope = config.getGrades().grades.get(grade).contexts.get("server=alpha");
+            if (scope == null || !scope.deniedPermissions.contains("customperm.command.time")) {
+                fail("server=here must name this member without a store: " + out);
+            }
+            if (player.canUse("time")) fail("A refusal naming this member must hold while the store is out of reach.");
+        } finally {
+            cluster.enabled = enabled;
+            cluster.connection = connection;
+            cluster.serverName = name;
+            GradeAdmin.delete(server, grade);
+            if (!exposedBefore) com.arcadia.customperm.admin.CommandAdmin.hide(server, "time");
+            config.save();
+        }
+        helper.succeed();
+    }
+
     /** Outside a cluster a list is stored but read nowhere, and here has nothing to stand for. */
     @GameTest(template = TEMPLATE, timeoutTicks = 100, batch = "cluster_server_lists_admin")
     public static void outsideAClusterAListIsStoredAndIgnored(GameTestHelper helper) {

@@ -83,6 +83,8 @@ public final class GradesScreen extends AdminScreen {
 
     private GradesData data;
     private Tab tab = Tab.NODES;
+    /** Whether the Nodes tab shows the selected node server by server instead of the list; kept across refreshes. */
+    private boolean nodeServersView;
 
     private final CpEditBox search;
     private final CpList<GradesData.Grade> gradeList;
@@ -400,7 +402,14 @@ public final class GradesScreen extends AdminScreen {
         Rect fieldRow = new Rect(in.x(), list.bottom() + 4, in.w(), FIELD);
         Rect buttonRow = new Rect(in.x(), fieldRow.bottom() + 4, in.w(), BUTTON);
         if (tab == Tab.NODES) {
-            addRenderableWidget(nodeList.at(list));
+            String serversNode = nodeServersNode();
+            if (serversNode != null) {
+                buildNodeServerToggles(list, nodeServerStates(serversNode, nodeList.items(), NodeRow::node, NodeRow::deny,
+                        NodeRow::context), editable,
+                        (server, state) -> act(GuiAction.GRADE_NODE_SERVER, gradeList.getSelected().name(), serversNode, server, state));
+            } else {
+                addRenderableWidget(nodeList.at(list));
+            }
             Rect[] boxes = fieldRow.split(4, WORLD_FIELD, DURATION_FIELD);
             addRenderableWidget(nodeField.at(boxes[0]));
             addRenderableWidget(worldField.at(boxes[1]));
@@ -409,13 +418,21 @@ public final class GradesScreen extends AdminScreen {
             worldField.setEditable(editable);
             durationField.setEditable(editable);
             NodeRow selected = nodeList.getSelected();
-            placeButtonRow(buttonRow, 6, true, List.of(
+            List<CpButton> buttons = new ArrayList<>(List.of(
                     CpButton.good(Component.literal("Allow"), () -> addNode(false)).icon(Icon.CHECK).enabled(editable),
                     CpButton.danger(Component.literal("Deny"), () -> addNode(true)).icon(Icon.CROSS).enabled(editable)
                             .tooltip(Component.literal("Refused, operators included, unless a more specific node allows "
                                     + "it: deny * and allow one command to open only that command.")),
                     CpButton.neutral(Component.literal("Remove"), () -> removeNode(selected)).icon(Icon.MINUS)
-                            .enabled(editable && selected != null)));
+                            .enabled(editable && selected != null && serversNode == null)));
+            if (context.cluster().inCluster()) {
+                // The selected node, server by server: where this grade allows it, denies it, or says nothing.
+                buttons.add(2, CpButton.neutral(Component.literal("Servers"), this::toggleNodeServers).iconOnly(Icon.HOME)
+                        .selected(nodeServersView).enabled(nodeServersView || selected != null)
+                        .tooltip(Component.literal(nodeServersView ? "Back to the list of nodes."
+                                : "Where this grade allows or denies the selected node, server by server.")));
+            }
+            placeButtonRow(buttonRow, 6, true, buttons);
         } else if (tab == Tab.PARENTS) {
             addRenderableWidget(parentList.at(list));
             Rect[] boxes = fieldRow.split(4, WORLD_FIELD, DURATION_FIELD);
@@ -502,6 +519,17 @@ public final class GradesScreen extends AdminScreen {
                             Component.literal(selected != null && selected.refused() ? "Accept" : "Unassign"),
                             () -> takeBack(selected)).icon(Icon.MINUS).enabled(editable && selected != null)));
         }
+    }
+
+    /** The node shown server by server, or null while the list of nodes shows. */
+    private String nodeServersNode() {
+        NodeRow selected = nodeList.getSelected();
+        return nodeServersView && selected != null && context.cluster().inCluster() ? selected.node() : null;
+    }
+
+    private void toggleNodeServers() {
+        nodeServersView = !nodeServersView;
+        rebuild();
     }
 
     private void setTab(Tab wanted) {
@@ -817,6 +845,10 @@ public final class GradesScreen extends AdminScreen {
 
     @Override
     protected void renderContent(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        if (layout != null && tab == Tab.NODES && gradeList.getSelected() != null && nodeServersNode() != null) {
+            Rect list = listArea();
+            Skin.text(g, font, nodeServersNode() + " by server", list.x(), list.y(), list.w(), Palette.TEXT_MUTE);
+        }
         Rect in = inner();
         Skin.panel(g, in.inset(-8));
         GradesData.Grade grade = gradeList.getSelected();

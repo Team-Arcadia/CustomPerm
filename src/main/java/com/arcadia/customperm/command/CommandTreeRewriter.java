@@ -277,6 +277,21 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         }
     }
 
+    /**
+     * Whether {@code rootName} is exposed for {@code source} on this server. It is when its list of servers names
+     * this one. When the command is exposed only on other members, a grade or a player still has the last word
+     * about this server: an entry of theirs limited to {@code server=<this one>}, allowing or denying, makes the
+     * node decide here for them, as on an exposed command. A node held everywhere does not, so the command's list
+     * keeps its meaning for the usual grade.
+     */
+    static boolean exposedFor(CommandSourceStack source, String rootName) {
+        var commands = CustomPerm.configManager.getCommands();
+        String here = com.arcadia.customperm.cluster.Cluster.identity();
+        if (commands.exposedHere(rootName, here)) return true;
+        if (here == null || !commands.grantedCommands.contains(rootName)) return false;
+        return com.arcadia.customperm.perm.PermissionService.get().checkServerScoped(source, commandNode(rootName)) != Tristate.UNSET;
+    }
+
     /** Node read for a root command, exposed or gated by {@code gateAllCommands}. */
     public static String commandNode(String rootName) {
         return "customperm.command." + rootName;
@@ -428,8 +443,9 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             if (!CustomPerm.isDirectCommandExposureEnabled()) {
                 return originalAllows.getAsBoolean();
             }
-            // Exposed here: a command limited to other cluster members keeps its original requirement on this one.
-            boolean exposed = CustomPerm.configManager.getCommands().exposedHere(rootName, com.arcadia.customperm.cluster.Cluster.identity());
+            // Exposed here, or opened here for this player by an entry of theirs naming this server: a command
+            // limited to other members keeps its original requirement otherwise.
+            boolean exposed = exposedFor(source, rootName);
             if (!exposed && !CustomPerm.gatesAllCommands()) {
                 return originalAllows.getAsBoolean();
             }

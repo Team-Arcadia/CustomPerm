@@ -40,6 +40,13 @@ public class InternalPermService implements PermissionService {
                 contexts(player));
     }
 
+    @Override
+    public Tristate checkServerScoped(CommandSourceStack source, String node) {
+        if (!(source.getEntity() instanceof ServerPlayer player)) return Tristate.UNSET;
+        return PermissionResolver.checkServerScoped(config.getGrades(), player.getUUID(), node,
+                config.getSettings().defaultGrade, contexts(player));
+    }
+
     /**
      * Where the player stands, not where the command runs: {@code execute in} does not change what they hold.
      * Their dimension, their game mode, and the server's static contexts.

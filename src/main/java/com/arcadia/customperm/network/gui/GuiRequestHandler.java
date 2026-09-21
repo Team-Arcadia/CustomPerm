@@ -199,6 +199,14 @@ public final class GuiRequestHandler {
             case GRADE_NODE_REMOVE -> kind(args.get(2)) == null ? malformed(action)
                     : guarded(player, () -> GradeAdmin.removeNode(player.getServer(), args.get(0), args.get(1), kind(args.get(2)),
                             args.get(3)));
+            case GRADE_NODE_SERVER -> guarded(player, () -> com.arcadia.customperm.admin.NodeServerAdmin.forGrade(
+                    player.getServer(), args.get(0), args.get(1), args.get(2), args.get(3)));
+            case USER_NODE_SERVER -> guarded(player, () -> {
+                java.util.UUID uuid = uuid(args.get(0));
+                if (uuid == null) return malformed(action);
+                return com.arcadia.customperm.admin.NodeServerAdmin.forPlayer(player.getServer(), uuid,
+                        GradeAdmin.displayName(player.getServer(), uuid), args.get(1), args.get(2), args.get(3));
+            });
             case GRADE_WEIGHT_SET -> signed(args.get(1)) == null ? malformed(action)
                     : guarded(player, () -> GradeAdmin.setWeight(player.getServer(), args.get(0), signed(args.get(1))));
             case GRADE_DISPLAYNAME_SET -> GradeAdmin.setDisplayName(args.get(0), args.get(1));

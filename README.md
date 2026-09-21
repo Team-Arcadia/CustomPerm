@@ -929,6 +929,25 @@ activates:
   The answer says whether the element is active on this server, warns when this server does not share that part
   (the list then stays in its own file), and names any server no member answers to right now.
 
+**Grades and players on one server**
+
+A grade or a player can say where they may use a command, server by server, with the command's node limited to
+`server=<name>`. The order is command, then grade, then player: each one has the last word over the one before it.
+
+- The command's list says where it is exposed. On a member it leaves out, a node held everywhere opens nothing.
+- A grade's entry naming a server has the last word there over the command, both ways: `adddeny vip
+  customperm.command.tp server=survival` closes `/tp` on `survival` to that grade even if the command is exposed
+  everywhere, and `addperm vip customperm.command.tp server=hub` opens it on `hub` to that grade even if the
+  command's list leaves `hub` out.
+- The player's own entry naming a server has the last word over their grades, the usual exception for one
+  player. Without one, the player follows their grades, which is the case nine times out of ten.
+- Between grades, the heaviest decides, as for any node.
+- In the interface, the house button of the Nodes tab, on the Grades and Players pages, shows the selected node
+  server by server: framed when the holder says nothing there, green when allowed, red when denied; a click moves
+  to the next state.
+- Such an entry holds while the database is out of reach, the member knowing its name from its settings.
+- Aliases are not opened this way: an alias limited to other members is not registered here at all.
+
 **`server=` context**
 
 In a cluster, `server=<name>` is a context like `world=`: `/customperm grade addperm vip customperm.command.fly

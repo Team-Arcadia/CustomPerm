@@ -106,6 +106,26 @@ public final class PermissionResolver {
      */
     public static Tristate check(GradesConfig grades, UUID uuid, String node, String defaultGrade,
                                  Contexts contexts) {
+        return check(grades, uuid, node, defaultGrade, contexts, NODES, false);
+    }
+
+    /**
+     * What the entries naming a server say about {@code node}, the others left out: the player's own node limited
+     * to {@code server=...} first, then their grades' such nodes, ranked like {@link #check}. UNSET when no entry
+     * naming a server reaches them.
+     *
+     * <p>This is how a grade or a player has the last word about one server over a command's own list of servers:
+     * only an entry that speaks about that server can open the command there, so a grade holding the node
+     * everywhere, the usual case, does not undo the list.
+     */
+    public static Tristate checkServerScoped(GradesConfig grades, UUID uuid, String node, String defaultGrade,
+                                             Contexts contexts) {
+        if (contexts.isEmpty()) return Tristate.UNSET;
+        return check(grades, uuid, node, defaultGrade, contexts, SERVER_NODES, true);
+    }
+
+    private static Tristate check(GradesConfig grades, UUID uuid, String node, String defaultGrade,
+                                  Contexts contexts, Reader<Tristate> reader, boolean serverOnly) {
         if (node == null || uuid == null) return Tristate.UNSET;
         boolean hasDefault = defaultGrade != null && !defaultGrade.isEmpty();
         String user = uuid.toString();
@@ -114,12 +134,14 @@ public final class PermissionResolver {
         List<String> refused = refused(grades, user, scoped, contexts);
 
         Ranked<Tristate> own = new Ranked<>(DENY_WINS);
-        offerNode(own, specificity(grades.userPermissions.get(user), grades.userPermissionExpiries.get(user), node),
-                specificity(grades.userDeniedPermissions.get(user), grades.userDeniedPermissionExpiries.get(user), node),
-                PLAYER_RANK, 0);
+        if (!serverOnly) {
+            offerNode(own, specificity(grades.userPermissions.get(user), grades.userPermissionExpiries.get(user), node),
+                    specificity(grades.userDeniedPermissions.get(user), grades.userDeniedPermissionExpiries.get(user), node),
+                    PLAYER_RANK, 0);
+        }
         if (scoped != null) {
             for (Map.Entry<String, GradesConfig.UserScoped> entry : scoped.entrySet()) {
-                if (!contexts.satisfies(entry.getKey())) continue;
+                if (!contexts.satisfies(entry.getKey()) || serverOnly && !Contexts.namesServer(entry.getKey())) continue;
                 GradesConfig.UserScoped scope = entry.getValue();
                 offerNode(own, specificity(scope.permissions, scope.permissionExpiries, node),
                         specificity(scope.deniedPermissions, scope.deniedPermissionExpiries, node), PLAYER_RANK,
@@ -128,12 +150,12 @@ public final class PermissionResolver {
         }
         List<String> assigned = Expiry.alive(grades.userGrades.get(user), grades.userGradeExpiries.get(user));
         if (assigned != null) {
-            offerGrades(own, NODES, grades, assigned, node, hasDefault ? defaultGrade : null, refused, contexts);
+            offerGrades(own, reader, grades, assigned, node, hasDefault ? defaultGrade : null, refused, contexts);
         }
         if (scoped != null) {
             for (Map.Entry<String, GradesConfig.UserScoped> entry : scoped.entrySet()) {
                 if (entry.getValue().grades.isEmpty() || !contexts.satisfies(entry.getKey())) continue;
-                offerGrades(own, NODES, grades, Expiry.alive(entry.getValue().grades, entry.getValue().gradeExpiries), node,
+                offerGrades(own, reader, grades, Expiry.alive(entry.getValue().grades, entry.getValue().gradeExpiries), node,
                         hasDefault ? defaultGrade : null, refused, contexts);
             }
         }
@@ -141,7 +163,7 @@ public final class PermissionResolver {
 
         if (!hasDefault) return Tristate.UNSET;
         Ranked<Tristate> fallback = new Ranked<>(DENY_WINS);
-        offerGrades(fallback, NODES, grades, List.of(defaultGrade), node, null, refused, contexts);
+        offerGrades(fallback, reader, grades, List.of(defaultGrade), node, null, refused, contexts);
         return fallback.value == null ? Tristate.UNSET : fallback.value;
     }
 
@@ -348,6 +370,18 @@ public final class PermissionResolver {
         if (grade.contexts.isEmpty() || contexts.isEmpty()) return;
         for (Map.Entry<String, GradesConfig.GradeScoped> entry : grade.contexts.entrySet()) {
             if (!contexts.satisfies(entry.getKey())) continue;
+            GradesConfig.GradeScoped scope = entry.getValue();
+            offerNode(into, specificity(scope.permissions, scope.permissionExpiries, node),
+                    specificity(scope.deniedPermissions, scope.deniedPermissionExpiries, node), rank,
+                    Contexts.size(entry.getKey()));
+        }
+    };
+
+    /** {@link #NODES} limited to the entries naming a server: what a grade says about one server. */
+    private static final Reader<Tristate> SERVER_NODES = (into, grade, node, rank, contexts) -> {
+        if (grade.contexts.isEmpty()) return;
+        for (Map.Entry<String, GradesConfig.GradeScoped> entry : grade.contexts.entrySet()) {
+            if (!Contexts.namesServer(entry.getKey()) || !contexts.satisfies(entry.getKey())) continue;
             GradesConfig.GradeScoped scope = entry.getValue();
             offerNode(into, specificity(scope.permissions, scope.permissionExpiries, node),
                     specificity(scope.deniedPermissions, scope.deniedPermissionExpiries, node), rank,

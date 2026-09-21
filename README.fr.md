@@ -943,6 +943,26 @@ active :
   liste. La réponse dit si l'élément est actif sur ce serveur, avertit quand ce serveur ne partage pas cette partie
   (la liste reste alors dans son propre fichier), et nomme tout serveur qu'aucun membre ne porte en ce moment.
 
+**Grades et joueurs sur un serveur**
+
+Un grade ou un joueur peut dire où il peut utiliser une commande, serveur par serveur, avec le nœud de la commande
+limité à `server=<nom>`. L'ordre est commande, puis grade, puis joueur : chacun a le dernier mot sur le précédent.
+
+- La liste de la commande dit où elle est exposée. Sur un membre qu'elle écarte, un nœud porté partout n'ouvre
+  rien.
+- Une entrée de grade qui nomme un serveur a le dernier mot sur la commande à cet endroit, dans les deux sens :
+  `adddeny vip customperm.command.tp server=survival` ferme `/tp` sur `survival` à ce grade même si la commande est
+  exposée partout, et `addperm vip customperm.command.tp server=hub` l'ouvre sur `hub` à ce grade même si la liste
+  de la commande écarte `hub`.
+- L'entrée propre d'un joueur qui nomme un serveur a le dernier mot sur ses grades : l'exception habituelle pour
+  un joueur. Sans elle, le joueur suit ses grades, ce qui est le cas neuf fois sur dix.
+- Entre grades, le plus lourd décide, comme pour tout nœud.
+- Dans l'interface, le bouton maison de l'onglet Nœuds, sur les pages Grades et Joueurs, montre le nœud
+  sélectionné serveur par serveur : encadré quand le détenteur ne dit rien, vert quand il autorise, rouge quand il
+  refuse ; un clic passe à l'état suivant.
+- Une telle entrée tient pendant une panne de la base, le membre connaissant son nom par ses réglages.
+- Les alias ne s'ouvrent pas ainsi : un alias limité à d'autres membres n'est pas enregistré ici.
+
 **Contexte `server=`**
 
 Dans un cluster, `server=<nom>` est un contexte comme `world=` : `/customperm grade addperm vip

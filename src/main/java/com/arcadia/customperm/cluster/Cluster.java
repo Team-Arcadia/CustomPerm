@@ -277,12 +277,14 @@ public final class Cluster {
 
     /**
      * The contexts set on this server beyond the world and the game mode: {@code statics}, plus {@code server=<name>}
-     * while a cluster runs. What an entry's context is checked against before it is stored, and what every player
+     * once this server has a cluster name, joined or not ({@link #identity}). What an entry's context is checked against before it is stored, and what every player
      * carries. The same map instance comes back while nothing changed, for the callers that cache on it.
      */
     public static java.util.Map<String, String> declared(java.util.Map<String, String> statics) {
-        String name = serverName();
-        if (service == null || name == null) return statics;
+        // The name known at startup, not only while the store answers: an outage must not lift an entry
+        // limited to another member, as it does not bring back an element its server list keeps away.
+        String name = identity();
+        if (name == null) return statics;
         java.util.Map<String, String> cached = declaredCache;
         if (cached != null && declaredFrom == statics && name.equals(declaredName)) return cached;
         java.util.TreeMap<String, String> all = new java.util.TreeMap<>(statics);

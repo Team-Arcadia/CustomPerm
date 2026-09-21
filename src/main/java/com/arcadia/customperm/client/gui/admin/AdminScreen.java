@@ -307,6 +307,85 @@ public abstract class AdminScreen extends CpScreen {
         return buttons;
     }
 
+    // ------------------------------------------------------------------ one node, server by server
+
+    /** Title line above the per-server buttons of a node. */
+    protected static final int NODE_SERVERS_TITLE = 12;
+
+    /**
+     * What a holder says about {@code node} on each server, from their entries: {@code allow} or {@code deny} for
+     * an entry limited to exactly {@code server=<name>}, absent when they say nothing there. {@code rows} gives each
+     * entry as node, whether it denies, and its context.
+     */
+    protected static <R> java.util.Map<String, String> nodeServerStates(String node, List<R> rows,
+            java.util.function.Function<R, String> nodeOf, java.util.function.Predicate<R> denies,
+            java.util.function.Function<R, String> contextOf) {
+        java.util.Map<String, String> states = new java.util.TreeMap<>();
+        for (R row : rows) {
+            String context = contextOf.apply(row);
+            if (!nodeOf.apply(row).equals(node) || context == null || !context.startsWith("server=") || context.contains(",")) continue;
+            states.put(context.substring("server=".length()), denies.test(row) ? "deny" : "allow");
+        }
+        return states;
+    }
+
+    /** Height of {@link #buildNodeServerToggles} in {@code width}, its title included. */
+    protected final int nodeServerTogglesHeight(int width, java.util.Map<String, String> states) {
+        int lines = flow(width, nodeServerButtons(states, false, (s, n) -> { })).size();
+        return NODE_SERVERS_TITLE + lines * Atlas.BUTTON_HEIGHT + (lines - 1) * SERVER_GAP;
+    }
+
+    /**
+     * One button per server for a node: framed while the holder says nothing there and follows their other entries,
+     * green when allowed there, red when denied there. A click moves to the next state, and {@code send} gets the
+     * server and that state: {@code allow}, {@code deny} or {@code inherit}.
+     */
+    protected final void buildNodeServerToggles(Rect area, java.util.Map<String, String> states, boolean editable,
+                                                java.util.function.BiConsumer<String, String> send) {
+        List<List<CpButton>> lines = flow(area.w(), nodeServerButtons(states, editable, send));
+        int y = area.y() + NODE_SERVERS_TITLE;
+        for (List<CpButton> line : lines) {
+            int x = area.x();
+            for (CpButton button : line) {
+                int w = Math.min(button.preferredWidth(font, 6), area.w());
+                addRenderableWidget(button.at(x, y, w, Atlas.BUTTON_HEIGHT));
+                x += w + SERVER_GAP;
+            }
+            y += Atlas.BUTTON_HEIGHT + SERVER_GAP;
+        }
+    }
+
+    private List<CpButton> nodeServerButtons(java.util.Map<String, String> states, boolean editable,
+                                             java.util.function.BiConsumer<String, String> send) {
+        var cluster = context.cluster();
+        List<String> names = new ArrayList<>(cluster.members());
+        if (cluster.inCluster() && !names.contains(cluster.here())) names.add(0, cluster.here());
+        states.keySet().stream().filter(name -> !names.contains(name)).forEach(names::add);
+        List<CpButton> buttons = new ArrayList<>();
+        for (String name : names) {
+            String state = states.getOrDefault(name, "inherit");
+            String next = switch (state) {
+                case "inherit" -> "allow";
+                case "allow" -> "deny";
+                default -> "inherit";
+            };
+            CpButton button = switch (state) {
+                case "allow" -> CpButton.good(Component.literal(name), () -> send.accept(name, next)).icon(Icon.CHECK);
+                case "deny" -> CpButton.danger(Component.literal(name), () -> send.accept(name, next)).icon(Icon.CROSS);
+                default -> CpButton.neutral(Component.literal(name), () -> send.accept(name, next));
+            };
+            String now = switch (state) {
+                case "allow" -> "allowed on " + name;
+                case "deny" -> "denied on " + name;
+                default -> "follows the other entries on " + name;
+            };
+            buttons.add(button.enabled(editable && cluster.inCluster())
+                    .tooltip(Component.literal("Now " + now + (name.equals(cluster.here()) ? " (this server)" : "")
+                            + ". Click: " + (next.equals("inherit") ? "follow the other entries" : next) + " there.")));
+        }
+        return buttons;
+    }
+
     /** A toggle that reads as one at a glance: filled when on, framed when off. */
     private static CpButton toggle(String label, boolean on, Runnable action) {
         return on ? CpButton.accent(Component.literal(label), action) : CpButton.neutral(Component.literal(label), action);

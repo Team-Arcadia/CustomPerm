@@ -58,6 +58,8 @@ public final class PlayersScreen extends AdminScreen {
     }
 
     private PlayersData data;
+    /** Whether the Nodes tab shows the selected node server by server instead of the list; kept across refreshes. */
+    private boolean nodeServersView;
 
     private final CpEditBox search;
     private final CpList<PlayersData.Player> playerList;
@@ -285,6 +287,17 @@ public final class PlayersScreen extends AdminScreen {
         return new Rect(in.x(), in.y() + 24, in.w(), FIELD);
     }
 
+    /** The node shown server by server, or null while the list of nodes shows. */
+    private String nodeServersNode() {
+        NodeRow selected = nodeList.getSelected();
+        return nodeServersView && selected != null && tab == Tab.NODES && context.cluster().inCluster() ? selected.node() : null;
+    }
+
+    private void toggleNodeServers() {
+        nodeServersView = !nodeServersView;
+        rebuild();
+    }
+
     private Rect listArea() {
         Rect in = inner();
         int top = in.y() + 24 + FIELD + 4;
@@ -373,7 +386,14 @@ public final class PlayersScreen extends AdminScreen {
                             .tooltip(Component.literal("Their grades' prefixes still apply."))));
             return;
         }
-        addRenderableWidget(nodeList.at(list));
+        String serversNode = nodeServersNode();
+        if (serversNode != null) {
+            buildNodeServerToggles(list, nodeServerStates(serversNode, nodeList.items(), NodeRow::node, NodeRow::deny,
+                    NodeRow::context), editable && !player.uuid().isEmpty(),
+                    (server, state) -> act(GuiAction.USER_NODE_SERVER, player.uuid(), serversNode, server, state));
+        } else {
+            addRenderableWidget(nodeList.at(list));
+        }
         Rect[] boxes = fieldRow.split(4, GradesScreen.WORLD_FIELD, DURATION_FIELD);
         addRenderableWidget(nodeField.at(boxes[0]));
         addRenderableWidget(worldField.at(boxes[1]));
@@ -383,13 +403,22 @@ public final class PlayersScreen extends AdminScreen {
         durationField.setEditable(editable);
 
         NodeRow selected = nodeList.getSelected();
-        placeButtonRow(buttonRow, 6, true, List.of(
+        List<CpButton> buttons = new ArrayList<>(List.of(
                 CpButton.good(Component.literal("Allow"), () -> addNode(false)).icon(Icon.CHECK).enabled(editable),
                 CpButton.danger(Component.literal("Deny"), () -> addNode(true)).icon(Icon.CROSS).enabled(editable)
                         .tooltip(Component.literal("Refused to this player, operators included, unless a more specific "
                                 + "node allows it. Their own nodes win over their grades at the same level.")),
                 CpButton.neutral(Component.literal("Remove"), () -> removeNode(selected)).icon(Icon.MINUS)
-                        .enabled(editable && selected != null && !player.uuid().isEmpty())));
+                        .enabled(editable && selected != null && !player.uuid().isEmpty() && serversNode == null)));
+        if (context.cluster().inCluster()) {
+            // Their own word on the selected node, server by server, above what their grades say there.
+            buttons.add(2, CpButton.neutral(Component.literal("Servers"), this::toggleNodeServers).iconOnly(Icon.HOME)
+                    .selected(nodeServersView).enabled(nodeServersView || selected != null)
+                    .tooltip(Component.literal(nodeServersView ? "Back to the list of nodes."
+                            : "Where this player's own entry allows or denies the selected node, server by server, "
+                            + "above their grades.")));
+        }
+        placeButtonRow(buttonRow, 6, true, buttons);
     }
 
     private void setTab(Tab wanted) {
@@ -557,6 +586,11 @@ public final class PlayersScreen extends AdminScreen {
 
     @Override
     protected void renderContent(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        if (layout != null && nodeServersNode() != null) {
+            Rect list = listArea();
+            Skin.text(g, font, nodeServersNode() + " by server, above their grades", list.x(), list.y(), list.w(),
+                    Palette.TEXT_MUTE);
+        }
         Rect in = inner();
         Skin.panel(g, in.inset(-8));
         PlayersData.Player player = playerList.getSelected();

@@ -88,6 +88,8 @@ public enum GuiAction {
     GRADE_NODE_ADD(5, GuiArea.GRADES),
     /** {@code [grade, node, "allow"|"deny", context]} Removes an ALLOW or a DENY node, from that context. */
     GRADE_NODE_REMOVE(4, GuiArea.GRADES),
+    /** {@code [grade, node, server, "allow"|"deny"|"inherit"]} What the grade says about the node on one cluster member. */
+    GRADE_NODE_SERVER(4, GuiArea.GRADES),
     /** {@code [grade, weight]} Sets the tie-break weight, which decides between grades at the same specificity. */
     GRADE_WEIGHT_SET(2, GuiArea.GRADES),
     /** {@code [grade, text]} Sets the name pages and listings show for the grade; empty text clears it. */
@@ -129,6 +131,8 @@ public enum GuiAction {
     USER_NICK_SET(2, GuiArea.GRADES),
     /** {@code [playerUuid, node, "allow"|"deny", context]} Removes one, by UUID so an unnamed entry can be cleaned up. */
     USER_NODE_REMOVE(4, GuiArea.GRADES),
+    /** {@code [playerUuid, node, server, "allow"|"deny"|"inherit"]} What the player says about the node on one member. */
+    USER_NODE_SERVER(4, GuiArea.GRADES),
     /**
      * {@code [playerName, track, context]} Moves a player one rung up a track, like {@code /customperm track
      * promote}; with a context, among the grades held there only. No area: {@code customperm.manage.grades} or

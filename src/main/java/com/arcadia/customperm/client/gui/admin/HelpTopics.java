@@ -234,6 +234,14 @@ final class HelpTopics {
                             + "A server that does not share that part keeps its own file and never sees the list.",
                     "In the interface: the house button on the Commands and Rate limits pages, the Servers tab on "
                             + "the Aliases page. All clears the list; OFF in a list marks what is not active here.",
+                    "# A grade or a player on one server",
+                    "Command, then grade, then player: each has the last word over the one before. A grade denying a "
+                            + "command's node with server=<name> closes it there even when the command is exposed "
+                            + "everywhere; allowing it there opens it even when the command's list leaves that server "
+                            + "out. A player's own such node wins over their grades. The house button of the Nodes "
+                            + "tab shows the selected node server by server.",
+                    "/customperm grade adddeny <grade> <node> server=<name>",
+                    "/customperm user addperm <player> <node> server=here",
                     "/customperm command servers <name> [servers|here|all]",
                     "/customperm alias servers <name> [servers|here|all]",
                     "/customperm ratelimit servers <name> [servers|here|all]")),
