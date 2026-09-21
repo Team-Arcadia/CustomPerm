@@ -58,6 +58,24 @@ class GapReaderTest {
     }
 
     @Test
+    void aNumberSkippedOnTheVeryFirstRowIsStillWaitedFor() {
+        GapReader reader = new GapReader();
+        assertTrue(reader.accept(3, 0), "the first row read is new");
+        assertEquals(Set.of(1L, 2L), reader.missing(),
+                "a cluster joining an empty table starts at 0, and a late commit below the first row read must "
+                        + "still be asked for by number");
+        assertTrue(reader.accept(1, 10), "the late commit is read");
+        assertEquals(Set.of(2L), reader.missing());
+    }
+
+    @Test
+    void startingAtZeroOnALongTableStillRefusesThousandsOfNumbers() {
+        GapReader reader = new GapReader();
+        reader.accept(GapReader.MISSING_MAX + 2, 0);
+        assertTrue(reader.missing().isEmpty(), "the bound, not the starting point, is what caps the waiting list");
+    }
+
+    @Test
     void aHugeJumpIsNotTurnedIntoThousandsOfNumbersToWaitFor() {
         GapReader reader = new GapReader();
         reader.accept(1, 0);

@@ -72,6 +72,39 @@ class JdbcDriversTest {
     }
 
     @Test
+    void eachDriverIsGivenItsOwnTlsVocabulary() {
+        assertEquals("disable", JdbcDrivers.sslMode(true, "off"));
+        assertEquals("trust", JdbcDrivers.sslMode(true, "trust"));
+        assertEquals("verify-full", JdbcDrivers.sslMode(true, "verify"));
+        assertEquals("DISABLED", JdbcDrivers.sslMode(false, "off"));
+        assertEquals("REQUIRED", JdbcDrivers.sslMode(false, "trust"));
+        assertEquals("VERIFY_IDENTITY", JdbcDrivers.sslMode(false, "verify"));
+    }
+
+    @Test
+    void anUnknownTlsSettingFallsBackToNoTls() {
+        assertEquals("disable", JdbcDrivers.sslMode(true, "nonsense"));
+        assertEquals("DISABLED", JdbcDrivers.sslMode(false, "nonsense"));
+    }
+
+    @Test
+    void theResolvedDriverAcceptsEveryValueItIsGiven() throws Exception {
+        java.sql.Driver driver = JdbcDrivers.first();
+        boolean mariaDb = JdbcDrivers.mariaDb(driver);
+        java.util.Properties props = new java.util.Properties();
+        props.setProperty("user", "nobody");
+        props.setProperty("connectTimeout", "1000");
+        for (String tls : new String[] {"off", "trust", "verify"}) {
+            props.setProperty("sslMode", JdbcDrivers.sslMode(mariaDb, tls));
+            String url = JdbcDrivers.urlFor(driver, "127.0.0.1", 1, "customperm");
+            SQLException thrown = assertThrows(SQLException.class, () -> driver.connect(url, props));
+            assertFalse(thrown.getMessage().contains("sslMode"),
+                    "the driver rejected the value itself rather than failing on the closed port: "
+                            + thrown.getMessage());
+        }
+    }
+
+    @Test
     void theStateSaysWhyTheClusterStayedOut() {
         assertNotNull(ClusterGate.reason(ClusterGate.State.NO_JDBC_DRIVER, null));
     }

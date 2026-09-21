@@ -56,7 +56,10 @@ final class GapReader {
     boolean accept(long number, long now) {
         if (number <= last) return missing.remove(number) != null;
         long gap = number - last - 1;
-        if (gap > 0 && gap <= MISSING_MAX && last > 0) {
+        // No floor on last: a cluster joining an empty table starts at 0, and a number skipped on the very first
+        // row read is exactly the one a concurrent insert commits late. The MISSING_MAX bound below is what keeps
+        // a first read of an already long table from turning into thousands of numbers to wait for.
+        if (gap > 0 && gap <= MISSING_MAX) {
             for (long skipped = last + 1; skipped < number && missing.size() < MISSING_MAX; skipped++) {
                 missing.put(skipped, now);
             }

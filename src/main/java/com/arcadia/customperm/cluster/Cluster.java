@@ -89,16 +89,7 @@ public final class Cluster {
         props.setProperty("password", db.password);
         props.setProperty("connectTimeout", "5000");
         props.setProperty("socketTimeout", "10000");
-        // Each driver rejects the other's TLS vocabulary, so the mode is named in the one it understands.
-        props.setProperty("sslMode", mariaDb ? switch (db.tls) {
-            case com.arcadia.customperm.config.SettingsConfig.Database.TLS_TRUST -> "trust";
-            case com.arcadia.customperm.config.SettingsConfig.Database.TLS_VERIFY -> "verify-full";
-            default -> "disable";
-        } : switch (db.tls) {
-            case com.arcadia.customperm.config.SettingsConfig.Database.TLS_TRUST -> "REQUIRED";
-            case com.arcadia.customperm.config.SettingsConfig.Database.TLS_VERIFY -> "VERIFY_IDENTITY";
-            default -> "DISABLED";
-        });
+        props.setProperty("sslMode", JdbcDrivers.sslMode(mariaDb, db.tls));
         DirectConnections connections = new DirectConnections(driver, url, props);
         directConnections = connections;
         return new SqlStore(connections::get);

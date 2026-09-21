@@ -8,6 +8,8 @@
  */
 package com.arcadia.customperm.cluster;
 
+import com.arcadia.customperm.config.SettingsConfig;
+
 import java.sql.Driver;
 import java.sql.SQLException;
 
@@ -43,6 +45,26 @@ public final class JdbcDrivers {
             }
         }
         return null;
+    }
+
+    /**
+     * The value to give the {@code sslMode} connection property, in the vocabulary the driver understands.
+     * MariaDB and MySQL name the same three modes differently and each rejects the other's spelling, so the
+     * translation has to happen here rather than at the call site.
+     */
+    public static String sslMode(boolean mariaDb, String tls) {
+        if (mariaDb) {
+            return switch (tls) {
+                case SettingsConfig.Database.TLS_TRUST -> "trust";
+                case SettingsConfig.Database.TLS_VERIFY -> "verify-full";
+                default -> "disable";
+            };
+        }
+        return switch (tls) {
+            case SettingsConfig.Database.TLS_TRUST -> "REQUIRED";
+            case SettingsConfig.Database.TLS_VERIFY -> "VERIFY_IDENTITY";
+            default -> "DISABLED";
+        };
     }
 
     /**

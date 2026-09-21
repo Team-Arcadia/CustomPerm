@@ -158,6 +158,8 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Fixed
 
+- **A cluster starting on an empty log table could lose an entry for good** — the shared log is numbered by the database, and a number is handed out when a row is inserted, not when it commits, so a server can read entry 42 before entry 41 is visible. `GapReader` remembers such a skipped number and asks for it again, except that it refused to do so for the very first row it read. A cluster joining a table with no entries starts at zero, which is exactly that case: two servers writing before the first poll, and one administration entry vanished from the shared log with nothing to signal it. The floor is gone; the bound that keeps a first read of an already long table from queueing thousands of numbers was doing that job on its own. Measured on the concurrency test: 2 failures in 20 runs before, 0 in 20 after, and the new unit test fails on the old code.
+
 - **The French half of `NOTICE.md` denied what the English half stated** — it listed neither Arcadia Lib nor the bundled MariaDB Connector/J, and closed on "Aucun code tiers n'est empaqueté dans le jar CustomPerm", the opposite of the English text. Since `§10.5` makes the English text authoritative, a French reader had no notice at all for a component shipped inside the jar. Both halves now carry the same table and the same statement, which the jar no longer contradicts either.
 
 - **Both READMEs claimed the mod is required on the client** — the license section explained the server-to-player permission by "Because CustomPerm has client-side components". The payload registrar is `optional()`, so a vanilla client connects and simply has no admin interface. The permission itself is unchanged; only its stated premise was wrong.
