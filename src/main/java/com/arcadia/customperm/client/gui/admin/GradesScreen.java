@@ -9,6 +9,7 @@
 package com.arcadia.customperm.client.gui.admin;
 
 import com.arcadia.customperm.client.gui.kit.Atlas;
+import com.arcadia.customperm.client.gui.kit.Completer;
 import com.arcadia.customperm.client.gui.kit.CpButton;
 import com.arcadia.customperm.client.gui.kit.CpEditBox;
 import com.arcadia.customperm.client.gui.kit.CpList;
@@ -112,11 +113,12 @@ public final class GradesScreen extends AdminScreen {
         this.data = data;
         this.nodeField = new CpEditBox(Component.literal("Permission node"), GuiCodecs.CLIENT_ARG_MAX)
                 .hint(Component.literal("permission node"))
+                .completes(Completions.nodes())
                 .onSubmit(() -> addNode(false));
         this.playerField = new CpEditBox(Component.literal("Player name"), 16)
                 .hint(Component.literal("player name"))
+                .completes(Completions.players())
                 .onSubmit(this::assign);
-        playerField.onChange(this::suggestPlayer);
         this.weightField = new CpEditBox(Component.literal("Grade weight"), 7)
                 .hint(Component.literal("weight"))
                 .onSubmit(this::applyWeight);
@@ -130,11 +132,14 @@ public final class GradesScreen extends AdminScreen {
         this.chat = new ChatFields(this::rebuild);
         this.meta = new MetaFields(this::rebuild);
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
-                .hint(Component.literal("for, e.g. 30d"));
+                .hint(Component.literal("for, e.g. 30d"))
+                .completes(Completions.durations());
         this.worldField = new CpEditBox(Component.literal("World"), 128)
-                .hint(Component.literal("in, e.g. the_nether"));
+                .hint(Component.literal("in, e.g. the_nether"))
+                .completes(Completions.contexts());
         this.search = new CpEditBox(Component.literal("Search grades"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
+                .completes(Completions.search(() -> this.data.grades().stream().map(GradesData.Grade::name).toList()))
                 .onChange(text -> refilter());
         this.gradeList = new CpList<GradesData.Grade>(Component.literal("Grades"), ROW)
                 .renderer(this::renderGrade)
@@ -160,8 +165,8 @@ public final class GradesScreen extends AdminScreen {
                 });
         this.parentField = new CpEditBox(Component.literal("Parent grade"), 64)
                 .hint(Component.literal("grade to inherit"))
+                .completes(Completer.of(this::parentCandidates))
                 .onSubmit(this::addParent);
-        parentField.onChange(this::suggestParent);
         this.parentList = new CpList<ParentRow>(Component.literal("Parents"), 14)
                 .renderer(this::renderParent)
                 .label(row -> (row.refused() ? "refuses " : "inherits ") + row.grade())
@@ -272,12 +277,6 @@ public final class GradesScreen extends AdminScreen {
         displayField.setValue(grade == null ? "" : grade.header().displayName());
         chat.fill(grade == null ? List.of() : grade.chat());
         meta.fill(grade == null ? List.of() : grade.meta());
-    }
-
-    /** Shows the rest of the first known player name that starts with what was typed. */
-    private void suggestPlayer(String typed) {
-        String completion = completion(typed);
-        playerField.setSuggestion(completion == null ? null : completion.substring(typed.length()));
     }
 
     private String completion(String typed) {
@@ -607,7 +606,6 @@ public final class GradesScreen extends AdminScreen {
         if (grade == null || name.isEmpty()) return;
         act(GuiAction.GRADE_PARENT_ADD, grade.name(), name, durationField.getValue().trim(), context(worldField.getValue()));
         parentField.setValue("");
-        parentField.setSuggestion(null);
     }
 
     private void addParent() {
@@ -622,7 +620,6 @@ public final class GradesScreen extends AdminScreen {
         if (grade == null || name.isEmpty()) return;
         act(GuiAction.GRADE_PARENT_DENY, grade.name(), name, durationField.getValue().trim(), context(worldField.getValue()));
         parentField.setValue("");
-        parentField.setSuggestion(null);
     }
 
     private void removeParent(ParentRow row) {
@@ -633,10 +630,13 @@ public final class GradesScreen extends AdminScreen {
         parentField.setValue("");
     }
 
-    /** Shows the rest of the first grade name that starts with what was typed, itself excluded. */
-    private void suggestParent(String typed) {
-        String completion = parentCompletion(typed);
-        parentField.setSuggestion(completion == null ? null : completion.substring(typed.length()));
+    /** Grades the selected one may inherit: every other grade. */
+    private List<String> parentCandidates() {
+        GradesData.Grade selected = gradeList.getSelected();
+        return data.grades().stream()
+                .map(GradesData.Grade::name)
+                .filter(name -> selected == null || !name.equals(selected.name()))
+                .toList();
     }
 
     private String parentCompletion(String typed) {
@@ -673,7 +673,6 @@ public final class GradesScreen extends AdminScreen {
         if (grade == null || name == null) return;
         act(GuiAction.GRADE_ASSIGN, name, grade.name(), durationField.getValue().trim(), context(worldField.getValue()));
         playerField.setValue("");
-        playerField.setSuggestion(null);
     }
 
     /** The player name in the field, completed against the known ones; {@code null} when it is empty. */
@@ -691,7 +690,6 @@ public final class GradesScreen extends AdminScreen {
         if (grade == null || name == null) return;
         act(GuiAction.GRADE_REFUSE, name, grade.name(), durationField.getValue().trim(), context(worldField.getValue()));
         playerField.setValue("");
-        playerField.setSuggestion(null);
     }
 
     private void takeBack(MemberRow row) {

@@ -38,13 +38,17 @@ final class MetaFields {
 
     MetaFields(Runnable onRebuild) {
         this.key = new CpEditBox(Component.literal("Meta key"), 128)
-                .hint(Component.literal("key, e.g. mymod.homes.max"));
+                .hint(Component.literal("key, e.g. mymod.homes.max"))
+                .completes(Completions.metaKeys());
         this.value = new CpEditBox(Component.literal("Value"), 256)
-                .hint(Component.literal("value"));
+                .hint(Component.literal("value"))
+                .completes(Completions.metaValues(() -> this.key.getValue()));
         this.duration = new CpEditBox(Component.literal("Duration"), 16)
-                .hint(Component.literal("for, e.g. 30d"));
+                .hint(Component.literal("for, e.g. 30d"))
+                .completes(Completions.durations());
         this.world = new CpEditBox(Component.literal("World"), 128)
-                .hint(Component.literal("in, e.g. the_nether"));
+                .hint(Component.literal("in, e.g. the_nether"))
+                .completes(Completions.contexts());
         this.list = new CpList<MetaLine>(Component.literal("Meta"), 14)
                 .renderer(this::renderLine)
                 .label(line -> line.key() + " = " + line.value())

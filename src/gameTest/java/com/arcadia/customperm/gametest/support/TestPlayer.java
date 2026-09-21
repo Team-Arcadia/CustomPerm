@@ -135,6 +135,7 @@ public final class TestPlayer implements AutoCloseable {
         if (modInstalledClientSide) {
             ChannelAttributes.getOrCreateAdHocChannels(connection).addAll(List.of(
                     GuiPagePayload.TYPE.id(), GuiActionResultPayload.TYPE.id(),
+                    com.arcadia.customperm.network.gui.GuiVocabularyPayload.TYPE.id(),
                     LpSyncPayload.TYPE.id(), LpEditResultPayload.TYPE.id()));
         }
         declareCompanionChannels(connection);

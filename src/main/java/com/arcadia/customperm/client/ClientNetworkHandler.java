@@ -11,6 +11,7 @@ package com.arcadia.customperm.client;
 import com.arcadia.customperm.client.gui.admin.AdminScreens;
 import com.arcadia.customperm.network.gui.GuiActionResultPayload;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
+import com.arcadia.customperm.network.gui.GuiVocabularyPayload;
 import com.arcadia.customperm.network.lp.LpEditResultPayload;
 import com.arcadia.customperm.network.lp.LpSyncPayload;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
@@ -27,6 +28,10 @@ public final class ClientNetworkHandler {
 
     public static void handlePage(GuiPagePayload payload, IPayloadContext context) {
         context.enqueueWork(() -> AdminScreens.deliver(payload));
+    }
+
+    public static void handleVocabulary(GuiVocabularyPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> com.arcadia.customperm.client.gui.admin.Completions.store(payload.vocabulary()));
     }
 
     public static void handleActionResult(GuiActionResultPayload payload, IPayloadContext context) {

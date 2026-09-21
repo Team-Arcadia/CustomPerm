@@ -53,6 +53,7 @@ public final class HelpScreen extends AdminScreen {
         super(Component.literal("Help"), context);
         this.search = new CpEditBox(Component.literal("Search help"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
+                .completes(Completions.search(() -> HelpTopics.ALL.stream().map(HelpTopics.Topic::title).toList()))
                 .onChange(text -> refilter());
         this.topics = new CpList<HelpTopics.Topic>(Component.literal("Help topics"), ROW)
                 .renderer((g, font, topic, r, hovered, selected) ->

@@ -26,6 +26,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
+import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
 
@@ -59,7 +60,8 @@ public final class RateLimitsScreen extends AdminScreen {
     public RateLimitsScreen(GuiContext context, RateLimitsData data) {
         super(Component.literal("Rate limits"), context);
         this.data = data;
-        this.target = new CpEditBox(Component.literal("Command or alias"), 64).hint(Component.literal("command or alias"));
+        this.target = new CpEditBox(Component.literal("Command or alias"), 64).hint(Component.literal("command or alias"))
+                .completes(Completions.commandsAndAliases());
         this.max = new CpEditBox(Component.literal("Maximum uses per window"), MAX_DIGITS).hint(Component.literal("uses"));
         this.window = new CpEditBox(Component.literal("Window in seconds"), MAX_DIGITS).hint(Component.literal("seconds"))
                 .onSubmit(this::save);
@@ -67,9 +69,13 @@ public final class RateLimitsScreen extends AdminScreen {
         window.setFilter(RateLimitsScreen::digitsOnly);
         this.scope = new CpEditBox(Component.literal("Who shares the budget"), 200)
                 .hint(Component.literal("server, network or hub,survival"))
+                // server and network stand alone; after a comma only server names make sense.
+                .completes(text -> (text.contains(",") ? Completions.servers(List.of())
+                        : Completions.servers(List.of("server", "network"))).propose(text))
                 .onSubmit(this::applyScope);
         this.search = new CpEditBox(Component.literal("Search rate limits"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
+                .completes(Completions.search(() -> this.data.rules().stream().map(RateLimitsData.Rule::name).toList()))
                 .onChange(text -> refilter());
         this.ruleList = new CpList<RateLimitsData.Rule>(Component.literal("Rate limits"), ROW)
                 .renderer(this::renderRule)

@@ -14,6 +14,7 @@ import com.arcadia.customperm.network.gui.GuiActionResultPayload;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
+import com.arcadia.customperm.network.gui.GuiVocabularyPayload;
 import com.arcadia.customperm.network.lp.LpEditPayload;
 import com.arcadia.customperm.network.lp.LpEditResultPayload;
 import com.arcadia.customperm.network.lp.LpRequestHandler;
@@ -58,6 +59,8 @@ public final class NetworkHandler {
         PayloadRegistrar registrar = event.registrar(PROTOCOL_VERSION).optional();
 
         registrar.playToClient(GuiPagePayload.TYPE, GuiPagePayload.STREAM_CODEC, NetworkHandler::dispatchPage);
+        registrar.playToClient(GuiVocabularyPayload.TYPE, GuiVocabularyPayload.STREAM_CODEC,
+                NetworkHandler::dispatchVocabulary);
         registrar.playToClient(GuiActionResultPayload.TYPE, GuiActionResultPayload.STREAM_CODEC,
                 NetworkHandler::dispatchActionResult);
         registrar.playToServer(GuiRequestPayload.TYPE, GuiRequestPayload.STREAM_CODEC, GuiRequestHandler::handleRequest);
@@ -79,6 +82,12 @@ public final class NetworkHandler {
     private static void dispatchPage(GuiPagePayload payload, IPayloadContext context) {
         if (FMLEnvironment.dist.isClient()) {
             ClientNetworkHandler.handlePage(payload, context);
+        }
+    }
+
+    private static void dispatchVocabulary(GuiVocabularyPayload payload, IPayloadContext context) {
+        if (FMLEnvironment.dist.isClient()) {
+            ClientNetworkHandler.handleVocabulary(payload, context);
         }
     }
 

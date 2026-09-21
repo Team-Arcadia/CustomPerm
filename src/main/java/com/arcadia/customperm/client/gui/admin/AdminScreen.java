@@ -10,6 +10,7 @@ package com.arcadia.customperm.client.gui.admin;
 
 import com.arcadia.customperm.client.gui.kit.Atlas;
 import com.arcadia.customperm.client.gui.kit.CpButton;
+import com.arcadia.customperm.client.gui.kit.CpEditBox;
 import com.arcadia.customperm.client.gui.kit.CpScreen;
 import com.arcadia.customperm.client.gui.kit.Icon;
 import com.arcadia.customperm.client.gui.kit.Palette;
@@ -125,8 +126,13 @@ public abstract class AdminScreen extends CpScreen {
      */
     protected final void rebuild() {
         GuiEventListener focused = getFocused();
+        // A page that rebuilds as a field is typed in (a search refilters) must not close that field's candidates.
+        boolean listOpen = focused instanceof CpEditBox box && box.completionsOpen();
         rebuildWidgets();
-        if (focused != null && children().contains(focused)) setFocused(focused);
+        if (focused != null && children().contains(focused)) {
+            setFocused(focused);
+            if (listOpen) ((CpEditBox) focused).reopenCompletions();
+        }
     }
 
     /** Whether this admin may write to {@code area}; screens render read-only otherwise. */

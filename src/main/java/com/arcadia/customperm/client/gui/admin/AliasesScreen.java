@@ -81,12 +81,15 @@ public final class AliasesScreen extends AdminScreen {
         this.data = data;
         this.stepEdit = new CpEditBox(Component.literal("Step command"), GuiCodecs.CLIENT_ARG_MAX)
                 .hint(Component.literal("step command"))
+                .completes(Completions.commandLine(this::stepArguments))
                 .onSubmit(this::appendStep);
         // Before the lists: their selection handlers clear it, and a blank final cannot be read first.
         this.paramValue = new CpEditBox(Component.literal("Argument value"), GuiCodecs.CLIENT_ARG_MAX)
-                .hint(Component.literal("default, 1..5, or a,b,c"));
+                .hint(Component.literal("default, 1..5, or a,b,c"))
+                .completes(Completions.search(this::paramValueCandidates));
         this.search = new CpEditBox(Component.literal("Search aliases"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
+                .completes(Completions.search(() -> this.data.aliases().stream().map(AliasesData.Alias::name).toList()))
                 .onChange(text -> refilter());
         this.aliasList = new CpList<AliasesData.Alias>(Component.literal("Aliases"), ROW)
                 .renderer(this::renderAlias)
@@ -105,6 +108,7 @@ public final class AliasesScreen extends AdminScreen {
                 .hint(Component.literal("name"));
         this.newStep = new CpEditBox(Component.literal("First step of the new alias"), GuiCodecs.CLIENT_ARG_MAX)
                 .hint(Component.literal("first step"))
+                .completes(Completions.commandLine(List::of))
                 .onSubmit(this::create);
         this.stepList = new CpList<Step>(Component.literal("Steps"), STEP_ROW)
                 .renderer(this::renderStep)
@@ -165,6 +169,18 @@ public final class AliasesScreen extends AdminScreen {
         fillParams();
         if (pendingParam != null) paramList.selectByKey(pendingParam);
         pendingParam = null;
+    }
+
+    /** Player names for the default of a player argument; the other types take a free value or a range. */
+    private List<String> paramValueCandidates() {
+        AliasesData.Param param = paramList.getSelected();
+        return param != null && param.type().equals("player") ? Completions.vocabulary().players() : List.of();
+    }
+
+    /** What a step's arguments may be: the selected alias's own arguments, then player names. */
+    private List<String> stepArguments() {
+        AliasesData.Alias alias = aliasList.getSelected();
+        return alias == null ? List.of() : alias.params().stream().map(param -> "${" + param.name() + "}").toList();
     }
 
     private void refilter() {

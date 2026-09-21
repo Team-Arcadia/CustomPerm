@@ -59,6 +59,12 @@ public final class GuiRequestHandler {
         RateLimiter.registerInternalBudget(ACTION_RATE_KEY, ACTION_WINDOW_SECONDS);
     }
 
+    /**
+     * The vocabulary each admin last received, so it is sent again only when it changed. Weak: a player who
+     * leaves drops out, and one who comes back is a new instance, sent the vocabulary on the first page.
+     */
+    private static final java.util.Map<ServerPlayer, GuiVocabulary> SENT_VOCABULARY = new java.util.WeakHashMap<>();
+
     private GuiRequestHandler() {
     }
 
@@ -75,6 +81,7 @@ public final class GuiRequestHandler {
     /** Opens the LuckPerms editor on a section; does nothing unless the LuckPerms mod is installed. */
     public static void openLuckPerms(ServerPlayer player, String section) {
         if (!CustomPerm.isLuckPermsPresent() || player.hasDisconnected() || !clientSupportsInterface(player)) return;
+        sendVocabulary(player);
         PacketDistributor.sendToPlayer(player,
                 new GuiPagePayload(true, GuiSnapshots.context(player), new LuckPermsData(section)));
     }
@@ -550,8 +557,18 @@ public final class GuiRequestHandler {
 
     private static void sendPage(ServerPlayer player, GuiPage page, boolean open) {
         if (player.hasDisconnected() || !clientSupportsInterface(player) || !available(page)) return;
+        sendVocabulary(player);
         PacketDistributor.sendToPlayer(player,
                 new GuiPagePayload(open, GuiSnapshots.context(player), GuiSnapshots.page(page, player)));
+    }
+
+    /** Sends what the fields propose ahead of the page, unless this admin already has the same. */
+    private static void sendVocabulary(ServerPlayer player) {
+        if (!player.connection.hasChannel(GuiVocabularyPayload.TYPE)) return;
+        GuiVocabulary vocabulary = GuiSnapshots.vocabulary(player.getServer());
+        if (vocabulary.equals(SENT_VOCABULARY.get(player))) return;
+        SENT_VOCABULARY.put(player, vocabulary);
+        PacketDistributor.sendToPlayer(player, new GuiVocabularyPayload(vocabulary));
     }
 
     private static void send(ServerPlayer player, CustomPacketPayload payload) {

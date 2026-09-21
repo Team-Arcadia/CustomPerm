@@ -12,6 +12,8 @@ import com.arcadia.customperm.client.gui.admin.AdminScreen;
 import com.arcadia.customperm.client.gui.admin.AdminScreens;
 import com.arcadia.customperm.client.gui.kit.Atlas;
 import com.arcadia.customperm.client.gui.kit.CpButton;
+import com.arcadia.customperm.client.gui.admin.Completions;
+import com.arcadia.customperm.client.gui.kit.Completer;
 import com.arcadia.customperm.client.gui.kit.CpEditBox;
 import com.arcadia.customperm.client.gui.kit.CpList;
 import com.arcadia.customperm.client.gui.kit.Icon;
@@ -152,6 +154,15 @@ public final class LuckPermsScreen extends AdminScreen implements AdminScreens.L
                 });
         complete(groupField, this::groupNames);
         complete(trackField, this::trackNames);
+        searchField.completes(Completions.players());
+        nodeKey.completes(Completions.nodes());
+        nodeContexts.completes(Completions.contexts());
+        nodeDuration.completes(Completions.durations());
+        groupDuration.completes(Completions.durations());
+        prefixValue.completes(Completions.chatTexts());
+        suffixValue.completes(Completions.chatTexts());
+        metaKey.completes(Completions.metaKeys());
+        metaValue.completes(Completions.metaValues(metaKey::getValue));
     }
 
     private static CpEditBox field(String hint, int max) {
@@ -366,9 +377,9 @@ public final class LuckPermsScreen extends AdminScreen implements AdminScreens.L
 
     // ------------------------------------------------------------------ completion
 
-    /** Grey completion of the first matching name; Enter or an action accepts it through {@link #accepted}. */
+    /** Completion over {@code names}; Enter or an action also accepts the first match through {@link #accepted}. */
     private static void complete(CpEditBox box, Supplier<List<String>> names) {
-        box.onChange(typed -> box.setSuggestion(rest(typed, names.get())));
+        box.completes(Completer.of(names));
     }
 
     private static String rest(String typed, List<String> names) {

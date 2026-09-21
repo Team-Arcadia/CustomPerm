@@ -61,6 +61,7 @@ public final class LogsScreen extends AdminScreen {
         this.data = data;
         this.search = new CpEditBox(Component.literal("Search logs"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
+                .completes(Completions.search(this::searchable))
                 .onChange(text -> refilter());
         this.list = new CpList<LogsData.Entry>(Component.literal("Log entries"), ROW)
                 .renderer(this::renderEntry)
@@ -108,6 +109,17 @@ public final class LogsScreen extends AdminScreen {
                 .toList());
         list.emptyText(!query.isEmpty() ? "No entry matches."
                 : playersTab ? "No player command recorded." : "No admin change recorded yet.");
+    }
+
+    /** Who acted and what they did, on the tab shown: what a search here is usually for. */
+    private java.util.Collection<String> searchable() {
+        java.util.Set<String> names = new java.util.LinkedHashSet<>();
+        for (LogsData.Entry e : current()) {
+            names.add(e.actor());
+            if (!e.server().isEmpty()) names.add(e.server());
+        }
+        for (LogsData.Entry e : current()) names.add(e.action());
+        return names;
     }
 
     private static boolean matches(LogsData.Entry e, String query) {

@@ -165,7 +165,7 @@ public class CustomPermCommand {
 
     /** A few durations, to show the form; any combination of w, d, h, m and s is accepted. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_DURATIONS =
-        (ctx, builder) -> SharedSuggestionProvider.suggest(List.of("1h", "12h", "1d", "7d", "30d"), builder);
+        (ctx, builder) -> SharedSuggestionProvider.suggest(com.arcadia.customperm.admin.KnownNames.DURATIONS, builder);
 
     /**
      * What may follow a grade being assigned: a duration, one of this server's worlds, or both. Suggested for
@@ -178,7 +178,7 @@ public class CustomPermCommand {
             List<String> written = space < 0 ? List.of() : List.of(typed.substring(0, space).trim().split("\\s+"));
             List<String> options = new java.util.ArrayList<>();
             if (written.stream().allMatch(word -> word.isEmpty() || word.contains("="))) {
-                options.addAll(List.of("1h", "12h", "1d", "7d", "30d"));
+                options.addAll(com.arcadia.customperm.admin.KnownNames.DURATIONS);
             }
             if (written.stream().noneMatch(word -> word.contains("="))) options.addAll(worldContexts(ctx.getSource().getServer()));
             return SharedSuggestionProvider.suggest(options, space < 0 ? builder : builder.createOffset(builder.getStart() + space + 1));
@@ -186,26 +186,16 @@ public class CustomPermCommand {
 
     /** The loaded worlds by id alone, for {@code prefix <holder> in <world>}. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_WORLD_IDS =
-        (ctx, builder) -> SharedSuggestionProvider.suggest(ctx.getSource().getServer() == null ? List.of()
-            : ctx.getSource().getServer().levelKeys().stream().map(key -> key.location().toString()).toList(), builder);
+        (ctx, builder) -> SharedSuggestionProvider.suggest(
+            com.arcadia.customperm.admin.KnownNames.worldIds(ctx.getSource().getServer()), builder);
 
     /** A context, for removing an entry limited to one. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_WORLDS =
         (ctx, builder) -> SharedSuggestionProvider.suggest(worldContexts(ctx.getSource().getServer()), builder);
 
-    /**
-     * {@code world=the_nether} and the like, one per loaded dimension, then the game modes and the static
-     * contexts, written as the commands take them.
-     */
+    /** Contexts as the commands take them: worlds, game modes, static contexts, cluster members. */
     private static List<String> worldContexts(net.minecraft.server.MinecraftServer server) {
-        if (server == null) return List.of();
-        List<String> worlds = new java.util.ArrayList<>();
-        for (var level : server.getAllLevels()) {
-            worlds.add("world=" + com.arcadia.customperm.perm.Contexts.luckPermsWorld(level.dimension().location().toString()));
-        }
-        com.arcadia.customperm.perm.Contexts.GAMEMODES.forEach(mode -> worlds.add("gamemode=" + mode));
-        worlds.addAll(com.arcadia.customperm.admin.ContextAdmin.describe());
-        return worlds;
+        return com.arcadia.customperm.admin.KnownNames.contexts(server);
     }
 
     /** Existing tracks. */
@@ -277,33 +267,10 @@ public class CustomPermCommand {
         (ctx, builder) -> SharedSuggestionProvider.suggest(
             ctx.getSource().getOnlinePlayerNames(), builder);
 
-    /**
-     * Known permission nodes: customperm.command.* and customperm.alias.* for what is configured, the
-     * admin interface write nodes, and every node (allowed or denied) already used by a grade.
-     */
+    /** Known permission nodes, as the interface proposes them too. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_KNOWN_NODES =
-        (ctx, builder) -> {
-            Set<String> nodes = new TreeSet<>(PermissionNodes.all());
-            for (String c : CustomPerm.configManager.getCommands().grantedCommands) {
-                nodes.add("customperm.command." + c);
-            }
-            var server = ctx.getSource().getServer();
-            if (CustomPerm.gatesAllCommands() && server != null) {
-                server.getCommands().getDispatcher().getRoot().getChildren().forEach(node -> {
-                    if (!node.getName().equals("customperm")) nodes.add("customperm.command." + node.getName());
-                });
-            }
-            // Nodes other mods declared through NeoForge: grantable here once CustomPerm answers them.
-            nodes.addAll(com.arcadia.customperm.perm.ModPermissions.declaredNodes());
-            for (String a : CustomPerm.configManager.getAliases().aliases.keySet()) {
-                nodes.add("customperm.alias." + a);
-            }
-            for (GradesConfig.Grade g : CustomPerm.configManager.getGrades().grades.values()) {
-                nodes.addAll(g.permissions);
-                nodes.addAll(g.deniedPermissions);
-            }
-            return SharedSuggestionProvider.suggest(nodes, builder);
-        };
+        (ctx, builder) -> SharedSuggestionProvider.suggest(
+            com.arcadia.customperm.admin.KnownNames.nodes(ctx.getSource().getServer()), builder);
 
     /** Nodes already granted to the grade named by the "grade" argument, for removeperm. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRADE_PERMS =

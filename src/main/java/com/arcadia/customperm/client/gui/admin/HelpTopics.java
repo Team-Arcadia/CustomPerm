@@ -32,6 +32,11 @@ final class HelpTopics {
                     "- Rate limits page: optionally cap how often a player may use it.",
                     "The Dashboard shows which backend decides, the counts, and any alert. Every page has the same "
                             + "text commands behind it, listed at the end of each topic here.",
+                    "# Typing in a field",
+                    "A field that names something existing proposes it: nodes, players, grades, worlds, durations, "
+                            + "commands, meta keys. Tab takes the highlighted candidate, Up and Down move through the "
+                            + "list, Down opens it on an empty field, Escape closes it. A field that creates a name "
+                            + "proposes nothing.",
                     "/customperm status",
                     "/customperm reload")),
             new Topic("Who can administer", List.of(

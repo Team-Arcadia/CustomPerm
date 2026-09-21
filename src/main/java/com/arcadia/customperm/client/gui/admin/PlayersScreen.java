@@ -90,13 +90,16 @@ public final class PlayersScreen extends AdminScreen {
         this.data = data;
         this.nodeField = new CpEditBox(Component.literal("Permission node"), GuiCodecs.CLIENT_ARG_MAX)
                 .hint(Component.literal("permission node"))
+                .completes(Completions.nodes())
                 .onSubmit(() -> addNode(false));
         this.chat = new ChatFields(this::rebuild);
         this.meta = new MetaFields(this::rebuild);
         this.durationField = new CpEditBox(Component.literal("Duration"), 16)
-                .hint(Component.literal("for, e.g. 30d"));
+                .hint(Component.literal("for, e.g. 30d"))
+                .completes(Completions.durations());
         this.worldField = new CpEditBox(Component.literal("World"), 128)
                 .hint(Component.literal("in, e.g. the_nether"))
+                .completes(Completions.contexts())
                 .onChange(text -> {
                     // On the Tracks tab the world box says which rungs are read: follow it as it is typed, and
                     // rebuild so Promote and Demote follow the rung read there, not the one read everywhere.
@@ -107,6 +110,7 @@ public final class PlayersScreen extends AdminScreen {
                 });
         this.search = new CpEditBox(Component.literal("Search players"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
+                .completes(Completions.search(() -> this.data.players().stream().map(PlayersData.Player::name).toList()))
                 .onChange(text -> refilter());
         this.playerList = new CpList<PlayersData.Player>(Component.literal("Players"), ROW)
                 .renderer(this::renderPlayer)
@@ -127,8 +131,8 @@ public final class PlayersScreen extends AdminScreen {
                         + "player's name. Works with LuckPerms too; hovering the name still shows the real one.")));
         this.newPlayer = new CpEditBox(Component.literal("Player name"), 16)
                 .hint(Component.literal("player name"))
+                .completes(Completions.players())
                 .onSubmit(this::track);
-        newPlayer.onChange(this::suggestPlayer);
         this.nodeList = new CpList<NodeRow>(Component.literal("Nodes"), 14)
                 .renderer(this::renderNode)
                 .label(n -> (n.deny() ? "denied " : "allowed ") + n.node())
@@ -253,12 +257,6 @@ public final class PlayersScreen extends AdminScreen {
         chat.fill(player == null ? List.of() : player.chat());
         meta.fill(player == null ? List.of() : player.meta());
         nickField.setValue(player == null ? "" : data.nickname(player.uuid()));
-    }
-
-    /** Shows the rest of the first known player name that starts with what was typed. */
-    private void suggestPlayer(String typed) {
-        String completion = completion(typed);
-        newPlayer.setSuggestion(completion == null ? null : completion.substring(typed.length()));
     }
 
     private String completion(String typed) {
@@ -503,7 +501,6 @@ public final class PlayersScreen extends AdminScreen {
         refilter();
         playerList.selectByKey(known == null ? "" : known.uuid());
         newPlayer.setValue("");
-        newPlayer.setSuggestion(null);
         fillDetails();
         rebuild();
     }

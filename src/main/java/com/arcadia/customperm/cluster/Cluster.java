@@ -185,6 +185,15 @@ public final class Cluster {
         return service != null;
     }
 
+    /** This server and the members it heard, sorted; empty when it is not in step with a cluster. */
+    public static java.util.List<String> memberNames() {
+        ClusterService running = service;
+        if (running == null) return java.util.List.of();
+        java.util.Set<String> names = new java.util.TreeSet<>(running.peers().keySet());
+        names.add(running.name());
+        return java.util.List.copyOf(names);
+    }
+
     /**
      * Joins {@code store} as {@code name}: an empty store is filled from this server's grades, a filled one
      * replaces them. On the server thread. Public for the GameTests, which run two servers against one store.

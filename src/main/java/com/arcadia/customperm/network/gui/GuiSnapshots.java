@@ -53,6 +53,25 @@ public final class GuiSnapshots {
         };
     }
 
+    /** What the interface's fields propose; see {@link GuiVocabulary}. */
+    public static GuiVocabulary vocabulary(MinecraftServer server) {
+        var config = CustomPerm.configManager;
+        List<String> metaValues = new ArrayList<>();
+        com.arcadia.customperm.admin.KnownNames.metaValues().forEach((key, values) ->
+                values.forEach(value -> metaValues.add(key + "\n" + value)));
+        return new GuiVocabulary(
+                List.copyOf(com.arcadia.customperm.admin.KnownNames.nodes(server)),
+                List.copyOf(new TreeSet<>(config.getGrades().grades.keySet())),
+                server == null ? List.of() : GradeAdmin.knownPlayerNames(server),
+                com.arcadia.customperm.admin.KnownNames.contexts(server),
+                com.arcadia.customperm.admin.KnownNames.commandRoots(server),
+                List.copyOf(new TreeSet<>(config.getAliases().aliases.keySet())),
+                com.arcadia.customperm.cluster.Cluster.memberNames(),
+                List.copyOf(com.arcadia.customperm.admin.KnownNames.metaKeys()),
+                metaValues,
+                List.copyOf(com.arcadia.customperm.admin.KnownNames.chatTexts()));
+    }
+
     /**
      * Everyone who holds something of their own, plus everyone online: a player with nothing yet is
      * reached by typing their name, not by scrolling a list of every account the server has ever seen.

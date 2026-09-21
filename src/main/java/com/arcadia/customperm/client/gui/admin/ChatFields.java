@@ -46,13 +46,16 @@ final class ChatFields {
 
     ChatFields(Runnable onRebuild) {
         this.text = new CpEditBox(Component.literal("Prefix or suffix"), LegacyText.MAX_LENGTH)
-                .hint(Component.literal("text, e.g. &6[VIP] "));
+                .hint(Component.literal("text, e.g. &6[VIP] "))
+                .completes(Completions.chatTexts());
         this.priority = new CpEditBox(Component.literal("Priority"), 11)
                 .hint(Component.literal("priority"));
         this.duration = new CpEditBox(Component.literal("Duration"), 16)
-                .hint(Component.literal("for, e.g. 30d"));
+                .hint(Component.literal("for, e.g. 30d"))
+                .completes(Completions.durations());
         this.world = new CpEditBox(Component.literal("World"), 128)
-                .hint(Component.literal("in, e.g. the_nether"));
+                .hint(Component.literal("in, e.g. the_nether"))
+                .completes(Completions.contexts());
         this.list = new CpList<ChatLine>(Component.literal("Prefixes and suffixes"), 14)
                 .renderer(this::renderLine)
                 .label(line -> (line.suffix() ? "suffix " : "prefix ") + line.text() + ", priority " + line.priority())

@@ -55,6 +55,7 @@ public final class CommandsScreen extends AdminScreen {
         this.data = data;
         this.search = new CpEditBox(Component.literal("Search commands"), 64)
                 .hint(Component.literal("Search (Ctrl+F)"))
+                .completes(Completions.search(() -> this.data.rows().stream().map(CommandsData.Row::name).toList()))
                 .onChange(text -> refilter());
         this.list = new CpList<CommandsData.Row>(Component.literal("Commands"), ROW)
                 .renderer(this::renderRow)

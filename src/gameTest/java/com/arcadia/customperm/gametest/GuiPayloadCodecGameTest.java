@@ -22,6 +22,8 @@ import com.arcadia.customperm.network.gui.GuiCodecs;
 import com.arcadia.customperm.network.gui.GuiContext;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
+import com.arcadia.customperm.network.gui.GuiVocabulary;
+import com.arcadia.customperm.network.gui.GuiVocabularyPayload;
 import com.arcadia.customperm.network.gui.ImportData;
 import com.arcadia.customperm.network.gui.NameSettings;
 import com.arcadia.customperm.network.gui.Remaining;
@@ -56,6 +58,23 @@ import java.util.function.Consumer;
 public class GuiPayloadCodecGameTest {
 
     private static final String TEMPLATE = "empty_3x3";
+
+    @GameTest(template = TEMPLATE)
+    public static void vocabularyRoundTripsAndIsCapped(GameTestHelper helper) {
+        GuiVocabulary vocabulary = new GuiVocabulary(List.of("essentials.fly", "customperm.command.tp"),
+                List.of("admin", "vip"), List.of("Steve"), List.of("world=the_nether", "server=hub"),
+                List.of("gamemode", "tp"), List.of("hub"), List.of("hub", "pvp"), List.of("homes.max"),
+                List.of("homes.max\n5", "homes.max\n10"), List.of("&6[VIP] "));
+        expectRoundTrip(GuiVocabularyPayload.STREAM_CODEC, new GuiVocabularyPayload(vocabulary));
+        if (!vocabulary.valuesOf("homes.max").equals(List.of("5", "10"))) fail("Meta values by key: " + vocabulary.valuesOf("homes.max"));
+        List<String> many = new java.util.ArrayList<>();
+        for (int i = 0; i <= GuiCodecs.SERVER_LIST_MAX; i++) many.add("node." + i);
+        GuiVocabulary capped = new GuiVocabulary(many, List.of(), List.of(), List.of(), List.of(), List.of(), List.of(),
+                List.of(), List.of(), List.of());
+        if (capped.nodes().size() != GuiCodecs.SERVER_LIST_MAX) fail("A list past the cap must be cut, not fail to encode.");
+        expectRoundTrip(GuiVocabularyPayload.STREAM_CODEC, new GuiVocabularyPayload(capped));
+        helper.succeed();
+    }
 
     @GameTest(template = TEMPLATE)
     public static void everyPayloadRoundTrips(GameTestHelper helper) {

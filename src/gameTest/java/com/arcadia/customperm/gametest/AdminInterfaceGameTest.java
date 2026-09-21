@@ -28,6 +28,8 @@ import com.arcadia.customperm.network.gui.GuiPage;
 import com.arcadia.customperm.network.gui.GuiPagePayload;
 import com.arcadia.customperm.network.gui.GuiRequestHandler;
 import com.arcadia.customperm.network.gui.GuiRequestPayload;
+import com.arcadia.customperm.network.gui.GuiVocabulary;
+import com.arcadia.customperm.network.gui.GuiVocabularyPayload;
 import com.arcadia.customperm.network.gui.LuckPermsData;
 import com.arcadia.customperm.network.gui.PlayersData;
 import com.arcadia.customperm.network.gui.RateLimitsData;
@@ -379,6 +381,48 @@ public class AdminInterfaceGameTest {
     }
 
     /** Area 6: grades, ALLOW and DENY nodes, online and offline assignment, deletion. Internal backend only. */
+    /**
+     * What the fields propose comes ahead of the first page, holds the server's names, and is sent again only
+     * once it changed: a node list can weigh more than the page it serves.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void vocabularyComesFirstThenOnlyWhenItChanged(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        String grade = "cp_i_vocab_grade";
+        var server = helper.getLevel().getServer();
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_vocab", 4)) {
+            owner.clearReceived();
+            GuiRequestHandler.open(owner.player(), GuiPage.DASHBOARD);
+            List<GuiVocabularyPayload> sent = owner.payloads(GuiVocabularyPayload.class);
+            if (sent.size() != 1) fail("The first page must bring the vocabulary, got " + sent.size());
+            GuiVocabulary vocabulary = sent.get(0).vocabulary();
+            if (!vocabulary.grades().equals(List.copyOf(new java.util.TreeSet<>(CustomPerm.configManager.getGrades().grades.keySet()))))
+                fail("Grades must be every grade, sorted: " + vocabulary.grades());
+            if (!vocabulary.players().contains("cp_i_vocab")) fail("An online player must be proposed: " + vocabulary.players());
+            if (!vocabulary.commands().contains("gamemode") || vocabulary.commands().contains("customperm"))
+                fail("Commands must be the dispatcher roots outside /customperm: " + vocabulary.commands());
+            if (vocabulary.contexts().stream().noneMatch(c -> c.startsWith("world=")))
+                fail("Loaded worlds must be proposed as contexts: " + vocabulary.contexts());
+            if (!vocabulary.nodes().containsAll(com.arcadia.customperm.admin.KnownNames.nodes(server)))
+                fail("Nodes must be what the command completion proposes.");
+            if (!vocabulary.servers().isEmpty()) fail("Outside a cluster no server name is proposed: " + vocabulary.servers());
+
+            owner.clearReceived();
+            GuiRequestHandler.open(owner.player(), GuiPage.GRADES);
+            if (!owner.payloads(GuiVocabularyPayload.class).isEmpty()) fail("An unchanged vocabulary must not be sent again.");
+            if (owner.payloads(GuiPagePayload.class).size() != 1) fail("The page itself must still come.");
+
+            owner.clearReceived();
+            gradeAct(owner, GuiAction.GRADE_CREATE, grade);
+            sent = owner.payloads(GuiVocabularyPayload.class);
+            if (sent.size() != 1 || !sent.get(0).vocabulary().grades().contains(grade))
+                fail("A new grade must reach the fields with the refresh, got " + sent);
+        } finally {
+            GradeAdmin.delete(server, grade);
+        }
+        helper.succeed();
+    }
+
     @GameTest(template = TEMPLATE, timeoutTicks = 200)
     public static void gradesPageEditsNodesAndPlayers(GameTestHelper helper) {
         if (!Modes.internalOnly(helper)) return;

@@ -187,6 +187,9 @@ public abstract class CpScreen extends Screen {
             }
             return super.keyPressed(keyCode, scanCode, modifiers);
         }
+        if (keyCode == KEY_ESCAPE && getFocused() instanceof CpEditBox box && box.closeCompletions()) {
+            return true;
+        }
         if (keyCode == KEY_F && hasControlDown() && searchBox() != null) {
             CpEditBox search = searchBox();
             setFocused(search);
@@ -195,6 +198,23 @@ public abstract class CpScreen extends Screen {
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
+    }
+
+    /** A click on the candidate list of the focused field goes to it, not to the widget drawn under it. */
+    @Override
+    public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        if (dialog == null && getFocused() instanceof CpEditBox box && box.clickCompletions(mouseX, mouseY)) {
+            return true;
+        }
+        return super.mouseClicked(mouseX, mouseY, button);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (dialog == null && getFocused() instanceof CpEditBox box && box.scrollCompletions(mouseX, mouseY, scrollY)) {
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
     }
 
     // ------------------------------------------------------------------ rendering
@@ -212,8 +232,10 @@ public abstract class CpScreen extends Screen {
     public void render(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
         // With a dialog open, widgets behind it must not show hover states.
         boolean modal = dialog != null;
-        super.render(g, modal ? -1 : mouseX, modal ? -1 : mouseY, partialTick);
+        boolean overList = !modal && getFocused() instanceof CpEditBox box && box.completionsContain(mouseX, mouseY);
+        super.render(g, modal || overList ? -1 : mouseX, modal || overList ? -1 : mouseY, partialTick);
         renderForeground(g, mouseX, mouseY, partialTick);
+        if (!modal && getFocused() instanceof CpEditBox box) box.renderCompletions(g, mouseX, mouseY, width, height);
         if (modal) renderDialog(g, mouseX, mouseY, partialTick);
     }
 
