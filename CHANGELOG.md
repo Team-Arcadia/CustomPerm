@@ -188,6 +188,12 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Fixed
 
+- **`/customperm debug` knew nothing of server lists** — it computed its expected decision from the exposed list alone, so on a member a command's list leaves out it reported a `MISMATCH` against the real answer, and it could not show why a grade's entry opened the command there. It now reads the same rule as the command gate and prints where the command is exposed and what the entries naming this server say. Found on the two-server Arcadia Lib bench.
+
+- **A save could fail on Windows while an antivirus held the file** — replacing a config file retried three times 25 ms apart, 75 ms in all, and a scan can hold the file longer, which surfaced as "Change applied in memory but NOT saved (disk error)". It now tries six times, the wait doubling from 25 ms, about 0.8 s at worst and only while the file is held.
+
+- **A tight button row could crash the client** — when a row lacked room, `placeButtonRow` took the icons away to save width, including the only icon of an icon-only button, which then had nothing to draw. An icon-only button now keeps its icon. No shipped row held one before the per-server buttons of the Nodes tab.
+
 - **A cluster starting on an empty log table could lose an entry for good** — the shared log is numbered by the database, and a number is handed out when a row is inserted, not when it commits, so a server can read entry 42 before entry 41 is visible. `GapReader` remembers such a skipped number and asks for it again, except that it refused to do so for the very first row it read. A cluster joining a table with no entries starts at zero, which is exactly that case: two servers writing before the first poll, and one administration entry vanished from the shared log with nothing to signal it. The floor is gone; the bound that keeps a first read of an already long table from queueing thousands of numbers was doing that job on its own. Measured on the concurrency test: 2 failures in 20 runs before, 0 in 20 after, and the new unit test fails on the old code.
 
 - **The French half of `NOTICE.md` denied what the English half stated** — it listed neither Arcadia Lib nor the bundled MariaDB Connector/J, and closed on "Aucun code tiers n'est empaqueté dans le jar CustomPerm", the opposite of the English text. Since `§10.5` makes the English text authoritative, a French reader had no notice at all for a component shipped inside the jar. Both halves now carry the same table and the same statement, which the jar no longer contradicts either.

@@ -2131,13 +2131,15 @@ public class CustomPermCommand {
             } catch (Throwable ignored) {}
         }
 
+        // Exposed for this player on this server: the command's list of servers, then an entry of theirs naming it.
+        boolean exposedHere = CommandTreeRewriter.exposedFor(source, cmd);
         // What CommandTreeRewriter.decide should answer, or null when the command's own requirement decides.
-        boolean gated = inGrantedList || CustomPerm.gatesAllCommands();
-        boolean keepOriginal = inGrantedList && preserveOriginalRequires;
+        boolean gated = exposedHere || CustomPerm.gatesAllCommands();
+        boolean keepOriginal = exposedHere && preserveOriginalRequires;
         Boolean expected = !gated ? null : switch (explicitValue) {
             case DENY -> false;
             case ALLOW -> keepOriginal ? null : Boolean.TRUE;
-            case UNSET -> !inGrantedList ? null
+            case UNSET -> !exposedHere ? null
                 : op2 ? (keepOriginal ? null : Boolean.TRUE)
                 : (CustomPerm.isLuckPermsPresent() ? null : Boolean.FALSE);
         };
@@ -2153,6 +2155,15 @@ public class CustomPermCommand {
         ctx.getSource().sendSuccess(() -> Component.literal("  Direct command exposure     : "
                 + (directCommandsEnabled ? "enabled" : "disabled (LuckPerms installed)")), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  In granted-commands list    : " + inGrantedList), false);
+        java.util.List<String> servers = CustomPerm.configManager.getCommands().servers(cmd);
+        String here = com.arcadia.customperm.cluster.Cluster.identity();
+        if (inGrantedList && (here != null || !servers.isEmpty())) {
+            Tristate serverWord = com.arcadia.customperm.perm.PermissionService.get().checkServerScoped(source, permNode);
+            ctx.getSource().sendSuccess(() -> Component.literal("  Exposed on this server      : " + exposedHere
+                    + "  (this server " + (here == null ? "has no cluster name" : here) + ", list "
+                    + (servers.isEmpty() ? "every member" : String.join(", ", servers))
+                    + ", entries naming this server: " + serverWord + ")"), false);
+        }
         ctx.getSource().sendSuccess(() -> Component.literal("  CustomPerm gates            : " + gating), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Source has op level 2       : " + op2), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  Source has op level 4       : " + op4), false);

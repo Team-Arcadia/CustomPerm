@@ -24,7 +24,8 @@ import java.nio.file.StandardCopyOption;
  */
 public final class AtomicFiles {
 
-    private static final int MOVE_ATTEMPTS = 3;
+    /** Six tries, the wait doubling from 25 ms: about 0.8 s at worst, spent only while the file is held. */
+    private static final int MOVE_ATTEMPTS = 6;
     private static final long MOVE_RETRY_DELAY_MS = 25L;
 
     private AtomicFiles() {
@@ -45,7 +46,8 @@ public final class AtomicFiles {
 
     /**
      * Windows refuses to replace a file another process (an editor, an antivirus scan) holds open for a
-     * few milliseconds; a short retry absorbs that instead of failing the save.
+     * moment; a retry absorbs that instead of failing the save. A scan can hold a file well past 75 ms, the
+     * whole window three tries at 25 ms gave, so the wait doubles between tries.
      */
     private static void moveReplacingWithRetry(Path source, Path target) throws IOException {
         AccessDeniedException lastAccessDenied = null;
@@ -61,7 +63,7 @@ public final class AtomicFiles {
                 lastAccessDenied = e;
                 if (attempt == MOVE_ATTEMPTS) break;
                 try {
-                    Thread.sleep(MOVE_RETRY_DELAY_MS);
+                    Thread.sleep(MOVE_RETRY_DELAY_MS << (attempt - 1));
                 } catch (InterruptedException interrupted) {
                     Thread.currentThread().interrupt();
                     throw new IOException("Interrupted while retrying file replacement", interrupted);

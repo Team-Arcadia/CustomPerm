@@ -87,6 +87,11 @@ public class CpButton extends AbstractButton {
         return this;
     }
 
+    /** Whether the icon is all this button shows: taking it away would leave nothing to draw. */
+    public boolean isIconOnly() {
+        return iconOnly;
+    }
+
     public CpButton enabled(boolean enabled) {
         this.active = enabled;
         return this;

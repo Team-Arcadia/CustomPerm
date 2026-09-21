@@ -67,7 +67,8 @@ public abstract class AdminScreen extends CpScreen {
         int gaps = 4 * (buttons.size() - 1);
         int natural = rowWidth(buttons, padding);
         if (natural + gaps > row.w()) {
-            buttons.forEach(button -> button.icon(null));
+            // An icon-only button keeps its icon: it has no label to fall back on.
+            buttons.stream().filter(button -> !button.isIconOnly()).forEach(button -> button.icon(null));
             natural = rowWidth(buttons, padding);
         }
         int gap = 4;

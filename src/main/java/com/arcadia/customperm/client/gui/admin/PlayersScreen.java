@@ -298,6 +298,13 @@ public final class PlayersScreen extends AdminScreen {
         rebuild();
     }
 
+    private CpButton nodeServersButton(boolean open) {
+        return CpButton.neutral(Component.literal("Servers"), this::toggleNodeServers).iconOnly(Icon.HOME).selected(open)
+                .tooltip(Component.literal(open ? "Back to the list of nodes."
+                        : "Where this player's own entry allows or denies the selected node, server by server, above "
+                        + "their grades."));
+    }
+
     private Rect listArea() {
         Rect in = inner();
         int top = in.y() + 24 + FIELD + 4;
@@ -388,12 +395,15 @@ public final class PlayersScreen extends AdminScreen {
         }
         String serversNode = nodeServersNode();
         if (serversNode != null) {
-            buildNodeServerToggles(list, nodeServerStates(serversNode, nodeList.items(), NodeRow::node, NodeRow::deny,
-                    NodeRow::context), editable && !player.uuid().isEmpty(),
+            // The fields and the add buttons do nothing here: the toggles take their room.
+            buildNodeServerToggles(new Rect(list.x(), list.y(), list.w(), fieldRow.bottom() - list.y()),
+                    nodeServerStates(serversNode, nodeList.items(), NodeRow::node, NodeRow::deny, NodeRow::context),
+                    editable && !player.uuid().isEmpty(),
                     (server, state) -> act(GuiAction.USER_NODE_SERVER, player.uuid(), serversNode, server, state));
-        } else {
-            addRenderableWidget(nodeList.at(list));
+            addRenderableWidget(nodeServersButton(true).at(buttonRow.left(BUTTON)));
+            return;
         }
+        addRenderableWidget(nodeList.at(list));
         Rect[] boxes = fieldRow.split(4, GradesScreen.WORLD_FIELD, DURATION_FIELD);
         addRenderableWidget(nodeField.at(boxes[0]));
         addRenderableWidget(worldField.at(boxes[1]));
@@ -409,14 +419,10 @@ public final class PlayersScreen extends AdminScreen {
                         .tooltip(Component.literal("Refused to this player, operators included, unless a more specific "
                                 + "node allows it. Their own nodes win over their grades at the same level.")),
                 CpButton.neutral(Component.literal("Remove"), () -> removeNode(selected)).icon(Icon.MINUS)
-                        .enabled(editable && selected != null && !player.uuid().isEmpty() && serversNode == null)));
+                        .enabled(editable && selected != null && !player.uuid().isEmpty())));
         if (context.cluster().inCluster()) {
             // Their own word on the selected node, server by server, above what their grades say there.
-            buttons.add(2, CpButton.neutral(Component.literal("Servers"), this::toggleNodeServers).iconOnly(Icon.HOME)
-                    .selected(nodeServersView).enabled(nodeServersView || selected != null)
-                    .tooltip(Component.literal(nodeServersView ? "Back to the list of nodes."
-                            : "Where this player's own entry allows or denies the selected node, server by server, "
-                            + "above their grades.")));
+            buttons.add(2, nodeServersButton(false).enabled(selected != null));
         }
         placeButtonRow(buttonRow, 6, true, buttons);
     }
@@ -586,11 +592,6 @@ public final class PlayersScreen extends AdminScreen {
 
     @Override
     protected void renderContent(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        if (layout != null && nodeServersNode() != null) {
-            Rect list = listArea();
-            Skin.text(g, font, nodeServersNode() + " by server, above their grades", list.x(), list.y(), list.w(),
-                    Palette.TEXT_MUTE);
-        }
         Rect in = inner();
         Skin.panel(g, in.inset(-8));
         PlayersData.Player player = playerList.getSelected();
@@ -624,5 +625,14 @@ public final class PlayersScreen extends AdminScreen {
                 + (canEdit(GuiArea.GRADES) ? "" : "  |  editing needs " + GuiArea.GRADES.node());
         Skin.text(g, font, sub, in.x(), in.y() + 11, textW, Palette.TEXT_MUTE);
         if (tab == Tab.CHAT) chat.renderPreview(g, font, listArea(), player.name(), data.names());
+        drawNodeServersTitle(g);
+    }
+
+    /** The title of the per-server view, over the panel drawn under it. */
+    private void drawNodeServersTitle(GuiGraphics g) {
+        if (layout != null && nodeServersNode() != null) {
+            Rect list = listArea();
+            Skin.text(g, font, nodeServersNode() + " by server", list.x(), list.y(), list.w(), Palette.TEXT_MUTE);
+        }
     }
 }

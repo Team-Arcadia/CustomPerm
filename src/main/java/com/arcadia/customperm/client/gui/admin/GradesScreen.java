@@ -404,12 +404,15 @@ public final class GradesScreen extends AdminScreen {
         if (tab == Tab.NODES) {
             String serversNode = nodeServersNode();
             if (serversNode != null) {
-                buildNodeServerToggles(list, nodeServerStates(serversNode, nodeList.items(), NodeRow::node, NodeRow::deny,
-                        NodeRow::context), editable,
+                // The fields and the add buttons do nothing here: the toggles take their room, a narrow window
+                // leaving the list a line or two.
+                buildNodeServerToggles(new Rect(list.x(), list.y(), list.w(), fieldRow.bottom() - list.y()),
+                        nodeServerStates(serversNode, nodeList.items(), NodeRow::node, NodeRow::deny, NodeRow::context), editable,
                         (server, state) -> act(GuiAction.GRADE_NODE_SERVER, gradeList.getSelected().name(), serversNode, server, state));
-            } else {
-                addRenderableWidget(nodeList.at(list));
+                addRenderableWidget(nodeServersButton(true).at(buttonRow.left(BUTTON)));
+                return;
             }
+            addRenderableWidget(nodeList.at(list));
             Rect[] boxes = fieldRow.split(4, WORLD_FIELD, DURATION_FIELD);
             addRenderableWidget(nodeField.at(boxes[0]));
             addRenderableWidget(worldField.at(boxes[1]));
@@ -424,13 +427,10 @@ public final class GradesScreen extends AdminScreen {
                             .tooltip(Component.literal("Refused, operators included, unless a more specific node allows "
                                     + "it: deny * and allow one command to open only that command.")),
                     CpButton.neutral(Component.literal("Remove"), () -> removeNode(selected)).icon(Icon.MINUS)
-                            .enabled(editable && selected != null && serversNode == null)));
+                            .enabled(editable && selected != null)));
             if (context.cluster().inCluster()) {
                 // The selected node, server by server: where this grade allows it, denies it, or says nothing.
-                buttons.add(2, CpButton.neutral(Component.literal("Servers"), this::toggleNodeServers).iconOnly(Icon.HOME)
-                        .selected(nodeServersView).enabled(nodeServersView || selected != null)
-                        .tooltip(Component.literal(nodeServersView ? "Back to the list of nodes."
-                                : "Where this grade allows or denies the selected node, server by server.")));
+                buttons.add(2, nodeServersButton(false).enabled(selected != null));
             }
             placeButtonRow(buttonRow, 6, true, buttons);
         } else if (tab == Tab.PARENTS) {
@@ -530,6 +530,12 @@ public final class GradesScreen extends AdminScreen {
     private void toggleNodeServers() {
         nodeServersView = !nodeServersView;
         rebuild();
+    }
+
+    private CpButton nodeServersButton(boolean open) {
+        return CpButton.neutral(Component.literal("Servers"), this::toggleNodeServers).iconOnly(Icon.HOME).selected(open)
+                .tooltip(Component.literal(open ? "Back to the list of nodes."
+                        : "Where this grade allows or denies the selected node, server by server."));
     }
 
     private void setTab(Tab wanted) {
@@ -845,10 +851,6 @@ public final class GradesScreen extends AdminScreen {
 
     @Override
     protected void renderContent(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
-        if (layout != null && tab == Tab.NODES && gradeList.getSelected() != null && nodeServersNode() != null) {
-            Rect list = listArea();
-            Skin.text(g, font, nodeServersNode() + " by server", list.x(), list.y(), list.w(), Palette.TEXT_MUTE);
-        }
         Rect in = inner();
         Skin.panel(g, in.inset(-8));
         GradesData.Grade grade = gradeList.getSelected();
@@ -884,6 +886,15 @@ public final class GradesScreen extends AdminScreen {
             Skin.text(g, font, sub, in.x(), in.y() + 11, titleW, Palette.TEXT_MUTE);
         }
         if (tab == Tab.CHAT) chat.renderPreview(g, font, listArea(), previewName(), data.names());
+        drawNodeServersTitle(g);
+    }
+
+    /** The title of the per-server view, over the panel drawn under it. */
+    private void drawNodeServersTitle(GuiGraphics g) {
+        if (layout != null && tab == Tab.NODES && gradeList.getSelected() != null && nodeServersNode() != null) {
+            Rect list = listArea();
+            Skin.text(g, font, nodeServersNode() + " by server", list.x(), list.y(), list.w(), Palette.TEXT_MUTE);
+        }
     }
 
     /** The admin's own name in the preview: it reads as a real line rather than a template. */

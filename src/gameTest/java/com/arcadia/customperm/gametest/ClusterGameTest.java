@@ -462,6 +462,11 @@ public class ClusterGameTest {
                 if (!result.success() || !player.canUse("time")) {
                     fail("A grade's entry naming this server must open a command the list leaves out: " + result.summary());
                 }
+                // The diagnostic reads the same rule as the gate, rather than reporting a mismatch.
+                List<String> debug = ServerCommands.run(server, "customperm debug cp_cl_prio time");
+                if (ServerCommands.contains(debug, "MISMATCH") || !ServerCommands.contains(debug, "Exposed on this server      : true")) {
+                    fail("debug must follow the server list and the entries naming this server: " + debug);
+                }
                 // The player says no here: over their grade again.
                 com.arcadia.customperm.admin.NodeServerAdmin.forPlayer(server, player.uuid(), "cp_cl_prio",
                         "customperm.command.time", "gametest", com.arcadia.customperm.admin.NodeServerAdmin.DENY);
