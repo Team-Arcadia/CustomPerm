@@ -53,6 +53,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 
+- **A part a member does not share stays local, and that is now tested** — `aPartNotSharedStaysLocal` publishes on a part the member has turned off, polls, and checks nothing is read back; then changes that part locally and checks nothing is written to the store. Each member's `share` block decides which parts it registers, so one member can follow the grades of a cluster while keeping its own exposed commands, aliases and rate limits. Nothing verified that until now.
+
+- **An administration node limited to one member opens nothing elsewhere, and that is now tested** — `anAdminNodeLimitedToAnotherServerOpensNothingHere` grants `customperm.manage.aliases` with `server=other` to a level-4 player and checks the area stays shut, then grants it for this server and checks it opens. This is what lets a server join a cluster to read its real grades without being able to change them: grant the manage nodes with `server=` limited to the servers that may administer. The console keeps full access whatever the nodes say.
+
 - **The Arcadia GameTest mode runs the whole suite, both mods loaded** — 183 tests: the 180 of the other modes plus the three driver ones. The simulated connection now declares `arcadia_lib:hub_permissions` and `arcadia_lib:open_hub`, which Arcadia Lib's join handler writes to without asking whether the channel is there. That mirrors the deployment the READMEs describe for cluster mode, both mods on the server and on the client, and it makes the mode able to catch interference between the two rather than dying at every player join.
 
 - **The mod check no longer asserts one wording** — `theModCheckReadsRealModFilesAndSkipsLuckPermsItself` required the report to read "No installed mod calls LuckPerms' API directly", which is only true when CustomPerm runs alone. It now accepts either that or a report naming the mods that do, so it fails on the check rather than on the mod set.

@@ -11,6 +11,7 @@ package com.arcadia.customperm.gametest;
 import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.admin.AdminResult;
 import com.arcadia.customperm.admin.AliasAdmin;
+import com.arcadia.customperm.admin.CommandAdmin;
 import com.arcadia.customperm.admin.GradeAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
 import com.arcadia.customperm.cluster.AliasesCodec;
@@ -35,6 +36,8 @@ import com.arcadia.customperm.log.LogKind;
 import com.arcadia.customperm.gametest.support.TestPlayer;
 import com.arcadia.customperm.notify.AdminAlerts;
 import com.arcadia.customperm.notify.AdminNotifier;
+import com.arcadia.customperm.network.gui.GuiAccess;
+import com.arcadia.customperm.network.gui.GuiArea;
 import com.arcadia.customperm.perm.PermissionService;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestAssertException;
@@ -119,6 +122,73 @@ public class ClusterGameTest {
      * Runs {@code body} with this server in a cluster over {@code store}, then puts its grades, commands, aliases
      * and rate limits back as they were.
      */
+    /**
+     * An administration node limited to another member opens nothing here. This is what lets a server join a
+     * cluster to read its real grades without being able to change them: grant the manage nodes with
+     * {@code server=<production names>} and an administrator connected elsewhere holds nothing.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_propagate")
+    public static void anAdminNodeLimitedToAnotherServerOpensNothingHere(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        try (TestPlayer admin = TestPlayer.reader(helper.getLevel(), "cp_cl_sandbox", 4)) {
+            inCluster(server, new MemoryStore(), () -> {
+                if (!GradeAdmin.create("cp_cl_sandbox").success()) fail("Could not create the grade.");
+                if (!GradeAdmin.assign(server, admin.player().getGameProfile(), "cp_cl_sandbox").success()) {
+                    fail("Could not assign the grade.");
+                }
+                AdminResult elsewhere = GradeAdmin.addNode(server, "cp_cl_sandbox",
+                        "customperm.manage.aliases", false, 0, "server=other");
+                if (!elsewhere.success()) fail("Limiting a manage node to a server must be accepted: " + elsewhere.message());
+                if (GuiAccess.canEdit(admin.player(), GuiArea.ALIASES)) {
+                    fail("A manage node limited to another member must open nothing here, level 4 included.");
+                }
+                AdminResult here = GradeAdmin.addNode(server, "cp_cl_sandbox",
+                        "customperm.manage.aliases", false, 0, "server=gametest");
+                if (!here.success()) fail("Could not grant the same node for this server: " + here.message());
+                if (!GuiAccess.canEdit(admin.player(), GuiArea.ALIASES)) {
+                    fail("The same node limited to this server must open its area.");
+                }
+            });
+        }
+        helper.succeed();
+    }
+
+    /**
+     * A part a member does not share is neither published nor read back: it keeps its own file while the others
+     * go on without it. This is what lets one member share grades and keep its own commands and aliases.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_propagate")
+    public static void aPartNotSharedStaysLocal(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        var share = CustomPerm.configManager.getSettings().cluster.share;
+        boolean sharedCommands = share.commands;
+        share.commands = false;
+        try {
+            MemoryStore store = new MemoryStore();
+            String part = new CommandsCodec().part();
+            inCluster(server, store, () -> {
+                // Another member publishes on that part. Its body is never parsed here, which is the point.
+                store.write(part, List.of(new ClusterStore.Change("cp_cl_unshared", 0, "{}")), "other");
+                Cluster.pollNow();
+                if (CustomPerm.configManager.getCommands().grantedCommands.contains("cp_cl_unshared")) {
+                    fail("A part this member does not share must not be read back from the cluster.");
+                }
+                AdminResult exposed = CommandAdmin.expose(server, "seed");
+                if (!exposed.success()) fail("Exposing a command here failed: " + exposed.message());
+                List<ClusterStore.Row> rows = store.changesSince(List.of(part), 0)
+                        .getOrDefault(part, List.of());
+                if (rows.stream().anyMatch(row -> "gametest".equals(row.updatedBy()))) {
+                    fail("A part this member does not share must not be published to the cluster: " + rows);
+                }
+            });
+        } finally {
+            share.commands = sharedCommands;
+        }
+        helper.succeed();
+    }
+
     private static void inCluster(MinecraftServer server, MemoryStore store, ThrowingRunnable body) throws Exception {
         var config = CustomPerm.configManager;
         Map<String, String> grades = CODEC.split(config.getGrades());
