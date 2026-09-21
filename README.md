@@ -905,6 +905,13 @@ CustomPerm ships none, and instantiates by name whichever one it finds. Arcadia 
 mod that carries a driver. On a server carrying none, cluster mode does not start and says why. See
 [NOTICE.md](NOTICE.md).
 
+> **Cluster mode through Arcadia Lib asks something of your players.** CustomPerm itself never does: its network
+> channel is optional, so a client without the mod joins and simply has no admin interface. Arcadia Lib registers
+> its own channels as required, so **every player has to install Arcadia Lib client-side to join a server running
+> it**. That is a property of Arcadia Lib, not of CustomPerm, and it applies the moment you install it, whether or
+> not cluster mode is on. Plan for it: ship it in your pack, or use another mod that provides a driver without
+> claiming the client.
+
 ---
 
 ## Common workflows

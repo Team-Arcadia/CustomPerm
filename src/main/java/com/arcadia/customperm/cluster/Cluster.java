@@ -74,7 +74,15 @@ public final class Cluster {
 
     /** Null when this server carries no driver able to reach the database, which leaves the cluster unjoined. */
     private static SqlStore directStore(com.arcadia.customperm.config.SettingsConfig.Database db) {
-        java.sql.Driver driver = JdbcDrivers.first();
+        return directStore(JdbcDrivers.first(), db);
+    }
+
+    /**
+     * The store this driver opens, or null when there is no driver at all or none that accepts the cluster URL.
+     * Taking the driver as an argument is what lets a test reach the empty case without a server that carries none.
+     */
+    static SqlStore directStore(java.sql.Driver driver,
+                                com.arcadia.customperm.config.SettingsConfig.Database db) {
         if (driver == null) return null;
         boolean mariaDb;
         String url;

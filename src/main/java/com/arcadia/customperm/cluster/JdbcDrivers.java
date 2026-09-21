@@ -35,8 +35,8 @@ public final class JdbcDrivers {
         return firstOf(CANDIDATES);
     }
 
-    /** {@link #first()} over a given list, for tests. */
-    static Driver firstOf(String... candidates) {
+    /** {@link #first()} over a given list, to name the candidates rather than take the standard order. */
+    public static Driver firstOf(String... candidates) {
         for (String candidate : candidates) {
             try {
                 return (Driver) Class.forName(candidate).getDeclaredConstructor().newInstance();

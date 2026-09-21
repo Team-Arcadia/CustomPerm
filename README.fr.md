@@ -919,6 +919,13 @@ CustomPerm n'en embarque aucun et instancie par son nom celui qu'il trouve. Arca
 mod qui en porte un. Sur un serveur qui n'en a aucun, le mode cluster ne démarre pas et dit pourquoi. Voir
 [NOTICE.md](NOTICE.md).
 
+> **Le mode cluster via Arcadia Lib exige quelque chose de vos joueurs.** CustomPerm, lui, n'exige jamais rien :
+> son canal réseau est optionnel, donc un client sans le mod se connecte et perd seulement l'interface
+> d'administration. Arcadia Lib enregistre ses propres canaux comme requis, donc **chaque joueur doit installer
+> Arcadia Lib côté client pour rejoindre un serveur qui la fait tourner**. C'est une propriété d'Arcadia Lib et non
+> de CustomPerm, et elle s'applique dès que vous l'installez, que le mode cluster soit actif ou non. Prévoyez-le :
+> livrez-la dans votre pack, ou utilisez un autre mod fournissant un pilote sans réclamer le client.
+
 ---
 
 ## Cas d'usage courants

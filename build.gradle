@@ -29,6 +29,11 @@ configurations {
         canBeResolved = true
         transitive = false
     }
+    arcadiaLibGameTestMod {
+        canBeConsumed = false
+        canBeResolved = true
+        transitive = false
+    }
 }
 
 sourceSets {
@@ -68,6 +73,18 @@ neoForge {
             systemProperty 'neoforge.enabledGameTestNamespaces', mod_id
             systemProperty 'customperm.gametest.luckperms', 'true'
         }
+        // Third mode: Arcadia Lib and nothing else, so the driver CustomPerm finds is the one another mod
+        // brought in a nested jar. That is the production configuration, and the only way to exercise it.
+        gameTestServerArcadia {
+            type = 'gameTestServer'
+            gameDirectory = project.file('run/gametest-arcadia')
+            // Its own namespace, so this mode runs the driver tests and nothing else: Arcadia Lib sends a
+            // mandatory payload on every player join, and any test that joins a test player dies on its
+            // handler. That is its defect, not ours, and it must not take the suite down with it.
+            systemProperty 'neoforge.enabledGameTestNamespaces', 'customperm_driver'
+            systemProperty 'customperm.gametest.luckperms', 'false'
+            systemProperty 'customperm.gametest.arcadia', 'true'
+        }
     }
 
     mods {
@@ -101,6 +118,11 @@ dependencies {
     // LuckPerms NeoForge 5.4.150 (CurseForge file 5971552), the minimum CustomPerm accepts. Only copied
     // into the LuckPerms GameTest mode's mods folder, never on a compile or runtime classpath.
     luckPermsGameTestMod "curse.maven:luckperms-431733:5971552"
+
+    // Arcadia Lib 1.3.0 (CurseForge file 8713651), copied into the Arcadia GameTest mode's mods folder only.
+    // It is the mod that brings a JDBC driver on a real server, so it is how the cross-mod driver lookup of
+    // cluster/JdbcDrivers gets exercised for real rather than against the run classpath.
+    arcadiaLibGameTestMod "curse.maven:arcadia-lib-1493170:8713651"
 
     // JMH benchmarks depend on main compiled classes only (no transitive NeoForge deps).
     // files() avoids the Gson conflict between testImplementation:2.11.0 and NeoForge strictly:2.10.1.
@@ -137,8 +159,13 @@ def prepareLuckPermsGameTestMods = tasks.register('prepareLuckPermsGameTestMods'
     from configurations.luckPermsGameTestMod
     into 'run/gametest-luckperms/mods'
 }
+def prepareArcadiaGameTestMods = tasks.register('prepareArcadiaGameTestMods', Sync) {
+    from configurations.arcadiaLibGameTestMod
+    into 'run/gametest-arcadia/mods'
+}
 tasks.matching { it.name == 'runGameTestServer' }.configureEach { dependsOn prepareInternalGameTestMods }
 tasks.matching { it.name == 'runGameTestServerLuckPerms' }.configureEach { dependsOn prepareLuckPermsGameTestMods }
+tasks.matching { it.name == 'runGameTestServerArcadia' }.configureEach { dependsOn prepareArcadiaGameTestMods }
 
 // jmhJar bundles the NeoForge runtime (over 65535 entries), so zip64 is required.
 tasks.named('jmhJar', Jar) { zip64 = true }
