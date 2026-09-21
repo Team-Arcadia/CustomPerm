@@ -385,6 +385,46 @@ public class ClusterGameTest {
         helper.succeed();
     }
 
+    /**
+     * server=here stands for this member wherever a context is typed, and the listings show each entry with where
+     * it applies, without opening grades.json.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_server_lists_admin")
+    public static void serverHereAndListingsShowWhereEntriesApply(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        String grade = "cp_cl_here";
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_cl_herep", 0)) {
+            List<String> out = ServerCommands.run(server, "customperm grade create " + grade);
+            out = ServerCommands.run(server, "customperm grade addperm " + grade + " customperm.command.time server=here");
+            if (!ServerCommands.contains(out, "server=here names this server in a cluster")) {
+                fail("server=here must be refused outside a cluster: " + out);
+            }
+            inCluster(server, new MemoryStore(), () -> {
+                List<String> added = ServerCommands.run(server, "customperm grade addperm " + grade + " customperm.command.time server=here");
+                var scoped = CustomPerm.configManager.getGrades().grades.get(grade).contexts.get("server=gametest");
+                if (scoped == null || !scoped.permissions.contains("customperm.command.time")) {
+                    fail("server=here must be stored as this member's name: " + added);
+                }
+                ServerCommands.run(server, "customperm grade addperm " + grade + " customperm.command.seed 30d");
+                List<String> shown = ServerCommands.run(server, "customperm grade list " + grade);
+                if (!ServerCommands.contains(shown, "customperm.command.time (server=gametest)")
+                        || !(ServerCommands.contains(shown, "customperm.command.seed (30d left)")
+                            || ServerCommands.contains(shown, "customperm.command.seed (29d 23h left)"))) {
+                    fail("grade list <grade> must show each node with its context and time left: " + shown);
+                }
+                ServerCommands.run(server, "customperm user addperm cp_cl_herep customperm.command.weather server=here");
+                shown = ServerCommands.run(server, "customperm user list cp_cl_herep");
+                if (!ServerCommands.contains(shown, "customperm.command.weather (server=gametest)")) {
+                    fail("user list must show an own node with its context on the same line: " + shown);
+                }
+            });
+        } finally {
+            GradeAdmin.delete(server, grade);
+        }
+        helper.succeed();
+    }
+
     /** Outside a cluster a list is stored but read nowhere, and here has nothing to stand for. */
     @GameTest(template = TEMPLATE, timeoutTicks = 100, batch = "cluster_server_lists_admin")
     public static void outsideAClusterAListIsStoredAndIgnored(GameTestHelper helper) {

@@ -103,7 +103,8 @@ final class HelpTopics {
                     "Weight breaks a tie between two grades at the same level: the heavier one decides.",
                     "Display name: what listings show instead of the id, such as Very Important (vip).",
                     "/customperm grade create <name>",
-                    "/customperm grade addperm <grade> <node>",
+                    "/customperm grade addperm <grade> <node> [duration] [context]",
+                    "/customperm grade list <grade>",
                     "/customperm grade adddeny <grade> <node>",
                     "/customperm grade assign <player> <grade>",
                     "/customperm grade weight <grade> <weight>")),
@@ -133,7 +134,7 @@ final class HelpTopics {
                             + "player needs, without inventing a grade for them.",
                     "Players are found among those online or who joined before; a name that never joined cannot be "
                             + "given anything in advance.",
-                    "/customperm user addperm <player> <node>",
+                    "/customperm user addperm <player> <node> [duration] [context]",
                     "/customperm user adddeny <player> <node>",
                     "/customperm user list <player>")),
             new Topic("Temporary entries", List.of(

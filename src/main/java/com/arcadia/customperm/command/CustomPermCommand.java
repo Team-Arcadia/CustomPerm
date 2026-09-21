@@ -73,7 +73,7 @@ import java.util.stream.Collectors;
  *             command gateall <true|false>          # every command reads its node, not only exposed ones
  *             command list                          # show currently exposed commands
  * /customperm grade   create|delete <name>
- *                     addperm|removeperm <grade> <node>
+ *                     addperm|removeperm <grade> <node> [duration] [context]
  *                     adddeny|removedeny <grade> <node>   # most specific entry wins, DENY on a tie
  *                     weight <grade> <weight>             # breaks ties at the same specificity
  *                     displayname <grade> [set <text> | clear]  # shown by pages and listings, never a key
@@ -83,7 +83,7 @@ import java.util.stream.Collectors;
  *                     assign|unassign <player> <grade>    # online, or joined the server before
  *                     setdefault <grade> | cleardefault   # grade applied to every player
  *                     list
- * /customperm user    addperm|removeperm <player> <node>  # nodes carried by one player, above their grades
+ * /customperm user    addperm|removeperm <player> <node> [duration] [context]  # nodes carried by one player, above their grades
  *                     adddeny|removedeny <player> <node>
  *                     denygrade|undenygrade <player> <grade>  # refuse a grade for one player
  *                     list <player>                       # grades held, refused, and own nodes
@@ -117,11 +117,11 @@ import java.util.stream.Collectors;
  *                     confirm [replace]                # applies what was previewed, nothing else
  * /customperm export  preview                          # what an export to LuckPerms would write
  *                     confirm [replace]                # writes what was previewed, in the background
- * /customperm grade   addperm|adddeny <grade> <node> [duration] [world=<dim>]  # 30d, 2h: temporary; world=the_nether: there only
+ * /customperm grade   addperm|adddeny <grade> <node> [duration] [context]  # 30d: temporary; server=hub, world=the_nether: there only
  *                     removeperm|removedeny <grade> <node> [world=<dim>]
  *                     assign <player> <grade> [duration] [world=<dim>]
  *                     unassign <player> <grade> [world=<dim>]
- * /customperm user    addperm|adddeny <player> <node> [duration] [world=<dim>]
+ * /customperm user    addperm|adddeny <player> <node> [duration] [context]
  *                     removeperm|removedeny <player> <node> [world=<dim>]
  *                     denygrade <player> <grade> [duration] [world=<dim>]
  *                     undenygrade <player> <grade> [world=<dim>]
@@ -291,6 +291,50 @@ public class CustomPermCommand {
         (ctx, builder) -> SharedSuggestionProvider.suggest(
             com.arcadia.customperm.admin.KnownNames.nodes(ctx.getSource().getServer()), builder);
 
+    /**
+     * {@code <node> [duration] [context]}: nodes for the first word, then a duration and a context for the words
+     * after it, each with a tooltip saying what it does. The usage line shows only {@code <node>}, since the
+     * argument reads the rest of the line: this is where the admin learns the rest.
+     */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_NODE_THEN_OPTIONS =
+        (ctx, builder) -> {
+            String typed = builder.getRemaining();
+            int space = typed.lastIndexOf(' ');
+            if (space < 0) {
+                return SharedSuggestionProvider.suggest(
+                    com.arcadia.customperm.admin.KnownNames.nodes(ctx.getSource().getServer()), builder);
+            }
+            String[] written = typed.substring(0, space).trim().split("\\s+");
+            boolean hasDuration = false;
+            boolean hasContext = false;
+            for (int i = 1; i < written.length; i++) {
+                if (written[i].contains("=")) hasContext = true;
+                else hasDuration = true;
+            }
+            var options = builder.createOffset(builder.getStart() + space + 1);
+            String word = typed.substring(space + 1).toLowerCase(Locale.ROOT);
+            if (!hasDuration) {
+                for (String duration : com.arcadia.customperm.admin.KnownNames.DURATIONS) {
+                    if (duration.startsWith(word)) {
+                        options.suggest(duration, Component.literal("Duration: removed after " + duration + ". Optional."));
+                    }
+                }
+            }
+            if (!hasContext) {
+                List<String> contexts = new java.util.ArrayList<>(
+                    com.arcadia.customperm.admin.KnownNames.contexts(ctx.getSource().getServer()));
+                if (com.arcadia.customperm.cluster.Cluster.identity() != null) contexts.add(0, "server=here");
+                for (String context : contexts) {
+                    if (context.startsWith(word)) {
+                        options.suggest(context, Component.literal(context.equals("server=here")
+                            ? "Context: this server only. Optional; join several with a comma."
+                            : "Context: applies there only. Optional; join several with a comma."));
+                    }
+                }
+            }
+            return options.buildFuture();
+        };
+
     /** Nodes already granted to the grade named by the "grade" argument, for removeperm. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_GRADE_PERMS =
         (ctx, builder) -> {
@@ -441,7 +485,7 @@ public class CustomPermCommand {
                         .then(Commands.argument("grade", StringArgumentType.word())
                             .suggests(SUGGEST_GRADES)
                             .then(Commands.argument("node", StringArgumentType.greedyString())
-                                .suggests(SUGGEST_KNOWN_NODES)
+                                .suggests(SUGGEST_NODE_THEN_OPTIONS)
                                 .executes(CustomPermCommand::gradeAddPerm))))
                     .then(Commands.literal("removeperm").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("grade", StringArgumentType.word())
@@ -453,7 +497,7 @@ public class CustomPermCommand {
                         .then(Commands.argument("grade", StringArgumentType.word())
                             .suggests(SUGGEST_GRADES)
                             .then(Commands.argument("node", StringArgumentType.greedyString())
-                                .suggests(SUGGEST_KNOWN_NODES)
+                                .suggests(SUGGEST_NODE_THEN_OPTIONS)
                                 .executes(CustomPermCommand::gradeAddDeny))))
                     .then(Commands.literal("removedeny").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("grade", StringArgumentType.word())
@@ -552,7 +596,10 @@ public class CustomPermCommand {
                     .then(Commands.literal("cleardefault").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .executes(CustomPermCommand::gradeClearDefault))
                     .then(Commands.literal("list")
-                        .executes(CustomPermCommand::gradeList)))
+                        .executes(CustomPermCommand::gradeList)
+                        .then(Commands.argument("grade", StringArgumentType.word())
+                            .suggests(SUGGEST_GRADES)
+                            .executes(CustomPermCommand::gradeShow))))
                 .then(Commands.literal("user")
                     .then(userChat("prefix", false))
                     .then(userChat("suffix", true))
@@ -568,7 +615,7 @@ public class CustomPermCommand {
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
                             .then(Commands.argument("node", StringArgumentType.greedyString())
-                                .suggests(SUGGEST_KNOWN_NODES)
+                                .suggests(SUGGEST_NODE_THEN_OPTIONS)
                                 .executes(ctx -> userNode(ctx, false, true)))))
                     .then(Commands.literal("removeperm").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("player", StringArgumentType.word())
@@ -580,7 +627,7 @@ public class CustomPermCommand {
                         .then(Commands.argument("player", StringArgumentType.word())
                             .suggests(SUGGEST_KNOWN_PLAYERS)
                             .then(Commands.argument("node", StringArgumentType.greedyString())
-                                .suggests(SUGGEST_KNOWN_NODES)
+                                .suggests(SUGGEST_NODE_THEN_OPTIONS)
                                 .executes(ctx -> userNode(ctx, true, true)))))
                     .then(Commands.literal("removedeny").requires(AdminAccess.manage(PermissionNodes.MANAGE_GRADES))
                         .then(Commands.argument("player", StringArgumentType.word())
@@ -1134,7 +1181,7 @@ public class CustomPermCommand {
             if (withNode && parts.length == 0) return fail("Expected a node.");
             if (parts.length > first + 2) {
                 return fail("Expected " + (withNode ? "a node, then optionally " : "optionally ")
-                    + "a duration such as 30d and a world such as world=the_nether.");
+                    + "a duration such as 30d and a context such as server=hub or world=the_nether.");
             }
             String node = withNode ? parts[0] : null;
             long seconds = 0;
@@ -1599,6 +1646,17 @@ public class CustomPermCommand {
         return 1;
     }
 
+    /** What one grade holds: its nodes and parents, each with where it applies and how long it lasts. */
+    private static int gradeShow(CommandContext<CommandSourceStack> ctx) {
+        AdminResult refusal = GradeAdmin.unavailable();
+        if (refusal != null) return report(ctx, refusal);
+        String name = StringArgumentType.getString(ctx, "grade");
+        List<String> lines = com.arcadia.customperm.admin.Listings.grade(name);
+        if (lines == null) return report(ctx, AdminResult.fail("Grade '" + name + "' does not exist."));
+        lines.forEach(line -> ctx.getSource().sendSuccess(() -> Component.literal(line), false));
+        return 1;
+    }
+
     // ---------------- user ----------------
 
     /** Adds or removes one node carried by a player themselves, above their grades. */
@@ -1666,17 +1724,22 @@ public class CustomPermCommand {
             ctx.getSource().sendSuccess(() -> Component.literal("  refuses: "
                 + join(timedGrades(uuid, "refuse", refused))), false);
         }
+        // Each node with where it applies: cp.zone.staff (server=demo-a), without opening grades.json.
         ctx.getSource().sendSuccess(() -> Component.literal("  own allow: "
-            + join(timed(uuid, "allow", UserAdmin.nodes(uuid, false)))), false);
+            + join(com.arcadia.customperm.admin.Listings.ownNodes(uuid, false))), false);
         ctx.getSource().sendSuccess(() -> Component.literal("  own deny : "
-            + join(timed(uuid, "deny", UserAdmin.nodes(uuid, true)))), false);
-        UserAdmin.scoped(uuid).forEach((context, entries) -> ctx.getSource().sendSuccess(() -> Component.literal(
-            "  in " + com.arcadia.customperm.perm.Contexts.describe(context) + ": " + String.join(", ", entries.stream()
+            + join(com.arcadia.customperm.admin.Listings.ownNodes(uuid, true))), false);
+        UserAdmin.scoped(uuid).forEach((context, entries) -> {
+            List<String> grades = entries.stream().filter(e -> e.startsWith("grade:") || e.startsWith("refused:"))
                 .map(entry -> {
                     int colon = entry.indexOf(':');
                     return withTimeLeft(entry, UserAdmin.remaining(uuid, context, entry.substring(0, colon),
                         entry.substring(colon + 1)));
-                }).toList())), false));
+                }).toList();
+            if (grades.isEmpty()) return;
+            ctx.getSource().sendSuccess(() -> Component.literal("  in " + com.arcadia.customperm.perm.Contexts.describe(context)
+                + ": " + String.join(", ", grades)), false);
+        });
         List<String> prefixes = UserAdmin.chat(uuid, false);
         List<String> suffixes = UserAdmin.chat(uuid, true);
         if (!prefixes.isEmpty() || !suffixes.isEmpty()) {
@@ -1686,14 +1749,6 @@ public class CustomPermCommand {
                 + "; suffixes: " + (suffixes.isEmpty() ? "none" : String.join(", ", suffixes))), false);
         }
         return 1;
-    }
-
-    /** Each entry with the time it has left, when it is temporary: {@code vip (29d 23h left)}. */
-    private static List<String> timed(java.util.UUID uuid, String kind, List<String> entries) {
-        return entries.stream().map(entry -> {
-            long left = UserAdmin.remaining(uuid, kind, entry);
-            return left > 0 ? entry + " (" + Expiry.describe(left) + " left)" : entry;
-        }).toList();
     }
 
     /**
@@ -1716,7 +1771,7 @@ public class CustomPermCommand {
         return report(ctx, com.arcadia.customperm.admin.NickAdmin.set(server, profile.get().getId(), name, text, true));
     }
 
-    /** {@link #timed} for grades, each under its display name when it has one. */
+    /** Each grade with the time it has left when it is temporary, under its display name when it has one. */
     private static List<String> timedGrades(java.util.UUID uuid, String kind, List<String> grades) {
         return grades.stream().map(grade -> {
             long left = UserAdmin.remaining(uuid, kind, grade);

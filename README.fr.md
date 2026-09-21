@@ -287,33 +287,34 @@ Elles gèrent les nodes ALLOW. Les nodes DENY internes sont stockés dans `grade
 |---|---|
 | `/customperm grade create <name>` | Crée un grade vide. |
 | `/customperm grade delete <name>` | Supprime un grade et le désassigne de tous les joueurs. |
-| `/customperm grade addperm <grade> <node> [durée] [world=<dim>]` | Ajoute une perm au grade, pour de bon, pour une durée comme `30d`, ou dans un monde comme `world=the_nether`. |
-| `/customperm grade removeperm <grade> <node> [world=<dim>]` | Retire une perm du grade, celle limitée à ce monde s'il est donné. |
-| `/customperm grade adddeny <grade> <node> [durée] [world=<dim>]` | Ajoute un nœud DENY : refusé, opérateurs compris, sauf si un nœud plus spécifique l'autorise. |
-| `/customperm grade removedeny <grade> <node> [world=<dim>]` | Retire un nœud DENY. |
+| `/customperm grade addperm <grade> <node> [durée] [context]` | Ajoute une perm au grade, pour de bon, pour une durée comme `30d`, ou dans un monde comme `world=the_nether`. |
+| `/customperm grade removeperm <grade> <node> [context]` | Retire une perm du grade, celle limitée à ce monde s'il est donné. |
+| `/customperm grade adddeny <grade> <node> [durée] [context]` | Ajoute un nœud DENY : refusé, opérateurs compris, sauf si un nœud plus spécifique l'autorise. |
+| `/customperm grade removedeny <grade> <node> [context]` | Retire un nœud DENY. |
 | `/customperm grade weight <grade> <poids>` | Définit le poids de départage, 0 par défaut, négatif accepté. |
 | `/customperm grade displayname <grade> [set <texte> \| clear]` | Affiche, définit ou efface le nom que les listes et la page Grades montrent pour le grade, `Très Important (vip)`. Affichage seulement : commandes, fichiers et autres grades continuent de le nommer `vip`. 48 caractères au plus, sur une ligne. |
-| `/customperm grade parent add <grade> <parent> [durée] [world=<dim>]` | Fait hériter le grade d'un autre, pour de bon, pour une durée ou dans un monde ; un cycle est refusé, dans n'importe quel monde. |
+| `/customperm grade parent add <grade> <parent> [durée] [context]` | Fait hériter le grade d'un autre, pour de bon, pour une durée ou dans un monde ; un cycle est refusé, dans n'importe quel monde. |
 | `/customperm grade parent remove <grade> <parent>` | Cesse d'en hériter. |
-| `/customperm grade parent adddeny <grade> <parent> [durée] [world=<dim>]` | Refuse un grade partout où celui-ci en hériterait, pour de bon, pour une durée ou dans un monde. |
+| `/customperm grade parent adddeny <grade> <parent> [durée] [context]` | Refuse un grade partout où celui-ci en hériterait, pour de bon, pour une durée ou dans un monde. |
 | `/customperm grade parent removedeny <grade> <parent>` | Cesse de le refuser. |
 | `/customperm grade parent list <grade>` | Affiche ce dont le grade hérite et ce qu'il refuse. |
-| `/customperm grade assign <player> <grade> [durée] [world=<dim>]` | Assigne le grade à un joueur, en ligne ou hors ligne s'il est déjà venu sur le serveur ; avec un monde, il ne vaut que là. |
-| `/customperm grade unassign <player> <grade> [world=<dim>]` | Désassigne, en ligne ou hors ligne. |
+| `/customperm grade assign <player> <grade> [durée] [context]` | Assigne le grade à un joueur, en ligne ou hors ligne s'il est déjà venu sur le serveur ; avec un monde, il ne vaut que là. |
+| `/customperm grade unassign <player> <grade> [context]` | Désassigne, en ligne ou hors ligne. |
 | `/customperm grade setdefault <grade>` | Applique le grade à tous les joueurs, sous leurs propres grades. |
 | `/customperm grade cleardefault` | Plus aucun grade ne s'applique à tous les joueurs. |
 | `/customperm grade list` | Liste les grades définis, du plus lourd au plus léger, chacun sous son nom d'affichage s'il en a un. |
+| `/customperm grade list <grade>` | Ce que le grade porte : nœuds autorisés et refusés, parents et parents refusés, chacun avec l'endroit où il s'applique et le temps qui lui reste, par exemple `cp.zone.staff (server=demo-a, 29d left)`. |
 
 Nœuds portés par un joueur, au-dessus de ses grades :
 
 | Commande | Description |
 |---|---|
-| `/customperm user addperm <joueur> <node> [durée] [world=<dim>]` | Ajoute un nœud ALLOW à ce joueur seul. |
-| `/customperm user removeperm <joueur> <node> [world=<dim>]` | Le retire. |
-| `/customperm user adddeny <joueur> <node> [durée] [world=<dim>]` | Ajoute un nœud DENY à ce joueur seul. |
-| `/customperm user removedeny <joueur> <node> [world=<dim>]` | Le retire. |
-| `/customperm user denygrade <joueur> <grade> [durée] [world=<dim>]` | Fait refuser un grade à un joueur, partout où l'un des siens l'apporterait, ou dans un seul monde. |
-| `/customperm user undenygrade <joueur> <grade> [world=<dim>]` | Cesse de le refuser. |
+| `/customperm user addperm <joueur> <node> [durée] [context]` | Ajoute un nœud ALLOW à ce joueur seul. |
+| `/customperm user removeperm <joueur> <node> [context]` | Le retire. |
+| `/customperm user adddeny <joueur> <node> [durée] [context]` | Ajoute un nœud DENY à ce joueur seul. |
+| `/customperm user removedeny <joueur> <node> [context]` | Le retire. |
+| `/customperm user denygrade <joueur> <grade> [durée] [context]` | Fait refuser un grade à un joueur, partout où l'un des siens l'apporterait, ou dans un seul monde. |
+| `/customperm user undenygrade <joueur> <grade> [context]` | Cesse de le refuser. |
 | `/customperm user list <joueur>` | Affiche les grades détenus, ceux refusés, et les nœuds portés, avec le temps restant des entrées temporaires et, par monde, ce qui ne vaut que là. |
 
 **Durées.** `w`, `d`, `h`, `m` et `s`, seuls ou combinés : `30d`, `2h`, `1d12h`, `1w`, dix ans au plus.
@@ -342,6 +343,11 @@ hérité dans un monde n'est suivi que là, à la même profondeur qu'un parent 
 monde s'y affiche avant le préfixe global du même détenteur à priorité égale, et les noms sont reconstruits au
 changement de monde. `parent remove|removedeny` et `undenygrade` acceptent le même `world=` pour
 désigner celui qui y est limité, et les `remove` et `clear` de préfixe le même `in <monde>`.
+
+**`[context]` dans les tableaux** désigne l'un de ceux-ci, écrit après le nœud, le grade ou le parent :
+`world=the_nether`, `gamemode=creative`, un contexte statique comme `region=eu`, et en cluster `server=hub`, ou
+`server=here` pour le serveur sur lequel on tape. La complétion les propose une fois le nœud tapé, avec les durées,
+et `grade list <grade>` et `user list <joueur>` montrent chaque entrée avec son contexte.
 
 **Autres contextes.** `world=` est un contexte parmi d'autres, joints par une virgule après le nœud, le
 grade ou le parent : `gamemode=creative` (`survival`, `creative`, `adventure`, `spectator`), et toute clé
@@ -376,8 +382,8 @@ changement.
 | `/customperm track append <track> <grade>` | Ajoute un grade comme nouveau cran du haut. |
 | `/customperm track insert <track> <grade> <position>` | Place un grade à un cran, 1 étant le plus bas. |
 | `/customperm track remove <track> <grade>` | Retire un grade du track ; les joueurs qui le détiennent le gardent. |
-| `/customperm track promote <joueur> <track> [world=<dim>]` | Un cran plus haut ; un joueur sur aucun cran reçoit le premier. Avec un contexte, parmi les grades détenus là seulement. |
-| `/customperm track demote <joueur> <track> [world=<dim>]` | Un cran plus bas ; depuis le premier cran, hors du track. Avec un contexte, pareil là seulement. |
+| `/customperm track promote <joueur> <track> [context]` | Un cran plus haut ; un joueur sur aucun cran reçoit le premier. Avec un contexte, parmi les grades détenus là seulement. |
+| `/customperm track demote <joueur> <track> [context]` | Un cran plus bas ; depuis le premier cran, hors du track. Avec un contexte, pareil là seulement. |
 | `/customperm track list [track]` | Affiche les tracks et leurs crans. |
 
 Promote et demote s'ouvrent aussi à `customperm.track.<track>`, en plus de `customperm.admin` : un modérateur

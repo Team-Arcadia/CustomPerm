@@ -130,8 +130,10 @@ public class ContextualEntriesGameTest {
             check(!player.canUse(COMMAND), "the player's own contextual DENY must outrank their grade");
             expect(ServerCommands.run(server, "customperm user adddeny cp_c_holder " + NODE + " 1d world=the_nether"),
                     NODE + " for cp_c_holder in the_nether now expires in 1d");
-            expect(ServerCommands.run(server, "customperm user list cp_c_holder"),
-                    "in the_nether: grade:" + GRADE + ", deny:" + NODE);
+            // The player's own node on its own line with where it applies; the grade held there on the context line.
+            List<String> listed = ServerCommands.run(server, "customperm user list cp_c_holder");
+            expect(listed, "own deny : " + NODE + " (the_nether, 1d left)");
+            expect(listed, "in the_nether: grade:" + GRADE);
 
             expect(ServerCommands.run(server, "customperm user removedeny cp_c_holder " + NODE + " world=the_nether"),
                     "Removed the denial of " + NODE + " from cp_c_holder in the_nether");
@@ -248,7 +250,7 @@ public class ContextualEntriesGameTest {
             teleport(server, player, Level.NETHER);
 
             expect(ServerCommands.run(server, "customperm grade parent add " + member + " " + base + " world=the_nether 2h 1d"),
-                    "Expected optionally a duration such as 30d and a world");
+                    "Expected optionally a duration such as 30d and a context");
             expect(ServerCommands.run(server, "customperm grade parent add " + member + " " + base + " 2h 1d"),
                     "One duration at most");
             expect(ServerCommands.run(server, "customperm grade parent add " + member + " " + base + " 2h world=the_nether"),

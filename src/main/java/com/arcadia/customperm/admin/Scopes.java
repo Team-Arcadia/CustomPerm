@@ -34,9 +34,20 @@ final class Scopes {
      */
     static String parse(String raw) {
         if (raw == null || raw.isBlank()) return null;
-        String parsed = Contexts.parse(raw);
+        String parsed = Contexts.parse(here(raw));
         if (parsed == null) return INVALID;
         return Contexts.undeclared(parsed, declared()) == null ? parsed : INVALID;
+    }
+
+    /** {@code server=here}, in any case, as one pair of a context. */
+    private static final java.util.regex.Pattern HERE =
+            java.util.regex.Pattern.compile("(?i)(^|,)\\s*server\\s*=\\s*here\\s*(?=,|$)");
+
+    /** {@code raw} with {@code server=here} replaced by this server's cluster name; unchanged outside a cluster. */
+    static String here(String raw) {
+        String name = com.arcadia.customperm.cluster.Cluster.identity();
+        if (name == null) return raw;
+        return HERE.matcher(raw).replaceAll("$1server=" + java.util.regex.Matcher.quoteReplacement(name));
     }
 
     private static java.util.Map<String, String> declared() {
@@ -45,7 +56,10 @@ final class Scopes {
     }
 
     static AdminResult invalid(String raw) {
-        String parsed = Contexts.parse(raw);
+        if (HERE.matcher(raw).find() && com.arcadia.customperm.cluster.Cluster.identity() == null) {
+            return AdminResult.fail("server=here names this server in a cluster, and it has no cluster name.");
+        }
+        String parsed = Contexts.parse(here(raw));
         if (parsed != null) {
             String key = Contexts.undeclared(parsed, declared());
             if (Contexts.SERVER.equals(key)) {
