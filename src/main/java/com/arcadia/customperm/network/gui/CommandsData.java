@@ -33,7 +33,14 @@ public record CommandsData(List<Row> rows, boolean truncated, boolean gateAll) i
      * @param missing      exposed in the config but absent from the dispatcher
      */
     public record Row(String name, boolean exposed, boolean keepOriginal, boolean alias, boolean rateLimited,
-                      boolean missing) {
+                      boolean missing, List<String> servers) {
+
+        /** One exposed on every member. */
+        public Row(String name, boolean exposed, boolean keepOriginal, boolean alias, boolean rateLimited,
+                   boolean missing) {
+            this(name, exposed, keepOriginal, alias, rateLimited, missing, List.of());
+        }
+
 
         public static final StreamCodec<ByteBuf, Row> CODEC = StreamCodec.of(
                 (buf, r) -> {
@@ -41,12 +48,13 @@ public record CommandsData(List<Row> rows, boolean truncated, boolean gateAll) i
                     int flags = (r.exposed ? 1 : 0) | (r.keepOriginal ? 2 : 0) | (r.alias ? 4 : 0)
                             | (r.rateLimited ? 8 : 0) | (r.missing ? 16 : 0);
                     ByteBufCodecs.VAR_INT.encode(buf, flags);
+                    GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX).encode(buf, r.servers);
                 },
                 buf -> {
                     String name = GuiCodecs.TEXT.decode(buf);
                     int flags = ByteBufCodecs.VAR_INT.decode(buf);
                     return new Row(name, (flags & 1) != 0, (flags & 2) != 0, (flags & 4) != 0,
-                            (flags & 8) != 0, (flags & 16) != 0);
+                            (flags & 8) != 0, (flags & 16) != 0, GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX).decode(buf));
                 });
     }
 

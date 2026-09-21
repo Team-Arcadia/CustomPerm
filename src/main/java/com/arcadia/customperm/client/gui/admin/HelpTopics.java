@@ -231,6 +231,8 @@ final class HelpTopics {
                     "Give it a list of servers: it is active on those members only, and on every member without a "
                             + "list. Elsewhere a command keeps its original requirement and an alias does not exist. "
                             + "A server that does not share that part keeps its own file and never sees the list.",
+                    "In the interface: the house button on the Commands and Rate limits pages, the Servers tab on "
+                            + "the Aliases page. All clears the list; OFF in a list marks what is not active here.",
                     "/customperm command servers <name> [servers|here|all]",
                     "/customperm alias servers <name> [servers|here|all]",
                     "/customperm ratelimit servers <name> [servers|here|all]")),

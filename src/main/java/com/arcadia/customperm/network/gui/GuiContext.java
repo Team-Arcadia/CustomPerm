@@ -21,15 +21,23 @@ import net.minecraft.network.codec.StreamCodec;
  * @param editMask           one {@link GuiArea#bit()} per area this admin may write to
  * @param alertCount         active admin alerts, shown as a badge on the dashboard entry
  * @param luckPermsInstalled whether the LuckPerms mod is loaded, running or not
+ * @param cluster            this server's cluster name, the members it hears and the parts it shares
  */
-public record GuiContext(BackendKind backend, int editMask, int alertCount, boolean luckPermsInstalled) {
+public record GuiContext(BackendKind backend, int editMask, int alertCount, boolean luckPermsInstalled,
+                         ClusterView cluster) {
 
     public static final StreamCodec<ByteBuf, GuiContext> CODEC = StreamCodec.composite(
             GuiCodecs.enumByName(BackendKind.class), GuiContext::backend,
             ByteBufCodecs.VAR_INT, GuiContext::editMask,
             ByteBufCodecs.VAR_INT, GuiContext::alertCount,
             ByteBufCodecs.BOOL, GuiContext::luckPermsInstalled,
+            ClusterView.CODEC, GuiContext::cluster,
             GuiContext::new);
+
+    /** One outside a cluster. */
+    public GuiContext(BackendKind backend, int editMask, int alertCount, boolean luckPermsInstalled) {
+        this(backend, editMask, alertCount, luckPermsInstalled, ClusterView.NONE);
+    }
 
     public boolean canEdit(GuiArea area) {
         return area.in(editMask);

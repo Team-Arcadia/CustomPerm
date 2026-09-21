@@ -86,8 +86,10 @@ public class GuiPayloadCodecGameTest {
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.INTERNAL, 0, 0, false), com.arcadia.customperm.network.gui.HelpData.INSTANCE));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
-                new GuiContext(BackendKind.LUCKPERMS, 0, 0, true), new CommandsData(List.of(
-                        new CommandsData.Row("gamemode", true, true, false, true, false),
+                new GuiContext(BackendKind.LUCKPERMS, 0, 0, true,
+                        new com.arcadia.customperm.network.gui.ClusterView("hub", List.of("hub", "pvp"),
+                                com.arcadia.customperm.network.gui.ClusterView.ALIASES)), new CommandsData(List.of(
+                        new CommandsData.Row("gamemode", true, true, false, true, false, List.of("hub", "survival")),
                         new CommandsData.Row("oldmod", true, false, true, false, true)), true, true)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.ALIASES.bit(), 0, true), new AliasesData(List.of(
@@ -99,11 +101,12 @@ public class GuiPayloadCodecGameTest {
                                 List.of(new AliasesData.Param("count", "integer", true, "8", 1, 64, List.of(), false),
                                         new AliasesData.Param("kind", "word", true, "", Integer.MIN_VALUE,
                                                 Integer.MAX_VALUE, List.of("bread", "steak"), true)),
-                                false, 0, 0, false)))));
+                                false, 0, 0, false, List.of("pvp"))))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.DENY, 0, 2, true), new RateLimitsData(List.of(
                         new RateLimitsData.Rule("gamemode", 3, 3600, true, false, RateLimitsData.Target.EXPOSED_COMMAND, "network"),
-                        new RateLimitsData.Rule("ghost", 1, 5, false, true, RateLimitsData.Target.NONE, "hub,survival")),
+                        new RateLimitsData.Rule("ghost", 1, 5, false, true, RateLimitsData.Target.NONE, "hub,survival",
+                                List.of("survival"))),
                         List.of("heal", "tp"))));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(true,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.GRADES.bit(), 0, true), new GradesData(List.of(

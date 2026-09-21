@@ -16,6 +16,7 @@ import com.arcadia.customperm.client.gui.kit.Icon;
 import com.arcadia.customperm.client.gui.kit.Palette;
 import com.arcadia.customperm.client.gui.kit.Rect;
 import com.arcadia.customperm.client.gui.kit.Skin;
+import com.arcadia.customperm.network.gui.ClusterView;
 import com.arcadia.customperm.network.gui.CommandsData;
 import com.arcadia.customperm.network.gui.GuiAction;
 import com.arcadia.customperm.network.gui.GuiArea;
@@ -35,6 +36,13 @@ import java.util.Locale;
  * knows is listed, so exposing a modded command needs no typing of its exact name.
  */
 public final class CommandsScreen extends AdminScreen {
+
+    /** Title line above the server toggles. */
+    private static final int SERVERS_TITLE = 12;
+    /** Whether the details panel shows the servers of the selected command; kept while moving between commands. */
+    private boolean serversView;
+    /** The command's name and status at the top of the details panel. */
+    private static final int HEADER = 28;
 
     private static final int ROW = 16;
     private static final int GAP = 6;
@@ -166,6 +174,24 @@ public final class CommandsScreen extends AdminScreen {
         if (row == null) return;
         boolean editable = canEdit(GuiArea.COMMANDS);
         Rect actions = details().inset(6).bottom(2 * Atlas.BUTTON_HEIGHT + 4);
+        if (row.exposed() && showsServers(row.servers())) {
+            // A view switch: the explanation and the toggles share the space between the header and the buttons.
+            Rect inner = details().inset(8);
+            addRenderableWidget(CpButton.neutral(Component.literal("Servers"), () -> {
+                        serversView = !serversView;
+                        rebuild();
+                    })
+                    .iconOnly(Icon.HOME).selected(serversView)
+                    .tooltip(Component.literal(serversView ? "Back to how /" + row.name() + " is authorised."
+                            : "The cluster members /" + row.name() + " is exposed on."))
+                    .at(new Rect(inner.right() - Atlas.BUTTON_HEIGHT, inner.y() - 2, Atlas.BUTTON_HEIGHT, Atlas.BUTTON_HEIGHT)));
+            if (serversView) {
+                Rect area = new Rect(inner.x(), inner.y() + HEADER + SERVERS_TITLE, inner.w(),
+                        serverTogglesHeight(inner.w(), row.servers(), ClusterView.COMMANDS));
+                buildServerToggles(area, row.servers(), ClusterView.COMMANDS, "exposed commands", editable,
+                        list -> act(GuiAction.COMMAND_SERVERS, row.name(), list));
+            }
+        }
 
         CpButton primary = row.exposed()
                 ? CpButton.danger(Component.literal("Hide"), () -> confirmHide(row)).icon(Icon.MINUS)
@@ -180,6 +206,11 @@ public final class CommandsScreen extends AdminScreen {
                 .tooltip(Component.literal("On: players need customperm.command." + row.name()
                         + " AND the command's own requirement. Off: the node alone is enough."));
         addRenderableWidget(keep.at(actions.bottom(Atlas.BUTTON_HEIGHT)));
+    }
+
+    /** Whether the details panel shows the selected command's servers instead of how it is authorised. */
+    private boolean showingServers(CommandsData.Row row) {
+        return serversView && row != null && row.exposed() && showsServers(row.servers());
     }
 
     private void toggleGateAll() {
@@ -214,6 +245,7 @@ public final class CommandsScreen extends AdminScreen {
 
     private static String status(CommandsData.Row row) {
         if (row.exposed() && row.missing()) return "exposed, not on this server";
+        if (row.exposed() && !row.servers().isEmpty()) return "exposed on " + String.join(", ", row.servers());
         return row.exposed() ? "exposed" : "not exposed";
     }
 
@@ -223,13 +255,14 @@ public final class CommandsScreen extends AdminScreen {
 
         int right = r.right() - 4;
         right = badgeLeft(g, font, row.missing(), "MISSING", Palette.DANGER, right, r);
+        right = badgeLeft(g, font, row.exposed() && elsewhereOnly(row.servers()), "OFF", Palette.TEXT_MUTE, right, r);
         right = badgeLeft(g, font, row.keepOriginal() && row.exposed(), "KEEP", Palette.ACCENT_HI, right, r);
         right = badgeLeft(g, font, row.rateLimited(), "LIMIT", Palette.WARN, right, r);
         right = badgeLeft(g, font, row.alias(), "ALIAS", Palette.INFO, right, r);
 
         int x = r.x() + 6 + Atlas.DOT_SIZE + 5;
         Skin.text(g, font, "/" + row.name(), x, r.y() + (r.h() - 8) / 2, right - x - 4,
-                row.exposed() ? Palette.TEXT : Palette.TEXT_DIM);
+                row.exposed() && !elsewhereOnly(row.servers()) ? Palette.TEXT : Palette.TEXT_DIM);
     }
 
     /** Draws a badge ending at {@code right} when {@code show}; returns the new right edge. */
@@ -261,14 +294,20 @@ public final class CommandsScreen extends AdminScreen {
             return;
         }
 
-        Skin.text(g, font, "/" + row.name(), inner.x(), inner.y(), inner.w(), Palette.TEXT);
+        boolean serversButton = row.exposed() && showsServers(row.servers());
+        Skin.text(g, font, "/" + row.name(), inner.x(), inner.y(),
+                inner.w() - (serversButton ? Atlas.BUTTON_HEIGHT + 4 : 0), Palette.TEXT);
         int dot = row.missing() ? Palette.WARN : row.exposed() ? Palette.GOOD : Palette.TEXT_MUTE;
         Skin.dot(g, inner.x(), inner.y() + 16, dot);
         Skin.text(g, font, status(row), inner.x() + Atlas.DOT_SIZE + 4, inner.y() + 12,
-                inner.w() - Atlas.DOT_SIZE - 4, Palette.TEXT_DIM);
+                inner.w() - Atlas.DOT_SIZE - 4 - (serversButton ? Atlas.BUTTON_HEIGHT + 4 : 0), Palette.TEXT_DIM);
 
         Rect text = new Rect(inner.x(), inner.y(), inner.w(), inner.h() - 2 * Atlas.BUTTON_HEIGHT - 4 - GAP);
-        int y = inner.y() + 28;
+        if (showingServers(row)) {
+            Skin.text(g, font, "EXPOSED ON", inner.x(), inner.y() + HEADER, inner.w(), Palette.TEXT_MUTE);
+            return;
+        }
+        int y = inner.y() + HEADER;
         boolean gated = data.gateAll() && !context.luckPermsInstalled();
         if (row.exposed()) {
             y = paragraph(g, "Players holding customperm.command." + row.name() + " can run it"

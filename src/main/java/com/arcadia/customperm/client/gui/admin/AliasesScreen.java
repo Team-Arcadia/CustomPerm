@@ -17,6 +17,7 @@ import com.arcadia.customperm.client.gui.kit.Palette;
 import com.arcadia.customperm.client.gui.kit.Rect;
 import com.arcadia.customperm.client.gui.kit.Skin;
 import com.arcadia.customperm.network.gui.AliasesData;
+import com.arcadia.customperm.network.gui.ClusterView;
 import com.arcadia.customperm.network.gui.GuiAction;
 import com.arcadia.customperm.network.gui.GuiArea;
 import com.arcadia.customperm.network.gui.GuiCodecs;
@@ -34,9 +35,10 @@ import java.util.Objects;
 
 /**
  * Alias editor: the list of aliases with a creation form on the left, the selected alias on the
- * right, on two tabs. Steps are reordered with Up and Down, replaced from the edit field, appended,
+ * right, on two tabs, three in a cluster. Steps are reordered with Up and Down, replaced from the edit field, appended,
  * or removed; deleting an alias (or removing its last step, which deletes it) asks for confirmation.
- * The Args tab declares what the alias takes, which its steps then reach with {@code ${name}}.
+ * The Args tab declares what the alias takes, which its steps then reach with {@code ${name}}. The Servers tab,
+ * in a cluster, picks the members the alias exists on.
  */
 public final class AliasesScreen extends AdminScreen {
 
@@ -45,7 +47,7 @@ public final class AliasesScreen extends AdminScreen {
     private static final int FIELD = Atlas.INPUT_HEIGHT;
     private static final int GAP = 6;
 
-    private enum Tab { STEPS, ARGS }
+    private enum Tab { STEPS, ARGS, SERVERS }
 
     /** The four argument types, in the order the Add button cycles through them. */
     private static final String[] TYPES = {"word", "player", "integer", "text"};
@@ -280,13 +282,36 @@ public final class AliasesScreen extends AdminScreen {
 
         AliasesData.Alias selected = aliasList.getSelected();
         if (selected == null) return;
-        placeButtonRow(tabsRow(), 8, false, List.of(
+        List<CpButton> tabs = new ArrayList<>(List.of(
                 CpButton.ghost(Component.literal("Steps (" + selected.steps().size() + ")"), () -> setTab(Tab.STEPS))
                         .icon(Icon.ALIAS).selected(tab == Tab.STEPS),
                 CpButton.ghost(Component.literal("Args (" + selected.params().size() + ")"), () -> setTab(Tab.ARGS))
                         .icon(Icon.EDIT).selected(tab == Tab.ARGS)));
+        // Only where a list means something: in a cluster, or when one was set before leaving it.
+        boolean servers = showsServers(selected.servers());
+        if (servers) {
+            tabs.add(CpButton.ghost(Component.literal("Servers"), () -> setTab(Tab.SERVERS))
+                    .icon(Icon.HOME).selected(tab == Tab.SERVERS));
+        } else if (tab == Tab.SERVERS) {
+            tab = Tab.STEPS;
+        }
+        placeButtonRow(tabsRow(), 8, false, tabs);
         if (tab == Tab.ARGS) buildParamEditor(editable);
+        else if (tab == Tab.SERVERS) buildServerToggles(new Rect(stepsArea().x(), stepsArea().y() + serversIntroHeight(selected), stepsArea().w(),
+                        serverTogglesHeight(stepsArea().w(), selected.servers(), ClusterView.ALIASES)),
+                selected.servers(), ClusterView.ALIASES, "aliases", editable,
+                list -> act(GuiAction.ALIAS_SERVERS, selected.name(), list));
         else buildStepEditor(editable);
+    }
+
+    private static String serversIntro(AliasesData.Alias alias) {
+        return "Where /" + alias.name() + " exists. Elsewhere it is not registered and a command of the same name "
+                + "stays. None picked: every member.";
+    }
+
+    /** Height of the intro above the server toggles, so they start under its last line at any width. */
+    private int serversIntroHeight(AliasesData.Alias alias) {
+        return font.split(Component.literal(serversIntro(alias)), stepsArea().w()).size() * 10 + 6;
     }
 
     private void setTab(Tab wanted) {
@@ -504,6 +529,13 @@ public final class AliasesScreen extends AdminScreen {
 
     private void renderAlias(GuiGraphics g, Font font, AliasesData.Alias alias, Rect r, boolean hovered, boolean selected) {
         int right = r.right() - 4;
+        // Not registered on this server: a short badge, so the name keeps its room on a narrow list.
+        boolean away = elsewhereOnly(alias.servers());
+        if (away) {
+            int w = font.width("OFF") + 6;
+            Skin.badge(g, font, "OFF", right - w, r.centerY(), Palette.TEXT_MUTE);
+            right -= w + 3;
+        }
         if (alias.shadows()) {
             int w = font.width("SHADOW") + 6;
             Skin.badge(g, font, "SHADOW", right - w, r.centerY(), Palette.WARN);
@@ -517,7 +549,8 @@ public final class AliasesScreen extends AdminScreen {
         String count = String.valueOf(alias.steps().size());
         int cw = font.width(count);
         Skin.text(g, font, count, right - cw, r.y() + (r.h() - 8) / 2, Palette.TEXT_MUTE);
-        Skin.text(g, font, "/" + alias.name(), r.x() + 6, r.y() + (r.h() - 8) / 2, right - cw - r.x() - 12, Palette.TEXT);
+        Skin.text(g, font, "/" + alias.name(), r.x() + 6, r.y() + (r.h() - 8) / 2, right - cw - r.x() - 12,
+                away ? Palette.TEXT_MUTE : Palette.TEXT);
     }
 
     private void renderStep(GuiGraphics g, Font font, Step step, Rect r, boolean hovered, boolean selected) {
@@ -572,5 +605,10 @@ public final class AliasesScreen extends AdminScreen {
                 ? "Shadows a real command of the same name."
                 : canEdit(GuiArea.ALIASES) ? "Steps run at op level 4." : "Read-only: needs " + GuiArea.ALIASES.node() + ".";
         Skin.text(g, font, warning, inner.x(), inner.y() + 22, inner.w(), alias.shadows() ? Palette.WARN : Palette.TEXT_MUTE);
+        if (tab == Tab.SERVERS && showsServers(alias.servers())) {
+            Rect area = stepsArea();
+            paragraph(g, serversIntro(alias), new Rect(area.x(), area.y(), area.w(), inner.bottom() - area.y()), area.y(),
+                    Palette.TEXT_DIM);
+        }
     }
 }

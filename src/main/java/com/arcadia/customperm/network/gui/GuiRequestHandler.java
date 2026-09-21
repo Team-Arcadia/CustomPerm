@@ -20,6 +20,7 @@ import com.arcadia.customperm.admin.ImportAdmin;
 import com.arcadia.customperm.admin.ImportPlan;
 import com.arcadia.customperm.admin.LogAdmin;
 import com.arcadia.customperm.admin.RateLimitAdmin;
+import com.arcadia.customperm.admin.ServerListAdmin;
 import com.arcadia.customperm.admin.UserAdmin;
 import com.arcadia.customperm.command.RateLimiter;
 import com.arcadia.customperm.log.ActivityLog;
@@ -186,6 +187,9 @@ public final class GuiRequestHandler {
             case RATELIMIT_REMOVE -> RateLimitAdmin.remove(args.get(0));
             case RATELIMIT_PERSISTENCE -> RateLimitAdmin.setPersistence(args.get(0), args.get(1));
             case RATELIMIT_SCOPE -> RateLimitAdmin.setScope(args.get(0), args.get(1));
+            case COMMAND_SERVERS -> ServerListAdmin.set(player.getServer(), ServerListAdmin.Kind.COMMAND, args.get(0), args.get(1));
+            case ALIAS_SERVERS -> ServerListAdmin.set(player.getServer(), ServerListAdmin.Kind.ALIAS, args.get(0), args.get(1));
+            case RATELIMIT_SERVERS -> ServerListAdmin.set(player.getServer(), ServerListAdmin.Kind.RATE_LIMIT, args.get(0), args.get(1));
             case GRADE_CREATE -> GradeAdmin.create(args.get(0));
             case GRADE_DELETE -> guarded(player, () -> GradeAdmin.delete(player.getServer(), args.get(0)));
             case GRADE_NODE_ADD -> kind(args.get(2)) == null ? malformed(action)

@@ -765,6 +765,45 @@ public class AdminInterfaceGameTest {
         return data;
     }
 
+    /**
+     * The interface sets a list like the command, answers the same, and the refreshed page and context carry
+     * what it needs to draw the toggles: the list, and outside a cluster no server name.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void serverListActionsStoreTheListAndRefreshThePage(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        var server = helper.getLevel().getServer();
+        String name = "cp_i_listed";
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_lists", 4)) {
+            aliasAct(owner, GuiAction.ALIAS_CREATE, name, "say listed");
+            owner.clearReceived();
+            aliasAct(owner, GuiAction.ALIAS_SERVERS, name, "hub,Survival");
+            List<String> results = results(owner);
+            if (results.size() != 1 || !results.get(0).startsWith("OK: Alias /cp_i_listed is now active on hub, survival only.")) {
+                fail("The action must answer like the command: " + results);
+            }
+            var pages = owner.payloads(GuiPagePayload.class);
+            if (pages.size() != 1 || !(pages.get(0).data() instanceof AliasesData data)) {
+                fail("A server list change must refresh the Aliases page.");
+                return;
+            }
+            var alias = data.aliases().stream().filter(a -> a.name().equals(name)).findFirst().orElseThrow();
+            if (!alias.servers().equals(List.of("hub", "survival"))) fail("The page must carry the list: " + alias.servers());
+            if (pages.get(0).context().cluster().inCluster()) fail("Outside a cluster the context names no server.");
+            if (!owner.canUse(name)) fail("Outside a cluster the alias must stay registered whatever its list.");
+
+            owner.clearReceived();
+            aliasAct(owner, GuiAction.ALIAS_SERVERS, name, "all");
+            if (!CustomPerm.configManager.getAliases().servers(name).isEmpty()) fail("all must clear the list.");
+            owner.clearReceived();
+            aliasAct(owner, GuiAction.ALIAS_SERVERS, name, "bad!name");
+            expectResult(owner, "FAIL: 'bad!name': ");
+        } finally {
+            AliasAdmin.remove(server, name);
+        }
+        helper.succeed();
+    }
+
     private static void aliasAct(TestPlayer player, GuiAction action, String... args) {
         GuiRequestHandler.handleAction(new GuiActionPayload(action.name(), List.of(args), GuiPage.ALIASES.id()),
                 player.payloadContext());

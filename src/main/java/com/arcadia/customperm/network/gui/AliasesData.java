@@ -90,7 +90,14 @@ public record AliasesData(List<Alias> aliases) implements GuiPageData {
      * @param limitEnabled whether that rule is enforced
      */
     public record Alias(String name, List<String> steps, List<Param> params, boolean shadows, int limitMax,
-                        int limitWindow, boolean limitEnabled) {
+                        int limitWindow, boolean limitEnabled, List<String> servers) {
+
+        /** One existing on every member. */
+        public Alias(String name, List<String> steps, List<Param> params, boolean shadows, int limitMax,
+                     int limitWindow, boolean limitEnabled) {
+            this(name, steps, params, shadows, limitMax, limitWindow, limitEnabled, List.of());
+        }
+
 
         public static final StreamCodec<ByteBuf, Alias> CODEC = StreamCodec.of(
                 (buf, a) -> {
@@ -101,6 +108,7 @@ public record AliasesData(List<Alias> aliases) implements GuiPageData {
                     ByteBufCodecs.VAR_INT.encode(buf, a.limitMax);
                     ByteBufCodecs.VAR_INT.encode(buf, a.limitWindow);
                     ByteBufCodecs.BOOL.encode(buf, a.limitEnabled);
+                    GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX).encode(buf, a.servers);
                 },
                 buf -> new Alias(
                         GuiCodecs.TEXT.decode(buf),
@@ -109,7 +117,8 @@ public record AliasesData(List<Alias> aliases) implements GuiPageData {
                         ByteBufCodecs.BOOL.decode(buf),
                         ByteBufCodecs.VAR_INT.decode(buf),
                         ByteBufCodecs.VAR_INT.decode(buf),
-                        ByteBufCodecs.BOOL.decode(buf)));
+                        ByteBufCodecs.BOOL.decode(buf),
+                        GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX).decode(buf)));
 
         public boolean hasLimit() {
             return limitMax > 0;

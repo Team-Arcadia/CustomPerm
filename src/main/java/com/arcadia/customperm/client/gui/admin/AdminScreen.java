@@ -29,7 +29,9 @@ import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.network.chat.Component;
 import net.neoforged.neoforge.network.PacketDistributor;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.function.Consumer;
 
 /**
  * Base of the CustomPerm admin pages: navigation sidebar, header toolbar, and the round trip with the
@@ -169,6 +171,7 @@ public abstract class AdminScreen extends CpScreen {
             layout = new WindowLayout(layout.window(), layout.header(), layout.sidebar(),
                     content.belowTop(bannerRect.h() + 6), layout.footer());
         }
+        serverNote = null;
         buildNavigation();
         buildToolbar();
         buildPage();
@@ -216,8 +219,123 @@ public abstract class AdminScreen extends CpScreen {
         renderContent(g, mouseX, mouseY, partialTick);
     }
 
+    // ------------------------------------------------------------------ cluster server lists
+
+    private static final int SERVER_GAP = 4;
+    /** The note under the server toggles, drawn over the page; null when the toggles say it all. */
+    private String serverNote;
+    private Rect serverNoteAt;
+    private int serverNoteColor;
+
+    /** Whether a list leaves this server out, for a badge on the element's row; false outside a cluster. */
+    protected final boolean elsewhereOnly(List<String> servers) {
+        var cluster = context.cluster();
+        return cluster.inCluster() && !servers.isEmpty() && !servers.contains(cluster.here());
+    }
+
+    /** Whether a {@code servers} list is worth showing: in a cluster, or when one was set before leaving it. */
+    protected final boolean showsServers(List<String> servers) {
+        return context.cluster().inCluster() || !servers.isEmpty();
+    }
+
+    /** Height {@link #buildServerToggles} takes in {@code width}: its lines of buttons and the note line. */
+    protected final int serverTogglesHeight(int width, List<String> servers, int part) {
+        int lines = flow(width, serverButtons(servers, part, false, text -> { })).size();
+        return lines * Atlas.BUTTON_HEIGHT + (lines - 1) * SERVER_GAP + (note(servers, part, "") == null ? 0 : 12);
+    }
+
+    /**
+     * The cluster members an element is active on, as toggles: All members, then one per member heard, this server
+     * marked, then any listed name no member answers to now, marked too and kept. A click sends the new list, names
+     * joined by commas or {@code all}. A note under them says when the list is ignored here or stays on this server.
+     */
+    protected final void buildServerToggles(Rect area, List<String> servers, int part, String partName, boolean editable,
+                                            Consumer<String> send) {
+        List<List<CpButton>> lines = flow(area.w(), serverButtons(servers, part, editable, send));
+        int y = area.y();
+        for (List<CpButton> line : lines) {
+            int x = area.x();
+            for (CpButton button : line) {
+                int w = Math.min(button.preferredWidth(font, 6), area.w());
+                addRenderableWidget(button.at(x, y, w, Atlas.BUTTON_HEIGHT));
+                x += w + SERVER_GAP;
+            }
+            y += Atlas.BUTTON_HEIGHT + SERVER_GAP;
+        }
+        serverNote = note(servers, part, partName);
+        serverNoteAt = new Rect(area.x(), y - SERVER_GAP + 3, area.w(), 9);
+        serverNoteColor = context.cluster().inCluster() && context.cluster().shares(part) ? Palette.TEXT_MUTE : Palette.WARN;
+    }
+
+    private String note(List<String> servers, int part, String partName) {
+        var cluster = context.cluster();
+        if (!cluster.inCluster()) return "No cluster here: the list is kept, not read.";
+        if (!cluster.shares(part)) return "This server keeps its " + partName + " local: the list stays here.";
+        if (!servers.isEmpty() && !servers.contains(cluster.here())) return "Not active on this server.";
+        return null;
+    }
+
+    private List<CpButton> serverButtons(List<String> servers, int part, boolean editable, Consumer<String> send) {
+        var cluster = context.cluster();
+        boolean enabled = editable && cluster.inCluster();
+        List<String> names = new ArrayList<>(cluster.members());
+        // This server even when it hears no member: the database may be down, and it can still be picked.
+        if (cluster.inCluster() && !names.contains(cluster.here())) names.add(0, cluster.here());
+        servers.stream().filter(name -> !names.contains(name)).forEach(names::add);
+        List<CpButton> buttons = new ArrayList<>();
+        buttons.add(toggle("All", servers.isEmpty(), () -> send.accept(com.arcadia.customperm.config.ServerScope.ALL))
+                .enabled(enabled)
+                .tooltip(Component.literal("All members: active on every member of the cluster, no list.")));
+        for (String name : names) {
+            boolean listed = servers.contains(name);
+            boolean here = name.equals(cluster.here());
+            boolean heard = here || cluster.members().contains(name);
+            List<String> next = new ArrayList<>(servers);
+            if (listed) next.remove(name);
+            else next.add(name);
+            CpButton button = toggle(name, listed,
+                            () -> send.accept(next.isEmpty() ? com.arcadia.customperm.config.ServerScope.ALL : String.join(",", next)))
+                    .enabled(enabled)
+                    .tooltip(Component.literal(name + ": " + (!heard
+                            ? "no member answers to this name right now. Kept, so it applies once that server runs."
+                            : here ? "this server." : "a member of the cluster.")));
+            // The icon says which server it is; the fill says whether it is picked.
+            if (!heard) button.icon(Icon.WARN);
+            else if (here) button.icon(Icon.HOME);
+            buttons.add(button);
+        }
+        return buttons;
+    }
+
+    /** A toggle that reads as one at a glance: filled when on, framed when off. */
+    private static CpButton toggle(String label, boolean on, Runnable action) {
+        return on ? CpButton.accent(Component.literal(label), action) : CpButton.neutral(Component.literal(label), action);
+    }
+
+    /** Buttons cut into lines that fit {@code width}, each line keeping at least one button. */
+    private List<List<CpButton>> flow(int width, List<CpButton> buttons) {
+        List<List<CpButton>> lines = new ArrayList<>();
+        List<CpButton> line = new ArrayList<>();
+        int used = 0;
+        for (CpButton button : buttons) {
+            int w = Math.min(button.preferredWidth(font, 6), width);
+            if (!line.isEmpty() && used + SERVER_GAP + w > width) {
+                lines.add(line);
+                line = new ArrayList<>();
+                used = 0;
+            }
+            used += (line.isEmpty() ? 0 : SERVER_GAP) + w;
+            line.add(button);
+        }
+        if (!line.isEmpty()) lines.add(line);
+        return lines;
+    }
+
     @Override
     protected void renderForeground(GuiGraphics g, int mouseX, int mouseY, float partialTick) {
+        if (serverNote != null && serverNoteAt != null) {
+            Skin.text(g, font, serverNote, serverNoteAt.x(), serverNoteAt.y(), serverNoteAt.w(), serverNoteColor);
+        }
         if (context.alertCount() > 0 && layout.hasSidebar()) {
             // Alert badge on the dashboard entry, whichever page is open.
             Rect side = layout.sidebar().inset(4, 6);

@@ -16,6 +16,7 @@ import com.arcadia.customperm.client.gui.kit.Icon;
 import com.arcadia.customperm.client.gui.kit.Palette;
 import com.arcadia.customperm.client.gui.kit.Rect;
 import com.arcadia.customperm.client.gui.kit.Skin;
+import com.arcadia.customperm.network.gui.ClusterView;
 import com.arcadia.customperm.network.gui.GuiAction;
 import com.arcadia.customperm.network.gui.GuiArea;
 import com.arcadia.customperm.network.gui.GuiContext;
@@ -52,6 +53,8 @@ public final class RateLimitsScreen extends AdminScreen {
     private final CpEditBox window;
     private final CpEditBox scope;
     private final CpList<String> unlimitedList;
+    /** Whether the servers view replaces the lower part of the form; kept while moving between rules. */
+    private boolean serversView;
     /** Rule to select once the next refresh lands, after saving a new one. */
     private String pendingRule;
     /** Right edge of the buttons on the save row, so the summary is only drawn where it fits. */
@@ -185,6 +188,17 @@ public final class RateLimitsScreen extends AdminScreen {
         return togglesY() + BUTTON + 4;
     }
 
+    /** Top of the server toggles in the servers view, below their title, where the toggle rows usually start. */
+    private int serversY() {
+        return togglesY() + 12;
+    }
+
+    /** Whether the lower part of the form shows the selected rule's servers instead of its other settings. */
+    private boolean showingServers() {
+        RateLimitsData.Rule rule = ruleList.getSelected();
+        return serversView && rule != null && showsServers(rule.servers());
+    }
+
     private Rect unlimitedArea() {
         Rect in = inner();
         int top = scopeY() + BUTTON + 18;
@@ -219,10 +233,33 @@ public final class RateLimitsScreen extends AdminScreen {
             int createW = create.preferredWidth(font, 8);
             addRenderableWidget(create.at(new Rect(in.x() + saveW + 4, saveY(), createW, BUTTON)));
             saveRowRight += 4 + createW;
+            if (showsServers(rule.servers())) {
+                // A view switch rather than more rows: the form already fills a small window.
+                CpButton servers = CpButton.neutral(Component.literal("Servers"), () -> {
+                            serversView = !serversView;
+                            rebuild();
+                        })
+                        .icon(Icon.HOME).selected(serversView)
+                        .tooltip(Component.literal("The cluster members this limit is enforced on. Click again to go back."));
+                int serversW = servers.preferredWidth(font, 6);
+                if (saveRowRight + 4 + serversW > in.right() - BUTTON - 4) {
+                    servers.iconOnly(Icon.HOME);
+                    serversW = BUTTON;
+                }
+                addRenderableWidget(servers.at(new Rect(saveRowRight + 4, saveY(), serversW, BUTTON)));
+                saveRowRight += 4 + serversW;
+            }
             CpButton remove = CpButton.danger(Component.literal("Remove limit"), () -> confirmRemove(rule))
                     .iconOnly(Icon.TRASH).enabled(editable);
             addRenderableWidget(remove.at(new Rect(in.right() - BUTTON, saveY(), BUTTON, BUTTON)));
 
+            if (showingServers()) {
+                buildServerToggles(new Rect(in.x(), serversY(), in.w(),
+                                serverTogglesHeight(in.w(), rule.servers(), ClusterView.RATE_LIMITS)), rule.servers(),
+                        ClusterView.RATE_LIMITS, "rate limits", editable,
+                        list -> act(GuiAction.RATELIMIT_SERVERS, rule.name(), list));
+                return;
+            }
             addRenderableWidget(CpButton.neutral(Component.literal(rule.enabled() ? "Enforced" : "Disabled"),
                             () -> act(rule.enabled() ? GuiAction.RATELIMIT_DISABLE : GuiAction.RATELIMIT_ENABLE, rule.name()))
                     .icon(rule.enabled() ? Icon.CHECK : Icon.CROSS).enabled(editable)
@@ -258,6 +295,7 @@ public final class RateLimitsScreen extends AdminScreen {
     }
 
     private void startNew() {
+        serversView = false;
         ruleList.clearSelection();
         target.setValue("");
         max.setValue("");
@@ -295,7 +333,8 @@ public final class RateLimitsScreen extends AdminScreen {
 
     private void renderRule(GuiGraphics g, Font font, RateLimitsData.Rule rule, Rect r, boolean hovered, boolean selected) {
         int right = r.right() - 4;
-        if (!rule.enabled()) {
+        // One badge for "not in effect here": disabled, or limited to other cluster members.
+        if (!rule.enabled() || elsewhereOnly(rule.servers())) {
             int w = font.width("OFF") + 6;
             Skin.badge(g, font, "OFF", right - w, r.centerY(), Palette.TEXT_MUTE);
             right -= w + 3;
@@ -309,7 +348,7 @@ public final class RateLimitsScreen extends AdminScreen {
         int nw = font.width(numbers);
         Skin.text(g, font, numbers, right - nw, r.y() + (r.h() - 8) / 2, Palette.TEXT_DIM);
         Skin.text(g, font, "/" + rule.name(), r.x() + 6, r.y() + (r.h() - 8) / 2, right - nw - r.x() - 12,
-                rule.enabled() ? Palette.TEXT : Palette.TEXT_MUTE);
+                rule.enabled() && !elsewhereOnly(rule.servers()) ? Palette.TEXT : Palette.TEXT_MUTE);
     }
 
     /** Short window label: 90s, 15m, 2h, 1d; exact seconds when not a whole unit. */
@@ -353,6 +392,10 @@ public final class RateLimitsScreen extends AdminScreen {
                 if (rule != null) x = in.right() - BUTTON - 6 - w;
                 if (x >= saveRowRight + 6) Skin.text(g, font, hint, x, saveY() + (BUTTON - 8) / 2, Palette.TEXT_DIM);
             }
+        }
+        if (showingServers()) {
+            Skin.text(g, font, "ENFORCED ON", in.x(), serversY() - 11, in.w(), Palette.TEXT_MUTE);
+            return;
         }
         Rect unlimited = unlimitedArea();
         if (unlimited.h() >= 24) {

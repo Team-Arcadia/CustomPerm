@@ -31,7 +31,11 @@ public enum GuiAction {
     COMMAND_KEEP_ORIGINAL(2, GuiArea.COMMANDS),
     /** {@code ["true"|"false"]} Whether every command reads its node, like {@code /customperm command gateall}. */
     COMMAND_GATE_ALL(1, GuiArea.COMMANDS),
+    /** {@code [command, servers]} The cluster members it is exposed on: names joined by commas, or {@code all}. */
+    COMMAND_SERVERS(2, GuiArea.COMMANDS),
 
+    /** {@code [alias, servers]} The cluster members it exists on: names joined by commas, or {@code all}. */
+    ALIAS_SERVERS(2, GuiArea.ALIASES),
     /** {@code [alias, firstStep]} Creates an alias; refused when the name is taken. */
     ALIAS_CREATE(2, GuiArea.ALIASES),
     /** {@code [alias]} Deletes an alias, restoring a command it shadowed. */
@@ -70,6 +74,8 @@ public enum GuiAction {
     RATELIMIT_PERSISTENCE(2, GuiArea.RATE_LIMITS),
     /** {@code [name, scope]} Who shares the rule's budget in cluster mode: server, network or server names. */
     RATELIMIT_SCOPE(2, GuiArea.RATE_LIMITS),
+    /** {@code [name, servers]} The cluster members the rule is enforced on: names joined by commas, or {@code all}. */
+    RATELIMIT_SERVERS(2, GuiArea.RATE_LIMITS),
 
     /** {@code [grade]} Creates an internal grade. */
     GRADE_CREATE(1, GuiArea.GRADES),

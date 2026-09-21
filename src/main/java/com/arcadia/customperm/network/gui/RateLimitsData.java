@@ -32,7 +32,14 @@ public record RateLimitsData(List<Rule> rules, List<String> unlimited) implement
      * @param scope     who shares the budget in cluster mode: server, network or server names
      */
     public record Rule(String name, int max, int windowSeconds, boolean enabled, boolean immediate, Target target,
-                       String scope) {
+                       String scope, List<String> servers) {
+
+        /** One enforced on every member. */
+        public Rule(String name, int max, int windowSeconds, boolean enabled, boolean immediate, Target target,
+                    String scope) {
+            this(name, max, windowSeconds, enabled, immediate, target, scope, List.of());
+        }
+
 
         public static final StreamCodec<ByteBuf, Rule> CODEC = StreamCodec.of(
                 (buf, r) -> {
@@ -43,6 +50,7 @@ public record RateLimitsData(List<Rule> rules, List<String> unlimited) implement
                     ByteBufCodecs.BOOL.encode(buf, r.immediate);
                     GuiCodecs.enumByName(Target.class).encode(buf, r.target);
                     GuiCodecs.TEXT.encode(buf, r.scope);
+                    GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX).encode(buf, r.servers);
                 },
                 buf -> new Rule(
                         GuiCodecs.TEXT.decode(buf),
@@ -51,7 +59,8 @@ public record RateLimitsData(List<Rule> rules, List<String> unlimited) implement
                         ByteBufCodecs.BOOL.decode(buf),
                         ByteBufCodecs.BOOL.decode(buf),
                         GuiCodecs.enumByName(Target.class).decode(buf),
-                        GuiCodecs.TEXT.decode(buf)));
+                        GuiCodecs.TEXT.decode(buf),
+                        GuiCodecs.list(GuiCodecs.TEXT, GuiCodecs.SERVER_LIST_MAX).decode(buf)));
     }
 
     public static final StreamCodec<ByteBuf, RateLimitsData> CODEC = StreamCodec.composite(

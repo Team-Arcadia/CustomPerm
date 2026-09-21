@@ -35,7 +35,15 @@ public final class GuiSnapshots {
 
     public static GuiContext context(ServerPlayer player) {
         return new GuiContext(CustomPerm.backendKind(), GuiAccess.editMask(player),
-                AdminNotifier.activeAlerts().size(), CustomPerm.isLuckPermsPresent());
+                AdminNotifier.activeAlerts().size(), CustomPerm.isLuckPermsPresent(), clusterView());
+    }
+
+    static ClusterView clusterView() {
+        String here = com.arcadia.customperm.cluster.Cluster.identity();
+        var share = CustomPerm.configManager.getSettings().cluster.share;
+        int shared = (share.commands ? ClusterView.COMMANDS : 0) | (share.aliases ? ClusterView.ALIASES : 0)
+                | (share.rateLimits ? ClusterView.RATE_LIMITS : 0);
+        return new ClusterView(here == null ? "" : here, com.arcadia.customperm.cluster.Cluster.memberNames(), shared);
     }
 
     public static GuiPageData page(GuiPage page, ServerPlayer player) {
@@ -315,7 +323,7 @@ public final class GuiSnapshots {
             RateLimitsData.Target target = aliases.contains(name) ? RateLimitsData.Target.ALIAS
                     : exposed.contains(name) ? RateLimitsData.Target.EXPOSED_COMMAND : RateLimitsData.Target.NONE;
             rows.add(new RateLimitsData.Rule(name, rule.maxExecutions, rule.windowSeconds, rule.enabled,
-                    rule.persistsImmediately(), target, rule.scope));
+                    rule.persistsImmediately(), target, rule.scope, rule.servers == null ? List.of() : List.copyOf(rule.servers)));
         }
         Set<String> candidates = new TreeSet<>(exposed);
         candidates.addAll(aliases);
@@ -344,7 +352,7 @@ public final class GuiSnapshots {
                             .toList(),
                     AliasManager.shadowsCommand(name),
                     rule == null ? 0 : rule.maxExecutions, rule == null ? 0 : rule.windowSeconds,
-                    rule != null && rule.enabled));
+                    rule != null && rule.enabled, List.copyOf(config.getAliases().servers(name))));
         });
         return new AliasesData(aliases);
     }
@@ -369,7 +377,8 @@ public final class GuiSnapshots {
             var rule = rules.get(name);
             rows.add(new CommandsData.Row(name, exposed.contains(name),
                     config.getCommands().shouldPreserveOriginalRequires(name), aliases.contains(name),
-                    rule != null && rule.enabled, !dispatcher.contains(name)));
+                    rule != null && rule.enabled, !dispatcher.contains(name),
+                    List.copyOf(config.getCommands().servers(name))));
         }
         return new CommandsData(rows, names.size() > rows.size(), config.getSettings().gateAllCommands);
     }
