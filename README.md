@@ -1437,11 +1437,12 @@ without prior written permission.
 exported/offline pack, re-hosting it elsewhere, or shipping a modified build
 still requires written permission.
 
-**Server operators may send the mod to their own players.** Because CustomPerm
-has client-side components, automatic mod-synchronization to the players joining
-*your* server is explicitly permitted, as long as the official file is
-transmitted unmodified. Offering it as a general download or a hosting-panel
-"one-click install" product is not.
+**Server operators may send the mod to their own players.** Automatic
+mod-synchronization to the players joining *your* server is explicitly
+permitted, as long as the official file is transmitted unmodified. A vanilla
+client can still join a server running CustomPerm — the admin interface needs
+the mod client-side, joining does not. Offering it as a general download or a
+hosting-panel "one-click install" product is not permitted.
 
 **Contributions are welcome.** You may fork the repository to submit a pull
 request — that specific use is explicitly permitted. Publishing any build made

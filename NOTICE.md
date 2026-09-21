@@ -21,7 +21,8 @@ This file is a plain-language summary for convenience. The binding terms are in
 | Report bugs, open issues | ✅ Yes |
 | Fork the repo to submit a pull request | ✅ Yes — see [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Ship the mod in your own modpack **after** contributing a PR | ✅ Yes — §5.3, official file only |
-| Be credited for a merged contribution | ✅ Yes — [CONTRIBUTORS.md](CONTRIBUTORS.md), §5.3(a) |
+| Be credited for a merged contribution, by name and by what you contributed | ✅ Yes — [CONTRIBUTORS.md](CONTRIBUTORS.md), §5.3(a) |
+| Redistribute it, relicense it, or publish a fork **because you contributed** | ❌ No — §5.2, a merged PR enlarges nothing |
 | Include it in a CurseForge / Modrinth modpack that **references** the official unmodified file | ✅ Yes, no need to ask |
 | Send the official file to players joining **your own** server (launcher / host auto-sync) | ✅ Yes — see §2.2 |
 | Mention it factually: "my pack includes CustomPerm", tutorials, reviews | ✅ Yes |
@@ -90,9 +91,19 @@ From the release that introduces cluster mode on, one third-party component is b
 It ships unmodified, as its own jar inside the CustomPerm jar
 (`META-INF/jarjar/mariadb-java-client-3.5.10.jar`), so it can be replaced by
 another build of the same library. The license text is included at
-`META-INF/licenses/mariadb-java-client-LGPL-2.1.txt`; the source is published by
-MariaDB at the address above. CustomPerm's own license does not apply to it,
-and nothing in CustomPerm's license restricts the rights the LGPL grants over it.
+`META-INF/licenses/mariadb-java-client-LGPL-2.1.txt`; the source of that exact
+version is published by MariaDB at the address above. CustomPerm's own license
+does not apply to it, and nothing in CustomPerm's license restricts the rights
+the LGPL grants over it.
+
+That is stated in the LICENSE itself, at §12, and not only here: §10.3 (entire
+agreement) is made subject to it, and this file is incorporated by reference for
+the purpose of identifying the components and their licenses. Concretely, and
+notwithstanding §3(a), §3(d) and §4, you may modify the component, modify
+CustomPerm as far as relinking it with your modified build requires and run the
+result for your own use, and reverse-engineer what debugging those changes
+needs. Those permissions cover the component and that combination; they grant no
+right to redistribute CustomPerm itself.
 
 ## License history by version
 
@@ -216,7 +227,8 @@ LICENSE prévaut.
 | Signaler des bugs, ouvrir des issues | ✅ Oui |
 | Forker le dépôt pour soumettre une pull request | ✅ Oui — voir [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Diffuser le mod dans votre propre modpack **après** avoir contribué une PR | ✅ Oui — §5.3, fichier officiel uniquement |
-| Être crédité pour une contribution fusionnée | ✅ Oui — [CONTRIBUTORS.md](CONTRIBUTORS.md), §5.3(a) |
+| Être crédité pour une contribution fusionnée, par votre nom et par ce que vous avez contribué | ✅ Oui — [CONTRIBUTORS.md](CONTRIBUTORS.md), §5.3(a) |
+| Le redistribuer, le relicencier ou publier un fork **parce que vous avez contribué** | ❌ Non — §5.2, une PR fusionnée n'élargit rien |
 | L'inclure dans un modpack CurseForge / Modrinth qui **référence** le fichier officiel non modifié | ✅ Oui, sans demander |
 | Transmettre le fichier officiel aux joueurs rejoignant **votre propre** serveur (auto-sync launcher / hébergeur) | ✅ Oui — voir §2.2 |
 | Le mentionner factuellement : « mon pack inclut CustomPerm », tutoriels, tests | ✅ Oui |
@@ -275,9 +287,34 @@ redistribuer :
 | [NeoForge](https://neoforged.net/) | Mod loader / framework | Fourni par l'installation de l'utilisateur final, sous sa propre licence |
 | [LuckPerms API](https://luckperms.net/) | Intégration optionnelle (`compileOnly`) | Fourni par l'installation de l'utilisateur final, sous sa propre licence |
 | Brigadier (Mojang) | Système de commandes | Partie de Minecraft, sous les conditions de Mojang |
+| [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) | Connexion optionnelle du mode cluster (`compileOnly`) | Fourni par l'installation de l'utilisateur final, sous sa propre licence |
 
 Ce sont des dépendances de compilation ou d'exécution résolues côté utilisateur.
-Aucun code tiers n'est empaqueté dans le jar CustomPerm.
+
+À partir de la version qui introduit le mode cluster, un composant tiers est
+empaqueté :
+
+| Composant | Rôle | Licence |
+|-----------|------|---------|
+| [MariaDB Connector/J](https://github.com/mariadb-corporation/mariadb-connector-j) 3.5.10 | Pilote de base de données pour la connexion directe du mode cluster | GNU Lesser General Public License 2.1 ou ultérieure |
+
+Il est livré non modifié, comme jar autonome à l'intérieur du jar CustomPerm
+(`META-INF/jarjar/mariadb-java-client-3.5.10.jar`), et peut donc être remplacé
+par un autre build de la même bibliothèque. Le texte de la licence est inclus
+dans `META-INF/licenses/mariadb-java-client-LGPL-2.1.txt` ; la source de cette
+version exacte est publiée par MariaDB à l'adresse ci-dessus. La licence de
+CustomPerm ne s'applique pas à ce composant, et rien dans la licence de
+CustomPerm ne restreint les droits que la LGPL accorde dessus.
+
+Ce point figure dans la LICENSE elle-même, au §12, et pas seulement ici : le
+§10.3 (intégralité de l'accord) lui est subordonné, et le présent fichier y est
+incorporé par référence pour identifier les composants et leurs licences.
+Concrètement, et nonobstant les §3(a), §3(d) et §4, vous pouvez modifier le
+composant, modifier CustomPerm dans la mesure nécessaire pour le relier à votre
+build modifié et exécuter le résultat pour votre usage propre, et
+décompiler ce que le débogage de ces modifications exige. Ces autorisations
+couvrent le composant et cette combinaison ; elles ne donnent aucun droit de
+redistribuer CustomPerm lui-même.
 
 ## Historique des licences par version
 

@@ -1458,11 +1458,12 @@ le jar dans un pack exporté/hors-ligne, le ré-héberger ailleurs ou livrer une
 version modifiée nécessite une autorisation écrite.
 
 **Les opérateurs de serveur peuvent transmettre le mod à leurs propres
-joueurs.** CustomPerm comportant des composants côté client, la synchronisation
-automatique des mods vers les joueurs rejoignant *votre* serveur est
-explicitement autorisée, tant que le fichier officiel est transmis non modifié.
-Le proposer en téléchargement général ou en « installation en un clic » dans le
-catalogue d'un hébergeur ne l'est pas.
+joueurs.** La synchronisation automatique des mods vers les joueurs rejoignant
+*votre* serveur est explicitement autorisée, tant que le fichier officiel est
+transmis non modifié. Un client vanilla peut tout de même rejoindre un serveur
+qui fait tourner CustomPerm : l'interface d'administration exige le mod côté
+client, pas la connexion. Le proposer en téléchargement général ou en
+« installation en un clic » dans le catalogue d'un hébergeur ne l'est pas.
 
 **Les contributions sont les bienvenues.** Vous pouvez forker le dépôt pour
 soumettre une pull request — cet usage précis est explicitement autorisé.

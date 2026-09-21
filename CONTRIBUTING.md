@@ -50,7 +50,10 @@ By submitting a pull request, patch, or code suggestion, you agree that:
 3. Your contribution contains no third-party code you are not entitled to
    submit.
 4. You keep the copyright on your own contribution, but submitting it gives you
-   **no ownership, co-authorship, or any other right over CustomPerm itself**.
+   **no ownership, no co-authorship, and no right to redistribute, publish,
+   mirror, relicense, or fork CustomPerm**. Your permissions over the mod stay
+   exactly those of anyone else under Sections 2 and 3 of the LICENSE; having a
+   contribution merged does not enlarge them.
 5. Where the law allows it, you waive your moral rights in the contribution as
    against the author; where it does not, you agree not to assert them in a way
    that would block the license above. In return, your contribution will never
@@ -64,9 +67,11 @@ By submitting a pull request, patch, or code suggestion, you agree that:
 
 Section 5.3 of the LICENSE gives every contributor two things:
 
-- **Credit** in [CONTRIBUTORS.md](CONTRIBUTORS.md), which is not withdrawn later
-  for any reason. Ask via the issue tracker if you want a different name or
-  handle, no contact address, or no listing at all.
+- **Credit** in [CONTRIBUTORS.md](CONTRIBUTORS.md), by the name or handle you
+  chose and with a description of what you contributed, so the credit identifies
+  the work and not only the person. It is not withdrawn later for any reason.
+  Ask via the issue tracker if you want a different name or handle, no contact
+  address, or no listing at all.
 - **The modpack permission**, confirmed explicitly: once your PR has concluded,
   you may ship CustomPerm in a modpack you publish — referencing CurseForge or
   Modrinth, unmodified official file, notices preserved. Having forked the repo
@@ -76,7 +81,8 @@ You still may not ship a build made from your own fork. The permission covers
 the official file only.
 
 That credit is recognition of your work — it does not make you a co-owner or
-co-maintainer of the project.
+co-maintainer of the project, and it grants no right to redistribute
+CustomPerm.
 
 If you do not agree with these terms, do not submit a pull request — open an
 issue describing the problem instead. That is just as useful.
@@ -202,8 +208,11 @@ acceptez que :
 3. Votre contribution ne contient aucun code tiers que vous n'auriez pas le
    droit de soumettre.
 4. Vous conservez le copyright sur votre propre contribution, mais la soumettre
-   ne vous donne **aucun droit de propriété, de co-paternité ou autre sur
-   CustomPerm lui-même**.
+   ne vous donne **aucun droit de propriété, aucune co-paternité, et aucun droit
+   de redistribuer, publier, miroiter, relicencier ou forker CustomPerm**. Vos
+   autorisations sur le mod restent exactement celles de n'importe qui d'autre
+   au titre des Sections 2 et 3 de la LICENSE ; faire fusionner une contribution
+   ne les élargit pas.
 5. Dans la limite permise par la loi, vous renoncez à vos droits moraux sur la
    contribution à l'égard de l'auteur ; à défaut, vous vous engagez à ne pas les
    invoquer d'une manière qui ferait obstacle à la licence ci-dessus. En
@@ -218,10 +227,12 @@ acceptez que :
 
 La Section 5.3 de la LICENSE accorde deux choses à tout contributeur :
 
-- **Le crédit** dans [CONTRIBUTORS.md](CONTRIBUTORS.md), qui n'est retiré
-  ultérieurement pour aucun motif. Demandez via le tracker d'issues si vous
-  souhaitez un autre nom ou pseudonyme, aucune adresse de contact, ou aucune
-  mention du tout.
+- **Le crédit** dans [CONTRIBUTORS.md](CONTRIBUTORS.md), sous le nom ou le
+  pseudonyme que vous avez choisi et avec une description de ce que vous avez
+  contribué, pour que le crédit identifie le travail et pas seulement la
+  personne. Il n'est retiré ultérieurement pour aucun motif. Demandez via le
+  tracker d'issues si vous souhaitez un autre nom ou pseudonyme, aucune adresse
+  de contact, ou aucune mention du tout.
 - **La permission modpack**, confirmée explicitement : une fois votre PR
   terminée, vous pouvez diffuser CustomPerm dans un modpack que vous publiez —
   en référençant CurseForge ou Modrinth, fichier officiel non modifié, mentions

@@ -27,7 +27,9 @@ Their work is gratefully acknowledged here.
 
 Under Section 5.3 of the [LICENSE](LICENSE):
 
-- **Credit.** Every merged contribution is credited on this page. No
+- **Credit.** Every merged contribution is credited on this page, by the name
+  or handle the contributor chose and with a description of what they
+  contributed, so the credit identifies the work and not only the person. No
   contribution will ever be misattributed to someone else. This credit is not
   withdrawn if the license is later terminated for any reason.
 - **Modpack permission.** Once your pull request has concluded, you may include
@@ -101,10 +103,12 @@ documentation au projet. Leur travail est ici salué avec gratitude.
 
 Au titre de la Section 5.3 de la [LICENSE](LICENSE) :
 
-- **Le crédit.** Toute contribution fusionnée est créditée sur cette page.
-  Aucune contribution ne sera jamais attribuée à un tiers. Ce crédit n'est pas
-  retiré si la licence est ultérieurement résiliée, pour quelque motif que ce
-  soit.
+- **Le crédit.** Toute contribution fusionnée est créditée sur cette page, sous
+  le nom ou le pseudonyme choisi par le contributeur et avec une description de
+  ce qu'il a contribué, pour que le crédit identifie le travail et pas seulement
+  la personne. Aucune contribution ne sera jamais attribuée à un tiers. Ce
+  crédit n'est pas retiré si la licence est ultérieurement résiliée, pour
+  quelque motif que ce soit.
 - **La permission modpack.** Une fois votre pull request terminée, vous pouvez
   inclure CustomPerm dans un modpack que vous publiez, aux mêmes conditions que
   tout le monde (§3(b)) : le pack doit référencer un canal officiel pour que le
