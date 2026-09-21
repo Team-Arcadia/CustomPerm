@@ -210,7 +210,11 @@ final class HelpTopics {
                             + "be carried and what left behind, then the change itself.",
                     "Add keeps what is already there; Replace empties it first. Import copies every config file to "
                             + "backup/ first. Export cannot be undone from here: run /lp export <file> before.",
+                    "Choose picks which groups, players, tracks and kinds of entries go, both ways; the report follows it. "
+                            + "Replacing then empties only the kinds chosen, and a reference to a group left out is kept "
+                            + "only where the other side has it already.",
                     "/customperm import preview",
+                    "/customperm import select groups set <names>",
                     "/customperm import confirm",
                     "/customperm export preview",
                     "/customperm export confirm")),

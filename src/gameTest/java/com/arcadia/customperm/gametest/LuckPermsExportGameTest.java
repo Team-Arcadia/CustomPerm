@@ -187,6 +187,44 @@ public class LuckPermsExportGameTest {
         helper.succeed();
     }
 
+    /**
+     * An export that carries only prefixes, replacing: the group's prefix is replaced, and the customperm nodes
+     * LuckPerms has on it stay, since nodes were not chosen.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 400, batch = "customperm_lp_export_select")
+    public static void replacingOnlyTheChosenKindsKeepsTheRestInLuckPerms(GameTestHelper helper) {
+        if (!Modes.luckPermsOnly(helper)) return;
+        String group = "cp_x_sel";
+        try {
+            LuckPermsTestSupport.apply(com.arcadia.customperm.network.lp.LpEditOp.GROUP_CREATE, group);
+            LuckPermsTestSupport.apply(com.arcadia.customperm.network.lp.LpEditOp.GROUP_PERM_ADD, group,
+                    "customperm.command.kick", "true", "", "0");
+            LuckPermsTestSupport.apply(com.arcadia.customperm.network.lp.LpEditOp.GROUP_PREFIX_SET, group, "10", "[Old]", "");
+            GradesConfig config = new GradesConfig();
+            GradesConfig.Grade grade = new GradesConfig.Grade();
+            grade.permissions.add("customperm.command.fly");
+            grade.prefixes.add(new GradesConfig.ChatEntry(10, "[New]", 0));
+            config.grades.put(group, grade);
+
+            com.arcadia.customperm.admin.TransferSelection selection = com.arcadia.customperm.admin.TransferSelection.ALL
+                    .edit("kinds", "set", "chat", new com.arcadia.customperm.admin.TransferSelection.Candidates(
+                            List.of(group), java.util.Map.of(), List.of())).next();
+            ExportPlan plan = selection.filter(ExportPlan.of(config, "")
+                    .withExisting(LuckPermsTestSupport.await(LuckPermsExport.existingGroups())));
+            ExportPlan.Outcome outcome = LuckPermsTestSupport.await(
+                    LuckPermsExport.write(plan, true, selection.kinds(), written -> { }));
+            if (!outcome.complete()) fail("The export stopped at " + outcome.stoppedAt() + ": " + outcome.error());
+            List<String> nodes = LuckPermsTestSupport.groupNodes(group);
+            expect(nodes, "customperm.command.kick=true", "Nodes were not chosen: LuckPerms' must stay");
+            if (nodes.contains("customperm.command.fly=true")) fail("Nodes were not chosen: none may be written: " + nodes);
+            expect(nodes, "prefix.10.[New]=true", "The chosen prefix must replace LuckPerms' at that priority");
+            if (nodes.contains("prefix.10.[Old]=true")) fail("Replacing prefixes must take the old one away: " + nodes);
+        } finally {
+            LuckPermsTestSupport.cleanup(List.of(group), List.of());
+        }
+        helper.succeed();
+    }
+
     /** The export tab: the refusals, reading then exporting, the lockout guard, and a spent preview. */
     @GameTest(template = TEMPLATE, timeoutTicks = 400, batch = "customperm_lp_export_page")
     public static void exportPageReadsThenExports(GameTestHelper helper) {

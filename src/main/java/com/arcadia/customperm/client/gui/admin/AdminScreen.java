@@ -183,14 +183,19 @@ public abstract class AdminScreen extends CpScreen {
     private void buildNavigation() {
         if (!layout.hasSidebar()) return;
         Rect side = layout.sidebar().inset(4, 6);
+        List<AdminScreens.NavEntry> entries = AdminScreens.navigation(context);
+        // Ten entries with LuckPerms installed run past a sidebar at GUI scale 3: rows then shrink to fit, a label
+        // needing 10 pixels, rather than the last one being drawn over the footer.
+        int step = Math.max(12, Math.min(NAV_ROW + 2, side.h() / Math.max(1, entries.size())));
+        int row = Math.min(NAV_ROW, step - 1);
         int y = side.y();
-        for (AdminScreens.NavEntry entry : AdminScreens.navigation(context)) {
+        for (AdminScreens.NavEntry entry : entries) {
             CpButton button = CpButton.ghost(Component.literal(entry.label()), () -> navigate(entry.page()))
                     .icon(entry.icon())
                     .selected(entry.page() == page())
-                    .at(side.x(), y, side.w(), NAV_ROW);
+                    .at(side.x(), y, side.w(), row);
             addRenderableWidget(button);
-            y += NAV_ROW + 2;
+            y += step;
         }
     }
 

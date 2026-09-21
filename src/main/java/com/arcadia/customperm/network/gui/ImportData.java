@@ -28,7 +28,37 @@ import java.util.List;
  * @param export         the export tab
  */
 public record ImportData(boolean running, boolean previewed, boolean exposeCommands, List<String> report,
-                         Export export) implements GuiPageData {
+                         Export export, Choice choice) implements GuiPageData {
+
+    /** One without a selection to show. */
+    public ImportData(boolean running, boolean previewed, boolean exposeCommands, List<String> report, Export export) {
+        this(running, previewed, exposeCommands, report, export, Choice.NONE);
+    }
+
+    /** One group or grade, player or track the selection may take: its key, the name shown, whether it is taken. */
+    public record Item(String key, String label, boolean on) {
+
+        public static final StreamCodec<ByteBuf, Item> CODEC = StreamCodec.composite(
+                GuiCodecs.TEXT, Item::key,
+                GuiCodecs.TEXT, Item::label,
+                ByteBufCodecs.BOOL, Item::on,
+                Item::new);
+    }
+
+    /** What an import or an export may carry, and what it carries now; {@code kinds} are the kind words taken. */
+    public record Choice(List<Item> groups, List<Item> players, List<Item> tracks, List<String> kinds) {
+
+        public static final Choice NONE = new Choice(List.of(), List.of(), List.of(), List.of());
+
+        private static final StreamCodec<ByteBuf, List<Item>> ITEMS = GuiCodecs.list(Item.CODEC, GuiCodecs.SERVER_LIST_MAX);
+
+        public static final StreamCodec<ByteBuf, Choice> CODEC = StreamCodec.composite(
+                ITEMS, Choice::groups,
+                ITEMS, Choice::players,
+                ITEMS, Choice::tracks,
+                GuiCodecs.list(GuiCodecs.TEXT, 16), Choice::kinds,
+                Choice::new);
+    }
 
     /** Most report lines carried; a report longer than this says more about the source than the import. */
     public static final int REPORT_MAX = 256;
@@ -37,9 +67,14 @@ public record ImportData(boolean running, boolean previewed, boolean exposeComma
      * The export tab. {@code exporting} is true while any export runs, whoever started it, with how far it
      * is: one runs at a time, and the page says so rather than offering a second.
      */
-    public record Export(boolean previewed, List<String> report, boolean exporting, int done, int total) {
+    public record Export(boolean previewed, List<String> report, boolean exporting, int done, int total, Choice choice) {
 
-        public static final Export NONE = new Export(false, List.of(), false, 0, 0);
+        public static final Export NONE = new Export(false, List.of(), false, 0, 0, Choice.NONE);
+
+        /** One without a selection to show. */
+        public Export(boolean previewed, List<String> report, boolean exporting, int done, int total) {
+            this(previewed, report, exporting, done, total, Choice.NONE);
+        }
 
         public static final StreamCodec<ByteBuf, Export> CODEC = StreamCodec.composite(
                 ByteBufCodecs.BOOL, Export::previewed,
@@ -47,6 +82,7 @@ public record ImportData(boolean running, boolean previewed, boolean exposeComma
                 ByteBufCodecs.BOOL, Export::exporting,
                 ByteBufCodecs.VAR_INT, Export::done,
                 ByteBufCodecs.VAR_INT, Export::total,
+                Choice.CODEC, Export::choice,
                 Export::new);
     }
 
@@ -56,6 +92,7 @@ public record ImportData(boolean running, boolean previewed, boolean exposeComma
             ByteBufCodecs.BOOL, ImportData::exposeCommands,
             GuiCodecs.list(GuiCodecs.TEXT, REPORT_MAX), ImportData::report,
             Export.CODEC, ImportData::export,
+            Choice.CODEC, ImportData::choice,
             ImportData::new);
 
     @Override

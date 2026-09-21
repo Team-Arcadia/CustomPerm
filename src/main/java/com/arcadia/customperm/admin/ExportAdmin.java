@@ -71,8 +71,14 @@ public final class ExportAdmin {
         PREVIEWS.put(admin, new Preview(plan, Instant.now()));
     }
 
-    /** What this admin previewed, or {@code null} when they previewed nothing or did it too long ago. */
+    /** What this admin previewed as their selection keeps it, or {@code null} when nothing or too long ago. */
     public static ExportPlan previewed(String admin) {
+        ExportPlan full = full(admin);
+        return full == null ? null : selection(admin).filter(full);
+    }
+
+    /** Everything this admin's read found, before their selection; {@code null} when nothing or too long ago. */
+    public static ExportPlan full(String admin) {
         Preview preview = PREVIEWS.get(admin);
         if (preview == null) return null;
         if (Duration.between(preview.read(), Instant.now()).compareTo(PREVIEW_KEEPS) > 0) {
@@ -80,6 +86,53 @@ public final class ExportAdmin {
             return null;
         }
         return preview.plan();
+    }
+
+    private static final Map<String, TransferSelection> SELECTIONS = new HashMap<>();
+
+    /**
+     * The selection this admin works with, kept across reads so a plan read again keeps what they chose; every
+     * group, player and kind until they choose.
+     */
+    public static TransferSelection selection(String admin) {
+        return SELECTIONS.getOrDefault(admin, TransferSelection.ALL);
+    }
+
+    /** What the selection chooses among: the grades, players and tracks this admin's read found, players named. */
+    public static TransferSelection.Candidates candidates(String admin, MinecraftServer server) {
+        ExportPlan full = full(admin);
+        if (full == null) return new TransferSelection.Candidates(java.util.List.of(), java.util.Map.of(), java.util.List.of());
+        java.util.Map<String, String> players = new java.util.LinkedHashMap<>();
+        for (ExportPlan.Player player : full.players()) {
+            String name = player.uuid();
+            try {
+                if (server != null) name = GradeAdmin.displayName(server, java.util.UUID.fromString(player.uuid()));
+            } catch (IllegalArgumentException ignored) {
+                // Not a UUID: shown as it is.
+            }
+            players.put(player.uuid(), name);
+        }
+        return new TransferSelection.Candidates(full.groups().stream().map(ExportPlan.Group::name).toList(), players,
+                full.tracks().stream().map(ExportPlan.Track::name).toList());
+    }
+
+    /** {@link ImportAdmin#select} for an export: the same parts, the same answers. */
+    public static AdminResult select(String admin, MinecraftServer server, String what, String op, String value) {
+        if (what.trim().equalsIgnoreCase("reset")) {
+            SELECTIONS.remove(admin);
+            return AdminResult.ok("Selection reset: every grade, player, track and kind.");
+        }
+        ExportPlan full = full(admin);
+        boolean kinds = what.trim().equalsIgnoreCase("kinds");
+        if (full == null && !kinds) {
+            return AdminResult.fail("Read the grades first (/customperm export preview): grades, players and tracks "
+                    + "are chosen among what it found.");
+        }
+        TransferSelection.Edit edit = selection(admin).edit(what, op, value, candidates(admin, server));
+        if (edit.problem() != null) return AdminResult.fail(edit.problem());
+        SELECTIONS.put(admin, edit.next());
+        return AdminResult.ok(full == null ? edit.next().describe(0, 0, 0)
+                : edit.next().describe(full.groups().size(), full.players().size(), full.tracks().size()));
     }
 
     public static void forget(String admin) {
@@ -117,6 +170,13 @@ public final class ExportAdmin {
      */
     public static AdminResult start(MinecraftServer server, ExportPlan plan, boolean replace,
                                     Runnable onProgress, Consumer<AdminResult> onDone) {
+        return start(server, plan, replace, TransferSelection.ALL.kinds(), onProgress, onDone);
+    }
+
+    /** {@link #start(MinecraftServer, ExportPlan, boolean, Runnable, Consumer)} replacing only the kinds selected. */
+    public static AdminResult start(MinecraftServer server, ExportPlan plan, boolean replace,
+                                    java.util.Set<TransferSelection.Kind> kinds,
+                                    Runnable onProgress, Consumer<AdminResult> onDone) {
         if (plan == null || plan.isEmpty()) {
             return AdminResult.fail("Nothing to export: preview it first, and check the report.");
         }
@@ -131,7 +191,7 @@ public final class ExportAdmin {
                 plan.groups().size(), plan.players().size(), replace ? "replacing" : "adding");
         // Inside the LuckPerms branch, and called rather than referenced: a method reference would resolve its
         // target eagerly and drag LuckPerms onto a server that does not have it.
-        com.arcadia.customperm.perm.lp.LuckPermsExport.write(plan, replace, written -> {
+        com.arcadia.customperm.perm.lp.LuckPermsExport.write(plan, replace, kinds, written -> {
             done = written;
             if (written - told[0] >= step && written < total) {
                 told[0] = written;

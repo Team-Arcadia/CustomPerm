@@ -151,6 +151,14 @@ public enum GuiAction {
     IMPORT_APPLY(1, GuiArea.GRADES),
     /** {@code []} Reads the grades and returns what an export to LuckPerms would write, writing nothing. */
     EXPORT_PREVIEW(0, GuiArea.LUCKPERMS),
+    /**
+     * {@code [part, op, value]} Changes what an import carries: part {@code groups}, {@code players}, {@code tracks},
+     * {@code kinds} or {@code reset}; op {@code set}, {@code add} or {@code remove}; value {@code all}, {@code none}
+     * or a name.
+     */
+    IMPORT_SELECT(3, GuiArea.GRADES),
+    /** {@code [part, op, value]} The same for an export. */
+    EXPORT_SELECT(3, GuiArea.LUCKPERMS),
     /** {@code ["merge"|"replace"]} Writes what this admin previewed into LuckPerms, in the background. */
     EXPORT_APPLY(1, GuiArea.LUCKPERMS),
 

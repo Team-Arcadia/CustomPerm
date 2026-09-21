@@ -715,7 +715,8 @@ public class CustomPermCommand {
                     .then(Commands.literal("confirm")
                         .executes(ctx -> importApply(ctx, false))
                         .then(Commands.literal("replace")
-                            .executes(ctx -> importApply(ctx, true)))))
+                            .executes(ctx -> importApply(ctx, true))))
+                    .then(selection(false)))
                 .then(Commands.literal("contexts").requires(AdminAccess.manage(PermissionNodes.MANAGE_CONFIG))
                     .executes(CustomPermCommand::listContexts)
                     .then(Commands.literal("set")
@@ -755,7 +756,8 @@ public class CustomPermCommand {
                     .then(Commands.literal("confirm")
                         .executes(ctx -> exportApply(ctx, false))
                         .then(Commands.literal("replace")
-                            .executes(ctx -> exportApply(ctx, true)))))
+                            .executes(ctx -> exportApply(ctx, true))))
+                    .then(selection(true)))
                 .then(Commands.literal("alias")
                     .then(Commands.literal("add").requires(AdminAccess.manage(PermissionNodes.MANAGE_ALIASES))
                         .then(Commands.argument("name", StringArgumentType.word())
@@ -1858,8 +1860,10 @@ public class CustomPermCommand {
                     return;
                 }
                 ImportAdmin.remember(admin, plan, exposeCommands);
-                plan.report().forEach(line -> source.sendSuccess(() -> Component.literal(line), false));
-                source.sendSuccess(() -> Component.literal(plan.isEmpty()
+                // As the admin's selection keeps it: what confirm will write.
+                ImportPlan selected = ImportAdmin.previewed(admin);
+                selected.report().forEach(line -> source.sendSuccess(() -> Component.literal(line), false));
+                source.sendSuccess(() -> Component.literal(selected.isEmpty()
                     ? "Nothing to import."
                     : "Nothing was changed. Run /customperm import confirm to apply this, or "
                         + "/customperm import confirm replace to overwrite grades of the same name.")
@@ -1878,10 +1882,85 @@ public class CustomPermCommand {
             return report(ctx, AdminResult.fail("Preview it first: /customperm import preview. A preview older "
                 + "than 10 minutes is read again rather than trusted."));
         }
-        AdminResult result = guarded(ctx, () -> ImportAdmin.apply(ctx.getSource().getServer(), plan, replace));
+        AdminResult result = guarded(ctx, () -> ImportAdmin.apply(ctx.getSource().getServer(), plan, replace,
+            ImportAdmin.selection(admin).kinds()));
         // Forgotten once applied: confirming twice would import the same thing twice.
         if (result.success()) ImportAdmin.forget(admin);
         return report(ctx, result);
+    }
+
+    /**
+     * {@code import select} or {@code export select}: without more, shows the selection; {@code reset} takes it back
+     * to everything; {@code <groups|players|tracks|kinds> <set|add|remove> <all|none|names>} changes one part.
+     */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> selection(boolean export) {
+        var select = Commands.literal("select")
+            .executes(ctx -> showSelection(ctx, export))
+            .then(Commands.literal("reset").executes(ctx -> editSelection(ctx, export, "reset", "set", "")));
+        for (String part : List.of("groups", "players", "tracks", "kinds")) {
+            var node = Commands.literal(part);
+            for (String op : List.of("set", "add", "remove")) {
+                node.then(Commands.literal(op)
+                    .then(Commands.argument("value", StringArgumentType.greedyString())
+                        .suggests((ctx, builder) -> suggestSelection(ctx, builder, export, part, op))
+                        .executes(ctx -> editSelection(ctx, export, part, op, StringArgumentType.getString(ctx, "value")))));
+            }
+            select.then(node);
+        }
+        return select;
+    }
+
+    private static int showSelection(CommandContext<CommandSourceStack> ctx, boolean export) {
+        String admin = importKey(ctx.getSource());
+        var server = ctx.getSource().getServer();
+        com.arcadia.customperm.admin.TransferSelection selection = export ? ExportAdmin.selection(admin) : ImportAdmin.selection(admin);
+        com.arcadia.customperm.admin.TransferSelection.Candidates candidates = export
+            ? ExportAdmin.candidates(admin, server) : ImportAdmin.candidates(admin);
+        String line = selection.describe(candidates.groups().size(), candidates.players().size(), candidates.tracks().size());
+        ctx.getSource().sendSuccess(() -> Component.literal(line), false);
+        if (selection.groups() != null) {
+            ctx.getSource().sendSuccess(() -> Component.literal("  " + (export ? "grades" : "groups") + ": "
+                + String.join(", ", new TreeSet<>(selection.groups()))), false);
+        }
+        if (selection.tracks() != null) {
+            ctx.getSource().sendSuccess(() -> Component.literal("  tracks: " + String.join(", ", new TreeSet<>(selection.tracks()))), false);
+        }
+        if (selection.players() != null) {
+            ctx.getSource().sendSuccess(() -> Component.literal("  players: " + String.join(", ", selection.players().stream()
+                .map(uuid -> candidates.players().getOrDefault(uuid, uuid)).sorted().toList())), false);
+        }
+        return 1;
+    }
+
+    private static int editSelection(CommandContext<CommandSourceStack> ctx, boolean export, String what, String op,
+                                     String value) {
+        String admin = importKey(ctx.getSource());
+        return report(ctx, export ? ExportAdmin.select(admin, ctx.getSource().getServer(), what, op, value)
+            : ImportAdmin.select(admin, what, op, value));
+    }
+
+    /** {@code all} and {@code none} for set, then the names read, for the word being typed. */
+    private static java.util.concurrent.CompletableFuture<com.mojang.brigadier.suggestion.Suggestions> suggestSelection(
+            CommandContext<CommandSourceStack> ctx, com.mojang.brigadier.suggestion.SuggestionsBuilder builder,
+            boolean export, String part, String op) {
+        String admin = importKey(ctx.getSource());
+        List<String> options = new ArrayList<>();
+        String typed = builder.getRemaining();
+        int cut = Math.max(typed.lastIndexOf(' '), typed.lastIndexOf(',')) + 1;
+        if (op.equals("set") && cut == 0) options.addAll(List.of("all", "none"));
+        if (part.equals("kinds")) {
+            for (var kind : com.arcadia.customperm.admin.TransferSelection.Kind.values()) {
+                if (!(export && kind == com.arcadia.customperm.admin.TransferSelection.Kind.COMMANDS)) options.add(kind.word());
+            }
+        } else {
+            var candidates = export ? ExportAdmin.candidates(admin, ctx.getSource().getServer()) : ImportAdmin.candidates(admin);
+            switch (part) {
+                case "groups" -> options.addAll(candidates.groups());
+                case "tracks" -> options.addAll(candidates.tracks());
+                default -> candidates.players().values().forEach(options::add);
+            }
+        }
+        return SharedSuggestionProvider.suggest(options, builder.createOffset(builder.getStart() + cut));
     }
 
     /** One preview per admin; the console is one of them. */
@@ -1907,8 +1986,9 @@ public class CustomPermCommand {
             .whenComplete((existing, error) -> server.execute(() -> {
                 ExportPlan read = plan.withExisting(existing == null ? java.util.Set.of() : existing);
                 ExportAdmin.remember(admin, read);
-                read.report().forEach(line -> source.sendSuccess(() -> Component.literal(line), false));
-                source.sendSuccess(() -> Component.literal(read.isEmpty()
+                ExportPlan selected = ExportAdmin.previewed(admin);
+                selected.report().forEach(line -> source.sendSuccess(() -> Component.literal(line), false));
+                source.sendSuccess(() -> Component.literal(selected.isEmpty()
                     ? "Nothing to export."
                     : "Nothing was changed. Run /customperm export confirm to add this to LuckPerms, or "
                         + "/customperm export confirm replace to clear the customperm nodes of what it writes first.")
@@ -1931,7 +2011,7 @@ public class CustomPermCommand {
         AdminResult lockout = ExportAdmin.lockout(source.getEntity() instanceof ServerPlayer p ? p : null, plan, replace);
         if (lockout != null) return report(ctx, lockout);
         String input = "/" + ctx.getInput();
-        AdminResult started = ExportAdmin.start(source.getServer(), plan, replace,
+        AdminResult started = ExportAdmin.start(source.getServer(), plan, replace, ExportAdmin.selection(admin).kinds(),
             () -> {
                 ExportAdmin.Progress progress = ExportAdmin.progress();
                 source.sendSuccess(() -> Component.literal("Export: " + progress.done() + " of " + progress.total()

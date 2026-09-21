@@ -85,14 +85,25 @@ public final class LuckPermsExport {
      * @param progress told the number of holders written after each one, on the worker thread
      */
     public static CompletableFuture<ExportPlan.Outcome> write(ExportPlan plan, boolean replace, IntConsumer progress) {
+        return write(plan, replace, com.arcadia.customperm.admin.TransferSelection.ALL.kinds(), progress);
+    }
+
+    /**
+     * {@link #write(ExportPlan, boolean, IntConsumer)} for a selection of kinds: replacing clears, on each holder,
+     * only the kinds selected, its entries limited to a context only when those are selected too.
+     */
+    public static CompletableFuture<ExportPlan.Outcome> write(ExportPlan plan, boolean replace,
+                                                              Set<com.arcadia.customperm.admin.TransferSelection.Kind> kinds,
+                                                              IntConsumer progress) {
         CompletableFuture<ExportPlan.Outcome> outcome = new CompletableFuture<>();
-        Thread worker = new Thread(() -> outcome.complete(run(plan, replace, progress)), "CustomPerm LuckPerms export");
+        Thread worker = new Thread(() -> outcome.complete(run(plan, replace, kinds, progress)), "CustomPerm LuckPerms export");
         worker.setDaemon(true);
         worker.start();
         return outcome;
     }
 
-    private static ExportPlan.Outcome run(ExportPlan plan, boolean replace, IntConsumer progress) {
+    private static ExportPlan.Outcome run(ExportPlan plan, boolean replace,
+                                          Set<com.arcadia.customperm.admin.TransferSelection.Kind> kinds, IntConsumer progress) {
         int groups = 0;
         int players = 0;
         int[] kept = {0};
@@ -103,7 +114,7 @@ public final class LuckPermsExport {
                 holder = "group " + source.name();
                 Group group = await(api.getGroupManager().loadGroup(source.name())).orElse(null);
                 if (group == null) group = await(api.getGroupManager().createAndLoadGroup(source.name()));
-                if (replace) clearDecided(group, true);
+                if (replace) clearDecided(group, true, kinds);
                 if (replace || group.getWeight().isEmpty()) {
                     // Adding to a group that has a weight keeps it, as the import keeps a grade's: the number
                     // set there is a decision. A weight of 0 is what no weight means, so none is written.
@@ -140,7 +151,7 @@ public final class LuckPermsExport {
             for (ExportPlan.Player source : plan.players()) {
                 holder = "player " + source.uuid();
                 User user = await(api.getUserManager().loadUser(UUID.fromString(source.uuid())));
-                if (replace) clearDecided(user, false);
+                if (replace) clearDecided(user, false, kinds);
                 for (String grade : source.grades()) {
                     add(user, timed(InheritanceNode.builder(grade), source.expiries().get("grade:" + grade)), kept);
                 }
@@ -318,14 +329,20 @@ public final class LuckPermsExport {
         if (!displayName.isEmpty()) group.data().add(DisplayNameNode.builder(displayName).build());
     }
 
-    private static void clearDecided(PermissionHolder holder, boolean group) {
+    private static void clearDecided(PermissionHolder holder, boolean group,
+                                     Set<com.arcadia.customperm.admin.TransferSelection.Kind> kinds) {
+        boolean nodes = kinds.contains(com.arcadia.customperm.admin.TransferSelection.Kind.NODES);
+        boolean parents = kinds.contains(com.arcadia.customperm.admin.TransferSelection.Kind.PARENTS);
+        boolean contexts = kinds.contains(com.arcadia.customperm.admin.TransferSelection.Kind.CONTEXTUAL);
         List<Node> doomed = holder.getNodes().stream()
                 .filter(LuckPermsExport::decidedHere)
+                // What is not selected stays as LuckPerms has it: a partial export never takes away what it does not bring.
+                .filter(node -> contexts || node.getContexts().isEmpty())
                 .filter(node -> {
                     if (node instanceof InheritanceNode inheritance) {
-                        return group || !inheritance.getGroupName().equals(ExportPlan.LP_DEFAULT);
+                        return parents && (group || !inheritance.getGroupName().equals(ExportPlan.LP_DEFAULT));
                     }
-                    return NodeType.PERMISSION.matches(node)
+                    return nodes && NodeType.PERMISSION.matches(node)
                             && (node.getKey().equals("*") || node.getKey().startsWith("customperm."));
                 })
                 .toList();

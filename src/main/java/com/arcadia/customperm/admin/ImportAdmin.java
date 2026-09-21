@@ -19,6 +19,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.Map;
 
 /**
@@ -59,8 +60,14 @@ public final class ImportAdmin {
         return preview != null && preview.exposeCommands();
     }
 
-    /** What this admin previewed, or {@code null} when they previewed nothing or did it too long ago. */
+    /** What this admin previewed as their selection keeps it, or {@code null} when nothing or too long ago. */
     public static ImportPlan previewed(String admin) {
+        ImportPlan full = full(admin);
+        return full == null ? null : selection(admin).filter(full, grades().grades.keySet());
+    }
+
+    /** Everything this admin's read found, before their selection; {@code null} when nothing or too long ago. */
+    public static ImportPlan full(String admin) {
         Preview preview = PREVIEWS.get(admin);
         if (preview == null) return null;
         if (Duration.between(preview.read(), Instant.now()).compareTo(PREVIEW_KEEPS) > 0) {
@@ -68,6 +75,48 @@ public final class ImportAdmin {
             return null;
         }
         return preview.plan();
+    }
+
+    private static final Map<String, TransferSelection> SELECTIONS = new HashMap<>();
+
+    /**
+     * The selection this admin works with, kept across reads so a plan read again keeps what they chose; every
+     * group, player and kind until they choose.
+     */
+    public static TransferSelection selection(String admin) {
+        return SELECTIONS.getOrDefault(admin, TransferSelection.ALL);
+    }
+
+    /** What the selection chooses among: the groups, players and tracks this admin's read found. */
+    public static TransferSelection.Candidates candidates(String admin) {
+        ImportPlan full = full(admin);
+        if (full == null) return new TransferSelection.Candidates(List.of(), Map.of(), List.of());
+        Map<String, String> players = new java.util.LinkedHashMap<>();
+        full.players().forEach(player -> players.put(player.uuid(), player.name()));
+        return new TransferSelection.Candidates(full.grades().stream().map(ImportPlan.Grade::name).toList(), players,
+                List.copyOf(full.tracks().keySet()));
+    }
+
+    /**
+     * Changes this admin's selection ({@link TransferSelection#edit}); {@code reset} as {@code what} takes it back to
+     * everything. The answer is the report line the selection now gives.
+     */
+    public static AdminResult select(String admin, String what, String op, String value) {
+        if (what.trim().equalsIgnoreCase("reset")) {
+            SELECTIONS.remove(admin);
+            return AdminResult.ok("Selection reset: every group, player, track and kind.");
+        }
+        ImportPlan full = full(admin);
+        boolean kinds = what.trim().equalsIgnoreCase("kinds");
+        if (full == null && !kinds) {
+            return AdminResult.fail("Read LuckPerms first (/customperm import preview): groups, players and tracks are "
+                    + "chosen among what it holds.");
+        }
+        TransferSelection.Edit edit = selection(admin).edit(what, op, value, candidates(admin));
+        if (edit.problem() != null) return AdminResult.fail(edit.problem());
+        SELECTIONS.put(admin, edit.next());
+        return AdminResult.ok(full == null ? edit.next().describe(0, 0, 0)
+                : edit.next().describe(full.grades().size(), full.players().size(), full.tracks().size()));
     }
 
     /** Forgets a preview once it has been applied: confirming twice would import the same thing twice. */
@@ -81,6 +130,32 @@ public final class ImportAdmin {
                 : AdminResult.fail("Nothing to import: LuckPerms is not running on this server.");
     }
 
+    /** Empties the selected kinds of one context's entries; {@code parents} covers what the holder refuses there. */
+    private static void clearScope(GradesConfig.Scoped scope, boolean nodes, boolean parents, boolean chat, boolean meta) {
+        if (nodes) {
+            scope.permissions.clear();
+            scope.deniedPermissions.clear();
+            scope.permissionExpiries.clear();
+            scope.deniedPermissionExpiries.clear();
+        }
+        if (parents) {
+            scope.refused.clear();
+            scope.refusedExpiries.clear();
+            if (scope instanceof GradesConfig.GradeScoped grade) {
+                grade.parents.clear();
+                grade.parentExpiries.clear();
+            }
+        }
+        if (chat) {
+            scope.prefixes.clear();
+            scope.suffixes.clear();
+        }
+        if (meta) {
+            scope.meta.clear();
+            scope.metaExpiries.clear();
+        }
+    }
+
     private static GradesConfig grades() {
         return CustomPerm.configManager.getGrades();
     }
@@ -91,6 +166,21 @@ public final class ImportAdmin {
      * @param replace true to overwrite a grade that already exists, false to add to it and say so
      */
     public static AdminResult apply(MinecraftServer server, ImportPlan plan, boolean replace) {
+        return apply(server, plan, replace, TransferSelection.ALL.kinds());
+    }
+
+    /**
+     * {@link #apply(MinecraftServer, ImportPlan, boolean)} for a selection of kinds: replacing empties, on each
+     * holder written, only the kinds selected, its entries limited to a context only when those are selected
+     * too. What is not selected stays as it was, so a partial import never takes away what it did not bring.
+     */
+    public static AdminResult apply(MinecraftServer server, ImportPlan plan, boolean replace,
+                                    java.util.Set<TransferSelection.Kind> kinds) {
+        boolean nodes = kinds.contains(TransferSelection.Kind.NODES);
+        boolean parents = kinds.contains(TransferSelection.Kind.PARENTS);
+        boolean clearChat = kinds.contains(TransferSelection.Kind.CHAT);
+        boolean clearMeta = kinds.contains(TransferSelection.Kind.META);
+        boolean contexts = kinds.contains(TransferSelection.Kind.CONTEXTUAL);
         if (plan == null || plan.isEmpty()) {
             return AdminResult.fail("Nothing to import: preview it first, and check the report.");
         }
@@ -112,21 +202,29 @@ public final class ImportAdmin {
                 target.displayName = shown(source);
                 grades().grades.put(source.name(), target);
             } else if (replace) {
-                target.permissions.clear();
-                target.deniedPermissions.clear();
-                target.permissionExpiries.clear();
-                target.deniedPermissionExpiries.clear();
-                target.contexts.clear();
-                target.parents.clear();
-                target.deniedParents.clear();
-                target.parentExpiries.clear();
-                target.deniedParentExpiries.clear();
+                if (nodes) {
+                    target.permissions.clear();
+                    target.deniedPermissions.clear();
+                    target.permissionExpiries.clear();
+                    target.deniedPermissionExpiries.clear();
+                }
+                if (parents) {
+                    target.parents.clear();
+                    target.deniedParents.clear();
+                    target.parentExpiries.clear();
+                    target.deniedParentExpiries.clear();
+                }
+                if (contexts) target.contexts.values().forEach(scope -> clearScope(scope, nodes, parents, clearChat, clearMeta));
                 target.weight = source.weight();
                 target.displayName = shown(source);
-                target.prefixes.clear();
-                target.suffixes.clear();
-                target.meta.clear();
-                target.metaExpiries.clear();
+                if (clearChat) {
+                    target.prefixes.clear();
+                    target.suffixes.clear();
+                }
+                if (clearMeta) {
+                    target.meta.clear();
+                    target.metaExpiries.clear();
+                }
             } else {
                 // A grade that already exists keeps its weight: the number an admin set by hand here is
                 // a decision, and silently taking the one from LuckPerms would undo it. A display name the
@@ -155,19 +253,36 @@ public final class ImportAdmin {
         int playersWritten = 0;
         for (ImportPlan.Player source : plan.players()) {
             if (replace) {
-                grades().userGrades.remove(source.uuid());
-                grades().userDeniedGrades.remove(source.uuid());
-                grades().userPermissions.remove(source.uuid());
-                grades().userDeniedPermissions.remove(source.uuid());
-                grades().userPrefixEntries.remove(source.uuid());
-                grades().userSuffixEntries.remove(source.uuid());
-                grades().userGradeExpiries.remove(source.uuid());
-                grades().userDeniedGradeExpiries.remove(source.uuid());
-                grades().userPermissionExpiries.remove(source.uuid());
-                grades().userDeniedPermissionExpiries.remove(source.uuid());
-                grades().userContexts.remove(source.uuid());
-                grades().userMeta.remove(source.uuid());
-                grades().userMetaExpiries.remove(source.uuid());
+                if (parents) {
+                    grades().userGrades.remove(source.uuid());
+                    grades().userDeniedGrades.remove(source.uuid());
+                    grades().userGradeExpiries.remove(source.uuid());
+                    grades().userDeniedGradeExpiries.remove(source.uuid());
+                }
+                if (nodes) {
+                    grades().userPermissions.remove(source.uuid());
+                    grades().userDeniedPermissions.remove(source.uuid());
+                    grades().userPermissionExpiries.remove(source.uuid());
+                    grades().userDeniedPermissionExpiries.remove(source.uuid());
+                }
+                if (clearChat) {
+                    grades().userPrefixEntries.remove(source.uuid());
+                    grades().userSuffixEntries.remove(source.uuid());
+                }
+                if (clearMeta) {
+                    grades().userMeta.remove(source.uuid());
+                    grades().userMetaExpiries.remove(source.uuid());
+                }
+                var scopes = grades().userContexts.get(source.uuid());
+                if (contexts && scopes != null) {
+                    scopes.values().forEach(scope -> {
+                        clearScope(scope, nodes, parents, clearChat, clearMeta);
+                        if (parents) {
+                            scope.grades.clear();
+                            scope.gradeExpiries.clear();
+                        }
+                    });
+                }
             }
             String uuid = source.uuid();
             List<String> held = grades().userGrades.computeIfAbsent(uuid, k -> new ArrayList<>());

@@ -290,6 +290,71 @@ public class LuckPermsImportGameTest {
         helper.succeed();
     }
 
+    /**
+     * The import carries what the admin chose on the page: one group of two, no player, no prefix. The report says
+     * so before anything is written, and the commands exposed are those of the group carried only.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 400, batch = "customperm_lp_import_select")
+    public static void theImportCarriesOnlyWhatIsSelected(GameTestHelper helper) {
+        if (!Modes.luckPermsOnly(helper)) return;
+        GradesConfig grades = CustomPerm.configManager.getGrades();
+        CommandsConfig commands = CustomPerm.configManager.getCommands();
+        Set<String> gradesBefore = new HashSet<>(grades.grades.keySet());
+        Set<String> commandsBefore = new HashSet<>(commands.grantedCommands);
+        String chosen = "cp_m_sela";
+        String other = "cp_m_selb";
+        String ownerKey = null;
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_m_selector", 4)) {
+            ownerKey = owner.uuid().toString();
+            apply(LpEditOp.GROUP_CREATE, chosen);
+            apply(LpEditOp.GROUP_PERM_ADD, chosen, "minecraft.command.weather", "true", "", "0");
+            apply(LpEditOp.GROUP_PREFIX_SET, chosen, "10", "[A]", "");
+            apply(LpEditOp.GROUP_CREATE, other);
+            apply(LpEditOp.GROUP_PERM_ADD, other, "minecraft.command.difficulty", "true", "", "0");
+
+            owner.clearReceived();
+            importAct(owner, GuiAction.IMPORT_PREVIEW, "true");
+            awaitReport(helper.getLevel().getServer(), owner);
+
+            owner.clearReceived();
+            importAct(owner, GuiAction.IMPORT_SELECT, "groups", "set", chosen);
+            expectResult(owner, "OK: Selection: 1 of");
+            owner.clearReceived();
+            importAct(owner, GuiAction.IMPORT_SELECT, "players", "set", "none");
+            importAct(owner, GuiAction.IMPORT_SELECT, "kinds", "remove", "chat");
+            ImportData page = report(owner);
+            String described = page == null ? null
+                    : page.report().stream().filter(line -> line.startsWith("Selection: ")).findFirst().orElse(null);
+            if (described == null || !described.startsWith("Selection: 1 of") || !described.contains(", 0 of ")
+                    || described.contains("chat")) {
+                fail("The refreshed report must describe the selection: " + (page == null ? "none" : page.report()));
+            }
+            if (!page.choice().groups().stream().filter(ImportData.Item::on).map(ImportData.Item::key).toList().equals(List.of(chosen))) {
+                fail("The page must show which group is carried: " + page.choice().groups());
+            }
+
+            owner.clearReceived();
+            importAct(owner, GuiAction.IMPORT_SELECT, "groups", "set", "typo_group");
+            expectResult(owner, "FAIL: Unknown group(s) in what was read: typo_group");
+            owner.clearReceived();
+            importAct(owner, GuiAction.IMPORT_APPLY, "merge");
+            expectResult(owner, "OK: Imported");
+            if (!grades.grades.containsKey(chosen) || grades.grades.containsKey(other)) {
+                fail("Only the selected group may become a grade: " + grades.grades.keySet());
+            }
+            if (!grades.grades.get(chosen).prefixes.isEmpty()) fail("Prefixes were left out: none may arrive.");
+            if (!commands.grantedCommands.contains("weather") || commands.grantedCommands.contains("difficulty")) {
+                fail("Only the commands of the group carried may be exposed: " + commands.grantedCommands);
+            }
+        } finally {
+            if (ownerKey != null) ImportAdmin.select(ownerKey, "reset", "set", "");
+            grades.grades.keySet().retainAll(gradesBefore);
+            commands.grantedCommands.retainAll(commandsBefore);
+            LuckPermsTestSupport.cleanup(List.of(chosen, other), List.of());
+        }
+        helper.succeed();
+    }
+
     /** The import page: reading answers with the report and writes nothing, and only a preview can be applied. */
     @GameTest(template = TEMPLATE, timeoutTicks = 400)
     public static void importPageReadsThenImports(GameTestHelper helper) {

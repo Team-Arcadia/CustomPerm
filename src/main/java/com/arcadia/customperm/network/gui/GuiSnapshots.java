@@ -295,7 +295,34 @@ public final class GuiSnapshots {
                 plan == null ? List.of() : plan.report().stream().limit(ImportData.REPORT_MAX).toList(),
                 new ImportData.Export(export != null,
                         export == null ? List.of() : export.report().stream().limit(ImportData.REPORT_MAX).toList(),
-                        progress.running(), progress.done(), progress.total()));
+                        progress.running(), progress.done(), progress.total(),
+                        choice(com.arcadia.customperm.admin.ExportAdmin.candidates(key, player.getServer()),
+                                com.arcadia.customperm.admin.ExportAdmin.selection(key))),
+                choice(com.arcadia.customperm.admin.ImportAdmin.candidates(key),
+                        com.arcadia.customperm.admin.ImportAdmin.selection(key)));
+    }
+
+    /** The candidates with what the selection takes of them, sorted by the name shown. */
+    private static ImportData.Choice choice(com.arcadia.customperm.admin.TransferSelection.Candidates candidates,
+                                            com.arcadia.customperm.admin.TransferSelection selection) {
+        List<String> kinds = new ArrayList<>();
+        for (var kind : com.arcadia.customperm.admin.TransferSelection.Kind.values()) {
+            if (selection.has(kind)) kinds.add(kind.word());
+        }
+        return new ImportData.Choice(items(candidates.groups(), java.util.Map.of(), selection.groups()),
+                items(List.copyOf(candidates.players().keySet()), candidates.players(), selection.players()),
+                items(candidates.tracks(), java.util.Map.of(), selection.tracks()), kinds);
+    }
+
+    private static List<ImportData.Item> items(List<String> keys, java.util.Map<String, String> labels, Set<String> taken) {
+        return keys.stream().limit(GuiCodecs.SERVER_LIST_MAX)
+                .map(key -> {
+                    String label = labels.get(key);
+                    return new ImportData.Item(key, label == null || label.isEmpty() ? key : label,
+                            taken == null || taken.contains(key));
+                })
+                .sorted(java.util.Comparator.comparing(ImportData.Item::label, String.CASE_INSENSITIVE_ORDER))
+                .toList();
     }
 
     static LogsData logs() {

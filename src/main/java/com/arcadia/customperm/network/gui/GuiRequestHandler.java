@@ -272,6 +272,10 @@ public final class GuiRequestHandler {
             case NAMES_DECORATE -> bool(args.get(0)) == null ? malformed(action)
                     : com.arcadia.customperm.admin.NameAdmin.setEnabled(player.getServer(), bool(args.get(0)));
             case EXPORT_PREVIEW -> exportPreview(player);
+            case IMPORT_SELECT -> importRefusal(player) != null ? importRefusal(player)
+                    : ImportAdmin.select(player.getUUID().toString(), args.get(0), args.get(1), args.get(2));
+            case EXPORT_SELECT -> exportRefusal(player) != null ? exportRefusal(player)
+                    : ExportAdmin.select(player.getUUID().toString(), player.getServer(), args.get(0), args.get(1), args.get(2));
             case EXPORT_APPLY -> exportApply(player, args.get(0));
             case LOG_PLAYERS -> bool(args.get(0)) == null ? malformed(action) : LogAdmin.setPlayerLog(bool(args.get(0)));
             case LOG_MASK -> bool(args.get(0)) == null ? malformed(action) : LogAdmin.setMasking(bool(args.get(0)));
@@ -311,7 +315,8 @@ public final class GuiRequestHandler {
             return AdminResult.fail("Read LuckPerms first. A preview older than 10 minutes is read again "
                     + "rather than trusted.");
         }
-        AdminResult result = guarded(admin, () -> ImportAdmin.apply(admin.getServer(), plan, mode.equals("replace")));
+        AdminResult result = guarded(admin, () -> ImportAdmin.apply(admin.getServer(), plan, mode.equals("replace"),
+                ImportAdmin.selection(key).kinds()));
         if (result.success()) ImportAdmin.forget(key);
         return result;
     }
@@ -359,7 +364,7 @@ public final class GuiRequestHandler {
         boolean replace = mode.equals("replace");
         AdminResult lockout = ExportAdmin.lockout(admin, plan, replace);
         if (lockout != null) return lockout;
-        AdminResult started = ExportAdmin.start(admin.getServer(), plan, replace,
+        AdminResult started = ExportAdmin.start(admin.getServer(), plan, replace, ExportAdmin.selection(key).kinds(),
                 () -> sendPage(admin, GuiPage.IMPORT, false),
                 result -> {
                     ActivityLog.admin(admin.createCommandSourceStack(), LogEntry.SOURCE_INTERFACE,
