@@ -10,6 +10,7 @@ package com.arcadia.customperm.config;
 
 import java.util.LinkedHashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -24,12 +25,33 @@ import java.util.Set;
 public class CommandsConfig {
     public Set<String> grantedCommands = new LinkedHashSet<>();
     public Map<String, Boolean> preserveOriginalRequires = new LinkedHashMap<>();
+    /**
+     * Exposed command -> the cluster members it is exposed on; absent for every member. See {@link ServerScope}.
+     * A member not listed treats the command as not exposed: it keeps its original requirement there.
+     */
+    public Map<String, List<String>> commandServers = new LinkedHashMap<>();
 
     public void normalize() {
         if (grantedCommands == null) grantedCommands = new LinkedHashSet<>();
         if (preserveOriginalRequires == null) preserveOriginalRequires = new LinkedHashMap<>();
+        if (commandServers == null) commandServers = new LinkedHashMap<>();
         grantedCommands.remove(null);
         preserveOriginalRequires.values().removeIf(java.util.Objects::isNull);
+        commandServers.replaceAll((name, servers) -> ServerScope.normalize(servers));
+        commandServers.values().removeIf(java.util.Objects::isNull);
+        // A list on a command that is not exposed would decide nothing and still take a row in a cluster store.
+        commandServers.keySet().retainAll(grantedCommands);
+    }
+
+    /** Whether {@code commandName} is exposed on the server named {@code here} (null outside a cluster). */
+    public boolean exposedHere(String commandName, String here) {
+        return grantedCommands.contains(commandName) && ServerScope.appliesHere(commandServers.get(commandName), here);
+    }
+
+    /** The members {@code commandName} is exposed on; empty for every member. */
+    public List<String> servers(String commandName) {
+        List<String> servers = commandServers.get(commandName);
+        return servers == null ? List.of() : servers;
     }
 
     public boolean shouldPreserveOriginalRequires(String commandName) {
@@ -41,6 +63,7 @@ public class CommandsConfig {
         boolean removed = grantedCommands.remove(commandName);
         if (removed) {
             preserveOriginalRequires.remove(commandName);
+            commandServers.remove(commandName);
         }
         return removed;
     }

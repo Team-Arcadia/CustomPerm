@@ -191,7 +191,8 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
      */
     public static int reassertExposedCommands(MinecraftServer server) {
         if (server == null || !CustomPerm.isDirectCommandExposureEnabled()) return 0;
-        Set<String> exposed = CustomPerm.configManager.getCommands().grantedCommands;
+        var commands = CustomPerm.configManager.getCommands();
+        String here = com.arcadia.customperm.cluster.Cluster.identity();
         CommandNode<CommandSourceStack> root = server.getCommands().getDispatcher().getRoot();
 
         int changed = 0;
@@ -202,7 +203,7 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             // gate must cover the whole subtree — otherwise the root command is reachable but its
             // sub-arguments (e.g. /gamemode <mode>) stay gated by LuckPerms.
             IdentityHashMap<CommandNode<CommandSourceStack>, Boolean> visited = new IdentityHashMap<>();
-            if (exposed.contains(name)) {
+            if (commands.exposedHere(name, here)) {
                 changed += applyGateRecursive(node, name, visited);
             } else {
                 changed += restoreGateRecursive(node, visited);
@@ -266,7 +267,7 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             // A gate left on a node after its command stopped being exposed must not keep granting it.
             // reassertExposedCommands restores the delegate on remove and reload, but access control
             // should not depend on every removal path remembering to do so.
-            if (!CustomPerm.configManager.getCommands().grantedCommands.contains(rootName)) {
+            if (!CustomPerm.configManager.getCommands().exposedHere(rootName, com.arcadia.customperm.cluster.Cluster.identity())) {
                 return delegate == null || delegate.test(source);
             }
             // Additive for a player without any value: the delegate (LuckPerms' own check) still decides.
@@ -318,7 +319,9 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         skipRoots.add("customperm");
         // Gated by customperm.nick itself: exposing it would hand it out without that node.
         if (NickCommand.registered()) skipRoots.add(NickCommand.ROOT);
-        skipRoots.addAll(CustomPerm.configManager.getAliases().aliases.keySet());
+        var aliases = CustomPerm.configManager.getAliases();
+        String here = com.arcadia.customperm.cluster.Cluster.identity();
+        aliases.aliases.keySet().stream().filter(name -> aliases.activeHere(name, here)).forEach(skipRoots::add);
 
         CommandNode<CommandSourceStack> root = dispatcher.getRoot();
         List<CommandNode<CommandSourceStack>> originals = new ArrayList<>(root.getChildren());
@@ -425,7 +428,8 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             if (!CustomPerm.isDirectCommandExposureEnabled()) {
                 return originalAllows.getAsBoolean();
             }
-            boolean exposed = CustomPerm.configManager.getCommands().grantedCommands.contains(rootName);
+            // Exposed here: a command limited to other cluster members keeps its original requirement on this one.
+            boolean exposed = CustomPerm.configManager.getCommands().exposedHere(rootName, com.arcadia.customperm.cluster.Cluster.identity());
             if (!exposed && !CustomPerm.gatesAllCommands()) {
                 return originalAllows.getAsBoolean();
             }
@@ -524,8 +528,8 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         // Piggybacked on command execution (single-threaded server tick) so idle players' history
         // is evicted without a dedicated scheduled task. See RateLimiter#maybeSweep.
         RateLimiter.maybeSweep(System.currentTimeMillis(), CommandTreeRewriter::rateLimitWindowMillis);
-        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(rootName);
-        if (rule == null || !rule.enabled || !(source.getEntity() instanceof ServerPlayer player)) return true;
+        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().activeRule(rootName, com.arcadia.customperm.cluster.Cluster.identity());
+        if (rule == null || !(source.getEntity() instanceof ServerPlayer player)) return true;
         RateLimiter.Result result = RateLimiter.tryAcquire(
             rootName, player.getUUID(), rule.maxExecutions, rule.windowSeconds);
         if (!result.allowed()) {
@@ -541,8 +545,8 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
 
     /** Active window (ms) for {@code commandName}, or {@code <= 0} when no enabled rule exists. */
     static long rateLimitWindowMillis(String commandName) {
-        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(commandName);
-        if (rule == null || !rule.enabled) return -1L;
+        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().activeRule(commandName, com.arcadia.customperm.cluster.Cluster.identity());
+        if (rule == null) return -1L;
         return rule.windowSeconds * 1000L;
     }
 

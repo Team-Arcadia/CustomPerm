@@ -130,7 +130,8 @@ public class AliasManager {
         CommandNode<CommandSourceStack> existing = root.getChild(aliasName);
 
         List<String> steps = CustomPerm.configManager.getAliases().aliases.get(aliasName);
-        if (steps != null && !steps.isEmpty()) {
+        // An alias limited to other cluster members is not registered here, and a command it shadowed comes back.
+        if (CustomPerm.configManager.getAliases().activeHere(aliasName, com.arcadia.customperm.cluster.Cluster.identity())) {
             if (existing != null
                     && !REGISTERED_ALIASES.contains(aliasName)
                     && !SHADOWED_ORIGINALS.containsKey(aliasName)) {
@@ -199,8 +200,8 @@ public class AliasManager {
     private static int run(CommandContext<CommandSourceStack> ctx, String alias, List<String> steps,
                            List<Parameter> parameters) throws CommandSyntaxException {
         CommandSourceStack source = ctx.getSource();
-        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(alias);
-        if (rule != null && rule.enabled && source.getEntity() instanceof ServerPlayer player) {
+        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().activeRule(alias, com.arcadia.customperm.cluster.Cluster.identity());
+        if (rule != null && source.getEntity() instanceof ServerPlayer player) {
             RateLimiter.Result result = RateLimiter.tryAcquire(
                 alias, player.getUUID(), rule.maxExecutions, rule.windowSeconds);
             if (!result.allowed()) {

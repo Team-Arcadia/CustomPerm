@@ -655,6 +655,9 @@ Ce fichier liste les commandes exposées quel que soit le backend. Le node `cust
 }
 ```
 
+`commandServers` est optionnel aussi : en cluster, les membres sur lesquels une commande est exposée (voir le mode
+cluster). Une commande absente de cette table est exposée sur tous les membres.
+
 `preserveOriginalRequires` est optionnel par commande. Une entrée absente vaut `false` pour conserver le comportement historique de CustomPerm. Mettez `true` pour les commandes sensibles, surtout modded, dont le prédicat Brigadier `requires` original doit rester obligatoire en plus de la permission CustomPerm.
 
 ### `settings.json`
@@ -740,6 +743,9 @@ charge sans changement.
   }
 }
 ```
+
+`aliasServers`, optionnel, liste en cluster les membres sur lesquels un alias existe ; un alias absent de cette
+table existe sur tous les membres.
 
 Un argument porte `name` et `type` (`player`, `integer`, `word` ou `text`), et en option `optional`,
 `defaultValue`, `min` et `max` (integer), `choices` (word) et `allowSelectors` (text).
@@ -885,6 +891,41 @@ anglaise) :
   secondes ; rien n'est relu deux fois. Mesuré sur MariaDB : environ 2 requêtes par seconde et moins de 1 Ko/s par
   serveur. Les tables sont `customperm_rows`, `customperm_seq`, `customperm_servers`, `customperm_log` et
   `customperm_uses`, créées dans la base configurée au premier démarrage.
+
+**Commandes, alias et limites de débit par serveur**
+
+Une commande exposée, un alias ou une limite de débit peut être limité à certains membres du cluster. La liste est
+rangée avec l'élément et partagée avec lui : chaque membre tient la même configuration et décide de ce qu'il
+active :
+
+```jsonc
+// commands.json
+"grantedCommands": ["tp", "seed"],
+"commandServers": { "tp": ["hub"] }
+
+// aliases.json
+"aliasServers": { "spawn": ["hub", "survival"] }
+
+// ratelimits.json
+"rules": { "home": { "maxExecutions": 3, "windowSeconds": 3600, "servers": ["survival"] } }
+```
+
+- Un membre présent dans la liste active l'élément. Un membre absent ne l'active pas : la commande n'y est pas
+  exposée et garde sa condition d'origine, l'alias n'y est pas enregistré (une vraie commande du même nom reste),
+  la règle n'y compte rien.
+- Pas de liste, ou une liste vide, veut dire tous les membres : les fichiers écrits avant les listes se comportent
+  comme avant.
+- Un nom qui n'est pas membre aujourd'hui est conservé : un serveur arrêté pour maintenance garde sa configuration.
+- La liste est lue contre le nom du membre, connu au démarrage par `serverName` ou par le `server_id` d'Arcadia Lib,
+  même quand la base est injoignable : une panne ne rend jamais à un membre ce que le cluster lui retire. Hors
+  cluster, les listes ne sont pas lues et tout s'applique.
+- Ce n'est pas le bloc `share`. `share` décide si un membre suit le cluster pour une partie entière ; un membre qui
+  ne partage pas ses alias garde son propre `aliases.json` et ne voit jamais les listes posées par les autres. La
+  liste décide, parmi les membres qui partagent une partie, lesquels en activent un élément.
+- Ce n'est pas non plus la portée d'une limite de débit : la portée dit quels membres comptent les utilisations
+  ensemble, la liste dit où la règle s'applique.
+- Un membre qui tourne encore un CustomPerm plus ancien ignore la liste et garde l'élément actif : mettez à jour
+  tous les membres.
 
 **Contexte `server=`**
 

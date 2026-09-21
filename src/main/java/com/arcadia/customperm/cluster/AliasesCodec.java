@@ -50,6 +50,8 @@ public final class AliasesCodec implements PartCodec<AliasesConfig> {
             row.add(STEPS, CanonicalJson.GSON.toJsonTree(steps));
             List<Parameter> parameters = config.parameters(name);
             if (!parameters.isEmpty()) row.add(PARAMS, CanonicalJson.GSON.toJsonTree(parameters));
+            List<String> servers = config.aliasServers.get(name);
+            if (servers != null && !servers.isEmpty()) row.add(CommandsCodec.SERVERS, CanonicalJson.GSON.toJsonTree(servers));
             rows.put(ALIAS + name, CanonicalJson.GSON.toJson(row));
         });
         return rows;
@@ -59,6 +61,7 @@ public final class AliasesCodec implements PartCodec<AliasesConfig> {
     public void patch(AliasesConfig config, String holder, String body) {
         if (!holder.startsWith(ALIAS)) return;
         String name = holder.substring(ALIAS.length());
+        config.aliasServers.remove(name);
         if (body == null) {
             config.aliases.remove(name);
             config.aliasParameters.remove(name);
@@ -78,6 +81,8 @@ public final class AliasesCodec implements PartCodec<AliasesConfig> {
         }
         if (parameters.isEmpty()) config.aliasParameters.remove(name);
         else config.aliasParameters.put(name, parameters);
+        List<String> servers = row.isJsonObject() ? CommandsCodec.readServers(row.getAsJsonObject()) : null;
+        if (servers != null) config.aliasServers.put(name, servers);
     }
 
     @Override

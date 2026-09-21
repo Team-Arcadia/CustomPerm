@@ -636,6 +636,9 @@ This file lists exposed commands regardless of backend. The `customperm.command.
 }
 ```
 
+`commandServers` is optional too: in a cluster, the members a command is exposed on (see
+[Cluster mode](#cluster-mode-several-servers)). A command absent from it is exposed on every member.
+
 `preserveOriginalRequires` is optional per command. Missing entries default to `false` to preserve the historical CustomPerm behavior. Set it to `true` for sensitive modded commands whose original Brigadier `requires` predicate must remain mandatory in addition to the CustomPerm permission node.
 
 ### `settings.json`
@@ -721,6 +724,9 @@ unchanged.
   }
 }
 ```
+
+`aliasServers`, optional, lists in a cluster the members an alias exists on; an alias absent from it exists on
+every member.
 
 An argument carries `name` and `type` (`player`, `integer`, `word` or `text`), and optionally
 `optional`, `defaultValue`, `min` and `max` (integer), `choices` (word) and `allowSelectors` (text).
@@ -873,6 +879,39 @@ Each part can be shared or kept local, in `settings.json`:
   for rate-limit uses when a rule is shared, and a heartbeat every 10 seconds; nothing is read twice. Measured on
   MariaDB: about 2 queries a second and under 1 KB/s per server. The tables are `customperm_rows`, `customperm_seq`,
   `customperm_servers`, `customperm_log` and `customperm_uses`, created in the configured database at first start.
+
+**Per-server commands, aliases and rate limits**
+
+An exposed command, an alias or a rate limit can be limited to some members of the cluster. The list is stored
+with the element and shared with it, so every member holds the same configuration and each one decides what it
+activates:
+
+```jsonc
+// commands.json
+"grantedCommands": ["tp", "seed"],
+"commandServers": { "tp": ["hub"] }
+
+// aliases.json
+"aliasServers": { "spawn": ["hub", "survival"] }
+
+// ratelimits.json
+"rules": { "home": { "maxExecutions": 3, "windowSeconds": 3600, "servers": ["survival"] } }
+```
+
+- A member on the list activates the element. A member not on it does not: the command is not exposed there and
+  keeps its original requirement, the alias is not registered there (a real command of the same name stays), the
+  rule counts nothing there.
+- No list, or an empty one, means every member: files written before lists existed behave as before.
+- A name that is not a member today is kept, so a server stopped for maintenance keeps its setup.
+- The list is read against the member's own name, known at startup from `serverName` or from Arcadia Lib's
+  `server_id`, even when the database cannot be reached: an outage never brings back on a member what the
+  cluster keeps away from it. Outside a cluster the lists are not read and everything applies.
+- Not the same thing as the `share` block. `share` decides whether a member follows the cluster for a whole part;
+  a member that does not share its aliases keeps its own `aliases.json` and never sees the lists the others set.
+  The list decides, among members that share a part, which ones activate one element of it.
+- Not the same thing as a rate limit's scope either: the scope says which members count uses together, the list
+  says where the rule applies at all.
+- A member still running an older CustomPerm ignores the list and keeps the element active; update every member.
 
 **`server=` context**
 

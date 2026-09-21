@@ -31,7 +31,7 @@ public class RateLimitsConfig {
     public static final String SCOPE_SERVER = "server";
     /** Every server of the cluster counts against one budget. */
     public static final String SCOPE_NETWORK = "network";
-    private static final java.util.regex.Pattern SERVER_NAME = java.util.regex.Pattern.compile("[0-9a-z_.\\-]{1,64}");
+    private static final java.util.regex.Pattern SERVER_NAME = ServerScope.NAME;
 
     public static class Rule {
         public boolean enabled = true;
@@ -43,6 +43,11 @@ public class RateLimitsConfig {
          * with a comma ({@code hub,survival}), which share one budget among themselves while the others count alone.
          */
         public String scope = SCOPE_SERVER;
+        /**
+         * The cluster members this rule is enforced on; null for every member. Not {@link #scope}: the scope says
+         * which members count uses together, this list says where the rule applies at all. See {@link ServerScope}.
+         */
+        public java.util.List<String> servers;
 
         public void normalize() {
             if (maxExecutions < 1) maxExecutions = 1;
@@ -51,6 +56,13 @@ public class RateLimitsConfig {
             if (!PERSISTENCE_IMMEDIATE.equals(persistence)) persistence = PERSISTENCE_WORLD_SAVE;
             String clean = normalizeScope(scope);
             scope = clean == null ? SCOPE_SERVER : clean;
+            // Null rather than empty, so a rule without a list keeps the cluster row it had before lists existed.
+            servers = ServerScope.normalize(servers);
+        }
+
+        /** Whether this rule applies on the server named {@code here} (null outside a cluster). */
+        public boolean appliesHere(String here) {
+            return ServerScope.appliesHere(servers, here);
         }
 
         /** Whether this server's uses of the rule are counted by other servers too. */
@@ -114,6 +126,12 @@ public class RateLimitsConfig {
 
     public Rule get(String commandName) {
         return rules.get(commandName);
+    }
+
+    /** The rule counting uses of {@code commandName} on the server named {@code here}: enabled and active there. */
+    public Rule activeRule(String commandName, String here) {
+        Rule rule = rules.get(commandName);
+        return rule != null && rule.enabled && rule.appliesHere(here) ? rule : null;
     }
 
     public boolean isEnforced(String commandName) {

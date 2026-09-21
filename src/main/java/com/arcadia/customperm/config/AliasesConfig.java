@@ -35,6 +35,12 @@ public class AliasesConfig {
      */
     public Map<String, List<Parameter>> aliasParameters = new LinkedHashMap<>();
 
+    /**
+     * Alias -> the cluster members it exists on; absent for every member. See {@link ServerScope}. A member not
+     * listed does not register it, so a real command of the same name stays there.
+     */
+    public Map<String, List<String>> aliasServers = new LinkedHashMap<>();
+
     /** Resolved through the command source, so only an online player is accepted. */
     public static final String TYPE_PLAYER = "player";
     /** A whole number, within the declared range when there is one. */
@@ -126,6 +132,23 @@ public class AliasesConfig {
         aliasParameters.keySet().retainAll(aliases.keySet());
         aliasParameters.values().forEach(AliasesConfig::normalizeAll);
         aliasParameters.values().removeIf(List::isEmpty);
+
+        if (aliasServers == null) aliasServers = new LinkedHashMap<>();
+        aliasServers.replaceAll((name, servers) -> ServerScope.normalize(servers));
+        aliasServers.values().removeIf(Objects::isNull);
+        aliasServers.keySet().retainAll(aliases.keySet());
+    }
+
+    /** Whether {@code alias} exists and is active on the server named {@code here} (null outside a cluster). */
+    public boolean activeHere(String alias, String here) {
+        List<String> steps = aliases.get(alias);
+        return steps != null && !steps.isEmpty() && ServerScope.appliesHere(aliasServers.get(alias), here);
+    }
+
+    /** The members {@code alias} exists on; empty for every member. */
+    public List<String> servers(String alias) {
+        List<String> servers = aliasServers.get(alias);
+        return servers == null ? List.of() : servers;
     }
 
     private static void normalizeAll(List<Parameter> parameters) {

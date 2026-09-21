@@ -67,6 +67,19 @@ public final class Cluster {
         }
         report(direct ? "direct connection to " + settings.database.host + ":" + settings.database.port
                 + "/" + settings.database.name : "Arcadia Lib " + version, version);
+        applyServerLists(event.getServer());
+    }
+
+    /**
+     * Applies the {@code servers} lists once this server's name is certain. The tree was built before, at a
+     * moment Arcadia Lib may not have read its {@code server_id} yet; the command gates read the name live,
+     * the aliases are registered, so those are brought in step here.
+     */
+    private static void applyServerLists(MinecraftServer server) {
+        if (identity() == null) return;
+        var config = CustomPerm.configManager;
+        if (config.getAliases().aliasServers.isEmpty() && config.getCommands().commandServers.isEmpty()) return;
+        CustomPerm.treeReloader.onConfigReload(config.getSnapshot(), server);
     }
 
     /** CustomPerm's own connections, closed with the server. */
@@ -177,6 +190,7 @@ public final class Cluster {
         closeDirect();
         state = ClusterGate.State.OFF;
         serverName = null;
+        identity = null;
         decidedWith = null;
     }
 
@@ -184,6 +198,30 @@ public final class Cluster {
     public static boolean running() {
         return service != null;
     }
+
+    /**
+     * The name the {@code servers} lists of commands, aliases and rate limits are read against: this server's
+     * cluster name, lowercased; null when cluster mode is off, which makes every list apply.
+     *
+     * <p>Known before the cluster is joined, from the settings or from Arcadia Lib's {@code server_id}, since the
+     * command tree is built before {@code ServerStartedEvent}, and an unreachable store must not bring back on a
+     * member what the cluster keeps away from it. Read on the command-check path only for an element that has a
+     * list, and cached once known: cluster settings apply at the next start anyway.
+     */
+    public static String identity() {
+        String running = serverName;
+        if (running != null) return running.toLowerCase(java.util.Locale.ROOT);
+        String known = identity;
+        if (known != null) return known;
+        SettingsConfig.Cluster settings = CustomPerm.configManager.getSettings().cluster;
+        if (settings == null || !settings.enabled) return null;
+        String name = settings.direct() ? settings.serverName : arcadiaLibVersion() == null ? null : ArcadiaLibBridge.serverId();
+        if (name == null || name.isBlank()) return null;
+        identity = name.trim().toLowerCase(java.util.Locale.ROOT);
+        return identity;
+    }
+
+    private static volatile String identity;
 
     /** This server and the members it heard, sorted; empty when it is not in step with a cluster. */
     public static java.util.List<String> memberNames() {

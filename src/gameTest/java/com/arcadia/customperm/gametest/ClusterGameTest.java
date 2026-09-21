@@ -29,6 +29,7 @@ import com.arcadia.customperm.config.AliasesConfig;
 import com.arcadia.customperm.config.CommandsConfig;
 import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
+import com.arcadia.customperm.gametest.support.Grants;
 import com.arcadia.customperm.gametest.support.Modes;
 import com.arcadia.customperm.log.ActivityLog;
 import com.arcadia.customperm.log.LogEntry;
@@ -255,6 +256,79 @@ public class ClusterGameTest {
                 fail("A rate limit set here must reach the other server.");
             }
         });
+        helper.succeed();
+    }
+
+    /**
+     * The {@code servers} list of an exposed command, an alias and a rate limit, set on another member, decides
+     * what this member activates: nothing while it names only the other one, everything once it names this one.
+     * The command keeps its original requirement meanwhile, so a node granted for it opens nothing here.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200, batch = "cluster_server_lists")
+    public static void serverListsDecideWhatThisMemberActivates(GameTestHelper helper) throws Exception {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        MemoryStore store = new MemoryStore();
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_cl_lists", 0);
+             Grants ignored = Grants.allow(player, "customperm.command.time", "customperm.alias.cp_cl_scoped")) {
+            inCluster(server, store, () -> {
+                if (!"gametest".equals(Cluster.identity())) fail("The member's name must be what lists are read against.");
+                CommandsConfig otherCommands = new CommandsCodec().empty();
+                PartSync<CommandsConfig> commands = new PartSync<>(new CommandsCodec(), store, "other", host(otherCommands));
+                commands.start();
+                AliasesConfig otherAliases = new AliasesCodec().empty();
+                PartSync<AliasesConfig> aliases = new PartSync<>(new AliasesCodec(), store, "other", host(otherAliases));
+                aliases.start();
+                RateLimitsConfig otherLimits = new RateLimitsCodec().empty();
+                PartSync<RateLimitsConfig> limits = new PartSync<>(new RateLimitsCodec(), store, "other", host(otherLimits));
+                limits.start();
+
+                otherCommands.grantedCommands.add("time");
+                otherCommands.commandServers.put("time", List.of("other"));
+                otherAliases.aliases.put("cp_cl_scoped", new ArrayList<>(List.of("say scoped")));
+                otherAliases.aliasServers.put("cp_cl_scoped", List.of("other"));
+                RateLimitsConfig.Rule rule = new RateLimitsConfig.Rule();
+                rule.maxExecutions = 2;
+                rule.servers = List.of("other");
+                otherLimits.rules.put("time", rule);
+                if (commands.publish() != null || aliases.publish() != null || limits.publish() != null) {
+                    fail("The other member's changes were refused.");
+                }
+                Cluster.pollNow();
+                var config = CustomPerm.configManager;
+                if (!config.getCommands().grantedCommands.contains("time") || !config.getCommands().servers("time").equals(List.of("other"))) {
+                    fail("The command and its list must reach this member as they are: " + config.getCommands().commandServers);
+                }
+                if (player.canUse("time")) fail("A command exposed on another member only must keep its original requirement here.");
+                if (server.getCommands().getDispatcher().getRoot().getChild("cp_cl_scoped") != null) {
+                    fail("An alias limited to another member must not be registered here.");
+                }
+                if (config.getRateLimits().activeRule("time", Cluster.identity()) != null) {
+                    fail("A rate limit limited to another member must not count uses here.");
+                }
+
+                otherCommands.commandServers.put("time", List.of("gametest", "other"));
+                otherAliases.aliasServers.put("cp_cl_scoped", List.of("gametest"));
+                otherLimits.rules.get("time").servers = List.of("gametest");
+                if (commands.publish() != null || aliases.publish() != null || limits.publish() != null) {
+                    fail("The other member's second changes were refused.");
+                }
+                Cluster.pollNow();
+                if (!player.canUse("time")) fail("A command whose list names this member must be exposed here.");
+                if (!player.canUse("cp_cl_scoped")) fail("An alias whose list names this member must be registered here.");
+                if (config.getRateLimits().activeRule("time", Cluster.identity()) == null) {
+                    fail("A rate limit whose list names this member must count uses here.");
+                }
+
+                // An emptied list means every member again.
+                otherAliases.aliasServers.remove("cp_cl_scoped");
+                if (aliases.publish() != null) fail("Emptying the list was refused.");
+                Cluster.pollNow();
+                if (!config.getAliases().servers("cp_cl_scoped").isEmpty() || !player.canUse("cp_cl_scoped")) {
+                    fail("An alias without a list must exist on every member.");
+                }
+            });
+        }
         helper.succeed();
     }
 
