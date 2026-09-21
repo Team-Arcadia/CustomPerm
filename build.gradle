@@ -186,3 +186,69 @@ tasks.named('processResources', ProcessResources).configure {
         expand replaceProperties
     }
 }
+
+// The licence carries no third-party clause, and that only holds while the jar carries no
+// third-party file. Bundling one again means reopening the clause and the corresponding-source duty
+// that comes with it, so the invariant breaks the build rather than waiting for a reviewer's eye.
+tasks.register('verifyPackage') {
+    description = 'Fails when the jar carries a third-party file or its licence metadata drifts.'
+    group = 'verification'
+    def jarFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
+    inputs.file(jarFile)
+    outputs.upToDateWhen { false }
+    doLast {
+        def allowedFiles = [
+            'META-INF/MANIFEST.MF', 'META-INF/neoforge.mods.toml',
+            'META-INF/LICENSE', 'META-INF/NOTICE.md', 'pack.mcmeta'
+        ] as Set
+        def allowedPrefixes = ['com/arcadia/customperm/', 'data/customperm/', 'assets/customperm/']
+        def problems = []
+        def licenseText = null
+        def modsToml = null
+
+        new java.util.zip.ZipFile(jarFile.get().asFile).withCloseable { zip ->
+            zip.entries().each { entry ->
+                def name = entry.name
+                if (name == 'META-INF/LICENSE') licenseText = zip.getInputStream(entry).text
+                if (name == 'META-INF/neoforge.mods.toml') modsToml = zip.getInputStream(entry).text
+                if (entry.directory) return
+                if (name.startsWith('META-INF/jarjar/')) {
+                    problems << "nested third-party jar: ${name}"
+                    return
+                }
+                if (name.startsWith('META-INF/licenses/')) {
+                    problems << "bundled third-party licence text: ${name}"
+                    return
+                }
+                if (allowedFiles.contains(name)) return
+                if (allowedPrefixes.any { name.startsWith(it) }) return
+                problems << "unexpected entry: ${name}"
+            }
+        }
+
+        if (licenseText == null) {
+            problems << 'META-INF/LICENSE is missing from the jar'
+        } else {
+            if (!licenseText.contains('SPDX-License-Identifier: LicenseRef-CustomPerm-ARR')) {
+                problems << 'META-INF/LICENSE does not declare LicenseRef-CustomPerm-ARR'
+            }
+            if (licenseText.contains('12. THIRD-PARTY COMPONENTS')) {
+                problems << 'the licence carries a third-party clause while the jar bundles nothing'
+            }
+        }
+        if (modsToml == null) {
+            problems << 'META-INF/neoforge.mods.toml is missing from the jar'
+        } else if (!modsToml.contains('LicenseRef-CustomPerm-ARR')) {
+            problems << 'the mod metadata does not name LicenseRef-CustomPerm-ARR'
+        }
+
+        if (problems) {
+            throw new GradleException(
+                "The package no longer matches the licence:\n  - " + problems.join('\n  - ') +
+                "\nSee LICENSE and NOTICE.md: bundling a component means reopening the third-party clause.")
+        }
+        logger.lifecycle('verifyPackage: the jar carries nothing third-party and its licence metadata agrees.')
+    }
+}
+
+tasks.named('check') { dependsOn 'verifyPackage' }
