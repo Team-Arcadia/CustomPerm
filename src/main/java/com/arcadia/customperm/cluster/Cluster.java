@@ -57,7 +57,13 @@ public final class Cluster {
         decidedWith = fingerprint(settings);
         serverName = state != ClusterGate.State.READY ? null : direct ? settings.serverName : ArcadiaLibBridge.serverId();
         if (state == ClusterGate.State.READY) {
-            join(event.getServer(), direct ? directStore(settings.database) : new SqlStore(ArcadiaLibBridge::connection));
+            SqlStore store = direct ? directStore(settings.database) : new SqlStore(ArcadiaLibBridge::connection);
+            if (store == null) {
+                state = ClusterGate.State.NO_JDBC_DRIVER;
+                serverName = null;
+            } else {
+                join(event.getServer(), store);
+            }
         }
         report(direct ? "direct connection to " + settings.database.host + ":" + settings.database.port
                 + "/" + settings.database.name : "Arcadia Lib " + version, version);
@@ -66,21 +72,34 @@ public final class Cluster {
     /** CustomPerm's own connections, closed with the server. */
     private static volatile DirectConnections directConnections;
 
+    /** Null when this server carries no driver able to reach the database, which leaves the cluster unjoined. */
     private static SqlStore directStore(com.arcadia.customperm.config.SettingsConfig.Database db) {
+        java.sql.Driver driver = JdbcDrivers.first();
+        if (driver == null) return null;
+        boolean mariaDb;
+        String url;
+        try {
+            mariaDb = JdbcDrivers.mariaDb(driver);
+            url = JdbcDrivers.urlFor(driver, db.host, db.port, db.name);
+        } catch (java.sql.SQLException refused) {
+            return null;
+        }
         java.util.Properties props = new java.util.Properties();
         props.setProperty("user", db.user);
         props.setProperty("password", db.password);
         props.setProperty("connectTimeout", "5000");
         props.setProperty("socketTimeout", "10000");
-        props.setProperty("sslMode", switch (db.tls) {
+        // Each driver rejects the other's TLS vocabulary, so the mode is named in the one it understands.
+        props.setProperty("sslMode", mariaDb ? switch (db.tls) {
             case com.arcadia.customperm.config.SettingsConfig.Database.TLS_TRUST -> "trust";
             case com.arcadia.customperm.config.SettingsConfig.Database.TLS_VERIFY -> "verify-full";
             default -> "disable";
+        } : switch (db.tls) {
+            case com.arcadia.customperm.config.SettingsConfig.Database.TLS_TRUST -> "REQUIRED";
+            case com.arcadia.customperm.config.SettingsConfig.Database.TLS_VERIFY -> "VERIFY_IDENTITY";
+            default -> "DISABLED";
         });
-        // IPv6 hosts are bracketed in a JDBC URL, or the colons read as the port separator.
-        String host = db.host.contains(":") && !db.host.startsWith("[") ? "[" + db.host + "]" : db.host;
-        DirectConnections connections = new DirectConnections(new org.mariadb.jdbc.Driver(),
-                "jdbc:mariadb://" + host + ":" + db.port + "/" + db.name, props);
+        DirectConnections connections = new DirectConnections(driver, url, props);
         directConnections = connections;
         return new SqlStore(connections::get);
     }

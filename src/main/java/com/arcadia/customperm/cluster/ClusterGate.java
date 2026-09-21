@@ -43,6 +43,8 @@ public final class ClusterGate {
         NO_SERVER_NAME,
         /** A direct connection without {@code cluster.database.user}. */
         NO_DATABASE_USER,
+        /** A direct connection on a server carrying no JDBC driver: CustomPerm ships none. */
+        NO_JDBC_DRIVER,
         /** Another running server already uses this server's name in the cluster. */
         DUPLICATE_NAME,
         /** The database answered Arcadia Lib but refused cluster mode's tables or first read. */
@@ -105,6 +107,9 @@ public final class ClusterGate {
                     + "digits, _ . or -, different on each server. This server runs alone.";
             case NO_DATABASE_USER -> "a direct connection needs cluster.database.user (and its password) in "
                     + "settings.json. This server runs alone.";
+            case NO_JDBC_DRIVER -> "a direct connection needs a JDBC driver for MariaDB or MySQL, and this server "
+                    + "carries none: CustomPerm ships no database driver. Install a mod that provides one, such as "
+                    + "Arcadia Lib, or let cluster mode go through Arcadia Lib instead. This server runs alone.";
             case ARCADIA_LIB_TOO_OLD -> "cluster mode needs Arcadia Lib " + MIN_VERSION + " or later, and "
                     + arcadiaLibVersion + " is installed. This server runs alone.";
             case ARCADIA_LIB_INCOMPATIBLE -> "Arcadia Lib " + arcadiaLibVersion + " no longer offers what cluster "

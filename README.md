@@ -68,7 +68,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 - **Permissions of other mods** — nodes other mods declare through NeoForge's permission API are answered from the grades, so `/customperm grade addperm vip somemod.feature` works for them too. CustomPerm becomes NeoForge's permission handler on its own only without LuckPerms, and never replaces a handler an admin chose. Mods that call LuckPerms by name instead are listed by `/customperm modcheck`.
 - **Tracks** — an ordered ladder of grades, so promoting and demoting move a player one rung at a time: `/customperm track promote Steve staff`, or the Tracks tab of the Players page. A track grants nothing itself; it is the convenience a server coming from LuckPerms expects.
 - **Per-world entries** — a node on a grade or a player, or a grade a player holds, can apply in one world only: `/customperm grade adddeny member customperm.command.home world=the_nether`. It outranks the same holder's entry without a world, and the command tree follows the player through portals. The Grades and Players pages take a world too.
-- **Cluster mode** — several servers without LuckPerms share their grades, commands, aliases, rate limits and activity log through one MariaDB or MySQL database, which CustomPerm reaches on its own or through [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) when that mod is installed; a change made on one applies on all within about two seconds. Off by default. See [Cluster mode](#cluster-mode-several-servers).
+- **Cluster mode** — several servers without LuckPerms share their grades, commands, aliases, rate limits and activity log through one MariaDB or MySQL database, which CustomPerm reaches with its own connection or through [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib), either way using a database driver another mod provides; a change made on one applies on all within about two seconds. Off by default. See [Cluster mode](#cluster-mode-several-servers).
 - **Chat prefixes and suffixes** — a grade, or one player, carries prefixes and suffixes around their name in chat and wherever the game shows it, each with a priority and, if wanted, a duration, like LuckPerms: the highest priority shows, or several in a row. With LuckPerms, the prefixes LuckPerms stores are shown instead. The name is decorated, never the message, so chat stays signed and reportable. Off until `/customperm names on`.
 - **Export to LuckPerms** — a server that built its grades here and installs LuckPerms later writes them into LuckPerms as groups, users and nodes, so they keep deciding. Same two steps as the import, nothing translated. `/customperm export preview` then `/customperm export confirm`, or the To LuckPerms tab of the Import page.
 - **Refused grades** — a grade can refuse another wherever it would inherit it, and a player can refuse one wherever a grade of theirs would bring it, the default grade included. A refusal takes the grade out of the resolution; it never turns what that grade allows into a denial. `/customperm grade parent adddeny`, `/customperm user denygrade`, or the Grades page.
@@ -892,8 +892,10 @@ encrypts without checking the certificate, `verify` encrypts and checks it. Arca
 way, without `verify` keep the database on a private network or the same machine: anyone able to read or alter that
 traffic can read or change every permission.
 
-The direct connection uses MariaDB Connector/J, packed unmodified inside the CustomPerm jar under the LGPL; it
-talks to MariaDB and MySQL alike. See [NOTICE.md](NOTICE.md).
+The direct connection needs a JDBC driver for MariaDB or MySQL **already loaded by another mod on the server**:
+CustomPerm ships none, and instantiates by name whichever one it finds. Arcadia Lib brings one, and so does any
+mod that carries a driver. On a server carrying none, cluster mode does not start and says why. See
+[NOTICE.md](NOTICE.md).
 
 ---
 

@@ -67,7 +67,7 @@ Le mod s'intègre nativement à **LuckPerms** s'il est installé, sinon il fourn
 - **Permissions des autres mods** : les nœuds que d'autres mods déclarent via l'API de permissions de NeoForge sont répondus depuis les grades, donc `/customperm grade addperm vip unmod.fonction` fonctionne pour eux aussi. CustomPerm devient de lui-même le handler de permissions de NeoForge seulement sans LuckPerms, et ne remplace jamais un handler choisi par un admin. Les mods qui appellent LuckPerms par son nom à la place sont listés par `/customperm modcheck`.
 - **Tracks** : une échelle ordonnée de grades, pour que promouvoir et rétrograder fassent monter ou descendre un joueur d'un cran : `/customperm track promote Steve staff`, ou l'onglet Tracks de la page Joueurs. Un track n'accorde rien lui-même ; c'est le confort qu'attend un serveur qui vient de LuckPerms.
 - **Entrées par monde** : un nœud sur un grade ou un joueur, ou un grade tenu par un joueur, peut ne valoir que dans un monde : `/customperm grade adddeny member customperm.command.home world=the_nether`. Elle l'emporte sur l'entrée sans monde du même détenteur, et l'arbre de commandes suit le joueur à travers les portails. Les pages Grades et Joueurs acceptent aussi un monde.
-- **Mode cluster** : plusieurs serveurs sans LuckPerms partagent grades, commandes, alias, limites et journal d'activité via une base MariaDB ou MySQL, que CustomPerm atteint lui-même ou via [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) si ce mod est installé ; un changement fait sur l'un s'applique sur tous en deux secondes environ. Désactivé par défaut. Voir [Mode cluster](#mode-cluster-plusieurs-serveurs).
+- **Mode cluster** : plusieurs serveurs sans LuckPerms partagent grades, commandes, alias, limites et journal d'activité via une base MariaDB ou MySQL, que CustomPerm atteint avec sa propre connexion ou via [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib), dans les deux cas avec un pilote de base fourni par un autre mod ; un changement fait sur l'un s'applique sur tous en deux secondes environ. Désactivé par défaut. Voir [Mode cluster](#mode-cluster-plusieurs-serveurs).
 - **Préfixes et suffixes de chat** : un grade, ou un joueur, porte des préfixes et des suffixes autour de son nom dans le chat et partout où le jeu l'affiche, chacun avec une priorité et, si voulu, une durée, comme LuckPerms : la priorité la plus haute s'affiche, ou plusieurs à la suite. Avec LuckPerms, ce sont les préfixes que LuckPerms stocke qui s'affichent. Le nom est décoré, jamais le message, donc le chat reste signé et signalable. Désactivé tant qu'on n'a pas fait `/customperm names on`.
 - **Export vers LuckPerms** : un serveur qui a construit ses grades ici et installe LuckPerms plus tard les écrit dans LuckPerms en groupes, utilisateurs et nœuds, pour qu'ils continuent de décider. Mêmes deux temps que l'import, rien n'est traduit. `/customperm export preview` puis `/customperm export confirm`, ou l'onglet To LuckPerms de la page Import.
 - **Import depuis LuckPerms** : un serveur qui quitte LuckPerms récupère ses groupes, ses joueurs et leurs nœuds au lieu de tout retaper. La lecture ne change rien et répond par un rapport, y compris ce qu'elle laisse derrière et pourquoi ; ce n'est qu'ensuite qu'on applique, après une sauvegarde de tous les fichiers de config. `/customperm import preview` puis `/customperm import confirm`, ou la page Import.
@@ -906,8 +906,10 @@ partagées et les autres serveurs entendus.
 les deux cas, sans `verify`, gardez la base sur un réseau privé ou sur la même machine : quiconque peut lire ou
 modifier ce trafic peut lire ou changer toutes les permissions.
 
-La connexion directe utilise MariaDB Connector/J, embarqué tel quel dans le jar de CustomPerm sous LGPL ; il parle
-aussi bien à MariaDB qu'à MySQL. Voir [NOTICE.md](NOTICE.md).
+La connexion directe a besoin d'un pilote JDBC MariaDB ou MySQL **déjà chargé par un autre mod du serveur** :
+CustomPerm n'en embarque aucun et instancie par son nom celui qu'il trouve. Arcadia Lib en apporte un, comme tout
+mod qui en porte un. Sur un serveur qui n'en a aucun, le mode cluster ne démarre pas et dit pourquoi. Voir
+[NOTICE.md](NOTICE.md).
 
 ---
 

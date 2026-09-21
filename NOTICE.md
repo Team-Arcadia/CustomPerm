@@ -81,42 +81,18 @@ CustomPerm builds against, but does not include or redistribute, the following:
 | [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) | Optional cluster-mode connection (`compileOnly`) | Provided by the end user's installation, under its own license |
 
 These are compile-time or runtime dependencies resolved on the user's side.
+**No third-party code is bundled into the CustomPerm jar.** The mod carries no
+nested jar, no vendored library, and no database driver, which is why its
+license needs no third-party clause and why sections 3 and 4 apply without
+exception.
 
-From the release that introduces cluster mode on, one third-party component is bundled:
-
-| Component | Role | Licensing |
-|-----------|------|-----------|
-| [MariaDB Connector/J](https://github.com/mariadb-corporation/mariadb-connector-j) 3.5.10 | Database driver for cluster mode's direct connection | GNU Lesser General Public License 2.1 or later |
-
-It ships unmodified, as its own jar inside the CustomPerm jar
-(`META-INF/jarjar/mariadb-java-client-3.5.10.jar`), and the license text is
-included at `META-INF/licenses/mariadb-java-client-LGPL-2.1.txt`. CustomPerm's
-own license does not apply to it, and nothing in CustomPerm's license restricts
-the rights the LGPL grants over it.
-
-**Corresponding source.** From that release on, the complete corresponding
-source of that exact version, `mariadb-java-client-3.5.10-sources.jar` as
-published by MariaDB, is offered from the same places the build itself is
-offered: it is attached to the release on CurseForge, on Modrinth, and on the
-GitHub Releases page. Independently of that, and for at least three years from
-the last distribution of a build containing the component, the author will
-supply that same source to anyone who asks through the issue tracker, for no
-more than the cost of performing the distribution. The upstream repository
-linked above carries it as well, as a convenience rather than as the mechanism.
-
-That is stated in the LICENSE itself, at §12, and not only here: §10.3 (entire
-agreement) is made subject to it, and this file is incorporated by reference for
-the purpose of identifying the components and their licenses. Concretely, and
-notwithstanding §3(a), §3(d) and §4, you may modify the component, modify
-CustomPerm as far as relinking it with your modified build requires and run the
-result for your own use, and reverse-engineer what debugging those changes
-needs. Those permissions cover the component and that combination; they grant no
-right to redistribute CustomPerm itself.
-
-One practical note on replacing it. The bundled-jar loader resolves this
-component on the exact version 3.5.10, so a build numbered differently is
-substituted inside the CustomPerm jar rather than installed beside it. That
-substitution is what §12 permits.
+That has one consequence worth stating plainly. Cluster mode's direct
+connection uses a JDBC driver for MariaDB or MySQL that **another mod on the
+server must provide**; CustomPerm instantiates by name whichever one is already
+loaded. On a server carrying none, cluster mode does not start and says so
+rather than failing obscurely. Installing Arcadia Lib, or any mod that brings a
+driver, is what restores it. Nothing about that driver is governed by
+CustomPerm's license, and CustomPerm redistributes no part of it.
 
 ## License history by version
 
@@ -303,44 +279,19 @@ redistribuer :
 | [Arcadia Lib](https://www.curseforge.com/minecraft/mc-mods/arcadia-lib) | Connexion optionnelle du mode cluster (`compileOnly`) | Fourni par l'installation de l'utilisateur final, sous sa propre licence |
 
 Ce sont des dépendances de compilation ou d'exécution résolues côté utilisateur.
+**Aucun code tiers n'est empaqueté dans le jar CustomPerm.** Le mod ne porte
+aucun jar imbriqué, aucune bibliothèque recopiée et aucun pilote de base de
+données, ce qui est la raison pour laquelle sa licence n'a besoin d'aucune
+clause composants tiers et pour laquelle ses sections 3 et 4 s'appliquent sans
+exception.
 
-À partir de la version qui introduit le mode cluster, un composant tiers est
-empaqueté :
-
-| Composant | Rôle | Licence |
-|-----------|------|---------|
-| [MariaDB Connector/J](https://github.com/mariadb-corporation/mariadb-connector-j) 3.5.10 | Pilote de base de données pour la connexion directe du mode cluster | GNU Lesser General Public License 2.1 ou ultérieure |
-
-Il est livré non modifié, comme jar autonome à l'intérieur du jar CustomPerm
-(`META-INF/jarjar/mariadb-java-client-3.5.10.jar`), et le texte de la licence
-est inclus dans `META-INF/licenses/mariadb-java-client-LGPL-2.1.txt`. La licence
-de CustomPerm ne s'applique pas à ce composant, et rien dans la licence de
-CustomPerm ne restreint les droits que la LGPL accorde dessus.
-
-**Source correspondante.** À partir de cette version, la source complète
-correspondante de cette version exacte, `mariadb-java-client-3.5.10-sources.jar`
-telle que publiée par MariaDB, est proposée depuis les mêmes endroits que le
-build lui-même : elle est jointe à la version sur CurseForge, sur Modrinth et
-sur la page GitHub Releases. Indépendamment de cela, et pendant au moins trois
-ans à compter de la dernière distribution d'un build contenant le composant,
-l'auteur fournira cette même source à quiconque la demande via le tracker
-d'issues, pour un coût n'excédant pas celui de la distribution. Le dépôt amont
-lié ci-dessus la porte également, à titre de commodité et non comme mécanisme.
-
-Ce point figure dans la LICENSE elle-même, au §12, et pas seulement ici : le
-§10.3 (intégralité de l'accord) lui est subordonné, et le présent fichier y est
-incorporé par référence pour identifier les composants et leurs licences.
-Concrètement, et nonobstant les §3(a), §3(d) et §4, vous pouvez modifier le
-composant, modifier CustomPerm dans la mesure nécessaire pour le relier à votre
-build modifié et exécuter le résultat pour votre usage propre, et
-décompiler ce que le débogage de ces modifications exige. Ces autorisations
-couvrent le composant et cette combinaison ; elles ne donnent aucun droit de
-redistribuer CustomPerm lui-même.
-
-Une précision pratique sur le remplacement. Le chargeur de jars imbriqués résout
-ce composant sur la version exacte 3.5.10 : un build numéroté autrement se
-substitue donc à l'intérieur du jar CustomPerm, il ne s'installe pas à côté.
-C'est cette substitution que le §12 autorise.
+Cela a une conséquence qu'il faut énoncer clairement. La connexion directe du
+mode cluster utilise un pilote JDBC MariaDB ou MySQL qu'**un autre mod du
+serveur doit fournir** ; CustomPerm instancie par son nom celui qui est déjà
+chargé. Sur un serveur qui n'en porte aucun, le mode cluster ne démarre pas et
+le dit, au lieu d'échouer obscurément. Installer Arcadia Lib, ou n'importe quel
+mod qui apporte un pilote, le rétablit. Rien de ce pilote n'est régi par la
+licence de CustomPerm, et CustomPerm n'en redistribue aucune partie.
 
 ## Historique des licences par version
 

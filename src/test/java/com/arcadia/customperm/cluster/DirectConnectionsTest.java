@@ -80,12 +80,15 @@ class DirectConnectionsTest extends PartSyncContract {
     }
 
     @Test
-    void theMariaDbDriverLoadsAndFailsCleanlyOnAClosedPort() {
+    void theResolvedDriverLoadsAndFailsCleanlyOnAClosedPort() throws Exception {
+        java.sql.Driver driver = JdbcDrivers.first();
+        assertNotNull(driver, "the test classpath carries a driver to resolve");
         Properties props = new Properties();
         props.setProperty("user", "nobody");
         props.setProperty("connectTimeout", "1000");
-        DirectConnections mariadb = new DirectConnections(new org.mariadb.jdbc.Driver(), "jdbc:mariadb://127.0.0.1:1/customperm", props);
-        assertThrows(SQLException.class, mariadb::get);
+        DirectConnections closed = new DirectConnections(driver,
+                JdbcDrivers.urlFor(driver, "127.0.0.1", 1, "customperm"), props);
+        assertThrows(SQLException.class, closed::get);
     }
 
     @Test

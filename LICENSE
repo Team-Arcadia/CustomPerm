@@ -261,7 +261,7 @@ granted in Sections 2.1, 2.2, 3(b), 5.1, and 5.3(b). You must then stop using
 and delete all copies of the Mod in Your possession, and cease any
 distribution then in progress.
 
-Sections 1, 3, 4, 5.2, 5.3(a), and 7 through 12, together with the reservation
+Sections 1, 3, 4, 5.2, 5.3(a), and 7 through 11, together with the reservation
 of rights stated above, survive termination. A Contributor's credit under
 Section 5.3(a) is an acknowledgment of authorship and is not withdrawn by
 termination. Termination is without prejudice to any other remedy available to
@@ -343,11 +343,6 @@ on a distribution platform's project page. Nothing on such a page modifies
 this license. Any modification of these terms in a specific case is valid only
 if made in writing by the Author.
 
-This Section is subject to Section 12. The licenses of the third-party
-components identified in NOTICE.md are not superseded by this license, and
-NOTICE.md is incorporated into it by reference for the sole purpose of
-identifying those components and their licenses.
-
 10.4 GOVERNING LAW AND JURISDICTION
 
 This license is governed by and construed in accordance with French law,
@@ -382,36 +377,5 @@ Only the Author can grant a permission under this license. A statement by a
 Contributor, a maintainer, a moderator, or a member of a Maintaining
 Organization is not a permission, whatever channel it is made on, unless the
 Author has authorized it in writing.
-
-
-12. THIRD-PARTY COMPONENTS
---------------------------------------------------------------------
-
-The Mod's distributed artifact includes third-party components that are not
-the work of the Author. Each is identified in the NOTICE.md file distributed
-with the Mod, together with its own license, and is governed by that license
-and not by this one. The Author claims no right in any of them beyond what
-their own licenses grant.
-
-Notwithstanding Sections 3 and 4, nothing in this license restricts, waives,
-or conditions any right granted to You by the license of such a component.
-Where this license and that license cannot both be satisfied as to that
-component, that license prevails as to that component.
-
-Where a component is licensed under the GNU Lesser General Public License, You
-may, as to that component and notwithstanding Sections 3(a), 3(d), and 4:
-
-  (a) modify that component;
-
-  (b) modify the Mod to the extent necessary to combine or relink it with a
-      modified version of that component, and run the result, for Your own
-      use; and
-
-  (c) decompile or otherwise reverse-engineer that component, and the Mod to
-      the extent necessary, in order to debug those modifications.
-
-These permissions concern the third-party component and the combination
-required to use it. They grant no right to redistribute the Mod or any build
-of it, which remains governed by Sections 2 and 3.
 
 Author: THEFricadelle
