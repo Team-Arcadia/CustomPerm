@@ -305,8 +305,8 @@ public final class AliasesScreen extends AdminScreen {
     }
 
     private static String serversIntro(AliasesData.Alias alias) {
-        return "Where /" + alias.name() + " exists. Elsewhere it is not registered and a command of the same name "
-                + "stays. None picked: every member.";
+        return "Where /" + alias.name() + " is open to its node. Elsewhere only a grade or a player naming that server "
+                + "opens it, and a command of the same name stays. None picked: every member.";
     }
 
     /** Height of the intro above the server toggles, so they start under its last line at any width. */

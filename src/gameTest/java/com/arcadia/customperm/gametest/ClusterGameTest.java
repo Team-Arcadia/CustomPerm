@@ -301,9 +301,7 @@ public class ClusterGameTest {
                     fail("The command and its list must reach this member as they are: " + config.getCommands().commandServers);
                 }
                 if (player.canUse("time")) fail("A command exposed on another member only must keep its original requirement here.");
-                if (server.getCommands().getDispatcher().getRoot().getChild("cp_cl_scoped") != null) {
-                    fail("An alias limited to another member must not be registered here.");
-                }
+                if (player.canUse("cp_cl_scoped")) fail("An alias limited to another member must stay closed here.");
                 if (config.getRateLimits().activeRule("time", Cluster.identity()) != null) {
                     fail("A rate limit limited to another member must not count uses here.");
                 }
@@ -526,6 +524,63 @@ public class ClusterGameTest {
             cluster.serverName = name;
             GradeAdmin.delete(server, grade);
             if (!exposedBefore) com.arcadia.customperm.admin.CommandAdmin.hide(server, "time");
+            config.save();
+        }
+        helper.succeed();
+    }
+
+    /**
+     * An alias follows the command model: its list, then a grade, then a player naming this server. Except where it
+     * would hide a command of this server, which then stays.
+     */
+    @GameTest(template = TEMPLATE, timeoutTicks = 100, batch = "cluster_alias_lists")
+    public static void aliasThenGradeThenPlayerDecideOnAServer(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        MinecraftServer server = helper.getLevel().getServer();
+        var config = CustomPerm.configManager;
+        var cluster = config.getSettings().cluster;
+        boolean enabled = cluster.enabled;
+        String connection = cluster.connection;
+        String name = cluster.serverName;
+        String grade = "cp_cl_aliasgr";
+        String alias = "cp_cl_aliasg";
+        try (TestPlayer player = TestPlayer.join(helper.getLevel(), "cp_cl_aliasp", 0)) {
+            cluster.enabled = true;
+            cluster.connection = "direct";
+            cluster.serverName = "alpha";
+            GradeAdmin.create(grade);
+            GradeAdmin.assign(server, player.player().getGameProfile(), grade);
+            ServerCommands.run(server, "customperm alias add " + alias + " say scoped");
+            ServerCommands.run(server, "customperm grade addperm " + grade + " customperm.alias." + alias);
+            if (!player.canUse(alias)) fail("Setup: an alias without a list is open to its node.");
+
+            ServerCommands.run(server, "customperm alias servers " + alias + " other");
+            if (server.getCommands().getDispatcher().getRoot().getChild(alias) == null) {
+                fail("An alias limited to another member stays in the tree, so a grade can still open it here.");
+            }
+            if (player.canUse(alias)) fail("A node held everywhere must not undo the alias's list.");
+
+            ServerCommands.run(server, "customperm grade addperm " + grade + " customperm.alias." + alias + " server=here");
+            if (!player.canUse(alias)) fail("A grade's entry naming this server must open the alias here.");
+            ServerCommands.run(server, "customperm user adddeny cp_cl_aliasp customperm.alias." + alias + " server=here");
+            if (player.canUse(alias)) fail("The player's own entry naming this server has the last word over their grade.");
+
+            // An alias standing in front of a command of this server leaves it there when its list skips this server.
+            ServerCommands.run(server, "customperm alias add seed say shadow");
+            if (!com.arcadia.customperm.command.AliasManager.registered("seed")) fail("Setup: the alias must shadow /seed.");
+            ServerCommands.run(server, "customperm alias servers seed other");
+            if (com.arcadia.customperm.command.AliasManager.registered("seed")
+                    || server.getCommands().getDispatcher().getRoot().getChild("seed") == null) {
+                fail("Outside its list, an alias must give the command it shadowed back.");
+            }
+        } finally {
+            cluster.enabled = enabled;
+            cluster.connection = connection;
+            cluster.serverName = name;
+            AliasAdmin.remove(server, alias);
+            AliasAdmin.remove(server, "seed");
+            GradeAdmin.delete(server, grade);
+            ServerCommands.run(server, "customperm user removedeny cp_cl_aliasp customperm.alias." + alias + " server=alpha");
             config.save();
         }
         helper.succeed();

@@ -332,9 +332,8 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
         skipRoots.add("customperm");
         // Gated by customperm.nick itself: exposing it would hand it out without that node.
         if (NickCommand.registered()) skipRoots.add(NickCommand.ROOT);
-        var aliases = CustomPerm.configManager.getAliases();
-        String here = com.arcadia.customperm.cluster.Cluster.identity();
-        aliases.aliases.keySet().stream().filter(name -> aliases.activeHere(name, here)).forEach(skipRoots::add);
+        // Every alias holding a node here keeps its own gating, including one opened here only by a server= entry.
+        CustomPerm.configManager.getAliases().aliases.keySet().stream().filter(AliasManager::registered).forEach(skipRoots::add);
 
         CommandNode<CommandSourceStack> root = dispatcher.getRoot();
         List<CommandNode<CommandSourceStack>> originals = new ArrayList<>(root.getChildren());

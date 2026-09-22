@@ -128,8 +128,14 @@ public class AliasManager {
         CommandNode<CommandSourceStack> existing = root.getChild(aliasName);
 
         List<String> steps = CustomPerm.configManager.getAliases().aliases.get(aliasName);
-        // An alias limited to other cluster members is not registered here, and a command it shadowed comes back.
-        if (CustomPerm.configManager.getAliases().activeHere(aliasName, com.arcadia.customperm.cluster.Cluster.identity())) {
+        boolean listed = CustomPerm.configManager.getAliases().activeHere(aliasName, com.arcadia.customperm.cluster.Cluster.identity());
+        // A command of this server the alias would stand in front of: the one it already shadows, or the one there now.
+        boolean shadows = SHADOWED_ORIGINALS.containsKey(aliasName)
+                || existing != null && !REGISTERED_ALIASES.contains(aliasName);
+        // Registered on every member, so a grade or a player can open it where its list leaves this server out (see
+        // usable). Except where it would hide a command of this server that its list does not cover: that command
+        // stays, as it did before lists could be overridden.
+        if (steps != null && !steps.isEmpty() && (listed || !shadows)) {
             if (existing != null
                     && !REGISTERED_ALIASES.contains(aliasName)
                     && !SHADOWED_ORIGINALS.containsKey(aliasName)) {
@@ -149,6 +155,26 @@ public class AliasManager {
         }
     }
 
+    /**
+     * Whether {@code source} may run {@code alias} on this server. Where its list names this server, or it has no
+     * list, its node decides. Where the list leaves this server out, a grade or a player still has the last word
+     * about this server, as for an exposed command: an entry of theirs naming {@code server=<this one>}, allowing or
+     * denying, makes the node decide here for them. A node held everywhere does not, so the list keeps its meaning.
+     */
+    static boolean usable(CommandSourceStack source, String alias, String node) {
+        String here = com.arcadia.customperm.cluster.Cluster.identity();
+        if (!CustomPerm.configManager.getAliases().activeHere(alias, here)
+                && PermissionService.get().checkServerScoped(source, node) == com.arcadia.customperm.perm.Tristate.UNSET) {
+            return false;
+        }
+        return PermissionService.get().hasPermission(source, node);
+    }
+
+    /** Whether {@code alias} holds a node of this server's command tree, listed here or not. */
+    public static boolean registered(String alias) {
+        return REGISTERED_ALIASES.contains(alias);
+    }
+
     private static void registerOne(CommandDispatcher<CommandSourceStack> dispatcher, String alias, List<String> steps) {
         if (steps == null || steps.isEmpty()) return;
         String permNode = "customperm.alias." + alias;
@@ -156,7 +182,7 @@ public class AliasManager {
 
         LiteralArgumentBuilder<CommandSourceStack> root = Commands.literal(alias)
                 // Explicit node first, operators included; op level 2 only when the node is not set.
-                .requires(src -> PermissionService.get().hasPermission(src, permNode));
+                .requires(src -> usable(src, alias, permNode));
 
         // Built from the last argument back, each node executing the alias when everything after it
         // may be left out. Optional arguments are a suffix of the list, so that is the next one.
