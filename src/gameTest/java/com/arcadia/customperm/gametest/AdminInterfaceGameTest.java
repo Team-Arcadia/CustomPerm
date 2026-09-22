@@ -316,6 +316,65 @@ public class AdminInterfaceGameTest {
         helper.succeed();
     }
 
+    /** Area 3: who may use an exposed command where, set from the Commands page for a grade and a player by name. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void commandsPageSetsWhoMayUseACommandWhere(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        String grade = "cp_i_whogr";
+        String node = "customperm.command.time";
+        var server = helper.getLevel().getServer();
+        boolean exposedBefore = CustomPerm.configManager.getCommands().grantedCommands.contains("time");
+        var cluster = CustomPerm.configManager.getSettings().cluster;
+        boolean enabled = cluster.enabled;
+        String connection = cluster.connection;
+        String name = cluster.serverName;
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_who", 4)) {
+            // server= is refused outside a cluster: this member is named, no store joined.
+            cluster.enabled = true;
+            cluster.connection = "direct";
+            cluster.serverName = "alpha";
+            com.arcadia.customperm.admin.CommandAdmin.expose(server, "time");
+            com.arcadia.customperm.admin.GradeAdmin.create(grade);
+            owner.clearReceived();
+            gradeAct(owner, GuiAction.GRADE_NODE_SERVER, grade, node, "*", "allow");
+            gradeAct(owner, GuiAction.GRADE_NODE_SERVER, grade, node, "survival", "deny");
+            userAct(owner, GuiAction.USER_NODE_SERVER, "cp_i_who", node, "hub", "allow");
+            userAct(owner, GuiAction.USER_NODE_SERVER, "cp_nobody_here", node, "hub", "allow");
+            List<String> results = results(owner);
+            if (results.size() != 4 || !results.get(0).equals("OK: " + node + " is now allowed to " + grade + " everywhere.")
+                    || !results.get(1).equals("OK: " + node + " is now denied to " + grade + " on survival.")
+                    || !results.get(2).equals("OK: " + node + " is now allowed to cp_i_who on hub.")
+                    || !results.get(3).startsWith("FAIL: ")) {
+                fail("Everywhere, a server and a player by name, then an unknown player refused: " + results);
+            }
+            if (!CustomPerm.configManager.getGrades().grades.get(grade).permissions.contains(node)) {
+                fail("Everywhere must store the node held without a context.");
+            }
+
+            CommandsData.Row row = commandRow(owner, "time");
+            String uuid = owner.player().getUUID().toString();
+            if (row == null || !row.holders().contains(new CommandsData.Holder(false, grade, grade, "allow", List.of("survival=deny")))
+                    || !row.holders().contains(new CommandsData.Holder(true, uuid, "cp_i_who", "", List.of("hub=allow")))) {
+                fail("The page must list who decides where: " + (row == null ? null : row.holders()));
+            }
+
+            owner.clearReceived();
+            gradeAct(owner, GuiAction.GRADE_NODE_SERVER, grade, node, "*", "inherit");
+            expectResult(owner, "OK: " + node + " is now no longer set for " + grade + " everywhere.");
+            if (CustomPerm.configManager.getGrades().grades.get(grade).permissions.contains(node)) {
+                fail("Removing it everywhere must leave only the server entry.");
+            }
+        } finally {
+            com.arcadia.customperm.admin.GradeAdmin.delete(server, grade);
+            com.arcadia.customperm.gametest.support.ServerCommands.run(server, "customperm user removeperm cp_i_who " + node + " server=hub");
+            cluster.enabled = enabled;
+            cluster.connection = connection;
+            cluster.serverName = name;
+            if (!exposedBefore) com.arcadia.customperm.admin.CommandAdmin.hide(server, "time");
+        }
+        helper.succeed();
+    }
+
     /** Area 5: the levels of a limit through the interface: a grade's and a player's value, listed and removed. */
     @GameTest(template = TEMPLATE, timeoutTicks = 200)
     public static void rateLimitsPageEditsLevels(GameTestHelper helper) {

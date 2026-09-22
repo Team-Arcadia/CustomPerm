@@ -408,10 +408,18 @@ public final class GuiSnapshots {
         for (String name : names) {
             if (rows.size() == GuiCodecs.SERVER_LIST_MAX) break;
             var rule = rules.get(name);
+            // Who decides where: only for an exposed command, and only where the grades file decides.
+            List<CommandsData.Holder> holders = !exposed.contains(name) || CustomPerm.isLuckPermsActive() ? List.of()
+                    : com.arcadia.customperm.admin.NodeServerAdmin.holders(server,
+                                    com.arcadia.customperm.command.CommandTreeRewriter.commandNode(name)).stream()
+                            .limit(CommandsData.HOLDERS_MAX)
+                            .map(h -> new CommandsData.Holder(h.player(), h.id(), h.label(), h.everywhere(),
+                                    h.servers().entrySet().stream().map(e -> e.getKey() + "=" + e.getValue()).toList()))
+                            .toList();
             rows.add(new CommandsData.Row(name, exposed.contains(name),
                     config.getCommands().shouldPreserveOriginalRequires(name), aliases.contains(name),
                     rule != null && rule.enabled, !dispatcher.contains(name),
-                    List.copyOf(config.getCommands().servers(name))));
+                    List.copyOf(config.getCommands().servers(name)), holders));
         }
         return new CommandsData(rows, names.size() > rows.size(), config.getSettings().gateAllCommands);
     }

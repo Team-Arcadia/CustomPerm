@@ -90,7 +90,11 @@ public class GuiPayloadCodecGameTest {
                         new com.arcadia.customperm.network.gui.ClusterView("hub", List.of("hub", "pvp"),
                                 com.arcadia.customperm.network.gui.ClusterView.ALIASES)), new CommandsData(List.of(
                         new CommandsData.Row("gamemode", true, true, false, true, false, List.of("hub", "survival")),
-                        new CommandsData.Row("oldmod", true, false, true, false, true)), true, true)));
+                        new CommandsData.Row("oldmod", true, false, true, false, true),
+                        new CommandsData.Row("tp", true, false, false, false, false, List.of(), List.of(
+                                new CommandsData.Holder(false, "vip", "vip", "allow", List.of("survival=deny")),
+                                new CommandsData.Holder(true, "00000000-0000-0000-0000-000000000001", "Notch", "",
+                                        List.of("hub=allow"))))), true, true)));
         expectRoundTrip(GuiPagePayload.STREAM_CODEC, new GuiPagePayload(false,
                 new GuiContext(BackendKind.INTERNAL, GuiArea.ALIASES.bit(), 0, true), new AliasesData(List.of(
                         new AliasesData.Alias("heal", List.of("effect give ${target} instant_health", "say healed"),

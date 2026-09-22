@@ -206,8 +206,13 @@ public final class GuiRequestHandler {
             case GRADE_NODE_SERVER -> guarded(player, () -> com.arcadia.customperm.admin.NodeServerAdmin.forGrade(
                     player.getServer(), args.get(0), args.get(1), args.get(2), args.get(3)));
             case USER_NODE_SERVER -> guarded(player, () -> {
+                // A UUID, or the name of a player this server knows, as typed on the Commands page.
                 java.util.UUID uuid = uuid(args.get(0));
-                if (uuid == null) return malformed(action);
+                if (uuid == null) {
+                    GradeAdmin.Resolution who = GradeAdmin.resolvePlayer(player.getServer(), args.get(0));
+                    if (who.profile().isEmpty()) return AdminResult.fail(who.problem());
+                    uuid = who.profile().get().getId();
+                }
                 return com.arcadia.customperm.admin.NodeServerAdmin.forPlayer(player.getServer(), uuid,
                         GradeAdmin.displayName(player.getServer(), uuid), args.get(1), args.get(2), args.get(3));
             });
