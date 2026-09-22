@@ -347,7 +347,7 @@ public final class RateLimitAdmin {
     private static void level(List<Level> out, LevelKind kind, String holder, String value, Long expiry, String context,
                               long now) {
         if (value == null || expiry != null && expiry <= now) return;
-        out.add(new Level(kind, holder, value, context, expiry == null ? 0 : Math.max(1, (expiry - now) / 1000)));
+        out.add(new Level(kind, holder, value, context, expiry == null ? 0 : Math.max(1, expiry - now)));
     }
 
     /** Grade or player entries of the meta for {@code /name}: {@code vip 10/1h}, {@code vip 20/1h (server=hub)}. */

@@ -337,7 +337,14 @@ public abstract class AdminScreen extends CpScreen {
 
     /** Height of {@link #buildNodeServerToggles} in {@code width}, its title included. */
     protected final int nodeServerTogglesHeight(int width, java.util.Map<String, String> states) {
-        int lines = flow(width, nodeServerButtons(states, false, (s, n) -> { })).size();
+        return nodeServerTogglesHeight(width, states, null);
+    }
+
+    /** {@link #nodeServerTogglesHeight(int, java.util.Map)} with {@code leading} placed before the servers. */
+    protected final int nodeServerTogglesHeight(int width, java.util.Map<String, String> states, CpButton leading) {
+        List<CpButton> buttons = nodeServerButtons(states, false, (s, n) -> { });
+        if (leading != null) buttons.add(0, leading);
+        int lines = flow(width, buttons).size();
         return NODE_SERVERS_TITLE + lines * Atlas.BUTTON_HEIGHT + (lines - 1) * SERVER_GAP;
     }
 
@@ -348,7 +355,18 @@ public abstract class AdminScreen extends CpScreen {
      */
     protected final void buildNodeServerToggles(Rect area, java.util.Map<String, String> states, boolean editable,
                                                 java.util.function.BiConsumer<String, String> send) {
-        List<List<CpButton>> lines = flow(area.w(), nodeServerButtons(states, editable, send));
+        buildNodeServerToggles(area, states, editable, send, null);
+    }
+
+    /**
+     * {@link #buildNodeServerToggles(Rect, java.util.Map, boolean, java.util.function.BiConsumer)} with {@code leading}
+     * flowed first, such as a toggle for the entry held everywhere.
+     */
+    protected final void buildNodeServerToggles(Rect area, java.util.Map<String, String> states, boolean editable,
+                                                java.util.function.BiConsumer<String, String> send, CpButton leading) {
+        List<CpButton> buttons = nodeServerButtons(states, editable, send);
+        if (leading != null) buttons.add(0, leading);
+        List<List<CpButton>> lines = flow(area.w(), buttons);
         int y = area.y() + NODE_SERVERS_TITLE;
         for (List<CpButton> line : lines) {
             int x = area.x();

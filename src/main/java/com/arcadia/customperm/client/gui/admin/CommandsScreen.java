@@ -79,7 +79,7 @@ public final class CommandsScreen extends AdminScreen {
                 .renderer(this::renderRow)
                 .label(row -> "/" + row.name() + ", " + status(row))
                 .identity(CommandsData.Row::name)
-                .onSelect(row -> rebuild())
+                .onSelect(this::selectRow)
                 .onActivate(this::primaryAction);
         this.holderList = new CpList<CommandsData.Holder>(Component.literal("Who decides"), ROW)
                 .renderer(this::renderHolder)
@@ -91,6 +91,14 @@ public final class CommandsScreen extends AdminScreen {
                 .completes(text -> (whoPlayer ? Completions.players() : Completions.grades()).propose(text))
                 .onSubmit(this::pickHolder);
         refilter();
+    }
+
+    /** A command picked in the list: its holders in the Who view, the one picked before it forgotten. */
+    private void selectRow(CommandsData.Row row) {
+        pendingHolder = null;
+        holderList.clearSelection();
+        refreshHolders();
+        rebuild();
     }
 
     private static String holderKey(CommandsData.Holder holder) {
@@ -237,7 +245,6 @@ public final class CommandsScreen extends AdminScreen {
                     .tooltip(Component.literal(whoView ? "Back to how /" + row.name() + " is authorised."
                             : "The grades and players whose entries decide where /" + row.name() + " may be used."))
                     .at(new Rect(x, inner.y() - 2, Atlas.BUTTON_HEIGHT, Atlas.BUTTON_HEIGHT)));
-            if (showingWho(row)) buildWho(row, inner, actions.y() - GAP);
         }
         if (row.exposed() && showsServers(row.servers())) {
             // A view switch: the explanation and the toggles share the space between the header and the buttons.
@@ -256,6 +263,11 @@ public final class CommandsScreen extends AdminScreen {
                 buildServerToggles(area, row.servers(), ClusterView.COMMANDS, "exposed commands", editable,
                         list -> act(GuiAction.COMMAND_SERVERS, row.name(), list));
             }
+        }
+        if (showingWho(row)) {
+            // The exposure buttons stay in the other view: the holders need the room in a short window.
+            buildWho(row, inner, inner.bottom());
+            return;
         }
 
         CpButton primary = row.exposed()
@@ -297,6 +309,32 @@ public final class CommandsScreen extends AdminScreen {
         boolean editable = canEdit(GuiArea.GRADES);
         int y = whoTop(inner);
         int button = Atlas.BUTTON_HEIGHT;
+        CommandsData.Holder selected = holderList.getSelected();
+        if (selected != null) {
+            // One holder at a time: a back arrow and their name take the place of the list and of the picker, so a
+            // short window keeps room for the servers.
+            addRenderableWidget(CpButton.neutral(Component.literal("Back to the list"), () -> {
+                        holderList.clearSelection();
+                        rebuild();
+                    })
+                    .iconOnly(Icon.BACK).at(new Rect(inner.x(), y, button, button)));
+            String node = "customperm.command." + row.name();
+            String now = selected.everywhere();
+            String next = now.equals("allow") ? "deny" : now.equals("deny") ? "inherit" : "allow";
+            CpButton everywhere = switch (now) {
+                case "allow" -> CpButton.good(Component.literal("everywhere"), () -> sendHolder(selected, node, "*", next)).icon(Icon.CHECK);
+                case "deny" -> CpButton.danger(Component.literal("everywhere"), () -> sendHolder(selected, node, "*", next)).icon(Icon.CROSS);
+                default -> CpButton.neutral(Component.literal("everywhere"), () -> sendHolder(selected, node, "*", next));
+            };
+            everywhere.enabled(editable).tooltip(Component.literal("Their entry for " + node + " held everywhere: "
+                    + (now.isEmpty() ? "not set" : now.equals("allow") ? "allowed" : "denied") + ". Click: "
+                    + (next.equals("inherit") ? "remove it" : next) + ". A server has the last word over it."));
+            java.util.Map<String, String> states = servers(selected);
+            int togglesY = y + button + 4;
+            buildNodeServerToggles(new Rect(inner.x(), togglesY, inner.w(), nodeServerTogglesHeight(inner.w(), states, everywhere)),
+                    states, editable, (server, state) -> sendHolder(selected, node, server, state), everywhere);
+            return;
+        }
         CpButton grade = CpButton.ghost(Component.literal("Grade"), () -> {
             whoPlayer = false;
             rebuild();
@@ -313,8 +351,8 @@ public final class CommandsScreen extends AdminScreen {
             gw = button;
             pw = button;
         }
-        addRenderableWidget(grade.at(inner.x(), y, gw, button));
-        addRenderableWidget(player.at(inner.x() + gw + 2, y, pw, button));
+        addRenderableWidget(grade.tooltip(Component.literal("Pick a grade")).at(inner.x(), y, gw, button));
+        addRenderableWidget(player.tooltip(Component.literal("Pick a player")).at(inner.x() + gw + 2, y, pw, button));
         int fieldX = inner.x() + gw + pw + 6;
         whoName.hint(Component.literal(whoPlayer ? "player" : "grade"));
         addRenderableWidget(whoName.at(new Rect(fieldX, y + (button - Atlas.INPUT_HEIGHT) / 2,
@@ -322,35 +360,13 @@ public final class CommandsScreen extends AdminScreen {
         addRenderableWidget(CpButton.accent(Component.literal("Pick"), this::pickHolder).iconOnly(Icon.PLUS)
                 .tooltip(Component.literal("Show this grade or player, to set where they may use /" + row.name() + "."))
                 .at(new Rect(inner.right() - button, y, button, button)));
+        int listTop = whoListTop(inner);
+        if (bottom - listTop >= ROW * 2) addRenderableWidget(holderList.at(new Rect(inner.x(), listTop, inner.w(), bottom - listTop)));
+    }
 
-        CommandsData.Holder selected = holderList.getSelected();
-        java.util.Map<String, String> states = selected == null ? java.util.Map.of() : servers(selected);
-        int toggles = selected == null ? 0 : button + 4 + nodeServerTogglesHeight(inner.w(), states);
-        int listTop = y + button + 4;
-        int listH = Math.max(0, bottom - toggles - 4 - listTop);
-        if (listH >= ROW * 2) addRenderableWidget(holderList.at(new Rect(inner.x(), listTop, inner.w(), listH)));
-        if (selected == null) return;
-
-        String node = "customperm.command." + row.name();
-        int everyY = listTop + listH + 4;
-        String now = selected.everywhere();
-        String next = now.equals("allow") ? "deny" : now.equals("deny") ? "inherit" : "allow";
-        String label = switch (now) {
-            case "allow" -> "Everywhere: allowed";
-            case "deny" -> "Everywhere: denied";
-            default -> "Everywhere: not set";
-        };
-        CpButton everywhere = switch (now) {
-            case "allow" -> CpButton.good(Component.literal(label), () -> sendHolder(selected, node, "*", next)).icon(Icon.CHECK);
-            case "deny" -> CpButton.danger(Component.literal(label), () -> sendHolder(selected, node, "*", next)).icon(Icon.CROSS);
-            default -> CpButton.neutral(Component.literal(label), () -> sendHolder(selected, node, "*", next));
-        };
-        addRenderableWidget(everywhere.enabled(editable)
-                .tooltip(Component.literal("Their entry for " + node + " held everywhere. Click: "
-                        + (next.equals("inherit") ? "remove it" : next) + ". A server below has the last word over it."))
-                .at(new Rect(inner.x(), everyY, Math.min(inner.w(), everywhere.preferredWidth(font, 6)), button)));
-        buildNodeServerToggles(new Rect(inner.x(), everyY + button + 4, inner.w(), nodeServerTogglesHeight(inner.w(), states)),
-                states, editable, (server, state) -> sendHolder(selected, node, server, state));
+    /** Top of the holders list, or of the selected holder's line, under the Grade / Player row. */
+    private int whoListTop(Rect inner) {
+        return whoTop(inner) + Atlas.BUTTON_HEIGHT + 4;
     }
 
     private static java.util.Map<String, String> servers(CommandsData.Holder holder) {
@@ -500,6 +516,18 @@ public final class CommandsScreen extends AdminScreen {
         }
         if (showingWho(row)) {
             Skin.text(g, font, "COMMAND, THEN GRADE, THEN PLAYER", inner.x(), inner.y() + HEADER, inner.w(), Palette.TEXT_MUTE);
+            CommandsData.Holder holder = holderList.getSelected();
+            if (holder != null && !context.luckPermsActive()) {
+                int top = whoTop(inner);
+                String badge = holder.player() ? "PLAYER" : "GRADE";
+                int x = inner.x() + Atlas.BUTTON_HEIGHT + 4;
+                int bw = Skin.badge(g, font, badge, x, top + Atlas.BUTTON_HEIGHT / 2,
+                        holder.player() ? Palette.WARN : Palette.TEXT_MUTE);
+                Skin.text(g, font, holder.label(), x + bw + 4, top + (Atlas.BUTTON_HEIGHT - 8) / 2,
+                        inner.right() - x - bw - 4, Palette.TEXT);
+                Skin.text(g, font, "EVERYWHERE, THEN EACH SERVER", inner.x(), top + Atlas.BUTTON_HEIGHT + 6, inner.w(),
+                        Palette.TEXT_MUTE);
+            }
             if (context.luckPermsActive()) {
                 paragraph(g, "Under LuckPerms, who may use /" + row.name() + " where is set there: customperm.command."
                         + row.name() + " with a server= context.", text, whoTop(inner), Palette.TEXT_DIM);
