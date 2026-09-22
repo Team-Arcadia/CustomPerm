@@ -217,6 +217,38 @@ public class CustomPermCommand {
             return SharedSuggestionProvider.suggest(options, builder.createOffset(builder.getStart() + cut));
         };
 
+    /** One cluster member: {@code here}, the members heard, and those the rule named by "name" has a limit for. */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_ONE_SERVER =
+        (ctx, builder) -> {
+            java.util.Set<String> options = new java.util.LinkedHashSet<>();
+            if (com.arcadia.customperm.cluster.Cluster.identity() != null) options.add(com.arcadia.customperm.config.ServerScope.HERE);
+            options.addAll(com.arcadia.customperm.cluster.Cluster.memberNames());
+            RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(StringArgumentType.getString(ctx, "name"));
+            if (rule != null && rule.perServer != null) options.addAll(rule.perServer.keySet());
+            return SharedSuggestionProvider.suggest(options, builder);
+        };
+
+    /**
+     * A grade's or a player's limit: first the value ({@code unlimited}, {@code clear}, or examples built on the
+     * rule's numbers), then a duration and a context as for any entry.
+     */
+    private static final SuggestionProvider<CommandSourceStack> SUGGEST_HOLDER_LIMIT =
+        (ctx, builder) -> {
+            String typed = builder.getRemaining();
+            int space = typed.indexOf(' ');
+            if (space >= 0) {
+                return SUGGEST_DURATIONS_AND_WORLDS.getSuggestions(ctx, builder.createOffset(builder.getStart() + space + 1));
+            }
+            List<String> options = new java.util.ArrayList<>(List.of(RateLimitsConfig.UNLIMITED_VALUE, "clear"));
+            RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().get(StringArgumentType.getString(ctx, "name"));
+            if (rule != null) {
+                String window = RateLimitsConfig.window(rule.windowSeconds);
+                options.add(rule.maxExecutions * 2 + "/" + window);
+                options.add(rule.maxExecutions * 5 + "/" + window);
+            }
+            return SharedSuggestionProvider.suggest(options, builder);
+        };
+
     /** Existing tracks. */
     private static final SuggestionProvider<CommandSourceStack> SUGGEST_TRACKS =
         (ctx, builder) -> SharedSuggestionProvider.suggest(com.arcadia.customperm.admin.TrackAdmin.names(), builder);
@@ -940,6 +972,47 @@ public class CustomPermCommand {
                                 .executes(ctx -> report(ctx, ServerListAdmin.set(ctx.getSource().getServer(),
                                     ServerListAdmin.Kind.RATE_LIMIT, StringArgumentType.getString(ctx, "name"),
                                     StringArgumentType.getString(ctx, "servers")))))))
+                    .then(Commands.literal("server").requires(AdminAccess.manage(PermissionNodes.MANAGE_RATELIMITS))
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_RATE_LIMITS)
+                            .then(Commands.argument("server", StringArgumentType.word())
+                                .suggests(SUGGEST_ONE_SERVER)
+                                .then(Commands.literal("clear")
+                                    .executes(ctx -> report(ctx, RateLimitAdmin.clearOnServer(
+                                        StringArgumentType.getString(ctx, "name"), StringArgumentType.getString(ctx, "server")))))
+                                .then(Commands.argument("max", IntegerArgumentType.integer(1))
+                                    .then(Commands.argument("windowSeconds", IntegerArgumentType.integer(1))
+                                        .executes(ctx -> report(ctx, RateLimitAdmin.setOnServer(
+                                            StringArgumentType.getString(ctx, "name"), StringArgumentType.getString(ctx, "server"),
+                                            IntegerArgumentType.getInteger(ctx, "max"),
+                                            IntegerArgumentType.getInteger(ctx, "windowSeconds")))))))))
+                    .then(rateLimitHolder("grade", Commands.argument("grade", StringArgumentType.word()).suggests(SUGGEST_GRADES),
+                        (ctx, value, qualified) -> {
+                            String grade = StringArgumentType.getString(ctx, "grade");
+                            String key = RateLimitsConfig.metaKey(StringArgumentType.getString(ctx, "name"));
+                            return report(ctx, value == null
+                                ? com.arcadia.customperm.admin.MetaAdmin.unsetOnGrade(ctx.getSource().getServer(), grade, key,
+                                    qualified.context())
+                                : com.arcadia.customperm.admin.MetaAdmin.setOnGrade(ctx.getSource().getServer(), grade, key,
+                                    value, qualified.seconds(), qualified.context()));
+                        }))
+                    .then(rateLimitHolder("player", Commands.argument("player", StringArgumentType.word()).suggests(SUGGEST_KNOWN_PLAYERS),
+                        (ctx, value, qualified) -> withPlayerReport(ctx, (uuid, player) -> {
+                            String key = RateLimitsConfig.metaKey(StringArgumentType.getString(ctx, "name"));
+                            return value == null
+                                ? com.arcadia.customperm.admin.MetaAdmin.unsetOnPlayer(ctx.getSource().getServer(), uuid, player, key,
+                                    qualified.context())
+                                : com.arcadia.customperm.admin.MetaAdmin.setOnPlayer(ctx.getSource().getServer(), uuid, player, key,
+                                    value, qualified.seconds(), qualified.context());
+                        })))
+                    .then(Commands.literal("show")
+                        .then(Commands.argument("name", StringArgumentType.word())
+                            .suggests(SUGGEST_RATE_LIMITS)
+                            .executes(ctx -> report(ctx, RateLimitAdmin.describe(ctx.getSource().getServer(),
+                                StringArgumentType.getString(ctx, "name"))))
+                            .then(Commands.argument("player", EntityArgument.player())
+                                .executes(ctx -> report(ctx, RateLimitAdmin.effective(EntityArgument.getPlayer(ctx, "player"),
+                                    StringArgumentType.getString(ctx, "name")))))))
                     .then(Commands.literal("enable").requires(AdminAccess.manage(PermissionNodes.MANAGE_RATELIMITS))
                         .then(Commands.argument("name", StringArgumentType.word())
                             .suggests(SUGGEST_RATE_LIMITS)
@@ -1151,6 +1224,8 @@ public class CustomPermCommand {
                 "/" + name + "  " + rule.maxExecutions + " per " + rule.windowSeconds + "s  [" + status + "]"
                     + "  persistence=" + rule.persistence + "  scope=" + rule.scope
                     + ServerListAdmin.label(ServerListAdmin.Kind.RATE_LIMIT, name)
+                    + (rule.perServer == null ? "" : "  own limit on " + rule.perServer.entrySet().stream()
+                        .map(e -> e.getKey() + " " + e.getValue()).collect(java.util.stream.Collectors.joining(", ")))
             ).withStyle(color), false);
         });
         return 1;
@@ -1433,6 +1508,48 @@ public class CustomPermCommand {
                             .suggests(SUGGEST_WORLDS)
                             .executes(ctx -> unset.run(ctx, StringArgumentType.getString(ctx, "key"),
                                 StringArgumentType.getString(ctx, "context")))))));
+    }
+
+    /** Writes, or with a null value removes, a grade's or a player's limit. */
+    @FunctionalInterface
+    private interface HolderLimit {
+        int run(CommandContext<CommandSourceStack> ctx, String value, Qualified qualified) throws CommandSyntaxException;
+    }
+
+    /**
+     * {@code ratelimit grade|player <name> <holder> <value> [duration] [context]}, stored as the meta
+     * {@code customperm.ratelimit.<name>} of that holder; {@code clear [context]} removes it. The value is
+     * {@code 10/1h}, {@code 10} or {@code unlimited}; one greedy argument, since Brigadier's word stops at the slash.
+     */
+    private static com.mojang.brigadier.builder.LiteralArgumentBuilder<CommandSourceStack> rateLimitHolder(
+            String literal, com.mojang.brigadier.builder.RequiredArgumentBuilder<CommandSourceStack, String> holder,
+            HolderLimit action) {
+        return Commands.literal(literal).requires(AdminAccess.manage(PermissionNodes.MANAGE_RATELIMITS))
+            .then(Commands.argument("name", StringArgumentType.word())
+                .suggests(SUGGEST_RATE_LIMITS)
+                .then(holder
+                    .then(Commands.argument("limit", StringArgumentType.greedyString())
+                        .suggests(SUGGEST_HOLDER_LIMIT)
+                        .executes(ctx -> holderLimit(ctx, action)))));
+    }
+
+    private static int holderLimit(CommandContext<CommandSourceStack> ctx, HolderLimit action) throws CommandSyntaxException {
+        String name = StringArgumentType.getString(ctx, "name");
+        String[] parts = StringArgumentType.getString(ctx, "limit").trim().split("\\s+", 2);
+        String rest = parts.length > 1 ? parts[1] : null;
+        Qualified qualified = Qualified.of(rest, false);
+        if (qualified.problem() != null) return report(ctx, AdminResult.fail(qualified.problem()));
+        if (parts[0].equalsIgnoreCase("clear")) {
+            if (qualified.seconds() > 0) return report(ctx, AdminResult.fail("clear takes a context at most, such as server=hub."));
+            return action.run(ctx, null, qualified);
+        }
+        String problem = RateLimitAdmin.holderValueProblem(name, parts[0]);
+        if (problem != null) return report(ctx, AdminResult.fail(problem));
+        if (CustomPerm.configManager.getRateLimits().get(name) == null) {
+            return report(ctx, AdminResult.fail("No rate limit configured for /" + name
+                + ". Use /customperm ratelimit set first: a grade's or a player's value adjusts a rule."));
+        }
+        return action.run(ctx, RateLimitAdmin.holderValue(parts[0]), qualified);
     }
 
     /** Runs {@code action} for the player named by the "player" argument, or reports why there is none. */

@@ -61,6 +61,14 @@ public interface PermissionService {
     }
 
     /**
+     * The value of meta {@code key} for {@code player} where they stand, or null when nothing they hold sets it.
+     * Nothing by default, like {@link #chatMeta}.
+     */
+    default String meta(ServerPlayer player, String key) {
+        return null;
+    }
+
+    /**
      * Called after each successful hot reload with the new snapshot. No-op by default: the internal
      * backend reads the live config and LuckPerms keeps its own data.
      */

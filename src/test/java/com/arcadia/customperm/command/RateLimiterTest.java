@@ -12,6 +12,8 @@ package com.arcadia.customperm.command;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -225,5 +227,59 @@ class RateLimiterTest {
         RateLimiter.maybeSweep(base + 1_000L, name -> 10_000L);
         assertTrue(RateLimiter.isTracked("observable", player),
                 "two sweeps close together: the second must not run, the cost being amortised");
+    }
+
+    @Test
+    void aLongerWindowInUseKeepsHistoryPastTheRuleWindow() {
+        UUID vip = UUID.randomUUID();
+        long now = System.currentTimeMillis();
+        // The rule says 10 seconds, a grade's own value says an hour.
+        assertTrue(RateLimiter.tryAcquire("observable", vip, 1, 3600, now).allowed());
+
+        RateLimiter.sweep(now + 60_000L, name -> 10_000L);
+        assertTrue(RateLimiter.isTracked("observable", vip), "the hour this use was counted with is not over");
+        assertFalse(RateLimiter.tryAcquire("observable", vip, 1, 3600, now + 60_000L).allowed(),
+                "the sweep must not hand the grade a fresh quota after the rule's window");
+
+        RateLimiter.sweep(now + 3_700_000L, name -> 10_000L);
+        assertFalse(RateLimiter.isTracked("observable", vip), "once the hour is over the history goes");
+    }
+
+    @Test
+    void theWindowsInUseSurviveARestart() {
+        UUID vip = UUID.randomUUID();
+        long now = System.currentTimeMillis();
+        RateLimiter.tryAcquire("observable", vip, 1, 3600, now);
+
+        var history = RateLimiter.snapshot(now + 60_000L, name -> 10_000L);
+        var windows = RateLimiter.windowsSnapshot(now + 60_000L, name -> 10_000L);
+        assertEquals(1, history.get("observable").get(vip).size(), "kept by the hour window, not the rule's 10 seconds");
+        assertEquals(Map.of("observable", Map.of(3_600_000L, now)), windows);
+
+        RateLimiter.clearServerState();
+        RateLimiter.restore(history, windows, now + 120_000L, name -> 10_000L);
+        assertFalse(RateLimiter.tryAcquire("observable", vip, 1, 3600, now + 120_000L).allowed(),
+                "after the restart, the use still counts against the grade's hour");
+    }
+
+    @Test
+    void aLapsedWindowIsForgotten() {
+        long now = System.currentTimeMillis();
+        RateLimiter.tryAcquire("observable", UUID.randomUUID(), 1, 60, now);
+        assertEquals(Map.of(), RateLimiter.windowsSnapshot(now + 61_000L, name -> 10_000L),
+                "a minute window unused for a minute asks nothing any more");
+
+        RateLimiter.tryAcquire("gone", UUID.randomUUID(), 1, 3600, now);
+        assertFalse(RateLimiter.windowsSnapshot(now, name -> name.equals("gone") ? -1L : 10_000L).containsKey("gone"),
+                "a rule that no longer exists keeps no window");
+    }
+
+    @Test
+    void restoringOldHistoryWithoutWindowsUsesTheRuleWindow() {
+        UUID player = UUID.randomUUID();
+        long now = System.currentTimeMillis();
+        RateLimiter.restore(Map.of("observable", Map.of(player, List.of(now - 30_000L))), Map.of(), now,
+                name -> 10_000L);
+        assertFalse(RateLimiter.isTracked("observable", player), "no window saved: the rule's 10 seconds decide");
     }
 }

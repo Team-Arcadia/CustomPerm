@@ -34,6 +34,13 @@ public final class RateLimiter {
 
     private static final Map<String, Map<UUID, Deque<Long>>> HISTORY = new ConcurrentHashMap<>();
 
+    /**
+     * The windows uses were counted with, per command: window in ms to the time of its latest use. A grade or a
+     * player can have a window of their own, longer than the rule's, so history is kept as long as the longest
+     * window still in use asks, not only the rule's. An entry lapses once its window has passed since its last use.
+     */
+    private static final Map<String, Map<Long, Long>> WINDOWS = new ConcurrentHashMap<>();
+
     /** Window, in ms, of every internal budget; these keys are never persisted nor dropped by the sweep. */
     private static final Map<String, Long> INTERNAL_WINDOWS = new ConcurrentHashMap<>();
 
@@ -92,6 +99,7 @@ public final class RateLimiter {
             timestamps.addLast(now);
         }
         if (!INTERNAL_WINDOWS.containsKey(commandName)) {
+            WINDOWS.computeIfAbsent(commandName, k -> new ConcurrentHashMap<>()).put(windowMillis, now);
             dirty = true;
             com.arcadia.customperm.cluster.Cluster.use(commandName, player, now);
         }
@@ -159,9 +167,10 @@ public final class RateLimiter {
         Iterator<Map.Entry<String, Map<UUID, Deque<Long>>>> commands = HISTORY.entrySet().iterator();
         while (commands.hasNext()) {
             Map.Entry<String, Map<UUID, Deque<Long>>> command = commands.next();
-            long windowMillis = windowFor(command.getKey(), resolver);
+            long windowMillis = windowFor(command.getKey(), resolver, now);
             if (windowMillis <= 0L) {
                 commands.remove();
+                WINDOWS.remove(command.getKey());
                 dirty = true;
                 continue;
             }
@@ -182,9 +191,38 @@ public final class RateLimiter {
         }
     }
 
-    private static long windowFor(String key, WindowResolver resolver) {
+    private static long windowFor(String key, WindowResolver resolver, long now) {
         Long internal = INTERNAL_WINDOWS.get(key);
-        return internal != null ? internal : resolver.windowMillisFor(key);
+        return internal != null ? internal : kept(key, resolver.windowMillisFor(key), now);
+    }
+
+    /**
+     * How long history of {@code command} is kept: {@code configured}, or longer when a window still in use asks it.
+     * {@code <= 0} stays as it is, the rule being gone.
+     */
+    private static long kept(String command, long configured, long now) {
+        if (configured <= 0L) return configured;
+        Map<Long, Long> used = WINDOWS.get(command);
+        if (used == null) return configured;
+        long longest = configured;
+        for (Map.Entry<Long, Long> entry : used.entrySet()) {
+            if (entry.getValue() + entry.getKey() > now) longest = Math.max(longest, entry.getKey());
+        }
+        return longest;
+    }
+
+    /** The windows still in use, for persistence: lapsed ones and those of rules now gone left out. */
+    static Map<String, Map<Long, Long>> windowsSnapshot(long now, WindowResolver resolver) {
+        Map<String, Map<Long, Long>> copy = new LinkedHashMap<>();
+        WINDOWS.forEach((command, used) -> {
+            if (resolver.windowMillisFor(command) <= 0L) return;
+            Map<Long, Long> live = new LinkedHashMap<>();
+            used.forEach((window, last) -> {
+                if (last + window > now) live.put(window, Math.min(last, now));
+            });
+            if (!live.isEmpty()) copy.put(command, live);
+        });
+        return copy;
     }
 
     /**
@@ -195,7 +233,7 @@ public final class RateLimiter {
         Map<String, Map<UUID, List<Long>>> copy = new LinkedHashMap<>();
         HISTORY.forEach((command, perPlayer) -> {
             if (INTERNAL_WINDOWS.containsKey(command)) return;
-            long windowMillis = resolver.windowMillisFor(command);
+            long windowMillis = kept(command, resolver.windowMillisFor(command), now);
             if (windowMillis <= 0L) return;
             long cutoff = now - windowMillis;
             Map<UUID, List<Long>> players = new LinkedHashMap<>();
@@ -219,10 +257,24 @@ public final class RateLimiter {
      * once), timestamps from the future are clamped, and rules that no longer exist are ignored.
      */
     static void restore(Map<String, Map<UUID, List<Long>>> persisted, long now, WindowResolver resolver) {
+        restore(persisted, Map.of(), now, resolver);
+    }
+
+    /** {@link #restore(Map, long, WindowResolver)}, with the windows in use when the history was saved. */
+    static void restore(Map<String, Map<UUID, List<Long>>> persisted, Map<String, Map<Long, Long>> windows,
+                        long now, WindowResolver resolver) {
         HISTORY.keySet().removeIf(command -> !INTERNAL_WINDOWS.containsKey(command));
+        WINDOWS.clear();
+        windows.forEach((command, used) -> {
+            Map<Long, Long> live = new ConcurrentHashMap<>();
+            used.forEach((window, last) -> {
+                if (window > 0L && Math.min(last, now) + window > now) live.put(window, Math.min(last, now));
+            });
+            if (!live.isEmpty()) WINDOWS.put(command, live);
+        });
         persisted.forEach((command, players) -> {
             if (INTERNAL_WINDOWS.containsKey(command)) return;
-            long windowMillis = resolver.windowMillisFor(command);
+            long windowMillis = kept(command, resolver.windowMillisFor(command), now);
             if (windowMillis <= 0L) return;
             long cutoff = now - windowMillis;
             Map<UUID, Deque<Long>> perPlayer = new ConcurrentHashMap<>();
@@ -252,6 +304,7 @@ public final class RateLimiter {
     /** Purges all tracked history. Called on server stop, after the history was persisted. */
     public static void clearServerState() {
         HISTORY.clear();
+        WINDOWS.clear();
         lastSweepMillis = 0L;
         dirty = false;
     }

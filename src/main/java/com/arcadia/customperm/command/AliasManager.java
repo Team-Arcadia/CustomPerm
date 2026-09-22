@@ -12,7 +12,6 @@ import com.arcadia.customperm.CustomPerm;
 import com.arcadia.customperm.config.AliasParameters;
 import com.arcadia.customperm.config.AliasesConfig;
 import com.arcadia.customperm.config.AliasesConfig.Parameter;
-import com.arcadia.customperm.config.RateLimitsConfig;
 import com.arcadia.customperm.perm.PermissionService;
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.ArgumentType;
@@ -32,7 +31,6 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.level.ServerPlayer;
 
 import java.lang.reflect.Field;
 import java.util.HashMap;
@@ -200,19 +198,7 @@ public class AliasManager {
     private static int run(CommandContext<CommandSourceStack> ctx, String alias, List<String> steps,
                            List<Parameter> parameters) throws CommandSyntaxException {
         CommandSourceStack source = ctx.getSource();
-        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().activeRule(alias, com.arcadia.customperm.cluster.Cluster.identity());
-        if (rule != null && source.getEntity() instanceof ServerPlayer player) {
-            RateLimiter.Result result = RateLimiter.tryAcquire(
-                alias, player.getUUID(), rule.maxExecutions, rule.windowSeconds);
-            if (!result.allowed()) {
-                source.sendFailure(Component.literal(
-                    "[CustomPerm] Rate limit reached for /" + alias + " — try again in "
-                        + result.retryAfterSeconds() + "s (max " + rule.maxExecutions
-                        + " per " + rule.windowSeconds + "s)."));
-                return 0;
-            }
-            RateLimitPersistence.afterAcceptedUse(rule);
-        }
+        if (!RateLimits.acquire(source, alias)) return 0;
 
         Map<String, String> values = new HashMap<>();
         for (Parameter parameter : parameters) {

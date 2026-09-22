@@ -27,8 +27,10 @@ import java.util.UUID;
 
 /**
  * Reads and writes the persisted rate-limit history, a small JSON file stored in the world save:
- * <pre>{"formatVersion": 1, "history": {"gamemode": {"&lt;uuid&gt;": [1789000000000, ...]}}}</pre>
- * Timestamps are Unix epoch milliseconds. Pure Java, no Minecraft types, so it is unit-tested directly.
+ * <pre>{"formatVersion": 1, "history": {"gamemode": {"&lt;uuid&gt;": [1789000000000, ...]}},
+ *  "windows": {"gamemode": {"3600000": 1789000000000}}}</pre>
+ * Timestamps are Unix epoch milliseconds. {@code windows} holds, per command, each window uses were counted with
+ * and when it was last used, so a grade's longer window survives a restart; a file without it reads as before. Pure Java, no Minecraft types, so it is unit-tested directly.
  */
 public final class RateLimitStore {
 
@@ -72,8 +74,43 @@ public final class RateLimitStore {
         return history;
     }
 
+    /** The windows in use saved with the history, empty when the file has none. */
+    static Map<String, Map<Long, Long>> readWindows(Path file) throws IOException {
+        Map<String, Map<Long, Long>> windows = new LinkedHashMap<>();
+        if (!Files.exists(file)) return windows;
+        JsonObject root;
+        try {
+            root = GSON.fromJson(Files.readString(file), JsonObject.class);
+        } catch (JsonParseException e) {
+            throw new IOException("Unreadable rate-limit history " + file.getFileName() + ": " + e.getMessage(), e);
+        }
+        if (root == null || !root.has("windows") || !root.get("windows").isJsonObject()) return windows;
+        for (Map.Entry<String, JsonElement> command : root.getAsJsonObject("windows").entrySet()) {
+            if (!command.getValue().isJsonObject()) continue;
+            Map<Long, Long> used = new LinkedHashMap<>();
+            for (Map.Entry<String, JsonElement> entry : command.getValue().getAsJsonObject().entrySet()) {
+                try {
+                    long window = Long.parseLong(entry.getKey());
+                    if (window > 0L && entry.getValue().isJsonPrimitive() && entry.getValue().getAsJsonPrimitive().isNumber()) {
+                        used.put(window, entry.getValue().getAsLong());
+                    }
+                } catch (NumberFormatException e) {
+                    // Not a window: skipped like any other entry this file cannot use.
+                }
+            }
+            if (!used.isEmpty()) windows.put(command.getKey(), used);
+        }
+        return windows;
+    }
+
     /** Replaces {@code file} atomically with {@code history}. */
     static void write(Path file, Map<String, Map<UUID, List<Long>>> history) throws IOException {
+        write(file, history, Map.of());
+    }
+
+    /** Replaces {@code file} atomically with {@code history} and the windows in use. */
+    static void write(Path file, Map<String, Map<UUID, List<Long>>> history, Map<String, Map<Long, Long>> windows)
+            throws IOException {
         JsonObject commands = new JsonObject();
         history.forEach((command, players) -> {
             JsonObject byPlayer = new JsonObject();
@@ -87,6 +124,15 @@ public final class RateLimitStore {
         JsonObject root = new JsonObject();
         root.addProperty("formatVersion", FORMAT_VERSION);
         root.add("history", commands);
+        if (!windows.isEmpty()) {
+            JsonObject byCommand = new JsonObject();
+            windows.forEach((command, used) -> {
+                JsonObject entries = new JsonObject();
+                used.forEach((window, last) -> entries.addProperty(Long.toString(window), last));
+                byCommand.add(command, entries);
+            });
+            root.add("windows", byCommand);
+        }
         AtomicFiles.write(file, GSON.toJson(root));
     }
 

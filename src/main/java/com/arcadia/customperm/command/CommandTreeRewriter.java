@@ -20,9 +20,7 @@ import com.mojang.brigadier.tree.CommandNode;
 import com.mojang.brigadier.tree.LiteralCommandNode;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.execution.CustomCommandExecutor;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
@@ -528,42 +526,14 @@ public class CommandTreeRewriter implements ICommandTreeReloader {
             @SuppressWarnings("unchecked")
             CustomCommandExecutor<CommandSourceStack> executor = (CustomCommandExecutor<CommandSourceStack>) custom;
             return (CustomCommandExecutor.CommandAdapter<CommandSourceStack>) (source, chain, modifiers, control) -> {
-                if (!withinRateLimit(rootName, source)) {
+                if (!RateLimits.acquire(source, rootName)) {
                     source.callback().onFailure();
                     return;
                 }
                 executor.run(source, chain, modifiers, control);
             };
         }
-        return ctx -> withinRateLimit(rootName, ctx.getSource()) ? original.run(ctx) : 0;
-    }
-
-    /** Counts one use of {@code rootName} and tells the player when the rate limit refuses it. */
-    private static boolean withinRateLimit(String rootName, CommandSourceStack source) {
-        // Amortised memory reclaim for the rate-limiter — self-throttled to once per interval.
-        // Piggybacked on command execution (single-threaded server tick) so idle players' history
-        // is evicted without a dedicated scheduled task. See RateLimiter#maybeSweep.
-        RateLimiter.maybeSweep(System.currentTimeMillis(), CommandTreeRewriter::rateLimitWindowMillis);
-        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().activeRule(rootName, com.arcadia.customperm.cluster.Cluster.identity());
-        if (rule == null || !(source.getEntity() instanceof ServerPlayer player)) return true;
-        RateLimiter.Result result = RateLimiter.tryAcquire(
-            rootName, player.getUUID(), rule.maxExecutions, rule.windowSeconds);
-        if (!result.allowed()) {
-            source.sendFailure(Component.literal(
-                "[CustomPerm] Rate limit reached for /" + rootName + " — try again in "
-                    + result.retryAfterSeconds() + "s (max " + rule.maxExecutions
-                    + " per " + rule.windowSeconds + "s)."));
-            return false;
-        }
-        RateLimitPersistence.afterAcceptedUse(rule);
-        return true;
-    }
-
-    /** Active window (ms) for {@code commandName}, or {@code <= 0} when no enabled rule exists. */
-    static long rateLimitWindowMillis(String commandName) {
-        RateLimitsConfig.Rule rule = CustomPerm.configManager.getRateLimits().activeRule(commandName, com.arcadia.customperm.cluster.Cluster.identity());
-        if (rule == null) return -1L;
-        return rule.windowSeconds * 1000L;
+        return ctx -> RateLimits.acquire(ctx.getSource(), rootName) ? original.run(ctx) : 0;
     }
 
     @SuppressWarnings("unchecked")

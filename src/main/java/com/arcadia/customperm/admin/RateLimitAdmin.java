@@ -9,10 +9,24 @@
 package com.arcadia.customperm.admin;
 
 import com.arcadia.customperm.CustomPerm;
+import com.arcadia.customperm.cluster.Cluster;
+import com.arcadia.customperm.command.RateLimits;
+import com.arcadia.customperm.config.GradesConfig;
 import com.arcadia.customperm.config.RateLimitsConfig;
+import com.arcadia.customperm.config.ServerScope;
+import com.arcadia.customperm.perm.Expiry;
+import com.arcadia.customperm.perm.PermissionService;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.UUID;
 import java.util.regex.Pattern;
 
 /**
@@ -48,11 +62,13 @@ public final class RateLimitAdmin {
         rule.enabled = true;
         rule.maxExecutions = max;
         rule.windowSeconds = windowSeconds;
-        // Redefining the numbers must not silently reset a persistence mode the admin chose.
+        // Redefining the numbers changes the numbers only: what else the admin chose for the rule stays.
         RateLimitsConfig.Rule previous = rules().get(name);
         if (previous != null) {
             rule.persistence = previous.persistence;
             rule.scope = previous.scope;
+            rule.servers = previous.servers;
+            rule.perServer = previous.perServer;
         }
         rule.normalize();
         rules().put(name, rule);
@@ -89,6 +105,13 @@ public final class RateLimitAdmin {
             return AdminResult.fail("Unknown scope '" + rawScope.trim() + "'. Use server (each server counts its own), network "
                     + "(one budget for the whole cluster) or server names joined with a comma, such as hub,survival.");
         }
+        List<String> sharing = rule.perServer == null ? List.of()
+                : RateLimitsConfig.Rule.sharingUnder(scope, rule.perServer.keySet());
+        if (!sharing.isEmpty()) {
+            return AdminResult.fail("A shared counter means one limit: " + String.join(", ", sharing) + " "
+                    + (sharing.size() == 1 ? "has a limit of its" : "have a limit of their") + " own for /" + name
+                    + ". Remove it first with /customperm ratelimit server " + name + " <server> clear.");
+        }
         rule.scope = scope;
         String what = switch (scope) {
             case RateLimitsConfig.SCOPE_SERVER -> "counted by each server on its own.";
@@ -100,6 +123,175 @@ public final class RateLimitAdmin {
             result = result.note("This server is in no cluster: it counts its own uses until cluster mode runs.");
         }
         return result;
+    }
+
+    /**
+     * A limit of its own for one cluster member. Refused where that member shares its counter: one budget, one
+     * limit. {@code here} names the server typed on.
+     */
+    public static AdminResult setOnServer(String name, String rawServer, int max, int windowSeconds) {
+        RateLimitsConfig.Rule rule = rules().get(name);
+        if (rule == null) return noRule(name, true);
+        String server = serverName(rawServer);
+        if (server == null) return badServer(rawServer);
+        if (max < 1 || windowSeconds < 1) {
+            return AdminResult.fail("A rate limit needs at least 1 use per window of at least 1 second.");
+        }
+        if (!RateLimitsConfig.Rule.sharingUnder(rule.scope, List.of(server)).isEmpty()) {
+            return AdminResult.fail(server + " shares the counter of /" + name + " (scope " + rule.scope
+                    + "), and a shared counter means one limit. Set the scope to server first, or change the limit of "
+                    + "every member with /customperm ratelimit set.");
+        }
+        if (rule.perServer == null) rule.perServer = new TreeMap<>();
+        RateLimitsConfig.Limit limit = new RateLimitsConfig.Limit(max, windowSeconds);
+        RateLimitsConfig.Limit before = rule.perServer.put(server, limit);
+        if (limit.equals(before)) return AdminResult.ok("/" + name + " is already " + limit + " on " + server + " — no change.");
+        AdminResult result = AdminResult.ok("/" + name + " is now " + limit + " on " + server + ", "
+                + new RateLimitsConfig.Limit(rule.maxExecutions, rule.windowSeconds) + " elsewhere.").warn(ConfigAdmin.persist());
+        if (!rule.appliesHere(server)) {
+            result = result.warn("The rule is not active on " + server + ": its list of servers leaves it out.");
+        }
+        return result;
+    }
+
+    /** Takes a member's own limit away: it follows the rule's numbers again. */
+    public static AdminResult clearOnServer(String name, String rawServer) {
+        RateLimitsConfig.Rule rule = rules().get(name);
+        if (rule == null) return noRule(name, false);
+        String server = serverName(rawServer);
+        if (server == null) return badServer(rawServer);
+        if (rule.perServer == null || rule.perServer.remove(server) == null) {
+            return AdminResult.ok(server + " has no limit of its own for /" + name + " — no change.");
+        }
+        if (rule.perServer.isEmpty()) rule.perServer = null;
+        return AdminResult.ok(server + " follows the limit of /" + name + " again: "
+                + new RateLimitsConfig.Limit(rule.maxExecutions, rule.windowSeconds) + ".").warn(ConfigAdmin.persist());
+    }
+
+    private static String serverName(String raw) {
+        String text = raw == null ? "" : raw.trim();
+        if (text.equalsIgnoreCase(ServerScope.HERE)) return Cluster.identity();
+        return ServerScope.problem(text) == null ? text.toLowerCase(Locale.ROOT) : null;
+    }
+
+    private static AdminResult badServer(String raw) {
+        return AdminResult.fail(raw != null && raw.trim().equalsIgnoreCase(ServerScope.HERE)
+                ? "'here' names this server in a cluster, and it has no cluster name."
+                : ServerScope.problem(raw));
+    }
+
+    /** Why {@code value} cannot be a grade's or a player's limit on {@code /name}, or null. */
+    public static String holderValueProblem(String name, String value) {
+        if (!NAME.matcher(name).matches()) return "Invalid command name '" + name + "'.";
+        if (MetaAdmin.problem(RateLimitsConfig.metaKey(name), "x") != null) {
+            return "/" + name + " cannot carry a limit per grade or player: its name holds a character a meta key cannot.";
+        }
+        RateLimitsConfig.Rule rule = rules().get(name);
+        if (RateLimitsConfig.parseLimit(value, rule == null ? 1 : rule.windowSeconds) == null) {
+            return "'" + value + "' is not a limit. Write uses per window, such as 10/1h, 10/30m or 10/90s, a number "
+                    + "alone for the rule's own window, or unlimited.";
+        }
+        return null;
+    }
+
+    /** What a grade's or a player's limit is stored as: the meta value, lowercased. */
+    public static String holderValue(String value) {
+        return value.trim().toLowerCase(Locale.ROOT);
+    }
+
+    /**
+     * Everything that decides {@code /name}: the rule, its servers, and the grades and players with a limit of their
+     * own. The limit one online player gets is {@link #effective}.
+     */
+    public static AdminResult describe(MinecraftServer server, String name) {
+        RateLimitsConfig.Rule rule = rules().get(name);
+        if (rule == null) return noRule(name, true);
+        String counted = switch (rule.scope) {
+            case RateLimitsConfig.SCOPE_SERVER -> "by each server alone";
+            case RateLimitsConfig.SCOPE_NETWORK -> "once across the cluster";
+            default -> "once across " + rule.scope.replace(",", ", ");
+        };
+        AdminResult result = AdminResult.ok("/" + name + ": " + new RateLimitsConfig.Limit(rule.maxExecutions, rule.windowSeconds)
+                + (rule.enabled ? "" : " (disabled)") + ", active on "
+                + (rule.servers == null ? "every member" : String.join(", ", rule.servers)) + ", counted " + counted + ".");
+        if (rule.perServer != null) {
+            List<String> own = new ArrayList<>();
+            rule.perServer.forEach((member, limit) -> own.add(member + " " + limit));
+            result = result.note("Per server: " + String.join(", ", own) + ".");
+        }
+        if (CustomPerm.isLuckPermsActive()) {
+            return result.note("Grades and players: in LuckPerms, as the meta " + RateLimitsConfig.metaKey(name)
+                    + ", e.g. lp group vip meta set " + RateLimitsConfig.metaKey(name) + " 10/1h");
+        }
+        List<String> grades = holders(name, true, server);
+        List<String> players = holders(name, false, server);
+        return result.note(grades.isEmpty() ? "No grade has a limit of its own." : "Grades: " + String.join(", ", grades) + ".")
+                .note(players.isEmpty() ? "No player has a limit of their own." : "Players: " + String.join(", ", players) + ".");
+    }
+
+    /** The limit {@code player} gets on {@code /name} on this server, and where it comes from. */
+    public static AdminResult effective(ServerPlayer player, String name) {
+        RateLimitsConfig.Rule rule = rules().get(name);
+        if (rule == null) return noRule(name, true);
+        RateLimitsConfig.Limit limit = RateLimits.limitFor(player, name);
+        String who = player.getGameProfile().getName();
+        if (limit == null) {
+            return AdminResult.ok("/" + name + " is not limited for " + who + " here: the rule is "
+                    + (rule.enabled ? "not active on this server." : "disabled."));
+        }
+        String here = Cluster.identity();
+        String meta = PermissionService.get().meta(player, RateLimitsConfig.metaKey(name));
+        String from;
+        if (RateLimitsConfig.parseLimit(meta, rule.limitOn(here).windowSeconds) != null) {
+            from = "their grades or their own value (meta " + RateLimitsConfig.metaKey(name) + "=" + meta + ")";
+        } else if (here != null && rule.perServer != null && rule.perServer.containsKey(here) && !rule.shared(here)) {
+            from = "this server's own limit";
+        } else {
+            from = "the rule";
+        }
+        return AdminResult.ok(who + " gets " + limit + " on /" + name + " here, from " + from + ".");
+    }
+
+    /** Grade or player entries of the meta for {@code /name}: {@code vip 10/1h}, {@code vip 20/1h (server=hub)}. */
+    private static List<String> holders(String name, boolean grades, MinecraftServer server) {
+        String key = RateLimitsConfig.metaKey(name);
+        GradesConfig config = CustomPerm.configManager.getGrades();
+        List<String> out = new ArrayList<>();
+        if (grades) {
+            new TreeMap<>(config.grades).forEach((grade, holder) -> {
+                entry(out, grade, holder.meta.get(key), holder.metaExpiries.get(key), "");
+                new TreeMap<>(holder.contexts).forEach((context, scope) ->
+                        entry(out, grade, scope.meta.get(key), scope.metaExpiries.get(key), context));
+            });
+            return out;
+        }
+        Set<String> uuids = new TreeSet<>(config.userMeta.keySet());
+        uuids.addAll(config.userContexts.keySet());
+        for (String uuid : uuids) {
+            String who;
+            try {
+                who = server == null ? uuid : GradeAdmin.displayName(server, UUID.fromString(uuid));
+            } catch (IllegalArgumentException e) {
+                continue;
+            }
+            Map<String, String> meta = config.userMeta.get(uuid);
+            Map<String, Long> expiries = config.userMetaExpiries.get(uuid);
+            if (meta != null) entry(out, who, meta.get(key), expiries == null ? null : expiries.get(key), "");
+            Map<String, GradesConfig.UserScoped> scopes = config.userContexts.get(uuid);
+            if (scopes != null) {
+                new TreeMap<>(scopes).forEach((context, scope) ->
+                        entry(out, who, scope.meta.get(key), scope.metaExpiries.get(key), context));
+            }
+        }
+        return out;
+    }
+
+    private static void entry(List<String> out, String holder, String value, Long expiry, String context) {
+        if (value == null) return;
+        long now = Expiry.now();
+        if (expiry != null && expiry <= now) return;
+        out.add(holder + " " + value + (context.isEmpty() ? "" : " (" + context + ")")
+                + (expiry == null ? "" : ", " + Expiry.describe(expiry - now) + " left"));
     }
 
     public static AdminResult enable(String name) {

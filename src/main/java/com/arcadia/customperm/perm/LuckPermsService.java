@@ -110,6 +110,22 @@ public class LuckPermsService implements PermissionService {
         }
     }
 
+    /** LuckPerms' own meta value for the player, inheritance, weights and contexts resolved by LuckPerms. */
+    @Override
+    public String meta(ServerPlayer player, String key) {
+        if (degraded.get()) {
+            return CustomPerm.configManager.getSettings().useInternalLuckPermsFallback() ? fallback.meta(player, key) : null;
+        }
+        try {
+            User user = LuckPermsProvider.get().getUserManager().getUser(player.getUUID());
+            return user == null ? null : user.getCachedData().getMetaData().getMetaValue(key);
+        } catch (Throwable t) {
+            if (t instanceof Error e) throw e;
+            // The rule's own limit applies meanwhile; the next permission check decides whether to degrade.
+            return null;
+        }
+    }
+
     /**
      * Switches permanently to the fallback policy. compareAndSet makes the log line and the admin
      * alert happen once, whichever path noticed first (AC2, P1).

@@ -69,6 +69,23 @@ public final class LuckPermsTestSupport {
         user.getCachedData().invalidate();
     }
 
+    /** Sets the user's own meta {@code key}, replacing any value it had. */
+    public static void setMeta(UUID uuid, String key, String value) {
+        User user = await(api().getUserManager().loadUser(uuid));
+        user.data().clear(net.luckperms.api.node.NodeType.META.predicate(meta -> meta.getMetaKey().equals(key)));
+        user.data().add(net.luckperms.api.node.types.MetaNode.builder(key, value).build());
+        await(api().getUserManager().saveUser(user));
+        user.getCachedData().invalidate();
+    }
+
+    /** Removes the user's own meta {@code key}. */
+    public static void clearMeta(UUID uuid, String key) {
+        User user = await(api().getUserManager().loadUser(uuid));
+        user.data().clear(net.luckperms.api.node.NodeType.META.predicate(meta -> meta.getMetaKey().equals(key)));
+        await(api().getUserManager().saveUser(user));
+        user.getCachedData().invalidate();
+    }
+
     /** Removes every own node with one of these keys, whatever its value. */
     public static void clearNodes(UUID uuid, Collection<String> nodes) {
         User user = await(api().getUserManager().loadUser(uuid));

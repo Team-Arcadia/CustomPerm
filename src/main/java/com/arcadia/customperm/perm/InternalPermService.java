@@ -69,6 +69,12 @@ public class InternalPermService implements PermissionService {
     }
 
     @Override
+    public String meta(ServerPlayer player, String key) {
+        return PermissionResolver.meta(config.getGrades(), player.getUUID(), key, config.getSettings().defaultGrade,
+                contexts(player));
+    }
+
+    @Override
     public ChatMeta chatMeta(ServerPlayer player) {
         var settings = config.getSettings();
         String defaultGrade = settings.defaultGrade;

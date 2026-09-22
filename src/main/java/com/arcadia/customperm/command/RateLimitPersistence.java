@@ -84,7 +84,8 @@ public final class RateLimitPersistence {
         Path current = file;
         if (current == null) return;
         try {
-            RateLimiter.restore(RateLimitStore.read(current), System.currentTimeMillis(), CommandTreeRewriter::rateLimitWindowMillis);
+            RateLimiter.restore(RateLimitStore.read(current), RateLimitStore.readWindows(current), System.currentTimeMillis(),
+                    RateLimits::retentionMillis);
         } catch (IOException e) {
             Path aside = current.resolveSibling(FILE_NAME + ".corrupt-" + LocalDateTime.now().format(CORRUPT_SUFFIX));
             CustomPerm.LOGGER.warn("[CustomPerm] Rate-limit history is unreadable; moved to {} and starting with empty counters.",
@@ -94,7 +95,7 @@ public final class RateLimitPersistence {
             } catch (IOException moveError) {
                 CustomPerm.LOGGER.warn("[CustomPerm] Could not move the unreadable rate-limit history aside.", moveError);
             }
-            RateLimiter.restore(java.util.Map.of(), System.currentTimeMillis(), CommandTreeRewriter::rateLimitWindowMillis);
+            RateLimiter.restore(java.util.Map.of(), System.currentTimeMillis(), RateLimits::retentionMillis);
         }
     }
 
@@ -103,7 +104,9 @@ public final class RateLimitPersistence {
         Path current = file;
         if (current == null) return;
         try {
-            RateLimitStore.write(current, RateLimiter.snapshot(System.currentTimeMillis(), CommandTreeRewriter::rateLimitWindowMillis));
+            long now = System.currentTimeMillis();
+            RateLimitStore.write(current, RateLimiter.snapshot(now, RateLimits::retentionMillis),
+                    RateLimiter.windowsSnapshot(now, RateLimits::retentionMillis));
         } catch (IOException e) {
             CustomPerm.LOGGER.warn("[CustomPerm] Could not save rate-limit history to {}.", current, e);
         }

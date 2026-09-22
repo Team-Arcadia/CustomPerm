@@ -413,8 +413,9 @@ final class ClusterService {
     /** The longest window of any rule, at least an hour, which is how long a counted use can matter. */
     private static long longestWindowMillis() {
         long longest = 3600_000L;
-        for (var rule : CustomPerm.configManager.getRateLimits().rules.values()) {
-            longest = Math.max(longest, rule.windowSeconds * 1000L);
+        for (var entry : CustomPerm.configManager.getRateLimits().rules.entrySet()) {
+            longest = Math.max(longest,
+                    com.arcadia.customperm.command.RateLimits.longestWindowSeconds(entry.getKey(), entry.getValue()) * 1000L);
         }
         return longest;
     }

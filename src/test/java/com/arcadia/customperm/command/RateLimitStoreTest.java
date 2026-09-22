@@ -71,4 +71,26 @@ class RateLimitStoreTest {
 
         assertEquals(Map.of("gamemode", Map.of(valid, List.of(5L))), history);
     }
+
+    @Test
+    void shouldRoundTripTheWindowsInUse() throws IOException {
+        Path file = tempDir.resolve("ratelimits-history.json");
+        UUID player = UUID.randomUUID();
+        Map<String, Map<Long, Long>> windows = Map.of("hub", Map.of(3_600_000L, 42L, 60_000L, 43L));
+        RateLimitStore.write(file, Map.of("hub", Map.of(player, List.of(42L))), windows);
+
+        assertEquals(windows, RateLimitStore.readWindows(file));
+        assertEquals(Map.of("hub", Map.of(player, List.of(42L))), RateLimitStore.read(file));
+    }
+
+    @Test
+    void aFileWithoutWindowsReadsAsBefore() throws IOException {
+        Path file = tempDir.resolve("ratelimits-history.json");
+        Files.writeString(file, "{\"formatVersion\": 1, \"history\": {}}");
+        assertTrue(RateLimitStore.readWindows(file).isEmpty());
+        assertTrue(RateLimitStore.readWindows(tempDir.resolve("missing.json")).isEmpty());
+
+        Files.writeString(file, "{\"history\": {}, \"windows\": {\"hub\": {\"x\": 1, \"-5\": 2, \"60000\": \"no\", \"1000\": 7}}}");
+        assertEquals(Map.of("hub", Map.of(1000L, 7L)), RateLimitStore.readWindows(file), "unusable entries are skipped");
+    }
 }
