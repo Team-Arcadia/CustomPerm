@@ -145,9 +145,9 @@ L'interface est dessinée nativement (sans bibliothèque d'interface) et remplac
 | Page | Contenu |
 |---|---|
 | Tableau de bord | Backend actif et sa signification, nombre de commandes exposées, d'alias, de limites et de grades, toutes les alertes admin actives, rechargement de la configuration (avec confirmation) |
-| Commandes | Toutes les commandes racines du serveur avec recherche (Ctrl+F) et filtre « exposées », badges pour les alias, les limites et les commandes absentes du serveur ; exposer, masquer (avec confirmation), et l'interrupteur « garder l'exigence d'origine » (`preserveOriginalRequires`) ; en cluster, le bouton maison d'une commande exposée choisit les membres sur lesquels elle est actif, et un badge `OFF` signale une commande limitée à d'autres membres |
+| Commandes | Toutes les commandes racines du serveur avec recherche (Ctrl+F) et filtre « exposées », badges pour les alias, les limites et les commandes absentes du serveur ; exposer, masquer (avec confirmation), et l'interrupteur « garder l'exigence d'origine » (`preserveOriginalRequires`) ; en cluster, le bouton maison d'une commande exposée choisit les membres sur lesquels elle est actif, et un badge `OFF` signale une commande limitée à d'autres membres ; le bouton personnage d'une commande exposée ouvre **Qui** : les grades et joueurs dont les entrées nomment son nœud, et pour l'un d'eux, pris dans la liste ou par son nom, son entrée valable partout et sur chaque membre, réglées avec les mêmes bascules à trois états que l'onglet Nœuds (sous LuckPerms, une phrase dit de le régler là-bas) |
 | Alias | Tous les alias avec recherche, badges pour les commandes masquées et les limites ; créer un alias avec sa première étape ; par alias : ajouter, remplacer, monter ou descendre et retirer des étapes, supprimer l'alias (avec confirmation) ; en cluster, un onglet **Servers** choisit les membres sur lesquels l'alias est actif, et un badge `OFF` signale un alias qui n'existe pas sur ce serveur |
-| Limites d'exécution | Toutes les règles avec leurs valeurs et badges (désactivée, cible ni exposée ni alias) ; ajouter une limite, changer usages et fenêtre, activer ou désactiver, choisir quand l'historique est écrit (sauvegarde du monde ou à chaque usage), supprimer (avec confirmation) ; les commandes exposées et alias sans limite sont listés et remplissent le formulaire en un clic ; en cluster, le bouton maison à côté de Save choisit les membres sur lesquels la règle est actif, et le badge `OFF` signale aussi une règle non appliquée sur ce serveur |
+| Limites d'exécution | Toutes les règles avec leurs valeurs et badges (désactivée, cible ni exposée ni alias) ; ajouter une limite, changer usages et fenêtre, activer ou désactiver, choisir quand l'historique est écrit (sauvegarde du monde ou à chaque usage), supprimer (avec confirmation) ; les commandes exposées et alias sans limite sont listés et remplissent le formulaire en un clic ; en cluster, le bouton maison à côté de Save choisit les membres sur lesquels la règle est actif, et le badge `OFF` signale aussi une règle non appliquée sur ce serveur ; le bouton personnage ouvre **Niveaux** : la limite propre d'un serveur, la valeur d'un grade ou d'un joueur, listées avec l'endroit où elles s'appliquent et le temps qui leur reste, réglées par type, nom, valeur et contexte, retirées depuis la liste (sous LuckPerms, les valeurs des grades et des joueurs restent dans LuckPerms) |
 | LuckPerms | Uniquement quand LuckPerms est installé : pas d'entrée de navigation sinon, et `/customperm gui luckperms` explique pourquoi. Installé mais pas démarré (solo, échec au démarrage), la page affiche une bannière au lieu de l'éditeur. **Groupes** : créer, supprimer, nœuds de permission allow/deny avec contextes et durée, parents, poids, nom affiché, préfixe, suffixe, meta. **Joueurs** : joueurs connectés et tout joueur trouvé par pseudo exact, leurs nœuds, groupes avec durée, groupe principal, promotion et rétrogradation sur un track, préfixe, suffixe, meta. **Tracks** : créer, supprimer, ajouter, insérer à une position, retirer un groupe. Les écritures passent par l'API LuckPerms côté serveur, protégées par `customperm.manage.luckperms` |
 | Grades | Toujours accessible, pour pouvoir lire le repli quand LuckPerms fonctionne ou tombe. Une bannière indique quand les grades ne décident pas des permissions ; avec LuckPerms actif la page est en lecture seule, comme les commandes de grade : grades avec recherche et création, triés par poids ; par grade, trois onglets : nœuds ALLOW et DENY, grades dont il hérite et ceux qu'il refuse, et les joueurs qui le détiennent à côté de ceux qui le refusent, avec leur état en ligne, attribués par pseudo avec complétion, y compris hors ligne s'ils sont déjà venus sur le serveur ; suppression d'un grade (avec confirmation). Un quatrième onglet, **Chat**, liste les préfixes et suffixes du grade avec leur priorité et leur temps restant, en ajoute un avec un texte, une priorité et une durée facultative, retire celui sélectionné, montre un aperçu de la ligne de chat, et porte les interrupteurs de décoration des noms et d'empilement (`customperm.manage.config`). Une case de durée à côté des champs nœud et joueur accorde pour un temps limité, et les lignes affichent le temps restant. Une case monde à côté limite un nœud ou une attribution à un monde (`the_nether`), affiché sur la ligne ; les onglets Parents et Chat en ont une aussi. Un cinquième onglet, **Meta**, liste et fixe la meta du grade, avec une durée et un contexte |
 | Joueurs | Nœuds portés par un joueur plutôt que par un grade : tous les joueurs qui détiennent quelque chose en propre plus tous ceux connectés, avec recherche ; par joueur, ses nœuds ALLOW et DENY et les grades qu'il détient, en lecture seule ici. Un joueur qui ne détient encore rien s'atteint en tapant son pseudo. Écrire demande `customperm.manage.grades`, comme la page Grades. Un onglet **Chat** règle de la même façon les préfixes et suffixes que le joueur porte lui-même. Un onglet **Meta** fixe la meta que le joueur porte lui-même. Un onglet **Tracks** montre chaque track avec le cran du joueur et le promeut ou le rétrograde d'un cran. Le champ nœud accepte aussi une durée et un monde, et les grades tenus dans un seul monde sont listés avec lui |
@@ -600,13 +600,36 @@ Plafonne le nombre d'utilisations d'une commande ou d'un alias par joueur sur un
 
 | Commande | Effet |
 |---|---|
-| `/customperm ratelimit set <name> <max> <windowSeconds>` | Autorise `<max>` utilisations par joueur toutes les `<windowSeconds>`. Redéfinir une règle conserve son mode de persistance. |
+| `/customperm ratelimit set <name> <max> <windowSeconds>` | Autorise `<max>` utilisations par joueur toutes les `<windowSeconds>`. Redéfinir une règle ne change que ses valeurs : son mode de persistance, sa portée, ses serveurs et ses limites par serveur restent. |
 | `/customperm ratelimit scope <name> <server\|network\|hub,survival>` | En mode cluster, qui partage le budget : chaque serveur seul (par défaut), tous les serveurs, ou ceux nommés. Voir [Mode cluster](#mode-cluster-plusieurs-serveurs). |
 | `/customperm ratelimit persistence <name> <world_save\|immediate>` | Choisit quand l'historique d'utilisation de cette commande est écrit sur le disque (voir `ratelimits.json`). |
 | `/customperm ratelimit servers <name> [serveurs\|here\|all]` | En cluster, les membres sur lesquels une règle est actif, noms séparés par des espaces ou des virgules ; `here` désigne ce serveur, `all` tous les membres (par défaut). Sans liste, l'affiche. Voir [Mode cluster](#mode-cluster-plusieurs-serveurs). |
 | `/customperm ratelimit disable <name>` / `enable <name>` | Suspend ou reprend l'application d'une règle sans perdre ses valeurs. |
 | `/customperm ratelimit remove <name>` | Supprime la règle. |
+| `/customperm ratelimit server <name> <serveur\|here> <max> <windowSeconds>` | Une limite propre à un membre du cluster. Refusée là où ce membre partage son compteur. `... <serveur> clear` la retire. |
+| `/customperm ratelimit grade <name> <grade> <limite> [durée] [contexte]` | La limite propre d'un grade : `10/1h`, `10/30m`, `10/90s`, `10` (la fenêtre de la règle) ou `unlimited`. Stockée dans la meta `customperm.ratelimit.<name>` du grade. `... <grade> clear [contexte]` la retire. |
+| `/customperm ratelimit player <name> <joueur> <limite> [durée] [contexte]` | La même chose pour un joueur. |
+| `/customperm ratelimit show <name> [joueur]` | Tout ce qui décide la règle : ses valeurs, où elle est active, comment elle est comptée, la limite propre de chaque serveur, les valeurs des grades et des joueurs. Avec un joueur connecté, la limite qu'il obtient ici et d'où elle vient. |
 | `/customperm ratelimit list` | Liste les règles avec leur état et leur mode de persistance. |
+
+**Niveaux d'une limite.** Règle, puis serveur, puis grade, puis joueur : chacun a le dernier mot sur le précédent.
+
+- Les valeurs de la règle s'appliquent partout par défaut.
+- Un membre qui compte ses usages seul (portée `server`, ou membre absent d'une portée nommée) peut avoir sa propre
+  limite. Un compteur partagé veut dire une seule limite : une valeur par serveur est refusée sur un membre qui partage
+  le compteur, et une portée qui partagerait un membre qui en a une est refusée aussi, en le nommant.
+- La valeur d'un grade l'emporte sur celle des serveurs, classée comme toute meta : le grade le plus lourd d'abord, une
+  valeur limitée à `server=` ou `world=` avant une valeur valable partout. La valeur propre d'un joueur l'emporte sur
+  celle de ses grades. Les durées marchent comme pour toute entrée : un grade peut avoir `unlimited` pour une soirée.
+- `unlimited` lève la limite, et ces usages ne sont pas comptés : ils ne prennent rien sur un budget partagé avec
+  d'autres serveurs.
+- Une valeur qui ne se lit pas comme une limite est ignorée et le niveau en dessous décide : une faute de frappe ne
+  bloque jamais personne.
+- Sous LuckPerms, les valeurs des grades et des joueurs sont des metas LuckPerms : `lp group vip meta set
+  customperm.ratelimit.home 10/1h`, contextes compris.
+- L'historique d'usage est gardé aussi longtemps que la plus longue fenêtre utilisée le demande, pas seulement celle de
+  la règle, et ces fenêtres sont sauvegardées avec lui : un grade avec une fenêtre d'une journée garde son compte après
+  un redémarrage.
 
 ### Diagnostic et utilitaires
 
@@ -727,17 +750,24 @@ Règles de limite d'exécution, indexées par nom de commande ou d'alias.
 {
   "rules": {
     "gamemode": { "enabled": true, "maxExecutions": 3, "windowSeconds": 60, "persistence": "world_save" },
-    "heal": { "enabled": true, "maxExecutions": 1, "windowSeconds": 3600, "persistence": "immediate" }
+    "heal": { "enabled": true, "maxExecutions": 1, "windowSeconds": 3600, "persistence": "immediate" },
+    "home": { "enabled": true, "maxExecutions": 3, "windowSeconds": 3600, "scope": "server",
+              "perServer": { "survival": { "maxExecutions": 1, "windowSeconds": 3600 } } }
   }
 }
 ```
+
+`perServer` est facultatif : une règle qui ne l'a pas s'écrit et se lit comme avant. Les valeurs des grades et des
+joueurs ne sont pas dans ce fichier, ce sont des metas de `grades.json` (ou de LuckPerms).
 
 L'historique d'utilisation est conservé entre les redémarrages et les `/reload` vanilla. C'est un état du serveur, pas un réglage : il vit dans la sauvegarde du monde, dans `<monde>/data/customperm_ratelimits.json` (timestamps Unix en millisecondes), et non dans ce dossier. `persistence` décide quand il est écrit :
 
 - `world_save` (défaut) : avec le monde, à la sauvegarde automatique, à `/save-all` et à l'arrêt du serveur. Aucun coût par commande ; un crash du serveur perd au plus les utilisations depuis la dernière sauvegarde.
 - `immediate` : juste après chaque utilisation acceptée de cette commande. Rien n'est perdu en cas de crash, au prix d'une écriture disque par utilisation. À réserver aux commandes rares et sensibles.
 
-Au chargement, l'historique plus ancien que la fenêtre actuelle de la règle est ignoré : une fenêtre raccourcie pendant l'arrêt du serveur s'applique immédiatement. Si l'horloge système recule, les utilisations enregistrées « dans le futur » comptent à partir de maintenant pour une fenêtre au lieu de bloquer les joueurs. Un fichier d'historique illisible est renommé `customperm_ratelimits.json.corrupt-<date>` et les compteurs repartent de zéro.
+Le fichier d'historique note aussi, par commande, les fenêtres avec lesquelles les usages ont été comptés et quand
+chacune a servi pour la dernière fois : la fenêtre plus longue d'un grade survit à un redémarrage, et un fichier qui ne
+les a pas se lit comme avant. Au chargement, l'historique plus ancien que la plus longue fenêtre encore utilisée est ignoré : une fenêtre raccourcie pendant l'arrêt du serveur s'applique immédiatement. Si l'horloge système recule, les utilisations enregistrées « dans le futur » comptent à partir de maintenant pour une fenêtre au lieu de bloquer les joueurs. Un fichier d'historique illisible est renommé `customperm_ratelimits.json.corrupt-<date>` et les compteurs repartent de zéro.
 
 ### `aliases.json`
 
@@ -973,7 +1003,12 @@ limité à `server=<nom>`. L'ordre est commande, puis grade, puis joueur : chacu
   sélectionné serveur par serveur : encadré quand le détenteur ne dit rien, vert quand il autorise, rouge quand il
   refuse ; un clic passe à l'état suivant.
 - Une telle entrée tient pendant une panne de la base, le membre connaissant son nom par ses réglages.
-- Les alias ne s'ouvrent pas ainsi : un alias limité à d'autres membres n'est pas enregistré ici.
+- Les alias suivent le même ordre avec `customperm.alias.<name>` : un alias est enregistré sur chaque membre, fermé là
+  où sa liste exclut le membre, sauf si l'entrée d'un grade ou d'un joueur nommant ce membre l'ouvre. Une exception :
+  un alias qui cacherait une commande du membre (un alias `spawn` sur un serveur qui a le `/spawn` d'un mod) n'est pas
+  enregistré là où sa liste exclut le membre, et cette commande reste.
+- Sur la page Commandes, le bouton personnage d'une commande exposée montre chaque grade et joueur dont les entrées
+  nomment son nœud, et règle les siennes partout et sur chaque membre.
 
 **Contexte `server=`**
 

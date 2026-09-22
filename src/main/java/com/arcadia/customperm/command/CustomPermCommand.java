@@ -109,6 +109,9 @@ import java.util.stream.Collectors;
  * /customperm ratelimit set <name> <max> <windowSeconds>   # cap executions per player per window
  *                     persistence <name> <world_save|immediate>  # when usage history is written
  *                     scope <name> <server|network|hub,survival>  # who shares the budget in cluster mode
+ *                     server <name> <server|here> <max> <windowSeconds> | clear  # a member's own limit
+ *                     grade|player <name> <holder> <limit> [duration] [context] | clear [context]  # 10/1h, 10, unlimited
+ *                     show <name> [player]                 # every level, or the limit one player gets here
  *                     enable <name>                        # re-enable a previously configured limit
  *                     disable <name>                       # keep the limit's numbers, stop enforcing it
  *                     remove <name>                        # delete the limit entirely

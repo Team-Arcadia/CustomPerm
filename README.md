@@ -144,9 +144,9 @@ The interface is drawn natively (no UI library) and replaces the former TesseraU
 | Page | Content |
 |---|---|
 | Dashboard | Active backend and what it means, counts of exposed commands, aliases, rate limits and grades, every active admin alert, reload of the configuration (with confirmation) |
-| Commands | Every root command of the server with search (Ctrl+F) and an exposed-only filter, badges for aliases, rate limits and commands missing from the server; expose, hide (with confirmation), and the keep-original switch (`preserveOriginalRequires`); in a cluster, the house button of an exposed command picks the members it is active on, and an `OFF` badge marks a command limited to other members |
+| Commands | Every root command of the server with search (Ctrl+F) and an exposed-only filter, badges for aliases, rate limits and commands missing from the server; expose, hide (with confirmation), and the keep-original switch (`preserveOriginalRequires`); in a cluster, the house button of an exposed command picks the members it is active on, and an `OFF` badge marks a command limited to other members; the person button of an exposed command opens **Who**: the grades and players whose entries name its node, and for one of them, picked from the list or by name, its entry held everywhere and on each member, set with the same three-state toggles as the Nodes tab (under LuckPerms, a sentence says to set it there) |
 | Aliases | Every alias with search, badges for shadowed commands and rate limits; create an alias with its first step; per alias: add, replace, move up or down and remove steps, delete the alias (with confirmation); in a cluster, a **Servers** tab picks the members the alias is active on, and an `OFF` badge marks an alias that does not exist on this server |
-| Rate limits | Every rule with its numbers and badges (disabled, target neither exposed nor an alias); add a limit, change uses and window, enable or disable, switch when usage history is written (world save or every use), remove (with confirmation); exposed commands and aliases without a limit are listed and fill the form in one click; in a cluster, the house button next to Save picks the members the rule is active on, and the `OFF` badge also marks a rule not enforced on this server |
+| Rate limits | Every rule with its numbers and badges (disabled, target neither exposed nor an alias); add a limit, change uses and window, enable or disable, switch when usage history is written (world save or every use), remove (with confirmation); exposed commands and aliases without a limit are listed and fill the form in one click; in a cluster, the house button next to Save picks the members the rule is active on, and the `OFF` badge also marks a rule not enforced on this server; the person button opens **Levels**: a server's own limit, a grade's or a player's value, listed with where it applies and the time it has left, set by kind, name, value and context, removed from the list (under LuckPerms, grades' and players' values stay in LuckPerms) |
 | LuckPerms | Only when LuckPerms is installed: no navigation entry otherwise, and `/customperm gui luckperms` explains why. Installed but not running (singleplayer, failed start), the page shows a banner instead of the editor. **Groups**: create, delete, permission nodes with allow/deny, contexts and duration, parents, weight, display name, prefix, suffix, meta. **Players**: online players and any player found by exact name, their nodes, groups with duration, primary group, promote and demote on a track, prefix, suffix, meta. **Tracks**: create, delete, append, insert at a position, remove a group. Writes go through the LuckPerms API server-side, gated by `customperm.manage.luckperms` |
 | Grades | Always reachable, so the fallback can be read while LuckPerms runs or fails. A banner says when grades do not decide permissions; while LuckPerms is active the page is read-only, like the grade commands: grades with search and creation, ordered by weight; per grade, three tabs: ALLOW and DENY nodes, the grades it inherits and the ones it refuses, and the players who hold it beside those who refuse it, with their online state, assigned by name with completion, including players who are offline but joined the server before; delete a grade (with confirmation). A fourth tab, **Chat**, lists the grade's prefixes and suffixes with their priority and time left, adds one with a text, a priority and an optional duration, removes the one selected, previews the chat line, and carries the switches for decorating names and for stacking (`customperm.manage.config`). A duration box beside the node and player fields grants for a limited time, and the rows show the time left. A world box beside it limits a node or an assignment to one world (`the_nether`), shown on the row; the Parents and Chat tabs have one too. A fifth tab, **Meta**, lists and sets the grade's meta, with a duration and a context |
 | Players | Nodes carried by one player rather than by a grade: every player holding something of their own plus everyone online, with search; per player, their ALLOW and DENY nodes and the grades they hold, read-only here. A player who holds nothing yet is reached by typing their name. Writing needs `customperm.manage.grades`, like the Grades page. A **Chat** tab edits the prefixes and suffixes the player carries themselves, the same way. A **Meta** tab sets the meta the player carries themselves. A **Tracks** tab shows every track with the player's rung and promotes or demotes them one rung. The node field takes a duration and a world too, and the grades held in one world are listed with it |
@@ -580,13 +580,34 @@ Cap how many times one player may run a command or an alias within a sliding win
 
 | Command | Effect |
 |---|---|
-| `/customperm ratelimit set <name> <max> <windowSeconds>` | Allows `<max>` uses per player per `<windowSeconds>`. Redefining a rule keeps its persistence mode. |
+| `/customperm ratelimit set <name> <max> <windowSeconds>` | Allows `<max>` uses per player per `<windowSeconds>`. Redefining a rule changes its numbers only: its persistence mode, scope, servers and per-server limits stay. |
 | `/customperm ratelimit persistence <name> <world_save\|immediate>` | Chooses when the usage history of that command is written to disk (see `ratelimits.json`). |
 | `/customperm ratelimit scope <name> <server\|network\|hub,survival>` | In cluster mode, who shares the budget: each server alone (default), every server, or the servers named. See [Cluster mode](#cluster-mode-several-servers). |
 | `/customperm ratelimit servers <name> [servers\|here\|all]` | In a cluster, the members a rule is active on, names separated by spaces or commas; `here` is this server, `all` every member (the default). Without a list, shows it. See [Cluster mode](#cluster-mode-several-servers). |
 | `/customperm ratelimit disable <name>` / `enable <name>` | Stops or resumes enforcing a rule without losing its numbers. |
 | `/customperm ratelimit remove <name>` | Deletes the rule. |
+| `/customperm ratelimit server <name> <server\|here> <max> <windowSeconds>` | A limit of its own for one cluster member. Refused where that member shares its counter. `... <server> clear` takes it away. |
+| `/customperm ratelimit grade <name> <grade> <limit> [duration] [context]` | A grade's own limit: `10/1h`, `10/30m`, `10/90s`, `10` (the rule's window) or `unlimited`. Stored as the grade's meta `customperm.ratelimit.<name>`. `... <grade> clear [context]` removes it. |
+| `/customperm ratelimit player <name> <player> <limit> [duration] [context]` | The same for one player. |
+| `/customperm ratelimit show <name> [player]` | Everything that decides the rule: its numbers, where it is active, how it is counted, each server's own limit, the grades' and players' values. With an online player, the limit they get here and where it comes from. |
 | `/customperm ratelimit list` | Lists rules with their state and persistence mode. |
+
+**Levels of a limit.** Rule, then server, then grade, then player: each one has the last word over the one before it.
+
+- The rule's numbers apply everywhere by default.
+- A member that counts its uses alone (scope `server`, or a member left out of a named scope) can have its own limit.
+  A shared counter means one limit: a per-server value is refused on a member that shares the counter, and a scope
+  that would share a member holding one is refused too, naming it.
+- A grade's value wins over the servers', ranked like any meta: the heaviest grade first, a value limited to
+  `server=` or `world=` over one held everywhere. A player's own value wins over their grades'. Durations work as for
+  any entry, so a grade can get `unlimited` for an evening.
+- `unlimited` lifts the limit, and those uses are not counted: they take nothing from a budget shared with other
+  servers.
+- A value that does not read as a limit is ignored and the level below decides, so a typo never locks anyone out.
+- Under LuckPerms, grades' and players' values are LuckPerms meta: `lp group vip meta set customperm.ratelimit.home
+  10/1h`, contexts included.
+- Usage history is kept as long as the longest window in use asks, not only the rule's, and those windows are saved
+  with it: a grade with a day-long window keeps its count through a restart.
 
 ### Diagnostic and utilities
 
@@ -707,17 +728,24 @@ Rate-limit rules, keyed by command or alias name.
 {
   "rules": {
     "gamemode": { "enabled": true, "maxExecutions": 3, "windowSeconds": 60, "persistence": "world_save" },
-    "heal": { "enabled": true, "maxExecutions": 1, "windowSeconds": 3600, "persistence": "immediate" }
+    "heal": { "enabled": true, "maxExecutions": 1, "windowSeconds": 3600, "persistence": "immediate" },
+    "home": { "enabled": true, "maxExecutions": 3, "windowSeconds": 3600, "scope": "server",
+              "perServer": { "survival": { "maxExecutions": 1, "windowSeconds": 3600 } } }
   }
 }
 ```
+
+`perServer` is optional: a rule without it is written and read as before. Grades' and players' values are not in
+this file, they are meta in `grades.json` (or LuckPerms).
 
 Usage history is kept across restarts and vanilla `/reload`. It is a server state, not a setting, so it lives in the world save, in `<world>/data/customperm_ratelimits.json` (Unix timestamps in milliseconds), not in this folder. `persistence` decides when it is written:
 
 - `world_save` (default): with the world, on autosave, `/save-all` and server stop. No cost per command; a server crash loses at most the uses since the last save.
 - `immediate`: right after each accepted use of that command. Nothing is lost on a crash, at the price of one disk write per use. Keep it for rare, sensitive commands.
 
-On load, history older than the rule's current window is dropped, so a window shortened while the server was stopped applies at once. If the system clock moves backwards, uses recorded "in the future" count from now for one window instead of locking players out. An unreadable history file is renamed `customperm_ratelimits.json.corrupt-<date>` and counters start empty.
+The history file also records, per command, the windows uses were counted with and when each was last used, so a
+grade's longer window survives a restart; a file without it reads as before. On load, history older than the longest
+window still in use is dropped, so a window shortened while the server was stopped applies at once. If the system clock moves backwards, uses recorded "in the future" count from now for one window instead of locking players out. An unreadable history file is renamed `customperm_ratelimits.json.corrupt-<date>` and counters start empty.
 
 ### `aliases.json`
 
@@ -957,7 +985,12 @@ A grade or a player can say where they may use a command, server by server, with
   server by server: framed when the holder says nothing there, green when allowed, red when denied; a click moves
   to the next state.
 - Such an entry holds while the database is out of reach, the member knowing its name from its settings.
-- Aliases are not opened this way: an alias limited to other members is not registered here at all.
+- Aliases follow the same order with `customperm.alias.<name>`: an alias is registered on every member, closed where
+  its list leaves the member out unless a grade's or a player's entry naming that member opens it. One exception: an
+  alias that would hide a command of the member (an alias named `spawn` on a server with a mod's `/spawn`) is not
+  registered where its list leaves the member out, and that command stays.
+- On the Commands page, the person button of an exposed command shows every grade and player whose entries name its
+  node, and sets theirs everywhere and on each member.
 
 **`server=` context**
 

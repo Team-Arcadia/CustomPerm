@@ -91,7 +91,16 @@ final class HelpTopics {
                     "Each rule has a scope: server, each server counting its own uses (the default); network, one "
                             + "budget for every server; or server names such as hub,survival, which share one budget "
                             + "while the others count alone. Outside a cluster every server counts its own.",
+                    "# Levels",
+                    "Rule, then server, then grade, then player: each has the last word over the one before. A server "
+                            + "that counts alone can have its own limit; a shared counter keeps one. A grade's or a "
+                            + "player's value is the meta customperm.ratelimit.<name>: 10/1h, 10 for the rule's window, "
+                            + "or unlimited, which is not counted. The Levels button lists and sets them.",
                     "/customperm ratelimit set <name> <max> <windowSeconds>",
+                    "/customperm ratelimit server <name> <server|here> <max> <windowSeconds>",
+                    "/customperm ratelimit grade <name> <grade> <limit> [duration] [context]",
+                    "/customperm ratelimit player <name> <player> <limit> [duration] [context]",
+                    "/customperm ratelimit show <name> [player]",
                     "/customperm ratelimit scope <name> <server|network|hub,survival>",
                     "/customperm ratelimit persistence <name> <world_save|immediate>",
                     "/customperm ratelimit list")),
@@ -243,7 +252,8 @@ final class HelpTopics {
                             + "command's node with server=<name> closes it there even when the command is exposed "
                             + "everywhere; allowing it there opens it even when the command's list leaves that server "
                             + "out. A player's own such node wins over their grades. The house button of the Nodes "
-                            + "tab shows the selected node server by server.",
+                            + "tab shows the selected node server by server, and the person button of an exposed "
+                            + "command lists who decides where. Aliases follow the same order with their node.",
                     "/customperm grade adddeny <grade> <node> server=<name>",
                     "/customperm user addperm <player> <node> server=here",
                     "/customperm command servers <name> [servers|here|all]",
