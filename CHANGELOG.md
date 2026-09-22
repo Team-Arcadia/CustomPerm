@@ -9,11 +9,15 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+---
+
+## [1.1.0] - 2026-09-22
+
 ### Removed
 
 - **TesseraUI dependency and panel** — the admin panel needed a second client mod, rendered from HTML/CSS templates through a library whose screens provided neither rendering nor mouse handling, and forced class-loading workarounds so a client without TesseraUI would not crash. It is replaced by a native interface (see Added). The `tesseraui` optional dependency, the templates, the `gui_sync` channel and the client-side `/customperm gui` command are gone. The in-game LuckPerms editor screens went with the panel and are being rebuilt natively; its server side is unchanged and still covered by GameTests.
 
-- **GitHub releases and tags v1.0.3 and v1.0.4** — removed on 2026-09-15. The repository history was rewritten to remove personal data from author, committer and tagger metadata; file contents are identical, but every commit hash changed, and anyone who cloned before that date must clone again. Both releases were marked immutable by GitHub, which locks their tags and made the rewrite impossible while they existed. They were development builds, never published on CurseForge or Modrinth, and 1.0.5 (beta) supersedes them. The `v1.0.3` and `v1.0.4` tags were locked the same way and removed too; the corresponding source remains in the history at commit `65ef813` (1.0.3) and `ffc4624` (1.0.4). Pull requests #1 and #2 were deleted by GitHub Support on 2026-09-16 for the same reason: their read-only refs kept the old history reachable. The contributed work is unchanged in the history and credited in `CONTRIBUTORS.md`. Builds are distributed on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) and [Modrinth](https://modrinth.com/mod/customperm); the next release is 1.1.0.
+- **GitHub releases and tags v1.0.3 and v1.0.4** — removed on 2026-09-15. The repository history was rewritten to remove personal data from author, committer and tagger metadata; file contents are identical, but every commit hash changed, and anyone who cloned before that date must clone again. Both releases were marked immutable by GitHub, which locks their tags and made the rewrite impossible while they existed. They were development builds, never published on CurseForge or Modrinth, and 1.0.5 (beta) supersedes them. The `v1.0.3` and `v1.0.4` tags were locked the same way and removed too; the corresponding source remains in the history at commit `65ef813` (1.0.3) and `ffc4624` (1.0.4). Pull requests #1 and #2 were deleted by GitHub Support on 2026-09-16 for the same reason: their read-only refs kept the old history reachable. The contributed work is unchanged in the history and credited in `CONTRIBUTORS.md`. Builds are distributed on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) and [Modrinth](https://modrinth.com/mod/customperm).
 
 ### Changed
 

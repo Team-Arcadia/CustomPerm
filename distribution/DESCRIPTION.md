@@ -2,9 +2,9 @@
 
 **Granular server-side command permissions for Minecraft NeoForge — grant individual vanilla or modded commands to non-op players, with or without LuckPerms.**
 
-> 🧪 **Current build 1.0.5 is published on the Beta channel** while final testing wraps up. It is feature-complete and safe to try on a test server; feedback is welcome.
+> 🧪 **Current build 1.1.0 is published on the Beta channel** while final testing wraps up. It is feature-complete and safe to try on a test server; feedback is welcome.
 
-![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-green.svg) ![NeoForge 21.1.221+](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg) ![Java 21](https://img.shields.io/badge/Java-21-red.svg) ![License All Rights Reserved](https://img.shields.io/badge/license-All%20Rights%20Reserved-blue.svg)
+![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-green.svg) ![NeoForge 21.1.221+](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg) ![Java 21](https://img.shields.io/badge/Java-21-red.svg) ![License All Rights Reserved](https://img.shields.io/badge/license-source--available%20(All%20Rights%20Reserved)-blue.svg)
 
 ---
 
@@ -41,7 +41,7 @@ It integrates natively with **LuckPerms** when installed, and otherwise ships it
 ## Installation
 
 1. Install **NeoForge 21.1.221+** for **Minecraft 1.21.1** (Java 21).
-2. Drop `customperm-1.0.5.jar` into your server's `mods/` folder.
+2. Drop `customperm-1.1.0.jar` into your server's `mods/` folder.
 3. *(Optional)* Add **[LuckPerms](https://luckperms.net/download)** (NeoForge 1.21.1 build) for full RBAC.
 4. *(Optional)* Have admins install **[TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui)** client-side for `/customperm gui`.
 5. Start the server. You should see `[CustomPerm] Ready — backend=...` in the log.
@@ -100,9 +100,9 @@ Offline, aliases and macros are the main draw. Grades and permission nodes come 
 
 **Système de permissions de commandes côté serveur pour Minecraft NeoForge — accordez des commandes vanilla ou moddées précises à des joueurs non-op, avec ou sans LuckPerms.**
 
-> 🧪 **La version 1.0.5 est publiée sur le canal Bêta** le temps de finaliser les tests. Elle est complète et sûre à essayer sur un serveur de test ; vos retours sont les bienvenus.
+> 🧪 **La version 1.1.0 est publiée sur le canal Bêta** le temps de finaliser les tests. Elle est complète et sûre à essayer sur un serveur de test ; vos retours sont les bienvenus.
 
-![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-green.svg) ![NeoForge 21.1.221+](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg) ![Java 21](https://img.shields.io/badge/Java-21-red.svg) ![License All Rights Reserved](https://img.shields.io/badge/license-All%20Rights%20Reserved-blue.svg)
+![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-green.svg) ![NeoForge 21.1.221+](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg) ![Java 21](https://img.shields.io/badge/Java-21-red.svg) ![License All Rights Reserved](https://img.shields.io/badge/license-source--available%20(All%20Rights%20Reserved)-blue.svg)
 
 ---
 
@@ -139,7 +139,7 @@ Il s'intègre nativement à **LuckPerms** s'il est installé, et embarque sinon 
 ## Installation
 
 1. Installez **NeoForge 21.1.221+** pour **Minecraft 1.21.1** (Java 21).
-2. Placez `customperm-1.0.5.jar` dans le dossier `mods/` de votre serveur.
+2. Placez `customperm-1.1.0.jar` dans le dossier `mods/` de votre serveur.
 3. *(Optionnel)* Ajoutez **[LuckPerms](https://luckperms.net/download)** (build NeoForge 1.21.1) pour un RBAC complet.
 4. *(Optionnel)* Faites installer **[TesseraUI](https://www.curseforge.com/minecraft/mc-mods/tesseraui)** côté client aux admins pour `/customperm gui`.
 5. Démarrez le serveur. La ligne `[CustomPerm] Ready — backend=...` doit apparaître dans les logs.

@@ -8,7 +8,7 @@
 [![NeoForge](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg)]()
 [![Java](https://img.shields.io/badge/Java-21-red.svg)]()
 [![License](https://img.shields.io/badge/license-source--available%20(All%20Rights%20Reserved)-blue.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-1.0.5-brightgreen.svg)]()
+[![Version](https://img.shields.io/badge/version-1.1.0-brightgreen.svg)]()
 
 ---
 
@@ -116,7 +116,7 @@ The mod natively integrates with **LuckPerms** if installed, otherwise it ships 
 4. (Optional) Admin players who want the in-game interface install CustomPerm on their client too.
 5. Start the server.
 
-> **Where the builds are.** Published builds are distributed on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) and [Modrinth](https://modrinth.com/mod/customperm). The current version there is **1.0.5 (beta)**; the next release will be **1.1.0**.
+> **Where the builds are.** Published builds are distributed on [CurseForge](https://www.curseforge.com/minecraft/mc-mods/customperm) and [Modrinth](https://modrinth.com/mod/customperm). The current version is **1.1.0**.
 >
 > **GitHub releases v1.0.3 and v1.0.4 were removed on 2026-09-15.** The repository history was rewritten to remove personal data from commit metadata. Those two releases were locked by GitHub and blocked the cleanup, so they had to go. They were development builds, never published on CurseForge or Modrinth, and 1.0.5 includes everything they contained. Their source remains in the history: commit `65ef813` for 1.0.3 and `ffc4624` for 1.0.4 (the tags were locked the same way and removed too). File contents are unchanged, but every commit hash changed: if you cloned the repository before that date, clone it again.
 
