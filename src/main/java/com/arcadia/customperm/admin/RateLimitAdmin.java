@@ -252,6 +252,104 @@ public final class RateLimitAdmin {
         return AdminResult.ok(who + " gets " + limit + " on /" + name + " here, from " + from + ".");
     }
 
+    /** Who a level of a limit belongs to. */
+    public enum LevelKind { SERVER, GRADE, PLAYER }
+
+    /**
+     * One level of a limit, for the interface: a member's own limit, or a grade's or a player's value.
+     *
+     * @param holder      the server, the grade, or the player's name
+     * @param context     where a grade's or a player's value applies, empty for everywhere
+     * @param secondsLeft time left of a temporary value, 0 when it does not expire
+     */
+    public record Level(LevelKind kind, String holder, String value, String context, long secondsLeft) {
+    }
+
+    /**
+     * Sets one level of {@code /name}, the interface's entry point: a member's own limit ({@code value} uses per
+     * window), or a grade's or a player's value ({@code 10/1h}, {@code 10} or {@code unlimited}), in {@code context}.
+     */
+    public static AdminResult setLevel(MinecraftServer server, String name, LevelKind kind, String holder, String value,
+                                       String context) {
+        RateLimitsConfig.Rule rule = rules().get(name);
+        if (rule == null) return noRule(name, true);
+        String ctx = context == null || context.isBlank() ? null : context.trim();
+        if (kind == LevelKind.SERVER) {
+            if (ctx != null) return AdminResult.fail("A server's own limit has no context: the server is where it applies.");
+            RateLimitsConfig.Limit limit = RateLimitsConfig.parseLimit(value, rule.windowSeconds);
+            if (limit == null || limit.unlimited()) {
+                return AdminResult.fail("A server's own limit is uses per window, such as 10/1h. Unlimited is for a grade or a player.");
+            }
+            return setOnServer(name, holder, limit.maxExecutions, limit.windowSeconds);
+        }
+        String problem = holderValueProblem(name, value);
+        if (problem != null) return AdminResult.fail(problem);
+        String key = RateLimitsConfig.metaKey(name);
+        if (kind == LevelKind.GRADE) return MetaAdmin.setOnGrade(server, holder, key, holderValue(value), 0, ctx);
+        GradeAdmin.Resolution who = GradeAdmin.resolvePlayer(server, holder);
+        if (who.profile().isEmpty()) return AdminResult.fail(who.problem());
+        return MetaAdmin.setOnPlayer(server, who.profile().get().getId(), who.profile().get().getName(), key,
+                holderValue(value), 0, ctx);
+    }
+
+    /** Removes one level of {@code /name}: the holder follows the level below again. */
+    public static AdminResult clearLevel(MinecraftServer server, String name, LevelKind kind, String holder, String context) {
+        if (kind == LevelKind.SERVER) return clearOnServer(name, holder);
+        String ctx = context == null || context.isBlank() ? null : context.trim();
+        String key = RateLimitsConfig.metaKey(name);
+        if (kind == LevelKind.GRADE) return MetaAdmin.unsetOnGrade(server, holder, key, ctx);
+        GradeAdmin.Resolution who = GradeAdmin.resolvePlayer(server, holder);
+        if (who.profile().isEmpty()) return AdminResult.fail(who.problem());
+        return MetaAdmin.unsetOnPlayer(server, who.profile().get().getId(), who.profile().get().getName(), key, ctx);
+    }
+
+    /**
+     * Every level of {@code /name}: the members with a limit of their own, then the grades and the players with a
+     * value in the grades file. Under LuckPerms the grades' and players' values live there and are not listed.
+     */
+    public static List<Level> levels(MinecraftServer server, String name) {
+        RateLimitsConfig.Rule rule = rules().get(name);
+        List<Level> out = new ArrayList<>();
+        if (rule == null) return out;
+        if (rule.perServer != null) {
+            rule.perServer.forEach((member, limit) -> out.add(new Level(LevelKind.SERVER, member, limit.toString(), "", 0)));
+        }
+        if (CustomPerm.isLuckPermsActive()) return out;
+        String key = RateLimitsConfig.metaKey(name);
+        GradesConfig config = CustomPerm.configManager.getGrades();
+        long now = Expiry.now();
+        new TreeMap<>(config.grades).forEach((grade, holder) -> {
+            level(out, LevelKind.GRADE, grade, holder.meta.get(key), holder.metaExpiries.get(key), "", now);
+            new TreeMap<>(holder.contexts).forEach((context, scope) ->
+                    level(out, LevelKind.GRADE, grade, scope.meta.get(key), scope.metaExpiries.get(key), context, now));
+        });
+        Set<String> uuids = new TreeSet<>(config.userMeta.keySet());
+        uuids.addAll(config.userContexts.keySet());
+        for (String uuid : uuids) {
+            String who;
+            try {
+                who = server == null ? uuid : GradeAdmin.displayName(server, UUID.fromString(uuid));
+            } catch (IllegalArgumentException e) {
+                continue;
+            }
+            Map<String, String> meta = config.userMeta.get(uuid);
+            Map<String, Long> expiries = config.userMetaExpiries.get(uuid);
+            if (meta != null) level(out, LevelKind.PLAYER, who, meta.get(key), expiries == null ? null : expiries.get(key), "", now);
+            Map<String, GradesConfig.UserScoped> scopes = config.userContexts.get(uuid);
+            if (scopes != null) {
+                new TreeMap<>(scopes).forEach((context, scope) ->
+                        level(out, LevelKind.PLAYER, who, scope.meta.get(key), scope.metaExpiries.get(key), context, now));
+            }
+        }
+        return out;
+    }
+
+    private static void level(List<Level> out, LevelKind kind, String holder, String value, Long expiry, String context,
+                              long now) {
+        if (value == null || expiry != null && expiry <= now) return;
+        out.add(new Level(kind, holder, value, context, expiry == null ? 0 : Math.max(1, (expiry - now) / 1000)));
+    }
+
     /** Grade or player entries of the meta for {@code /name}: {@code vip 10/1h}, {@code vip 20/1h (server=hub)}. */
     private static List<String> holders(String name, boolean grades, MinecraftServer server) {
         String key = RateLimitsConfig.metaKey(name);

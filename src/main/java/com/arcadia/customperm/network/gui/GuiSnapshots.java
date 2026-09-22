@@ -51,7 +51,7 @@ public final class GuiSnapshots {
             case DASHBOARD -> dashboard(player.getServer());
             case COMMANDS -> commands(player.getServer());
             case ALIASES -> aliases();
-            case RATE_LIMITS -> rateLimits();
+            case RATE_LIMITS -> rateLimits(player.getServer());
             case GRADES -> grades(player.getServer());
             case PLAYERS -> players(player.getServer(), player);
             case LUCKPERMS -> new LuckPermsData(LuckPermsData.GROUPS);
@@ -337,7 +337,7 @@ public final class GuiSnapshots {
                 .toList();
     }
 
-    static RateLimitsData rateLimits() {
+    static RateLimitsData rateLimits(MinecraftServer server) {
         ConfigManager config = CustomPerm.configManager;
         Set<String> exposed = config.getCommands().grantedCommands;
         Set<String> aliases = config.getAliases().aliases.keySet();
@@ -349,14 +349,20 @@ public final class GuiSnapshots {
             var rule = rules.get(name);
             RateLimitsData.Target target = aliases.contains(name) ? RateLimitsData.Target.ALIAS
                     : exposed.contains(name) ? RateLimitsData.Target.EXPOSED_COMMAND : RateLimitsData.Target.NONE;
+            List<RateLimitsData.Level> levels = com.arcadia.customperm.admin.RateLimitAdmin.levels(server, name).stream()
+                    .limit(RateLimitsData.LEVELS_MAX)
+                    .map(level -> new RateLimitsData.Level(level.kind().name(), level.holder(), level.value(),
+                            level.context(), level.secondsLeft()))
+                    .toList();
             rows.add(new RateLimitsData.Rule(name, rule.maxExecutions, rule.windowSeconds, rule.enabled,
-                    rule.persistsImmediately(), target, rule.scope, rule.servers == null ? List.of() : List.copyOf(rule.servers)));
+                    rule.persistsImmediately(), target, rule.scope, rule.servers == null ? List.of() : List.copyOf(rule.servers),
+                    levels));
         }
         Set<String> candidates = new TreeSet<>(exposed);
         candidates.addAll(aliases);
         candidates.removeAll(rules.keySet());
         List<String> unlimited = candidates.stream().limit(GuiCodecs.SERVER_LIST_MAX).toList();
-        return new RateLimitsData(rows, unlimited);
+        return new RateLimitsData(rows, unlimited, CustomPerm.isLuckPermsActive());
     }
 
     static AliasesData aliases() {

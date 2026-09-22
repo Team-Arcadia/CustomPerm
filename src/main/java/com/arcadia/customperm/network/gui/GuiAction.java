@@ -76,6 +76,14 @@ public enum GuiAction {
     RATELIMIT_SCOPE(2, GuiArea.RATE_LIMITS),
     /** {@code [name, servers]} The cluster members the rule is enforced on: names joined by commas, or {@code all}. */
     RATELIMIT_SERVERS(2, GuiArea.RATE_LIMITS),
+    /**
+     * {@code [name, kind, holder, value, context]} One level of a rule: {@code SERVER} with uses per window such as
+     * {@code 10/1h}, or {@code GRADE} / {@code PLAYER} with {@code 10/1h}, {@code 10} or {@code unlimited}, in a context
+     * or everywhere (empty).
+     */
+    RATELIMIT_LEVEL_SET(5, GuiArea.RATE_LIMITS),
+    /** {@code [name, kind, holder, context]} Removes one level of a rule. */
+    RATELIMIT_LEVEL_CLEAR(4, GuiArea.RATE_LIMITS),
 
     /** {@code [grade]} Creates an internal grade. */
     GRADE_CREATE(1, GuiArea.GRADES),

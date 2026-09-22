@@ -34,7 +34,9 @@ import java.util.Objects;
 /**
  * Rate limit editor. The left column lists the rules; the right panel edits the selected rule or a
  * new one: target, uses per window, enforcement and when usage history is saved. Exposed commands and
- * aliases without a rule are listed under the form, a click fills the target.
+ * aliases without a rule are listed under the form, a click fills the target. The Levels view lists and edits
+ * what adjusts the rule: a server's own limit, a grade's or a player's value, each with the last word over the
+ * one before it.
  */
 public final class RateLimitsScreen extends AdminScreen {
 
@@ -53,8 +55,16 @@ public final class RateLimitsScreen extends AdminScreen {
     private final CpEditBox window;
     private final CpEditBox scope;
     private final CpList<String> unlimitedList;
+    private final CpList<RateLimitsData.Level> levelList;
+    private final CpEditBox levelHolder;
+    private final CpEditBox levelValue;
+    private final CpEditBox levelContext;
     /** Whether the servers view replaces the lower part of the form; kept while moving between rules. */
     private boolean serversView;
+    /** Whether the levels view replaces the lower part of the form; never together with the servers view. */
+    private boolean levelsView;
+    /** SERVER, GRADE or PLAYER: who the level being typed belongs to. */
+    private String levelKind = "GRADE";
     /** Rule to select once the next refresh lands, after saving a new one. */
     private String pendingRule;
     /** Right edge of the buttons on the save row, so the summary is only drawn where it fits. */
@@ -104,7 +114,43 @@ public final class RateLimitsScreen extends AdminScreen {
                     setFocused(max);
                     rebuild();
                 });
+        this.levelHolder = new CpEditBox(Component.literal("Server, grade or player"), 64)
+                .completes(text -> (switch (levelKind) {
+                    case "SERVER" -> Completions.servers(List.of("here"));
+                    case "PLAYER" -> Completions.players();
+                    default -> Completions.grades();
+                }).propose(text));
+        this.levelValue = new CpEditBox(Component.literal("Limit"), 32)
+                .completes(text -> Completions.search(this::valueExamples).propose(text))
+                .onSubmit(this::setLevel);
+        this.levelContext = new CpEditBox(Component.literal("Where it applies"), 128)
+                .hint(Component.literal("everywhere, or server=hub"))
+                .completes(Completions.contexts())
+                .onSubmit(this::setLevel);
+        this.levelList = new CpList<RateLimitsData.Level>(Component.literal("Levels of this limit"), ROW)
+                .renderer(this::renderLevel)
+                .label(level -> kindLabel(level.kind()) + " " + level.holder() + ", " + level.value()
+                        + (level.context().isEmpty() ? "" : ", " + level.context()))
+                .identity(level -> level.kind() + "|" + level.holder() + "|" + level.context())
+                .emptyText("Nothing adjusts this limit: every player gets the rule's numbers.")
+                .onSelect(level -> {
+                    levelKind = level.kind();
+                    levelHolder.setValue(level.holder());
+                    levelValue.setValue(level.value());
+                    levelContext.setValue(level.context());
+                    rebuild();
+                });
         refilter();
+    }
+
+    /** What the value field proposes: the rule's numbers doubled and multiplied by five, and unlimited. */
+    private List<String> valueExamples() {
+        RateLimitsData.Rule rule = ruleList.getSelected();
+        if (rule == null) return List.of();
+        String window = formatWindow(rule.windowSeconds());
+        List<String> examples = new java.util.ArrayList<>(List.of(rule.max() * 2 + "/" + window, rule.max() * 5 + "/" + window));
+        if (!levelKind.equals("SERVER")) examples.add("unlimited");
+        return examples;
     }
 
     private static boolean digitsOnly(String text) {
@@ -142,6 +188,7 @@ public final class RateLimitsScreen extends AdminScreen {
                 .toList());
         unlimitedList.setItems(data.unlimited());
         RateLimitsData.Rule after = ruleList.getSelected();
+        levelList.setItems(after == null ? List.of() : after.levels());
         if (after != null && !after.equals(before)) fillForm(after);
         if (layout != null && !Objects.equals(before == null ? null : before.name(), after == null ? null : after.name())) {
             rebuild();
@@ -199,6 +246,16 @@ public final class RateLimitsScreen extends AdminScreen {
         return serversView && rule != null && showsServers(rule.servers());
     }
 
+    /** Whether the lower part of the form shows what adjusts the selected rule. */
+    private boolean showingLevels() {
+        return levelsView && ruleList.getSelected() != null;
+    }
+
+    /** Top of the levels list, under the kind row and the two field rows. */
+    private int levelsListY() {
+        return togglesY() + (BUTTON + 4) * 3 + 14;
+    }
+
     private Rect unlimitedArea() {
         Rect in = inner();
         int top = scopeY() + BUTTON + 18;
@@ -237,6 +294,7 @@ public final class RateLimitsScreen extends AdminScreen {
                 // A view switch rather than more rows: the form already fills a small window.
                 CpButton servers = CpButton.neutral(Component.literal("Servers"), () -> {
                             serversView = !serversView;
+                            if (serversView) levelsView = false;
                             rebuild();
                         })
                         .icon(Icon.HOME).selected(serversView)
@@ -249,10 +307,28 @@ public final class RateLimitsScreen extends AdminScreen {
                 addRenderableWidget(servers.at(new Rect(saveRowRight + 4, saveY(), serversW, BUTTON)));
                 saveRowRight += 4 + serversW;
             }
+            CpButton levels = CpButton.neutral(Component.literal("Levels"), () -> {
+                        levelsView = !levelsView;
+                        if (levelsView) serversView = false;
+                        rebuild();
+                    })
+                    .icon(Icon.USER).selected(levelsView)
+                    .tooltip(Component.literal("A server's own limit, a grade's or a player's value. Click again to go back."));
+            int levelsW = levels.preferredWidth(font, 6);
+            if (saveRowRight + 4 + levelsW > in.right() - BUTTON - 4) {
+                levels.iconOnly(Icon.USER);
+                levelsW = BUTTON;
+            }
+            addRenderableWidget(levels.at(new Rect(saveRowRight + 4, saveY(), levelsW, BUTTON)));
+            saveRowRight += 4 + levelsW;
             CpButton remove = CpButton.danger(Component.literal("Remove limit"), () -> confirmRemove(rule))
                     .iconOnly(Icon.TRASH).enabled(editable);
             addRenderableWidget(remove.at(new Rect(in.right() - BUTTON, saveY(), BUTTON, BUTTON)));
 
+            if (showingLevels()) {
+                buildLevels(rule, editable, in);
+                return;
+            }
             if (showingServers()) {
                 buildServerToggles(new Rect(in.x(), serversY(), in.w(),
                                 serverTogglesHeight(in.w(), rule.servers(), ClusterView.RATE_LIMITS)), rule.servers(),
@@ -285,7 +361,80 @@ public final class RateLimitsScreen extends AdminScreen {
         if (unlimited.h() >= 24) addRenderableWidget(unlimitedList.at(unlimited));
     }
 
+    /** Kind row, holder and value, context and the buttons, then the levels already set. */
+    private void buildLevels(RateLimitsData.Rule rule, boolean editable, Rect in) {
+        boolean serverAllowed = !"network".equals(rule.scope());
+        boolean holdersAllowed = !data.holdersInLuckPerms();
+        if (levelKind.equals("SERVER") && !serverAllowed || !levelKind.equals("SERVER") && !holdersAllowed) {
+            levelKind = serverAllowed ? "SERVER" : "GRADE";
+        }
+        int third = (in.w() - 8) / 3;
+        String[][] kinds = {{"SERVER", "Server"}, {"GRADE", "Grade"}, {"PLAYER", "Player"}};
+        for (int i = 0; i < kinds.length; i++) {
+            String kind = kinds[i][0];
+            boolean allowed = kind.equals("SERVER") ? serverAllowed : holdersAllowed;
+            String why = kind.equals("SERVER")
+                    ? (serverAllowed ? "A limit of its own for one cluster member that counts its uses alone."
+                            : "Every member shares this counter, and a shared counter means one limit.")
+                    : (holdersAllowed ? "A value for everyone holding the grade, or for one player: it wins over the servers'."
+                            : "Under LuckPerms, set it there as the meta customperm.ratelimit." + rule.name().toLowerCase(Locale.ROOT) + ".");
+            int x = in.x() + i * (third + 4);
+            int w = i == kinds.length - 1 ? in.right() - x : third;
+            addRenderableWidget(CpButton.neutral(Component.literal(kinds[i][1]), () -> {
+                        levelKind = kind;
+                        rebuild();
+                    })
+                    .selected(levelKind.equals(kind)).enabled(allowed)
+                    .tooltip(Component.literal(why))
+                    .at(new Rect(x, togglesY(), w, BUTTON)));
+        }
+        boolean server = levelKind.equals("SERVER");
+        levelHolder.hint(Component.literal(server ? "server, or here" : levelKind.equals("PLAYER") ? "player" : "grade"));
+        levelValue.hint(Component.literal(server ? "10/1h" : "10/1h, 10 or unlimited"));
+        int fieldsY = togglesY() + BUTTON + 4;
+        Rect[] fields = new Rect(in.x(), fieldsY + (BUTTON - FIELD) / 2, in.w(), FIELD).split(GAP, in.w() * 45 / 100);
+        addRenderableWidget(levelHolder.at(fields[0]));
+        addRenderableWidget(levelValue.at(fields[1]));
+        levelHolder.setEditable(editable);
+        levelValue.setEditable(editable);
+
+        int actionsY = fieldsY + BUTTON + 4;
+        RateLimitsData.Level selected = levelList.getSelected();
+        CpButton set = CpButton.accent(Component.literal("Set"), this::setLevel).icon(Icon.CHECK).enabled(editable);
+        int setW = set.preferredWidth(font, 8);
+        int right = in.right();
+        if (selected != null) {
+            addRenderableWidget(CpButton.danger(Component.literal("Remove level"), () -> act(GuiAction.RATELIMIT_LEVEL_CLEAR,
+                            rule.name(), selected.kind(), selected.holder(), selected.context()))
+                    .iconOnly(Icon.TRASH).enabled(editable)
+                    .at(new Rect(right - BUTTON, actionsY, BUTTON, BUTTON)));
+            right -= BUTTON + 4;
+        }
+        addRenderableWidget(set.at(new Rect(right - setW, actionsY, setW, BUTTON)));
+        if (!server) {
+            addRenderableWidget(levelContext.at(new Rect(in.x(), actionsY + (BUTTON - FIELD) / 2, right - setW - GAP - in.x(), FIELD)));
+            levelContext.setEditable(editable);
+        }
+
+        Rect list = new Rect(in.x(), levelsListY(), in.w(), in.bottom() - levelsListY());
+        if (list.h() >= 24) addRenderableWidget(levelList.at(list));
+    }
+
     // ------------------------------------------------------------------ actions
+
+    private void setLevel() {
+        RateLimitsData.Rule rule = ruleList.getSelected();
+        if (rule == null) return;
+        String holder = levelHolder.getValue().trim();
+        String value = levelValue.getValue().trim();
+        if (holder.isEmpty() || value.isEmpty()) {
+            status("A level needs " + (levelKind.equals("SERVER") ? "a server" : levelKind.equals("PLAYER") ? "a player" : "a grade")
+                    + " and a limit, such as 10/1h.", false);
+            return;
+        }
+        String context = levelKind.equals("SERVER") ? "" : levelContext.getValue().trim();
+        act(GuiAction.RATELIMIT_LEVEL_SET, rule.name(), levelKind, holder, value, context);
+    }
 
     private void applyScope() {
         RateLimitsData.Rule rule = ruleList.getSelected();
@@ -296,6 +445,7 @@ public final class RateLimitsScreen extends AdminScreen {
 
     private void startNew() {
         serversView = false;
+        levelsView = false;
         ruleList.clearSelection();
         target.setValue("");
         max.setValue("");
@@ -351,6 +501,30 @@ public final class RateLimitsScreen extends AdminScreen {
                 rule.enabled() && !elsewhereOnly(rule.servers()) ? Palette.TEXT : Palette.TEXT_MUTE);
     }
 
+    private void renderLevel(GuiGraphics g, Font font, RateLimitsData.Level level, Rect r, boolean hovered, boolean selected) {
+        int y = r.y() + (r.h() - 8) / 2;
+        String badge = kindLabel(level.kind());
+        int bw = font.width(badge) + 6;
+        Skin.badge(g, font, badge, r.x() + 4, r.centerY(), switch (level.kind()) {
+            case "SERVER" -> Palette.TEXT_DIM;
+            case "PLAYER" -> Palette.WARN;
+            default -> Palette.TEXT_MUTE;
+        });
+        String right = level.value() + (level.context().isEmpty() ? "" : "  " + level.context())
+                + (level.secondsLeft() > 0 ? "  " + formatWindow((int) Math.min(Integer.MAX_VALUE, level.secondsLeft())) + " left" : "");
+        int rw = Math.min(font.width(right), (r.w() - bw - 16) / 2);
+        Skin.text(g, font, right, r.right() - 4 - rw, y, rw, Palette.TEXT_DIM);
+        Skin.text(g, font, level.holder(), r.x() + 8 + bw, y, r.w() - bw - rw - 18, Palette.TEXT);
+    }
+
+    private static String kindLabel(String kind) {
+        return switch (kind) {
+            case "SERVER" -> "SERVER";
+            case "PLAYER" -> "PLAYER";
+            default -> "GRADE";
+        };
+    }
+
     /** Short window label: 90s, 15m, 2h, 1d; exact seconds when not a whole unit. */
     static String formatWindow(int seconds) {
         if (seconds % 86_400 == 0) return (seconds / 86_400) + "d";
@@ -395,6 +569,13 @@ public final class RateLimitsScreen extends AdminScreen {
         }
         if (showingServers()) {
             Skin.text(g, font, "ENFORCED ON", in.x(), serversY() - 11, in.w(), Palette.TEXT_MUTE);
+            return;
+        }
+        if (showingLevels()) {
+            Skin.text(g, font, "RULE, THEN SERVER, THEN GRADE, THEN PLAYER", in.x(), togglesY() - 11, in.w(), Palette.TEXT_MUTE);
+            int listY = levelsListY();
+            String title = data.holdersInLuckPerms() ? "SET HERE (GRADES AND PLAYERS: IN LUCKPERMS)" : "SET HERE";
+            if (in.bottom() - listY >= 24) Skin.text(g, font, title, in.x(), listY - 11, in.w(), Palette.TEXT_MUTE);
             return;
         }
         Rect unlimited = unlimitedArea();

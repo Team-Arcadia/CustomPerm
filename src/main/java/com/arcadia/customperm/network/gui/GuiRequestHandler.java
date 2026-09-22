@@ -190,6 +190,10 @@ public final class GuiRequestHandler {
             case COMMAND_SERVERS -> ServerListAdmin.set(player.getServer(), ServerListAdmin.Kind.COMMAND, args.get(0), args.get(1));
             case ALIAS_SERVERS -> ServerListAdmin.set(player.getServer(), ServerListAdmin.Kind.ALIAS, args.get(0), args.get(1));
             case RATELIMIT_SERVERS -> ServerListAdmin.set(player.getServer(), ServerListAdmin.Kind.RATE_LIMIT, args.get(0), args.get(1));
+            case RATELIMIT_LEVEL_SET -> levelKind(args.get(1)) == null ? malformed(action)
+                    : RateLimitAdmin.setLevel(player.getServer(), args.get(0), levelKind(args.get(1)), args.get(2), args.get(3), args.get(4));
+            case RATELIMIT_LEVEL_CLEAR -> levelKind(args.get(1)) == null ? malformed(action)
+                    : RateLimitAdmin.clearLevel(player.getServer(), args.get(0), levelKind(args.get(1)), args.get(2), args.get(3));
             case GRADE_CREATE -> GradeAdmin.create(args.get(0));
             case GRADE_DELETE -> guarded(player, () -> GradeAdmin.delete(player.getServer(), args.get(0)));
             case GRADE_NODE_ADD -> kind(args.get(2)) == null ? malformed(action)
@@ -559,6 +563,14 @@ public final class GuiRequestHandler {
         String digits = value.startsWith("-") ? value.substring(1) : value;
         if (digits.isEmpty() || digits.length() > 9 || !digits.chars().allMatch(Character::isDigit)) return null;
         return Integer.parseInt(value);
+    }
+
+    /** A rate limit level kind as the client sends it, or null when it is none. */
+    private static RateLimitAdmin.LevelKind levelKind(String value) {
+        for (RateLimitAdmin.LevelKind kind : RateLimitAdmin.LevelKind.values()) {
+            if (kind.name().equals(value)) return kind;
+        }
+        return null;
     }
 
     /** Strict boolean argument: only "true" and "false", anything else is malformed. */

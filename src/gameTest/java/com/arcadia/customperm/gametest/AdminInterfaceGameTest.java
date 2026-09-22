@@ -316,6 +316,55 @@ public class AdminInterfaceGameTest {
         helper.succeed();
     }
 
+    /** Area 5: the levels of a limit through the interface: a grade's and a player's value, listed and removed. */
+    @GameTest(template = TEMPLATE, timeoutTicks = 200)
+    public static void rateLimitsPageEditsLevels(GameTestHelper helper) {
+        if (!Modes.internalOnly(helper)) return;
+        String alias = "cp_i_levels";
+        String grade = "cp_i_levelgr";
+        var server = helper.getLevel().getServer();
+        try (TestPlayer owner = TestPlayer.admin(helper.getLevel(), "cp_i_levels", 4)) {
+            AliasAdmin.define(server, alias, List.of("say levels"));
+            com.arcadia.customperm.admin.GradeAdmin.create(grade);
+            owner.clearReceived();
+            limitAct(owner, GuiAction.RATELIMIT_LEVEL_SET, alias, "GRADE", grade, "3", "");
+            expectResult(owner, "FAIL: No rate limit configured for /cp_i_levels.");
+
+            limitAct(owner, GuiAction.RATELIMIT_SET, alias, "1", "60");
+            owner.clearReceived();
+            limitAct(owner, GuiAction.RATELIMIT_LEVEL_SET, alias, "GRADE", grade, "10/1h", "");
+            limitAct(owner, GuiAction.RATELIMIT_LEVEL_SET, alias, "PLAYER", "cp_i_levels", "unlimited", "");
+            limitAct(owner, GuiAction.RATELIMIT_LEVEL_SET, alias, "GRADE", grade, "lots", "");
+            limitAct(owner, GuiAction.RATELIMIT_LEVEL_SET, alias, "SERVER", "hub", "unlimited", "");
+            limitAct(owner, GuiAction.RATELIMIT_LEVEL_SET, alias, "NOBODY", grade, "3", "");
+            List<String> results = results(owner);
+            if (results.size() != 5 || !results.get(0).startsWith("OK: Set customperm.ratelimit.cp_i_levels=10/1h")
+                    || !results.get(1).startsWith("OK: Set customperm.ratelimit.cp_i_levels=unlimited")
+                    || !results.get(2).contains("is not a limit")
+                    || !results.get(3).contains("Unlimited is for a grade or a player")
+                    || !results.get(4).equals("FAIL: Malformed request for RATELIMIT_LEVEL_SET.")) {
+                fail("Levels set and refused as expected, got " + results);
+            }
+
+            RateLimitsData.Rule row = rateLimitsPage(owner).rules().stream()
+                    .filter(r -> r.name().equals(alias)).findFirst().orElse(null);
+            if (row == null || !row.levels().equals(List.of(
+                    new RateLimitsData.Level("GRADE", grade, "10/1h", "", 0L),
+                    new RateLimitsData.Level("PLAYER", "cp_i_levels", "unlimited", "", 0L)))) {
+                fail("The page must list the grade's and the player's value: " + row);
+            }
+
+            owner.clearReceived();
+            limitAct(owner, GuiAction.RATELIMIT_LEVEL_CLEAR, alias, "PLAYER", "cp_i_levels", "");
+            expectResult(owner, "OK: Removed customperm.ratelimit.cp_i_levels=unlimited");
+        } finally {
+            com.arcadia.customperm.admin.GradeAdmin.delete(server, grade);
+            AliasAdmin.remove(server, alias);
+            CustomPerm.configManager.getRateLimits().rules.remove(alias);
+        }
+        helper.succeed();
+    }
+
     /** Area 5: the rate limit cycle through the interface, mirrored in config and in the page. */
     @GameTest(template = TEMPLATE, timeoutTicks = 200)
     public static void rateLimitsPageEditsRules(GameTestHelper helper) {
