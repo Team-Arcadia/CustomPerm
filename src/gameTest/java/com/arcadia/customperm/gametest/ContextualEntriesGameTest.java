@@ -132,7 +132,8 @@ public class ContextualEntriesGameTest {
                     NODE + " for cp_c_holder in the_nether now expires in 1d");
             // The player's own node on its own line with where it applies; the grade held there on the context line.
             List<String> listed = ServerCommands.run(server, "customperm user list cp_c_holder");
-            expect(listed, "own deny : " + NODE + " (the_nether, 1d left)");
+            expectAny(listed, "own deny : " + NODE + " (the_nether, 1d left)",
+                    "own deny : " + NODE + " (the_nether, 23h 59m left)");
             expect(listed, "in the_nether: grade:" + GRADE);
 
             expect(ServerCommands.run(server, "customperm user removedeny cp_c_holder " + NODE + " world=the_nether"),
@@ -392,6 +393,14 @@ public class ContextualEntriesGameTest {
 
     private static void expect(List<String> lines, String fragment) {
         check(lines.stream().anyMatch(line -> line.contains(fragment)), "expected '" + fragment + "' in " + lines);
+    }
+
+    /** A remaining time read within the same second as the grant, or the one after. */
+    private static void expectAny(List<String> lines, String... fragments) {
+        for (String fragment : fragments) {
+            if (lines.stream().anyMatch(line -> line.contains(fragment))) return;
+        }
+        throw new GameTestAssertException("expected one of " + List.of(fragments) + " in " + lines);
     }
 
     private static void check(boolean condition, String message) {
