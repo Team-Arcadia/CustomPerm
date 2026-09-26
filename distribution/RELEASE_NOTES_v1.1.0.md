@@ -1,6 +1,6 @@
-# CustomPerm 1.1.0 (Beta)
+# CustomPerm 1.1.0
 
-> **Beta build.** This release is feature-complete but still in final testing. Try it on a test server first, and report any issue on the [tracker](https://github.com/Team-Arcadia/CustomPerm/issues) before running it in production.
+> Upgrading from 1.0.x? Read **Before you upgrade** first: after the upgrade, nobody can administer CustomPerm until the new nodes are granted from the console. Back up your configuration folder before replacing the jar.
 
 **Compatibility:** Minecraft 1.21.1 · NeoForge 21.1.221+ · Java 21 · LuckPerms 5.4.150+ (optional) · Arcadia Lib 1.3.0+ (cluster mode only)
 
@@ -86,22 +86,16 @@ The complete list is in the [changelog](https://github.com/Team-Arcadia/CustomPe
 
 ---
 
-## Please help us test
+## Reporting an issue
 
-- [ ] Upgrade from 1.0.5: grant the admin nodes from the console, then check your grades still give what you expect.
-- [ ] The interface on a normal and a narrow game window.
-- [ ] A vanilla client still joining a server running CustomPerm without Arcadia Lib.
-- [ ] Import from or export to LuckPerms on a copy of your data.
-- [ ] Cluster mode on two servers sharing a test database.
-
-Report issues with your server type (dedicated or singleplayer), LuckPerms version if any, and whether cluster mode is on.
+Open an issue on the [tracker](https://github.com/Team-Arcadia/CustomPerm/issues) with your server type (dedicated or singleplayer), your LuckPerms version if any, whether cluster mode is on, and the relevant lines of `logs/latest.log`.
 
 ---
 ---
 
-# CustomPerm 1.1.0 (Bêta)
+# CustomPerm 1.1.0
 
-> **Version bêta.** Cette version est complète mais encore en phase de tests finaux. Essayez-la d'abord sur un serveur de test, et signalez tout problème sur le [tracker](https://github.com/Team-Arcadia/CustomPerm/issues) avant une mise en production.
+> Vous venez de la 1.0.x ? Lisez d'abord **Avant de mettre à jour** : après la mise à jour, personne ne peut administrer CustomPerm tant que les nouveaux nœuds ne sont pas accordés depuis la console. Sauvegardez votre dossier de configuration avant de remplacer le jar.
 
 **Compatibilité :** Minecraft 1.21.1 · NeoForge 21.1.221+ · Java 21 · LuckPerms 5.4.150+ (optionnel) · Arcadia Lib 1.3.0+ (mode cluster uniquement)
 
@@ -187,12 +181,6 @@ La 1.1.0 est la première version publiée sous la licence propriétaire à sour
 
 ---
 
-## Aidez-nous à tester
+## Signaler un problème
 
-- [ ] Mise à jour depuis la 1.0.5 : accordez les nœuds admin depuis la console, puis vérifiez que vos grades donnent toujours ce que vous attendez.
-- [ ] L'interface dans une fenêtre de jeu normale et étroite.
-- [ ] Un client vanilla qui rejoint un serveur sous CustomPerm sans Arcadia Lib.
-- [ ] Import depuis ou export vers LuckPerms sur une copie de vos données.
-- [ ] Le mode cluster sur deux serveurs partageant une base de test.
-
-Signalez les problèmes en précisant le type de serveur (dédié ou solo), la version de LuckPerms le cas échéant, et si le mode cluster est actif.
+Ouvrez une issue sur le [tracker](https://github.com/Team-Arcadia/CustomPerm/issues) en précisant le type de serveur (dédié ou solo), la version de LuckPerms le cas échéant, si le mode cluster est actif, et les lignes utiles de `logs/latest.log`.
