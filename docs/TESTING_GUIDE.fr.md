@@ -978,3 +978,34 @@ Pour un mod NeoForge 1.21.x neuf, dans l'ordre :
 
 Les étapes 1 à 8 sont le minimum qui produit un dispositif fonctionnel et vert. Tout ce qui suit est ce
 qui rend la suite digne d'être maintenue.
+
+## 10. Performance : les scénarios spark, joués tout seuls
+
+Les tests prouvent un comportement, pas l'absence de fuite ou de régression du temps de frame. Pour cela la
+procédure a des scénarios spark, et les deux sont automatisés pour qu'une release n'attende pas que quelqu'un
+clique dedans. spark n'entre jamais dans le build : poser une fois le jar NeoForge 1.21.1 dans `run/spark/mods`.
+Les rapports restent dans des fichiers et ne sont jamais envoyés ; en publier un sur spark.lucko.me reste une
+décision humaine.
+
+**S01 à S03, une commande, environ 12 minutes :** `./gradlew runSparkScenario`. Un run client (`sparkScenario`,
+source set `gameTest`, dossier `run/spark`) crée un monde plat neuf et `SparkScenario` le pilote :
+
+- crée une commande limitée et exposée, un alias et 300 joueurs connus (simulés avec `TestPlayer`) ;
+- S01 : ouvre et ferme l'interface 50 fois en visitant Grades, Players (en tapant dans le champ de nœud
+  complété), Commands avec la vue Who, Rate limits avec la vue Levels, et Aliases ; un admin simulé ouvre chaque
+  page puis se déconnecte ; heap summaries avant et après ;
+- S02 : la page Players avec sa liste de complétion, profilée 30 s au repos puis 60 s en défilant et en tapant ;
+- S03 : huit joueurs martèlent la commande limitée pendant 5 minutes sous profil serveur, puis 10 reloads.
+
+Le verdict, une ligne PASS ou FAIL par attendu avec les chiffres, est dans `run/spark/spark-report.txt`.
+`SparkData` lit les fichiers `.sparkheap` et `.sparkprofile` de spark (du protobuf brut), sans rien envoyer.
+En solo il n'y a qu'une JVM : un heap summary compte ensemble les classes client et serveur, et la page Import
+n'est pas visitée car LuckPerms ne tourne pas en solo.
+
+**S04, un membre de cluster sur une heure :** `python tools/spark_cluster.py` (`--minutes` pour raccourcir). Il
+démarre le MariaDB de XAMPP s'il ne tourne pas (`--mysql-bin` pour une autre installation), crée une base et un
+utilisateur jetables, lance deux serveurs dédiés (`runSparkClusterA`, `runSparkClusterB`) reliés par Arcadia Lib,
+modifie grades, alias, limites et commandes exposées sur l'un puis l'autre en RCON, coupe la base au milieu, et
+supprime la base à la fin. `ClusterProbe` journalise toutes les 30 s ce qu'un heap summary ne montre pas (numéros
+en attente de GapReader, threads vivants, octets alloués par le poller, compteurs GC). Verdict dans
+`run/spark-cluster/spark-cluster-report.txt`.

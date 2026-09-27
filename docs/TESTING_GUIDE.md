@@ -951,3 +951,33 @@ For a fresh NeoForge 1.21.x mod, in order:
 
 Steps 1 to 8 are the minimum that produces a working, green setup. Everything after is what makes the
 suite worth maintaining.
+
+## 10. Performance: the spark scenarios, played by themselves
+
+Tests prove behaviour, not the absence of leaks or frame-time regressions. For that the procedure has spark
+scenarios, and both are automated so a release does not wait on someone clicking through them. spark itself
+never enters the build: put the NeoForge 1.21.1 jar in `run/spark/mods` once. Reports are saved to files and
+never uploaded; publishing one on spark.lucko.me stays a human decision.
+
+**S01 to S03, one command, about 12 minutes:** `./gradlew runSparkScenario`. A client run (`sparkScenario`,
+source set `gameTest`, game directory `run/spark`) creates a fresh flat world and `SparkScenario` drives it:
+
+- seeds a limited and exposed command, an alias, and 300 known players (simulated with `TestPlayer`);
+- S01: opens and closes the interface 50 times, visiting Grades, Players (typing in the completed node field),
+  Commands with the Who view, Rate limits with the Levels view, and Aliases; a simulated admin opens every page
+  and disconnects; heap summaries before and after;
+- S02: the Players page with its completion list, profiled 30 s idle, then 60 s scrolling and typing;
+- S03: eight players hammer the limited command for 5 minutes under a server profile, then 10 reloads.
+
+The verdict, one PASS or FAIL line per expectation with the numbers behind it, is in `run/spark/spark-report.txt`.
+`SparkData` reads spark's `.sparkheap` and `.sparkprofile` files (plain protobuf) so no upload is needed.
+Singleplayer means one JVM: a heap summary counts client and server classes together, and Import is not visited
+because LuckPerms does not run in singleplayer.
+
+**S04, a cluster member over an hour:** `python tools/spark_cluster.py` (`--minutes` to shorten). It starts
+MariaDB from XAMPP when it is not running (`--mysql-bin` for another install), creates a throwaway database and
+user, launches two dedicated servers (`runSparkClusterA`, `runSparkClusterB`) joined through Arcadia Lib, changes
+grades, aliases, rate limits and exposed commands on both in turn over RCON, stops the database in the middle,
+and drops the database at the end. `ClusterProbe` logs what a heap summary cannot show every 30 s (GapReader
+pending numbers, live threads, bytes allocated by the poller, GC counts). Verdict in
+`run/spark-cluster/spark-cluster-report.txt`.

@@ -85,6 +85,32 @@ neoForge {
             systemProperty 'customperm.gametest.luckperms', 'false'
             systemProperty 'customperm.gametest.arcadia', 'true'
         }
+        // Spark scenarios S01 to S03 of the test procedure, played by SparkScenario in a fresh world. spark goes
+        // in run/spark/mods by hand, never in the build; reports stay on disk, the verdict is spark-report.txt.
+        sparkScenario {
+            client()
+            sourceSet = sourceSets.gameTest
+            gameDirectory = project.file('run/spark')
+            programArguments.addAll '--username', 'SparkAdmin'
+            systemProperty 'customperm.spark', 'true'
+            // -PsparkScenarios=s03 plays one scenario; all three by default.
+            systemProperty 'customperm.spark.scenarios', (project.findProperty('sparkScenarios') ?: 's01,s02,s03').toString()
+        }
+        // Spark scenario S04: two cluster members through Arcadia Lib, driven by tools/spark_cluster.py over RCON.
+        sparkClusterA {
+            server()
+            sourceSet = sourceSets.gameTest
+            gameDirectory = project.file('run/spark-cluster/a')
+            programArgument '--nogui'
+            systemProperty 'customperm.sparkCluster', 'true'
+        }
+        sparkClusterB {
+            server()
+            sourceSet = sourceSets.gameTest
+            gameDirectory = project.file('run/spark-cluster/b')
+            programArgument '--nogui'
+            systemProperty 'customperm.sparkCluster', 'true'
+        }
     }
 
     mods {
@@ -166,6 +192,30 @@ def prepareArcadiaGameTestMods = tasks.register('prepareArcadiaGameTestMods', Sy
 tasks.matching { it.name == 'runGameTestServer' }.configureEach { dependsOn prepareInternalGameTestMods }
 tasks.matching { it.name == 'runGameTestServerLuckPerms' }.configureEach { dependsOn prepareLuckPermsGameTestMods }
 tasks.matching { it.name == 'runGameTestServerArcadia' }.configureEach { dependsOn prepareArcadiaGameTestMods }
+
+// Every spark run starts from nothing: no world, no CustomPerm config, no remembered player names. spark's own
+// folder and options.txt are kept.
+def prepareSparkScenario = tasks.register('prepareSparkScenario', Delete) {
+    delete 'run/spark/saves', 'run/spark/config/arcadia/customperm', 'run/spark/config/customperm', 'run/spark/usernamecache.json',
+            'run/spark/usercache.json', 'run/spark/spark-report.txt'
+    doLast {
+        def spark = file('run/spark/mods').listFiles()?.find { it.name.startsWith('spark-') && it.name.endsWith('.jar') }
+        if (spark == null) {
+            throw new GradleException('Put the spark mod jar (NeoForge 1.21.1) in run/spark/mods first; it is never part of the build.')
+        }
+    }
+}
+tasks.matching { it.name == 'runSparkScenario' }.configureEach { dependsOn prepareSparkScenario }
+
+// S04 members carry Arcadia Lib, whose connector reaches the database; spark is copied in by the script.
+['a', 'b'].each { member ->
+    def prepare = tasks.register("prepareSparkCluster${member.toUpperCase()}", Sync) {
+        from configurations.arcadiaLibGameTestMod
+        into "run/spark-cluster/${member}/mods"
+        preserve { include 'spark-*.jar' }
+    }
+    tasks.matching { it.name == "runSparkCluster${member.toUpperCase()}" }.configureEach { dependsOn prepare }
+}
 
 // jmhJar bundles the NeoForge runtime (over 65535 entries), so zip64 is required.
 tasks.named('jmhJar', Jar) { zip64 = true }
