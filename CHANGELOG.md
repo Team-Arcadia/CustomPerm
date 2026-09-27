@@ -198,6 +198,8 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Fixed
 
+- **Icons and outlines were the largest cost of an admin page** — every pixel run of an icon and every side of an outline was sent to the GPU as its own draw call, so a page full of buttons spent about 13% of the render thread on icons alone (Players page, 300 players, measured with spark). Each icon and outline is now drawn in one batch; nothing changes on screen.
+
 - **The Import page left its report a single line on an ordinary window** — at GUI scale 3 the banner, the tab row, the introduction and the buttons took nearly all the height. The introduction now shows only until something is read, the report then saying more.
 
 - **The last admin page ran past the sidebar with LuckPerms installed** — ten entries did not fit at GUI scale 3 and Help was drawn over the footer. The rows now shrink to fit.

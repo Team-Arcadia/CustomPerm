@@ -84,7 +84,8 @@ public final class Skin {
     /** One-pixel border drawn inside {@code r}. */
     public static void outline(GuiGraphics g, Rect r, int color) {
         if (r.isEmpty()) return;
-        g.renderOutline(r.x(), r.y(), r.w(), r.h(), color);
+        // Four fills of one colour: batched into one flush, like icon().
+        g.drawManaged(() -> g.renderOutline(r.x(), r.y(), r.w(), r.h(), color));
     }
 
     /** Keyboard focus indicator, drawn one pixel outside the element so it never covers content. */
@@ -163,19 +164,23 @@ public final class Skin {
 
     /** Paints an icon at its native size, merging each row's lit pixels into horizontal runs. */
     public static void icon(GuiGraphics g, Icon icon, int x, int y, int color) {
-        int size = Atlas.ICON_SIZE;
-        for (int row = 0; row < size; row++) {
-            int start = -1;
-            for (int col = 0; col <= size; col++) {
-                boolean lit = col < size && icon.lit(col, row);
-                if (lit && start < 0) {
-                    start = col;
-                } else if (!lit && start >= 0) {
-                    g.fill(x + start, y + row, x + col, y + row + 1, color);
-                    start = -1;
+        // One flush for the whole icon: outside drawManaged every fill is its own draw call, which made icons
+        // the largest cost of a page (spark scenario S02). Same colour and render type, so the layering is unchanged.
+        g.drawManaged(() -> {
+            int size = Atlas.ICON_SIZE;
+            for (int row = 0; row < size; row++) {
+                int start = -1;
+                for (int col = 0; col <= size; col++) {
+                    boolean lit = col < size && icon.lit(col, row);
+                    if (lit && start < 0) {
+                        start = col;
+                    } else if (!lit && start >= 0) {
+                        g.fill(x + start, y + row, x + col, y + row + 1, color);
+                        start = -1;
+                    }
                 }
             }
-        }
+        });
     }
 
     /**
