@@ -177,8 +177,8 @@ final class ChatFields {
         String note = problem != null ? "Text: " + problem
                 : typedPriority() == null ? "A priority is a whole number: the highest shows first."
                 : names.decorate() ? "Codes: &0-&f colours, &l bold, &o italic, &r reset, &#RRGGBB any colour."
-                : "Names are not decorated yet: nobody sees this until Names is on, on the Grades page's "
-                        + "Chat tab, or /customperm names on.";
+                // The way out first: a narrow panel cuts the end of this line, and the reason alone does not help.
+                : "Turn Names on to show this: Grades page, Chat tab, or /customperm names on.";
         Skin.text(g, font, Skin.ellipsize(font, note, area.w()), area.x(), y + 28,
                 problem != null || typedPriority() == null || !names.decorate() ? Palette.WARN : Palette.TEXT_MUTE);
     }
