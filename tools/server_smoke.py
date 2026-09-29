@@ -60,7 +60,7 @@ def prepare(password):
         "rcon.port": RCON_PORT, "rcon.password": password, "level-type": "minecraft\\:flat", "view-distance": 4,
         "simulation-distance": 4, "spawn-protection": 0, "motd": "CustomPerm server smoke",
         # A driven client cannot defend itself: the first run lost its admin to a slime.
-        "gamemode": "creative", "difficulty": "peaceful", "spawn-monsters": "false"})
+        "max-tick-time": -1, "gamemode": "creative", "difficulty": "peaceful", "spawn-monsters": "false"})
 
 
 def gradle(task, log_name):

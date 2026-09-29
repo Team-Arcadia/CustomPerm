@@ -112,10 +112,12 @@ def reset(jar, password):
         old.unlink()
     shutil.copy2(jar, SERVER / "mods" / jar.name)
     (SERVER / "eula.txt").write_text("eula=true\n", encoding="utf-8")
+    # max-tick-time -1: the pack's autosave (FTB Quests rewriting some 3900 files) can hold a tick past the watchdog's
+    # minute on a disk scanned on access, and the watchdog would stop the test; slow ticks still show in spark.
     write_properties(SERVER, {
         "server-port": PORT, "server-ip": "127.0.0.1", "online-mode": "false", "enable-rcon": "true",
         "rcon.port": RCON_PORT, "rcon.password": password, "view-distance": 4, "simulation-distance": 4,
-        "spawn-protection": 0, "motd": "CustomPerm Arcadia smoke", "level-seed": "customperm"})
+        "spawn-protection": 0, "max-tick-time": -1, "motd": "CustomPerm Arcadia smoke", "level-seed": "customperm"})
     cut_database()
 
 

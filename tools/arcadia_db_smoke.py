@@ -110,7 +110,7 @@ class Member:
         write_properties(self.folder, {
             "server-port": self.port, "server-ip": "127.0.0.1", "online-mode": "false", "enable-rcon": "true",
             "rcon.port": self.rcon_port, "rcon.password": self.password, "view-distance": 4, "simulation-distance": 4,
-            "spawn-protection": 0, "gamemode": "creative", "difficulty": "peaceful", "level-seed": "customperm",
+            "spawn-protection": 0, "max-tick-time": -1, "gamemode": "creative", "difficulty": "peaceful", "level-seed": "customperm",
             "motd": f"CustomPerm Arcadia DB smoke {self.key}"})
         if forbidden_host:
             for path in list((self.folder / "config").rglob("*")) + list((self.folder / "defaultconfigs").rglob("*")):

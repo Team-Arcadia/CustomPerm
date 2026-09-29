@@ -139,7 +139,7 @@ def server_files(folder, port, rcon_port, password, settings):
     write_properties(folder, {
         "server-port": port, "server-ip": "127.0.0.1", "online-mode": "false", "enable-rcon": "true",
         "rcon.port": rcon_port, "rcon.password": password, "level-type": "minecraft\\:flat", "view-distance": 4,
-        "simulation-distance": 4, "spawn-protection": 0, "gamemode": "creative", "difficulty": "peaceful",
+        "simulation-distance": 4, "spawn-protection": 0, "max-tick-time": -1, "gamemode": "creative", "difficulty": "peaceful",
         "spawn-monsters": "false", "motd": "CustomPerm cluster smoke"})
     config = folder / "config" / "arcadia" / "customperm"
     config.mkdir(parents=True, exist_ok=True)
