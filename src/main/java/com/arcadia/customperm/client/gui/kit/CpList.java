@@ -125,10 +125,16 @@ public class CpList<T> extends net.minecraft.client.gui.components.AbstractWidge
     /** The empty-list sentence, wrapped and centred; only when the list is too short for it is the last line cut. */
     private void renderEmptyText(GuiGraphics g, Font font, Rect frame) {
         Rect inner = frame.inset(4, 2);
+        int room = Math.max(1, (inner.h() + 1) / 10);
         var lines = font.split(Component.literal(emptyText), Math.max(1, inner.w()));
-        int fit = Math.max(1, Math.min(lines.size(), (inner.h() + 1) / 10));
+        int colon = emptyText.indexOf(':');
+        if (lines.size() > room && colon > 0) {
+            // Too short for the whole sentence: what the list lacks, before the colon, rather than a cut sentence.
+            lines = font.split(Component.literal(emptyText.substring(0, colon) + "."), Math.max(1, inner.w()));
+        }
+        int fit = Math.max(1, Math.min(lines.size(), room));
         if (fit < lines.size()) {
-            Skin.centeredText(g, font, emptyText, frame, Palette.TEXT_MUTE);
+            Skin.centeredText(g, font, colon > 0 ? emptyText.substring(0, colon) + "." : emptyText, frame, Palette.TEXT_MUTE);
             return;
         }
         int y = frame.y() + (frame.h() - fit * 10 + 2) / 2;

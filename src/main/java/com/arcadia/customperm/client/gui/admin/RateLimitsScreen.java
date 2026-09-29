@@ -615,7 +615,8 @@ public final class RateLimitsScreen extends AdminScreen {
         int half = (in.w() - GAP) / 2;
         if (showingLevels()) {
             int listY = levelsListY();
-            String title = data.holdersInLuckPerms() ? "SET HERE (GRADES, PLAYERS: LUCKPERMS)" : "SET HERE";
+            String title = data.holdersInLuckPerms()
+                    ? fitting("SET HERE (GRADES, PLAYERS: LUCKPERMS)", "SET HERE (+ LUCKPERMS)", in.w()) : "SET HERE";
             if (in.bottom() - listY >= ROW) Skin.text(g, font, title, in.x(), listY - 11, in.w(), Palette.TEXT_MUTE);
             return;
         }
