@@ -193,6 +193,42 @@ tasks.matching { it.name == 'runGameTestServer' }.configureEach { dependsOn prep
 tasks.matching { it.name == 'runGameTestServerLuckPerms' }.configureEach { dependsOn prepareLuckPermsGameTestMods }
 tasks.matching { it.name == 'runGameTestServerArcadia' }.configureEach { dependsOn prepareArcadiaGameTestMods }
 
+// A run exits 0 when the game never started or ran no test at all (the '--tests' trap of 2026-09-21), so each
+// GameTest mode is judged on the log it wrote: the summary line must be there and nothing fatal around it.
+def fatalLogPatterns = ['failed to load correctly', 'ModLoadingException', 'Failed to start the minecraft server',
+                        'invalid dist', 'Mixin apply failed', 'InvalidInjectionException', 'UnrecognizedOptionException']
+def failOnLog = { File log, List<String> patterns ->
+    if (!log.exists()) throw new GradleException("${log} was not written: the game never started.")
+    def hits = log.readLines('UTF-8').findAll { line -> patterns.any { line.contains(it) } }
+    if (hits) throw new GradleException("${log.name} shows a fatal line:\n  " + hits.take(5).join('\n  '))
+}
+[
+    ['runGameTestServer', 'run/gametest'],
+    ['runGameTestServerLuckPerms', 'run/gametest-luckperms'],
+    ['runGameTestServerArcadia', 'run/gametest-arcadia'],
+].each { runName, dir ->
+    def verify = tasks.register("verify${runName.capitalize()}") {
+        group = 'verification'
+        description = "Judges ${runName} from its log, never from its exit code."
+        outputs.upToDateWhen { false }
+        doLast {
+            def log = file("${dir}/logs/latest.log")
+            failOnLog(log, fatalLogPatterns)
+            def passed = log.readLines('UTF-8').findResult { (it =~ /All (\d+) required tests passed/).with { m -> m.find() ? m.group(1) as int : null } }
+            if (passed == null || passed == 0) {
+                throw new GradleException("${runName}: no 'All N required tests passed' line in ${log}, or N is 0.")
+            }
+            file("${dir}/gametest-count.txt").text = "${passed}\n"
+            logger.lifecycle("${runName}: ${passed} required tests passed.")
+        }
+    }
+    tasks.matching { it.name == runName }.configureEach {
+        doFirst { delete "${dir}/logs/latest.log", "${dir}/gametest-count.txt" }
+        finalizedBy verify
+        mustRunAfter 'build'
+    }
+}
+
 // Every spark run starts from nothing: no world, no CustomPerm config, no remembered player names. spark's own
 // folder and options.txt are kept.
 def prepareSparkScenario = tasks.register('prepareSparkScenario', Delete) {
@@ -272,8 +308,17 @@ tasks.register('verifyPackage') {
     group = 'verification'
     def jarFile = tasks.named('jar', Jar).flatMap { it.archiveFile }
     inputs.file(jarFile)
+    // The harness classes share the main packages' prefix, so they are listed from their own output.
+    def gameTestClassDirs = sourceSets.gameTest.output.classesDirs
+    dependsOn 'gameTestClasses'
     outputs.upToDateWhen { false }
     doLast {
+        def gameTestClasses = [] as Set
+        gameTestClassDirs.each { dir ->
+            if (dir.exists()) dir.eachFileRecurse(groovy.io.FileType.FILES) { f ->
+                if (f.name.endsWith('.class')) gameTestClasses << dir.toPath().relativize(f.toPath()).toString().replace('\\', '/')
+            }
+        }
         def allowedFiles = [
             'META-INF/MANIFEST.MF', 'META-INF/neoforge.mods.toml',
             'META-INF/LICENSE', 'META-INF/NOTICE.md', 'pack.mcmeta'
@@ -289,6 +334,10 @@ tasks.register('verifyPackage') {
                 if (name == 'META-INF/LICENSE') licenseText = zip.getInputStream(entry).text
                 if (name == 'META-INF/neoforge.mods.toml') modsToml = zip.getInputStream(entry).text
                 if (entry.directory) return
+                if (gameTestClasses.contains(name) || name.contains('/gametest/') || name.endsWith('.nbt')) {
+                    problems << "test harness file shipped: ${name}"
+                    return
+                }
                 if (name.startsWith('META-INF/jarjar/')) {
                     problems << "nested third-party jar: ${name}"
                     return
@@ -329,3 +378,13 @@ tasks.register('verifyPackage') {
 }
 
 tasks.named('check') { dependsOn 'verifyPackage' }
+
+// Everything that runs headless, in order: unit tests and the package check, then the three GameTest modes, each
+// judged from its log. The client and multi-server smoke runs open windows or databases and stay separate.
+tasks.register('testAll') {
+    group = 'verification'
+    description = 'build, then the three GameTest modes, each verified from its log.'
+    dependsOn 'build', 'runGameTestServer', 'runGameTestServerLuckPerms', 'runGameTestServerArcadia'
+}
+tasks.matching { it.name == 'runGameTestServerLuckPerms' }.configureEach { mustRunAfter 'runGameTestServer' }
+tasks.matching { it.name == 'runGameTestServerArcadia' }.configureEach { mustRunAfter 'runGameTestServerLuckPerms' }
