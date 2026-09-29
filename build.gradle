@@ -105,6 +105,13 @@ neoForge {
             programArguments.addAll '--username', 'SmokeAdmin', '--width', '1280', '--height', '720'
             systemProperty 'customperm.clientSmoke', 'true'
         }
+        // For the hand checks of the test procedure: the world runClientSmoke seeded (grades, players, an alias, a
+        // limit and its levels), without LuckPerms and without any driver. The next runClientSmoke starts it afresh.
+        manualClient {
+            client()
+            gameDirectory = project.file('run/clientsmoke')
+            programArguments.addAll '--username', 'SmokeAdmin', '--quickPlaySingleplayer', 'customperm-smoke'
+        }
         // tools/server_smoke.py: a dedicated server running LuckPerms, joined by a client without CustomPerm (V01)
         // and by an admin client that plays the LuckPerms pages and the import selection (V09).
         smokeServer {
