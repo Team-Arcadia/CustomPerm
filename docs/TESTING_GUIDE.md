@@ -891,10 +891,8 @@ jobs:
           restore-keys: gradle-${{ runner.os }}-
 
       - run: chmod +x ./gradlew
-      # The task's exit code is the number of failed required tests, so this fails the job by itself.
-      - run: ./gradlew runGameTestServer --no-daemon
-      - run: ./gradlew runGameTestServerLuckPerms --no-daemon
-      - run: ./gradlew build --no-daemon
+      # build, then every GameTest mode, each judged from its log by a verify task.
+      - run: ./gradlew testAll --no-daemon
 
       - name: Verify distributable jar contents
         run: |
@@ -916,8 +914,10 @@ jobs:
 
 Points that matter:
 
-- **`gameTestServer` exits with the number of failed required tests.** No log parsing needed; a
-  non-zero exit fails the job.
+- **Judge the run from its log, not only its exit code.** `gameTestServer` exits with the number of
+  failed required tests, but a run that never started, or ran nothing (an option the launch target
+  rejects, a namespace left out), exits 0 too. Each mode's `verify` task requires the line
+  `All N required tests passed` with N above zero and no fatal line; `testAll` chains them.
 - **`--no-daemon`** — a Gradle daemon in CI wastes memory and occasionally survives between steps
   holding stale state.
 - **Upload the logs on failure.** A GameTest failure in CI is nearly undiagnosable from the console
@@ -981,3 +981,49 @@ grades, aliases, rate limits and exposed commands on both in turn over RCON, sto
 and drops the database at the end. `ClusterProbe` logs what a heap summary cannot show every 30 s (GapReader
 pending numbers, live threads, bytes allocated by the poller, GC counts). Verdict in
 `run/spark-cluster/spark-cluster-report.txt`.
+
+## 11. Real clients and real servers, played by themselves
+
+GameTests stop where a screen, a second process or a real database starts. Four scripts cover that ground, all
+built on the same rules: a harness class in the `gameTest` source set switched on by a system property (never in
+the jar: `verifyPackage` refuses any `gameTest` class), a tick-driven step queue, and a plain-text report whose
+last line is `RESULT PASS n checks` or `RESULT FAIL x of n`. The verdict always comes from that report or from the
+log, never from an exit code: a Minecraft run exits 0 even when the game never started. Every check line starts
+with the step of the test procedure it stands for (`V03`, `D06`...), so the results map back to it.
+
+| Command | What it plays | Report |
+|---|---|---|
+| `./gradlew testAll` | JUnit, `verifyPackage`, the three GameTest modes, each judged from its log | build output |
+| `./gradlew runClientSmoke` | singleplayer client: every page and view (V02), layout at four window sizes (V03), decorated name in chat and tab list (V04), completion following a grant (V05), completion in fields (V08), rate limit levels (V10), the Who view (V11) | `run/clientsmoke/smoke-report.txt` |
+| `python tools/server_smoke.py` | dedicated server with LuckPerms: a client with no project mod joins (V01), an admin client draws the LuckPerms and Import pages at every size and plays the import selection (V09) | `run/serversmoke/server-smoke-report.txt` |
+| `python tools/cluster_smoke.py` | release jar on the Arcadia pack's NeoForge with XAMPP's MariaDB: no driver (D01), Arcadia Lib's driver (D02), TLS trust and verify (D03), first boot of three members (D04); two dev members with smoke players: D05 to D10; an admin client on a member: V06, V07 | `run/clustersmoke/cluster-smoke-report.txt` |
+| `python tools/arcadia_smoke.py` | the release jar in the Arcadia server pack (about 400 mods): backend, commands, per-tick cost, the time a reload holds the server thread, the heap across reloads, the log | `run/arcadia/arcadia-smoke-report.txt` |
+| `python tools/test_all.py` | all of the above in order (`--only`, `--skip`; `--spark` adds S01 to S04) | `run/automation/automation-report.html` |
+
+**Layout without comparing pixels.** `LayoutProbe` renders the open screen a second time into a `GuiGraphics`
+that records every string it draws. A label cut with an ellipsis outside a list, text running past the window,
+two widgets overlapping or a widget outside the window fails V03; a list row cut to fit its column is counted, and
+a field hint cut to fit is reported as a warning. Screenshots of every view at every size land in `screenshots/`
+for a person to look at; nothing asserts on pixels. The window sizes are 427x240 (the usual narrow panel, 1280x720
+at GUI scale 3), 480x270, 640x360 and 1280x720.
+
+**Driving without mixins.** `Drive` asks for pages the way the sidebar does, presses buttons by their label, finds
+lists and fields by their narration, and sends a page's actions exactly as its own buttons would. What a page keeps
+private (its tab, its status line, a list hidden while one entry is selected) is read by reflection, with an error
+that names the member when a rename breaks it.
+
+**Servers and players.** Dedicated servers are driven over RCON (`tools/mc_harness.py`), never stdin, which Gradle
+does not forward. A check such as "refused on the second member although the node is held" needs someone online:
+`cptest join|can|run|leave` (`gametest/cluster/SmokePlayers`, on the smoke members only) joins `TestPlayer`s under
+the offline UUID of their name, the same on every member. When a client must know what another server holds, it
+asks the script through `Bridge`, a request file and a response file.
+
+**What the scripts guard.** The Arcadia pack ships a connection to a real database: `arcadia_smoke.py` disables it
+and points it at `127.0.0.1:1` before every boot, and refuses to boot if it cannot. Bare servers link the pack's
+`libraries` through a directory junction and remove only the junction. The TLS step starts MariaDB with
+certificates generated for the run and restarts it without them at the end; a MariaDB the script started is
+stopped again. Driven servers run in creative and peaceful mode: the first dedicated-server run lost its admin
+client to a slime.
+
+**Still for a person.** Looking at the screenshots; a truly vanilla launcher client (V01 uses a NeoForge client
+without the mod); the production rollout; the distribution pages.

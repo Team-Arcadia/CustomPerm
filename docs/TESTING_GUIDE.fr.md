@@ -917,10 +917,8 @@ jobs:
           restore-keys: gradle-${{ runner.os }}-
 
       - run: chmod +x ./gradlew
-      # Le code de sortie de la tâche est le nombre de tests requis en échec : le job échoue seul.
-      - run: ./gradlew runGameTestServer --no-daemon
-      - run: ./gradlew runGameTestServerLuckPerms --no-daemon
-      - run: ./gradlew build --no-daemon
+      # build, puis chaque mode GameTest, chacun jugé sur son journal par une tâche verify.
+      - run: ./gradlew testAll --no-daemon
 
       - name: Verify distributable jar contents
         run: |
@@ -942,8 +940,11 @@ jobs:
 
 Les points qui comptent :
 
-- **`gameTestServer` sort avec le nombre de tests requis en échec.** Aucun parsing de log ; un code de
-  sortie non nul fait échouer le job.
+- **Juger le run sur son journal, pas seulement sur son code de sortie.** `gameTestServer` sort avec le
+  nombre de tests requis en échec, mais un run qui n'a jamais démarré, ou n'a rien joué (une option que
+  la cible de lancement rejette, un namespace oublié), sort aussi en 0. La tâche `verify` de chaque mode
+  exige la ligne `All N required tests passed` avec N supérieur à zéro et aucune ligne fatale ;
+  `testAll` les enchaîne.
 - **`--no-daemon`** — un démon Gradle en CI gaspille de la mémoire et survit parfois entre les étapes
   en retenant un état périmé.
 - **Téléverser les logs en cas d'échec.** Un échec GameTest en CI est quasi indiagnosticable depuis la
@@ -1009,3 +1010,52 @@ modifie grades, alias, limites et commandes exposées sur l'un puis l'autre en R
 supprime la base à la fin. `ClusterProbe` journalise toutes les 30 s ce qu'un heap summary ne montre pas (numéros
 en attente de GapReader, threads vivants, octets alloués par le poller, compteurs GC). Verdict dans
 `run/spark-cluster/spark-cluster-report.txt`.
+
+## 11. Vrais clients et vrais serveurs, joués tout seuls
+
+Les GameTests s'arrêtent là où commencent un écran, un second processus ou une vraie base. Quatre scripts couvrent
+ce terrain, tous sur les mêmes règles : une classe de harnais dans le source set `gameTest` activée par une
+propriété système (jamais dans le jar : `verifyPackage` refuse toute classe `gameTest`), une file d'étapes cadencée
+au tick, et un rapport texte dont la dernière ligne est `RESULT PASS n checks` ou `RESULT FAIL x of n`. Le verdict
+vient toujours de ce rapport ou du journal, jamais d'un code de sortie : un run Minecraft sort en 0 même quand le
+jeu n'a jamais démarré. Chaque ligne de contrôle commence par l'étape de la procédure de test qu'elle représente
+(`V03`, `D06`...), pour que les résultats s'y rattachent.
+
+| Commande | Ce qu'elle joue | Rapport |
+|---|---|---|
+| `./gradlew testAll` | JUnit, `verifyPackage`, les trois modes GameTest, chacun jugé sur son journal | sortie du build |
+| `./gradlew runClientSmoke` | client solo : chaque page et vue (V02), mise en page à quatre tailles de fenêtre (V03), nom décoré dans le chat et la liste des joueurs (V04), complétion qui suit un droit (V05), complétion des champs (V08), niveaux de limite (V10), vue Who (V11) | `run/clientsmoke/smoke-report.txt` |
+| `python tools/server_smoke.py` | serveur dédié avec LuckPerms : un client sans aucun mod du projet se connecte (V01), un client admin dessine les pages LuckPerms et Import à toutes les tailles et joue la sélection d'import (V09) | `run/serversmoke/server-smoke-report.txt` |
+| `python tools/cluster_smoke.py` | jar de release sur le NeoForge du pack Arcadia avec le MariaDB de XAMPP : sans pilote (D01), pilote d'Arcadia Lib (D02), TLS trust et verify (D03), premier démarrage de trois membres (D04) ; deux membres dev avec joueurs de sonde : D05 à D10 ; un client admin sur un membre : V06, V07 | `run/clustersmoke/cluster-smoke-report.txt` |
+| `python tools/arcadia_smoke.py` | le jar de release dans le server pack Arcadia (environ 400 mods) : backend, commandes, coût par tick, temps qu'un reload tient le thread serveur, tas au fil des reloads, journal | `run/arcadia/arcadia-smoke-report.txt` |
+| `python tools/test_all.py` | tout ce qui précède dans l'ordre (`--only`, `--skip` ; `--spark` ajoute S01 à S04) | `run/automation/automation-report.html` |
+
+**La mise en page sans comparer de pixels.** `LayoutProbe` rend l'écran ouvert une seconde fois dans un
+`GuiGraphics` qui enregistre chaque texte dessiné. Un libellé coupé par des points de suspension hors d'une liste,
+un texte qui dépasse la fenêtre, deux widgets qui se chevauchent ou un widget hors de la fenêtre font échouer V03 ;
+une ligne de liste coupée à sa colonne est comptée, et une aide de champ coupée est signalée comme avertissement.
+Les captures de chaque vue à chaque taille arrivent dans `screenshots/` pour un regard humain ; rien ne compare de
+pixels. Les tailles de fenêtre sont 427x240 (le panneau étroit habituel, 1280x720 à l'échelle GUI 3), 480x270,
+640x360 et 1280x720.
+
+**Piloter sans mixin.** `Drive` demande les pages comme la barre latérale, presse les boutons par leur libellé,
+trouve listes et champs par leur narration, et envoie les actions d'une page exactement comme ses propres boutons.
+Ce qu'une page garde privé (son onglet, sa ligne d'état, une liste masquée pendant qu'une entrée est choisie) est lu
+par réflexion, avec une erreur qui nomme le membre quand un renommage le casse.
+
+**Serveurs et joueurs.** Les serveurs dédiés sont pilotés par RCON (`tools/mc_harness.py`), jamais par stdin, que
+Gradle ne transmet pas. Un contrôle comme « refusé sur le second membre bien que le noeud soit détenu » demande
+quelqu'un en ligne : `cptest join|can|run|leave` (`gametest/cluster/SmokePlayers`, sur les membres de smoke
+seulement) connecte des `TestPlayer` sous l'UUID hors ligne de leur nom, le même sur chaque membre. Quand un client
+doit savoir ce qu'un autre serveur détient, il le demande au script par `Bridge`, un fichier de requête et un
+fichier de réponse.
+
+**Ce que les scripts protègent.** Le pack Arcadia embarque une connexion à une vraie base : `arcadia_smoke.py` la
+désactive et la pointe sur `127.0.0.1:1` avant chaque démarrage, et refuse de démarrer s'il n'y parvient pas. Les
+serveurs nus relient les `libraries` du pack par une jonction de dossier et ne suppriment que la jonction. L'étape
+TLS démarre MariaDB avec des certificats générés pour le run et le redémarre sans eux à la fin ; un MariaDB démarré
+par le script est arrêté à nouveau. Les serveurs pilotés tournent en créatif et en paisible : le premier run sur
+serveur dédié a perdu son client admin face à un slime.
+
+**Reste pour une personne.** Regarder les captures ; un client lanceur réellement vanilla (V01 utilise un client
+NeoForge sans le mod) ; le déploiement en production ; les pages de distribution.

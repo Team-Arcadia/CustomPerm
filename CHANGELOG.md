@@ -9,6 +9,18 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+### Fixed
+
+- **A reload rewrote every config file and rotated real backups out** - `customperm reload` saved the five files it had just read and wrote five new backups each time. Three reloads that changed nothing were enough to push every earlier state out of the three backups kept per file, and on a Windows disk scanned on access each reload held the server thread for about a second (measured in the Arcadia server pack). A file is now written only when its text changes, and backed up only when it differs from its latest backup: 13 ms per reload in the same pack.
+- **A cluster member could forget a player's shared rate-limit count on restart** - the saved history was read at server start against the member's own rules, before the cluster's replaced them, so the uses of a rule it did not know locally were dropped and the player got a fresh budget on that member. The history is now read again once the cluster's rules are in force.
+- **Cut labels in the narrow admin window** - at the usual 427x240 panel the Grades tabs read `Nod...`, `Par...`, `Play...` and the name display button `Names dec...`. A tight button row now tries a button's shorter label, then its icon for the buttons that allow it, before sharing the width equally.
+- **The Who view left a grade or player on its third click** - removing their last entry for a command threw the view back to the list; it now stays on them, holding nothing, as the procedure expects.
+- **The GameTest structure shipped in the release jar** - `empty_3x3.nbt` lived in the main resources; it moved to the `gameTest` source set, and `verifyPackage` now refuses any `gameTest` class, `gametest` path or `.nbt` file in the jar.
+
+### Added
+
+- **Test automation beyond GameTests** - `./gradlew testAll` (JUnit, package check, the three GameTest modes judged from their logs); `./gradlew runClientSmoke` (every page on a real client, layout judged at four window sizes); `tools/server_smoke.py` (dedicated server with LuckPerms, a client without the mod, the import selection); `tools/cluster_smoke.py` (the release jar on a real NeoForge server and MariaDB: missing driver, Arcadia Lib's driver, TLS, a three-member first boot, sharing, per-member elements and limits); `tools/arcadia_smoke.py` (the release jar in the Arcadia server pack); `tools/test_all.py` runs them all and maps every result to the step of the test procedure it proves. See `docs/TESTING_GUIDE.md`, section 11.
+
 ---
 
 ## [1.1.0] - 2026-09-22

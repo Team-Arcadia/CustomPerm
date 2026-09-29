@@ -105,6 +105,46 @@ neoForge {
             programArguments.addAll '--username', 'SmokeAdmin', '--width', '1280', '--height', '720'
             systemProperty 'customperm.clientSmoke', 'true'
         }
+        // tools/server_smoke.py: a dedicated server running LuckPerms, joined by a client without CustomPerm (V01)
+        // and by an admin client that plays the LuckPerms pages and the import selection (V09).
+        smokeServer {
+            server()
+            sourceSet = sourceSets.gameTest
+            gameDirectory = project.file('run/serversmoke/server')
+            programArgument '--nogui'
+        }
+        smokeAdmin {
+            client()
+            sourceSet = sourceSets.gameTest
+            gameDirectory = project.file('run/serversmoke/admin')
+            programArguments.addAll '--username', 'SmokeAdmin', '--quickPlayMultiplayer', '127.0.0.1:25630', '--width', '1280', '--height', '720'
+            systemProperty 'customperm.serverSmoke', 'admin'
+        }
+        // No mod from this project at all: the client a player without CustomPerm connects with.
+        smokeBare {
+            client()
+            gameDirectory = project.file('run/serversmoke/bare')
+            programArguments.addAll '--username', 'BareClient', '--quickPlayMultiplayer', '127.0.0.1:25630'
+            mods.set([])
+        }
+        // tools/cluster_smoke.py: two members joined directly on MariaDB (the driver is the dev runs' own), with smoke
+        // players driven over RCON (gametest/cluster/SmokePlayers), and an admin client on the first one (V06, V07).
+        ['a', 'b'].each { member ->
+            "clusterSmoke${member.toUpperCase()}" {
+                server()
+                sourceSet = sourceSets.gameTest
+                gameDirectory = project.file("run/clustersmoke/dev-${member}")
+                programArgument '--nogui'
+                systemProperty 'customperm.clusterSmoke', 'true'
+            }
+        }
+        clusterSmokeAdmin {
+            client()
+            sourceSet = sourceSets.gameTest
+            gameDirectory = project.file('run/clustersmoke/admin')
+            programArguments.addAll '--username', 'ClusterAdmin', '--quickPlayMultiplayer', '127.0.0.1:25640', '--width', '1280', '--height', '720'
+            systemProperty 'customperm.clusterSmoke.client', 'true'
+        }
         // Spark scenario S04: two cluster members through Arcadia Lib, driven by tools/spark_cluster.py over RCON.
         sparkClusterA {
             server()
@@ -278,6 +318,28 @@ def verifyClientSmoke = tasks.register('verifyClientSmoke') {
         logger.lifecycle("Client smoke: ${lines.last()}. Screenshots in run/clientsmoke/screenshots.")
     }
 }
+def prepareSmokeServer = tasks.register('prepareSmokeServer', Sync) {
+    from configurations.luckPermsGameTestMod
+    into 'run/serversmoke/server/mods'
+}
+tasks.matching { it.name == 'runSmokeServer' }.configureEach { dependsOn prepareSmokeServer }
+['smokeAdmin', 'smokeBare'].each { client ->
+    tasks.matching { it.name == "run${client.capitalize()}" }.configureEach {
+        doFirst {
+            def dir = file("run/serversmoke/${client == 'smokeAdmin' ? 'admin' : 'bare'}")
+            delete "${dir}/screenshots", "${dir}/smoke-report.txt", "${dir}/logs/latest.log"
+            automationOptions(dir)
+        }
+    }
+}
+
+tasks.matching { it.name == 'runClusterSmokeAdmin' }.configureEach {
+    doFirst {
+        delete 'run/clustersmoke/admin/screenshots', 'run/clustersmoke/admin/smoke-report.txt', 'run/clustersmoke/admin/logs/latest.log'
+        automationOptions(file('run/clustersmoke/admin'))
+    }
+}
+
 tasks.matching { it.name == 'runClientSmoke' }.configureEach {
     doFirst {
         delete 'run/clientsmoke/saves', 'run/clientsmoke/config/arcadia/customperm', 'run/clientsmoke/screenshots',

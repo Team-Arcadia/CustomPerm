@@ -73,8 +73,19 @@ class Rcon:
             raise IOError("rcon authentication refused")
 
     def run(self, command):
+        # The server splits a long answer into packets of 4096 bytes and never says which is the last one. A full
+        # packet may be followed by more: read on briefly. A leftover fragment would otherwise answer the next command.
         self.sock.sendall(_packet(2, 2, command))
-        return _read(self.sock)[1].strip()
+        parts = [_read(self.sock)[1]]
+        while len(parts[-1].encode("utf-8")) >= 4096:
+            self.sock.settimeout(1.0)
+            try:
+                parts.append(_read(self.sock)[1])
+            except socket.timeout:
+                break
+            finally:
+                self.sock.settimeout(60)
+        return "".join(parts).strip()
 
     def close(self):
         try:
