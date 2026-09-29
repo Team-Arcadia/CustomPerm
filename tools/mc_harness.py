@@ -262,7 +262,9 @@ class Database:
 # ---------------------------------------------------------------- judging a log
 
 # Lines that mean the mod broke, whoever logged them, as long as they name CustomPerm's code.
-OUR_CODE = re.compile(r"com\.arcadia\.customperm|\[CustomPerm\]|customperm", re.IGNORECASE)
+# The code or the mod's own tag, never a bare "customperm": the repository folder is named CustomPerm, so every path
+# another mod prints from a run folder would match.
+OUR_CODE = re.compile(r"com\.arcadia\.customperm|\[CustomPerm\]|\bcustomperm:")
 FATAL = re.compile(r"/ERROR\]|Exception|Mixin apply failed|InvalidInjectionException|failed to load correctly|invalid dist")
 
 

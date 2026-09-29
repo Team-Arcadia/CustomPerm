@@ -1,0 +1,61 @@
+// The admin interface inside the Arcadia client pack, driven by tools/arcadia_client_smoke.py. A separate build on
+// purpose: the pack's client runs NeoForge 21.1.250 and about 450 mods (Sodium and Iris among them), while CustomPerm
+// keeps building against the version it declares. CustomPerm is loaded from its release jar in the game's mods folder;
+// this build only adds the driver, reusing the client harness of the gameTest source set (Drive, LayoutProbe,
+// StepQueue) rather than copying it. Same ModDevGradle as the main build.
+plugins {
+    id 'java-library'
+    id 'net.neoforged.moddev' version '1.0.21'
+}
+
+// Pinned exactly to the NeoForge build the Arcadia 2.0.32 client instance and server pack run.
+def packNeoForge = '21.1.250'
+
+def customPerm = new Properties()
+file('../../gradle.properties').withInputStream { customPerm.load(it) }
+def customPermJar = file("../../build/libs/${customPerm.mod_id}-${customPerm.mod_version}.jar")
+def gameDir = file('../../run/arcadia/client')
+
+java.toolchain.languageVersion = JavaLanguageVersion.of(21)
+
+sourceSets.main.java {
+    srcDir '../../src/gameTest/java'
+    include 'com/arcadia/customperm/gametest/client/Drive.java', 'com/arcadia/customperm/gametest/client/LayoutProbe.java',
+            'com/arcadia/customperm/gametest/client/StepQueue.java', 'com/arcadia/customperm/packsmoke/**'
+}
+
+neoForge {
+    version = packNeoForge
+
+    runs {
+        packClient {
+            client()
+            gameDirectory = gameDir
+            jvmArguments.add '-Xmx6G'
+            programArguments.addAll '--username', 'PackAdmin', '--quickPlayMultiplayer', '127.0.0.1:25620',
+                    '--width', '1280', '--height', '720'
+            systemProperty 'customperm.packSmoke', 'true'
+            // Create: Numismatics hands this property to URI.create(); the raw Windows path ModDevGradle writes makes
+            // the mod fail to construct and the whole pack with it (found by the Better Creative pack smoke).
+            systemProperty 'log4j2.configurationFile', file('build/moddev/packClientLog4j2.xml').toURI().toString()
+            // oωo-lib turns its handshake debug on outside production; the pack server has it off.
+            systemProperty 'owo.debug', 'false'
+        }
+    }
+
+    mods {
+        customperm_packsmoke {
+            sourceSet sourceSets.main
+        }
+    }
+}
+
+dependencies {
+    // Compiled against the release jar the script builds; at runtime that same jar is in the client's mods folder.
+    compileOnly files(customPermJar)
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+}

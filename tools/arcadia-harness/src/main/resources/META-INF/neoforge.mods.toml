@@ -1,0 +1,18 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "All Rights Reserved (LicenseRef-CustomPerm-ARR)"
+
+# Test harness only, loaded by the packClient run of tools/arcadia-harness; never packaged.
+[[mods]]
+modId = "customperm_packsmoke"
+version = "0"
+displayName = "CustomPerm Arcadia Pack Harness"
+authors = "THEFricadelle"
+description = '''Drives CustomPerm's admin interface inside the Arcadia client pack for tools/arcadia_client_smoke.py.'''
+
+[[dependencies.customperm_packsmoke]]
+modId = "customperm"
+type = "required"
+versionRange = "[0,)"
+ordering = "AFTER"
+side = "CLIENT"
