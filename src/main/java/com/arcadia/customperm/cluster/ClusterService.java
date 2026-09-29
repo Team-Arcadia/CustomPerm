@@ -133,8 +133,10 @@ final class ClusterService {
         // written meanwhile carries a higher number, read at the next poll. The highest number the starts read would
         // skip a row written to one part while another was starting.
         long cursor = store.currentSeq();
+        boolean limitsReplaced = false;
         for (PartSync<?> part : parts) {
             PartSync.Start start = part.start();
+            if (start == PartSync.Start.ADOPTED_REPLACED && RateLimitsCodec.PART.equals(part.part())) limitsReplaced = true;
             switch (start) {
                 case SEEDED -> CustomPerm.LOGGER.info("[CustomPerm] Cluster: the store held no {}; this server's were written to it.",
                         part.part());
@@ -145,6 +147,12 @@ final class ClusterService {
             }
         }
         partsCursor = cursor;
+        if (limitsReplaced) {
+            // The history saved on disk was read at server start against this server's own rules, before the store's
+            // replaced them: the uses of a rule it did not know yet were dropped. Read it again against the rules now in
+            // force, before the other servers' uses are added.
+            com.arcadia.customperm.command.RateLimitPersistence.load();
+        }
         // Uses the other servers counted still apply here: the table only holds those within the longest window.
         List<ClusterStore.UseRow> uses = store.usesAfter(0, List.of(), Integer.MAX_VALUE);
         long lastUse = 0;
