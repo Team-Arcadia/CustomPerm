@@ -511,8 +511,7 @@ def values_across_cluster(report, a, b, bench, members):
     p1 = "2d4486b9-c406-32d4-a2a4-7ed5d874585c"  # offline UUID of cs_p1
     saved = b.folder / "world" / "data" / "customperm_ratelimits.json"
     history = json.loads(saved.read_text(encoding="utf-8")).get("history", {}) if saved.is_file() else {}
-    report.add(f"INFO beta saved on stop: {{k: len(v.get(p1, [])) for k, v in history.items()}} = "
-               + str({k: len(v.get(p1, [])) for k, v in history.items()}))
+    report.add("INFO uses of cs_p1 beta saved on stop, by rule: " + str({k: len(v.get(p1, [])) for k, v in history.items()}))
     report.add("INFO shared uses of cs_p1 by server: " + one_line(bench.db.sql(
         f"SELECT server, command, COUNT(*) FROM customperm_uses WHERE player = '{p1}' GROUP BY server, command", DATABASE)))
     members.remove(b)

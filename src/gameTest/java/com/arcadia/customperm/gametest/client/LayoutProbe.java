@@ -74,7 +74,9 @@ public final class LayoutProbe {
         List<String> warnings = new ArrayList<>();
         for (Text t : recorder.texts) {
             boolean cut = t.text().endsWith("...") && t.text().length() > 3 && !LITERAL_ELLIPSES.contains(t.text());
-            boolean inList = lists.stream().anyMatch(r -> contains(r, t.x(), t.y()));
+            // A row half scrolled out starts just outside the list, drawn under its scissor: still a list row.
+            boolean inList = lists.stream().anyMatch(r -> contains(r, t.x(), t.y())
+                    || t.clipped() && t.x() >= r.x() && t.x() < r.right() && t.y() > r.y() - 16 && t.y() < r.bottom() + 16);
             boolean inField = fields.stream().anyMatch(r -> contains(r, t.x(), t.y()));
             if (cut && inList) {
                 cutRows++;
