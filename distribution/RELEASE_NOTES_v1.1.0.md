@@ -75,6 +75,7 @@ Every admin change is recorded with who, when, from where and the result, includ
 - A hand-edited file with `null` entries could break permission checks, and an admin command could wipe a file that had failed to load.
 - A save could fail on Windows while an antivirus held the file.
 - Per-player rate limit history no longer grows without bound.
+- A reload rewrote every configuration file and a new set of backups each time: a few reloads that changed nothing pushed every earlier backup out of the three kept. Only files whose content changed are now written and backed up.
 
 The complete list is in the [changelog](https://github.com/Team-Arcadia/CustomPerm/blob/main/CHANGELOG.md).
 
@@ -170,6 +171,7 @@ Chaque modification admin est enregistrée avec qui, quand, d'où et le résulta
 - Un fichier édité à la main avec des entrées `null` pouvait casser les vérifications, et une commande admin pouvait effacer un fichier qui avait échoué au chargement.
 - Une sauvegarde pouvait échouer sous Windows quand un antivirus tenait le fichier.
 - L'historique des limites par joueur ne grossit plus sans borne.
+- Un reload réécrivait chaque fichier de configuration et un nouveau jeu de sauvegardes à chaque fois : quelques reloads sans changement suffisaient à évincer toutes les sauvegardes antérieures des trois conservées. Seuls les fichiers dont le contenu change sont désormais écrits et sauvegardés.
 
 La liste complète est dans le [changelog](https://github.com/Team-Arcadia/CustomPerm/blob/main/CHANGELOG.md).
 
