@@ -231,6 +231,8 @@ class Database:
         self.bin = Path(bin_dir)
         self.root = ["-u", "root"] + ([f"-p{root_password}"] if root_password else [])
         self.process = None
+        # Whether this script started the server, so it stops it again at the end and leaves a running one alone.
+        self.started_here = False
 
     def up(self):
         return subprocess.run([str(self.bin / "mysqladmin.exe"), *self.root, "ping"],

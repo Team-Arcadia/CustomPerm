@@ -132,6 +132,10 @@ def main():
         print(f"   {sum(l.startswith('FAIL') for l in lines)} failed of {sum(l.startswith(('PASS', 'FAIL')) for l in lines)}"
               f" in {seconds / 60:.1f} min", flush=True)
     if args.spark and "spark" not in skip:
+        # A report left from an earlier run must never pass for this one: the S04 script once failed at start and
+        # the report of the day before was read as its verdict.
+        for stale in (ROOT / "run" / "spark" / "spark-report.txt", ROOT / "run" / "spark-cluster" / "spark-cluster-report.txt"):
+            stale.unlink(missing_ok=True)
         started = time.time()
         subprocess.run([GRADLEW, "runSparkScenario", "--console=plain"], cwd=ROOT,
                        stdout=open(OUT / "spark.log", "w", encoding="utf-8"), stderr=subprocess.STDOUT)
