@@ -34,6 +34,9 @@ public class CpButton extends AbstractButton {
     private final Runnable action;
     private Icon icon;
     private boolean iconOnly;
+    private Component compact;
+    /** The icon a tight row may reduce this button to, or null when its label must stay. */
+    private Icon collapsible;
     /** Pinned "on" state for navigation and toggle buttons, drawn like a hovered button with an accent edge. */
     private boolean selected;
 
@@ -90,6 +93,37 @@ public class CpButton extends AbstractButton {
     /** Whether the icon is all this button shows: taking it away would leave nothing to draw. */
     public boolean isIconOnly() {
         return iconOnly;
+    }
+
+    /** A shorter label a tight row may switch to rather than cut the full one. */
+    public CpButton compact(Component label) {
+        this.compact = label;
+        return this;
+    }
+
+    /** Lets a tight row show only this button's icon, the label becoming its tooltip, rather than cut the label. */
+    public CpButton collapsesToIcon() {
+        this.collapsible = icon;
+        return this;
+    }
+
+    /** Switches to the shorter label; returns whether there was one. */
+    public boolean useCompactLabel() {
+        if (compact == null || iconOnly) return false;
+        setMessage(compact);
+        compact = null;
+        return true;
+    }
+
+    /** Shows only the icon it was given; returns whether it may. */
+    public boolean collapseToIcon() {
+        if (collapsible == null || iconOnly) return false;
+        iconOnly(collapsible);
+        return true;
+    }
+
+    public boolean canCollapse() {
+        return collapsible != null && !iconOnly;
     }
 
     public CpButton enabled(boolean enabled) {

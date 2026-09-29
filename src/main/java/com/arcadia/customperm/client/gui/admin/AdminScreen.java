@@ -78,6 +78,7 @@ public abstract class AdminScreen extends CpScreen {
             gaps = gap * (buttons.size() - 1);
             int spare = row.w() - gaps - rowWidth(buttons, 0);
             padding = Math.min(padding, spare / (2 * buttons.size()));
+            if (padding < CpButton.MIN_PADDING && fitWhole(row.w() - gaps, buttons)) padding = CpButton.MIN_PADDING;
             if (padding < CpButton.MIN_PADDING) {
                 int each = (row.w() - gaps) / buttons.size();
                 int x = row.x();
@@ -98,6 +99,23 @@ public abstract class AdminScreen extends CpScreen {
                     : new Rect(x, row.y(), width, row.h())));
             x += width + gap;
         }
+    }
+
+    /**
+     * Before an equal share cuts labels: shorter labels where a button has one, then the buttons allowed to shrink to
+     * their icon, widest label first, until every label left fits whole. Returns whether it got there.
+     */
+    private boolean fitWhole(int room, List<CpButton> buttons) {
+        if (rowWidth(buttons, CpButton.MIN_PADDING) <= room) return true;
+        for (CpButton button : buttons) button.useCompactLabel();
+        List<CpButton> collapsible = buttons.stream().filter(CpButton::canCollapse)
+                .sorted(java.util.Comparator.comparingInt((CpButton b) -> font.width(b.getMessage())).reversed())
+                .toList();
+        for (CpButton button : collapsible) {
+            if (rowWidth(buttons, CpButton.MIN_PADDING) <= room) return true;
+            button.collapseToIcon();
+        }
+        return rowWidth(buttons, CpButton.MIN_PADDING) <= room;
     }
 
     private int rowWidth(List<CpButton> buttons, int padding) {

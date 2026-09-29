@@ -336,11 +336,11 @@ public final class PlayersScreen extends AdminScreen {
         if (!nickField.isFocused()) nickField.setValue(data.nickname(player.uuid()));
         placeButtonRow(tabRow(), 8, false, List.of(
                 CpButton.ghost(Component.literal("Nodes (" + nodeList.items().size() + ")"),
-                        () -> setTab(Tab.NODES)).icon(Icon.LOCK).selected(tab == Tab.NODES),
+                        () -> setTab(Tab.NODES)).icon(Icon.LOCK).compact(Component.literal("Nodes")).selected(tab == Tab.NODES),
                 CpButton.ghost(Component.literal("Chat"), () -> setTab(Tab.CHAT)).icon(Icon.EDIT).selected(tab == Tab.CHAT),
                 CpButton.ghost(Component.literal("Meta"), () -> setTab(Tab.META)).icon(Icon.EDIT).selected(tab == Tab.META),
                 CpButton.ghost(Component.literal("Tracks (" + data.tracks().size() + ")"), () -> setTab(Tab.TRACKS))
-                        .icon(Icon.SHIELD).selected(tab == Tab.TRACKS)));
+                        .icon(Icon.SHIELD).compact(Component.literal("Tracks")).selected(tab == Tab.TRACKS)));
         Rect fieldRow = new Rect(in.x(), list.bottom() + 4, in.w(), FIELD);
         Rect buttonRow = new Rect(in.x(), fieldRow.bottom() + 4, in.w(), BUTTON);
         if (tab == Tab.TRACKS) {

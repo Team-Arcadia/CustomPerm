@@ -388,11 +388,11 @@ public final class GradesScreen extends AdminScreen {
         }
         placeButtonRow(tabs, 8, false, List.of(
                 CpButton.ghost(Component.literal(nodesTab), () -> setTab(Tab.NODES))
-                        .icon(Icon.LOCK).selected(tab == Tab.NODES),
+                        .icon(Icon.LOCK).collapsesToIcon().selected(tab == Tab.NODES),
                 CpButton.ghost(Component.literal(parentsTab), () -> setTab(Tab.PARENTS))
-                        .icon(Icon.SHIELD).selected(tab == Tab.PARENTS),
+                        .icon(Icon.SHIELD).collapsesToIcon().selected(tab == Tab.PARENTS),
                 CpButton.ghost(Component.literal(playersTab), () -> setTab(Tab.PLAYERS))
-                        .icon(Icon.USER).selected(tab == Tab.PLAYERS),
+                        .icon(Icon.USER).collapsesToIcon().selected(tab == Tab.PLAYERS),
                 CpButton.ghost(Component.literal(chatTab), () -> setTab(Tab.CHAT))
                         .icon(Icon.EDIT).selected(tab == Tab.CHAT),
                 CpButton.ghost(Component.literal(metaTab), () -> setTab(Tab.META))
@@ -493,6 +493,7 @@ public final class GradesScreen extends AdminScreen {
                                     + GuiArea.CONFIG.node() + ".")),
                     CpButton.ghost(Component.literal(decorate ? "Names decorated" : "Names plain"),
                                     () -> act(GuiAction.NAMES_DECORATE, String.valueOf(!decorate)))
+                            .compact(Component.literal(decorate ? "Decorated" : "Plain"))
                             .icon(decorate ? Icon.CHECK : Icon.CROSS).selected(decorate)
                             .enabled(canEdit(GuiArea.CONFIG))
                             .tooltip(Component.literal("Puts prefixes and suffixes around player names, in chat and "
