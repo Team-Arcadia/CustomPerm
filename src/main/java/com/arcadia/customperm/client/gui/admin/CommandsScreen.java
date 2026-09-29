@@ -214,12 +214,21 @@ public final class CommandsScreen extends AdminScreen {
             }
         }
         CommandsData.Holder before = holderList.getSelected();
+        if (before != null && row != null && holders.stream().noneMatch(h -> sameHolder(h, before))) {
+            // Their last entry for this node was just removed: stay on them, now holding nothing, so the third
+            // state of a toggle does not throw the view back to the list.
+            pendingHolder = new CommandsData.Holder(before.player(), before.id(), before.label(), "", List.of());
+            holders.add(pendingHolder);
+        }
         holderList.setItems(holders);
         if (before != null) {
             // The same player comes back under their UUID once their first entry exists.
-            holders.stream().filter(h -> h.player() == before.player() && h.label().equalsIgnoreCase(before.label()))
-                    .findFirst().ifPresent(h -> holderList.selectByKey(holderKey(h)));
+            holders.stream().filter(h -> sameHolder(h, before)).findFirst().ifPresent(h -> holderList.selectByKey(holderKey(h)));
         }
+    }
+
+    private static boolean sameHolder(CommandsData.Holder a, CommandsData.Holder b) {
+        return a.player() == b.player() && a.label().equalsIgnoreCase(b.label());
     }
 
     /** Number of buttons at the top right of the details panel. */
