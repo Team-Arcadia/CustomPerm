@@ -122,6 +122,22 @@ public class CpList<T> extends net.minecraft.client.gui.components.AbstractWidge
         return this;
     }
 
+    /** The empty-list sentence, wrapped and centred; only when the list is too short for it is the last line cut. */
+    private void renderEmptyText(GuiGraphics g, Font font, Rect frame) {
+        Rect inner = frame.inset(4, 2);
+        var lines = font.split(Component.literal(emptyText), Math.max(1, inner.w()));
+        int fit = Math.max(1, Math.min(lines.size(), (inner.h() + 1) / 10));
+        if (fit < lines.size()) {
+            Skin.centeredText(g, font, emptyText, frame, Palette.TEXT_MUTE);
+            return;
+        }
+        int y = frame.y() + (frame.h() - fit * 10 + 2) / 2;
+        for (int i = 0; i < fit; i++) {
+            g.drawString(font, lines.get(i), frame.x() + (frame.w() - font.width(lines.get(i))) / 2, y, Palette.TEXT_MUTE, false);
+            y += 10;
+        }
+    }
+
     public CpList<T> emptyText(String emptyText) {
         this.emptyText = emptyText;
         return this;
@@ -253,7 +269,7 @@ public class CpList<T> extends net.minecraft.client.gui.components.AbstractWidge
         g.fill(frame.x(), frame.y(), frame.right(), frame.bottom(), Palette.BG1);
 
         if (items.isEmpty()) {
-            if (!emptyText.isEmpty()) Skin.centeredText(g, font, emptyText, frame, Palette.TEXT_MUTE);
+            if (!emptyText.isEmpty()) renderEmptyText(g, font, frame);
         } else {
             Rect area = rowsArea();
             g.enableScissor(area.x(), area.y(), area.right(), area.bottom());

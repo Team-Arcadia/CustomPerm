@@ -37,6 +37,9 @@ public final class DashboardScreen extends AdminScreen {
 
     private static final int CARD_HEIGHT = 34;
     private static final int TILE_HEIGHT = 42;
+    private static final int DESCRIPTION_LINE = 10;
+    /** Height of the tile row, set when the page is built: the tallest wrapped detail decides it. */
+    private int tileHeight = TILE_HEIGHT;
     private static final int GAP = 6;
     private static final int ALERT_ROW = 34;
 
@@ -65,16 +68,22 @@ public final class DashboardScreen extends AdminScreen {
 
     // ------------------------------------------------------------------ layout
 
+    /** The backend card, as tall as its description needs once wrapped to the panel. */
     private Rect card() {
-        return layout.content().top(CARD_HEIGHT);
+        return layout.content().top(CARD_HEIGHT + DESCRIPTION_LINE * (descriptionLines().size() - 1));
+    }
+
+    private List<FormattedCharSequence> descriptionLines() {
+        Rect inner = layout.content().top(CARD_HEIGHT).inset(8, 6);
+        return font.split(Component.literal(describe(context.backend())), Math.max(1, inner.w() - Atlas.DOT_SIZE - 6));
     }
 
     private Rect tiles() {
-        return layout.content().belowTop(CARD_HEIGHT + GAP).top(TILE_HEIGHT);
+        return layout.content().belowTop(card().h() + GAP).top(tileHeight);
     }
 
     private Rect alertsTitle() {
-        return layout.content().belowTop(CARD_HEIGHT + TILE_HEIGHT + 2 * GAP + 2).top(12);
+        return layout.content().belowTop(card().h() + tileHeight + 2 * GAP + 2).top(12);
     }
 
     private Rect actionBar() {
@@ -89,8 +98,7 @@ public final class DashboardScreen extends AdminScreen {
 
     @Override
     protected void buildPage() {
-        Rect row = tiles();
-        int w = (row.w() - 3 * GAP) / 4;
+        int w = (layout.content().w() - 3 * GAP) / 4;
         List<CpTile> tiles = List.of(
                 new CpTile(Icon.COMMAND, "Exposed", String.valueOf(data.exposedCommands()),
                         "of " + data.dispatcherCommands() + " total", Palette.TEXT, () -> navigate(GuiPage.COMMANDS)),
@@ -98,6 +106,10 @@ public final class DashboardScreen extends AdminScreen {
                 new CpTile(Icon.CLOCK, "Limits", data.rateLimitsEnabled() + " / " + data.rateLimits(),
                         "enabled", Palette.TEXT, () -> navigate(GuiPage.RATE_LIMITS)),
                 gradesTile());
+        // A detail that does not fit wraps, and every tile grows to the tallest one rather than cutting it.
+        int lines = tiles.stream().mapToInt(t -> t.detailLines(font, w)).max().orElse(1);
+        tileHeight = TILE_HEIGHT + CpTile.DETAIL_LINE * (lines - 1);
+        Rect row = tiles();
         for (int i = 0; i < tiles.size(); i++) {
             addRenderableWidget(tiles.get(i).at(new Rect(row.x() + i * (w + GAP), row.y(), w, row.h())));
         }
@@ -168,7 +180,11 @@ public final class DashboardScreen extends AdminScreen {
         Skin.dot(g, inner.x(), inner.y() + 4, color);
         int x = inner.x() + Atlas.DOT_SIZE + 6;
         Skin.text(g, font, "Permissions backend: " + backend.label(), x, inner.y(), inner.right() - x, Palette.TEXT);
-        Skin.text(g, font, describe(backend), x, inner.y() + 12, inner.right() - x, Palette.TEXT_DIM);
+        int y = inner.y() + 12;
+        for (FormattedCharSequence line : descriptionLines()) {
+            g.drawString(font, line, x, y, Palette.TEXT_DIM, false);
+            y += DESCRIPTION_LINE;
+        }
     }
 
     private static String describe(BackendKind backend) {

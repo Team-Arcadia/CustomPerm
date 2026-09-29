@@ -124,6 +124,11 @@ public abstract class AdminScreen extends CpScreen {
         return total;
     }
 
+    /** {@code full} when it fits in {@code width}, else {@code shorter}: a title keeps its words whole rather than cut. */
+    protected final String fitting(String full, String shorter, int width) {
+        return font.width(full) <= width ? full : shorter;
+    }
+
     /** The page this screen shows. */
     public abstract GuiPage page();
 

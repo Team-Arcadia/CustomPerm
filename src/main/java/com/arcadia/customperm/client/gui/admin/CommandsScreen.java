@@ -524,7 +524,8 @@ public final class CommandsScreen extends AdminScreen {
             return;
         }
         if (showingWho(row)) {
-            Skin.text(g, font, "COMMAND, THEN GRADE, THEN PLAYER", inner.x(), inner.y() + HEADER, inner.w(), Palette.TEXT_MUTE);
+            Skin.text(g, font, fitting("COMMAND, THEN GRADE, THEN PLAYER", "WHO DECIDES", inner.w()), inner.x(),
+                    inner.y() + HEADER, inner.w(), Palette.TEXT_MUTE);
             CommandsData.Holder holder = holderList.getSelected();
             if (holder != null && !context.luckPermsActive()) {
                 int top = whoTop(inner);
@@ -534,8 +535,8 @@ public final class CommandsScreen extends AdminScreen {
                         holder.player() ? Palette.WARN : Palette.TEXT_MUTE);
                 Skin.text(g, font, holder.label(), x + bw + 4, top + (Atlas.BUTTON_HEIGHT - 8) / 2,
                         inner.right() - x - bw - 4, Palette.TEXT);
-                Skin.text(g, font, "EVERYWHERE, THEN EACH SERVER", inner.x(), top + Atlas.BUTTON_HEIGHT + 6, inner.w(),
-                        Palette.TEXT_MUTE);
+                Skin.text(g, font, fitting("EVERYWHERE, THEN EACH SERVER", "BY SERVER", inner.w()), inner.x(),
+                        top + Atlas.BUTTON_HEIGHT + 6, inner.w(), Palette.TEXT_MUTE);
             }
             if (context.luckPermsActive()) {
                 paragraph(g, "Under LuckPerms, who may use /" + row.name() + " where is set there: customperm.command."

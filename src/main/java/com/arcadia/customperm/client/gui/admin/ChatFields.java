@@ -33,7 +33,8 @@ import java.util.List;
 final class ChatFields {
 
     /** Height kept under the list for the preview. */
-    static final int PREVIEW = 46;
+    static final int PREVIEW = 56;
+    private static final int NOTE_LINE = 10;
     static final int PRIORITY_FIELD = 44;
     static final int DURATION_FIELD = 64;
     static final int WORLD_FIELD = GradesScreen.WORLD_FIELD;
@@ -176,10 +177,31 @@ final class ChatFields {
         String problem = LegacyText.problem(text.getValue());
         String note = problem != null ? "Text: " + problem
                 : typedPriority() == null ? "A priority is a whole number: the highest shows first."
-                : names.decorate() ? "Codes: &0-&f colours, &l bold, &o italic, &r reset, &#RRGGBB any colour."
+                : names.decorate() ? "Codes: &0-&f colour, &l bold, &o italic, &r reset, &#RRGGBB any colour."
                 // The way out first: a narrow panel cuts the end of this line, and the reason alone does not help.
                 : "Turn Names on to show this: Grades page, Chat tab, or /customperm names on.";
-        Skin.text(g, font, Skin.ellipsize(font, note, area.w()), area.x(), y + 28,
-                problem != null || typedPriority() == null || !names.decorate() ? Palette.WARN : Palette.TEXT_MUTE);
+        int color = problem != null || typedPriority() == null || !names.decorate() ? Palette.WARN : Palette.TEXT_MUTE;
+        // Wrapped rather than cut; only when the preview has no room left is the last line shortened.
+        int room = Math.max(1, (area.bottom() - (y + 28)) / NOTE_LINE);
+        List<net.minecraft.util.FormattedCharSequence> wrapped = font.split(Component.literal(note), Math.max(1, area.w()));
+        if (wrapped.size() > room && problem == null && typedPriority() != null && names.decorate()) {
+            // The reference in its short form, whole, rather than the sentence cut.
+            wrapped = font.split(Component.literal("Codes: &0-&f &l &o &r &#RRGGBB"), Math.max(1, area.w()));
+        }
+        for (int i = 0; i < Math.min(room, wrapped.size()); i++) {
+            if (i == room - 1 && wrapped.size() > room) {
+                StringBuilder rest = new StringBuilder();
+                for (int j = i; j < wrapped.size(); j++) {
+                    if (j > i) rest.append(' ');
+                    wrapped.get(j).accept((index, style, cp) -> {
+                        rest.appendCodePoint(cp);
+                        return true;
+                    });
+                }
+                Skin.text(g, font, rest.toString(), area.x(), y + 28 + i * NOTE_LINE, area.w(), color);
+            } else {
+                g.drawString(font, wrapped.get(i), area.x(), y + 28 + i * NOTE_LINE, color, false);
+            }
+        }
     }
 }

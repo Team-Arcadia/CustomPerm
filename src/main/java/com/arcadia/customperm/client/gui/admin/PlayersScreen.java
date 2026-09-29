@@ -47,6 +47,7 @@ import java.util.Objects;
  */
 public final class PlayersScreen extends AdminScreen {
 
+    private static final int SUMMARY_LINE = 10;
     private static final int ROW = 16;
     private static final int FIELD = Atlas.INPUT_HEIGHT;
     private static final int BUTTON = Atlas.BUTTON_HEIGHT;
@@ -284,7 +285,34 @@ public final class PlayersScreen extends AdminScreen {
 
     private Rect tabRow() {
         Rect in = inner();
-        return new Rect(in.x(), in.y() + 24, in.w(), FIELD);
+        return new Rect(in.x(), in.y() + 24 + summaryExtra(), in.w(), FIELD);
+    }
+
+    /** The selected player's summary, wrapped beside the nickname box; the tabs and lists move down rather than cut it. */
+    private List<net.minecraft.util.FormattedCharSequence> summaryLines() {
+        PlayersData.Player player = playerList.getSelected();
+        if (player == null) return List.of();
+        Rect in = inner();
+        return font.split(Component.literal(summary(player)), Math.max(1, in.w() - nickWidth(in) - 6));
+    }
+
+    private int summaryExtra() {
+        return SUMMARY_LINE * Math.max(0, summaryLines().size() - 1);
+    }
+
+    private String summary(PlayersData.Player player) {
+        // Grades and refusals first: they are said nowhere else on this page, while the node counts are the
+        // list right below. Under their display names: the grades are only read here, the Grades page shows both.
+        List<String> held = new ArrayList<>(player.grades().stream().map(data::shown).toList());
+        player.scoped().stream().filter(e -> e.kind().equals("grade"))
+                .forEach(e -> held.add(data.shown(e.value()) + " (" + GradesScreen.label(e.context(), e.remaining()) + ")"));
+        List<String> refused = new ArrayList<>(player.refused().stream().map(data::shown).toList());
+        player.scoped().stream().filter(e -> e.kind().equals("refused"))
+                .forEach(e -> refused.add(data.shown(e.value()) + " (" + GradesScreen.label(e.context(), e.remaining()) + ")"));
+        return (held.isEmpty() ? "no grade" : "grades: " + String.join(", ", held))
+                + (refused.isEmpty() ? "" : "  |  refuses: " + String.join(", ", refused))
+                + "  |  " + player.allow().size() + " allow, " + player.deny().size() + " deny"
+                + (canEdit(GuiArea.GRADES) ? "" : "  |  editing needs " + GuiArea.GRADES.node());
     }
 
     /** The node shown server by server, or null while the list of nodes shows. */
@@ -307,7 +335,7 @@ public final class PlayersScreen extends AdminScreen {
 
     private Rect listArea() {
         Rect in = inner();
-        int top = in.y() + 24 + FIELD + 4;
+        int top = in.y() + 24 + summaryExtra() + FIELD + 4;
         int bottom = in.bottom() - (FIELD + 4 + BUTTON + 4);
         return new Rect(in.x(), top, in.w(), bottom - top);
     }
@@ -610,20 +638,11 @@ public final class PlayersScreen extends AdminScreen {
         // Said first, where a narrow panel cannot clip it; the disabled boxes alone do not say why.
         String title = canEdit(GuiArea.GRADES) ? player.name() : "Read-only: " + player.name();
         Skin.text(g, font, title, in.x(), in.y(), textW, Palette.TEXT);
-        // Grades and refusals first: they are said nowhere else on this page, while the node counts are the
-        // list right below. A narrow panel then clips the counts rather than the refusals.
-        // Under their display names: the grades are only read here, the Grades page shows both.
-        List<String> held = new ArrayList<>(player.grades().stream().map(data::shown).toList());
-        player.scoped().stream().filter(e -> e.kind().equals("grade"))
-                .forEach(e -> held.add(data.shown(e.value()) + " (" + GradesScreen.label(e.context(), e.remaining()) + ")"));
-        List<String> refused = new ArrayList<>(player.refused().stream().map(data::shown).toList());
-        player.scoped().stream().filter(e -> e.kind().equals("refused"))
-                .forEach(e -> refused.add(data.shown(e.value()) + " (" + GradesScreen.label(e.context(), e.remaining()) + ")"));
-        String sub = (held.isEmpty() ? "no grade" : "grades: " + String.join(", ", held))
-                + (refused.isEmpty() ? "" : "  |  refuses: " + String.join(", ", refused))
-                + "  |  " + player.allow().size() + " allow, " + player.deny().size() + " deny"
-                + (canEdit(GuiArea.GRADES) ? "" : "  |  editing needs " + GuiArea.GRADES.node());
-        Skin.text(g, font, sub, in.x(), in.y() + 11, textW, Palette.TEXT_MUTE);
+        int y = in.y() + 11;
+        for (net.minecraft.util.FormattedCharSequence line : summaryLines()) {
+            g.drawString(font, line, in.x(), y, Palette.TEXT_MUTE, false);
+            y += SUMMARY_LINE;
+        }
         if (tab == Tab.CHAT) chat.renderPreview(g, font, listArea(), player.name(), data.names());
         drawNodeServersTitle(g);
     }

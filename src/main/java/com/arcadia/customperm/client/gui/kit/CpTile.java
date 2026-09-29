@@ -37,6 +37,14 @@ public class CpTile extends AbstractButton {
         this.active = action != null;
     }
 
+    /** Height of one more line of detail; a tile grows by it for each line its detail wraps to. */
+    public static final int DETAIL_LINE = 9;
+
+    /** Lines the detail takes in a tile {@code tileWidth} wide: it wraps rather than being cut. */
+    public int detailLines(Font font, int tileWidth) {
+        return Math.max(1, font.split(Component.literal(detail), Math.max(1, tileWidth - 12)).size());
+    }
+
     public CpTile at(Rect r) {
         setRectangle(r.w(), r.h(), r.x(), r.y());
         return this;
@@ -60,7 +68,11 @@ public class CpTile extends AbstractButton {
         Skin.text(g, font, getMessage().getString(), inner.x() + Atlas.ICON_SIZE + 4, inner.y(),
                 inner.w() - Atlas.ICON_SIZE - 4, Palette.TEXT_DIM);
         Skin.text(g, font, value, inner.x(), inner.y() + 12, inner.w(), valueColor);
-        Skin.text(g, font, detail, inner.x(), inner.y() + 23, inner.w(), Palette.TEXT_MUTE);
+        int y = inner.y() + 23;
+        for (var line : font.split(Component.literal(detail), Math.max(1, inner.w()))) {
+            g.drawString(font, line, inner.x(), y, Palette.TEXT_MUTE, false);
+            y += DETAIL_LINE;
+        }
         if (action != null && isFocused() && Minecraft.getInstance().getLastInputType().isKeyboard()) {
             Skin.focusRing(g, r);
         }

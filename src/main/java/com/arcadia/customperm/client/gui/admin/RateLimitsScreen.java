@@ -43,6 +43,7 @@ public final class RateLimitsScreen extends AdminScreen {
     private static final int ROW = 16;
     private static final int FIELD = Atlas.INPUT_HEIGHT;
     private static final int BUTTON = Atlas.BUTTON_HEIGHT;
+    private static final int SUBTITLE_LINE = 10;
     private static final int GAP = 6;
     private static final int MAX_DIGITS = 9;
 
@@ -221,7 +222,24 @@ public final class RateLimitsScreen extends AdminScreen {
 
     /** Vertical positions inside the right panel, top to bottom. */
     private int targetY() {
-        return inner().y() + 24;
+        return inner().y() + 24 + SUBTITLE_LINE * (subtitleLines().size() - 1);
+    }
+
+    /** The sentence under the rule's name, wrapped to the panel: the fields below move down rather than cut it. */
+    private java.util.List<net.minecraft.util.FormattedCharSequence> subtitleLines() {
+        return font.split(Component.literal(subtitle()), Math.max(1, inner().w()));
+    }
+
+    private String subtitle() {
+        RateLimitsData.Rule rule = ruleList.getSelected();
+        if (!canEdit(GuiArea.RATE_LIMITS)) return "Read-only: needs " + GuiArea.RATE_LIMITS.node() + ".";
+        if (rule == null) return "Uses allowed per player within a sliding window.";
+        if (showingLevels()) return "Rule " + rule.max() + "/" + formatWindow(rule.windowSeconds()) + ", then server, grade, player.";
+        return switch (rule.target()) {
+            case ALIAS -> "Applies to the alias /" + rule.name() + ".";
+            case EXPOSED_COMMAND -> "Applies to the exposed command /" + rule.name() + ".";
+            case NONE -> "Waits: /" + rule.name() + " is neither exposed nor an alias.";
+        };
     }
 
     private int numbersY() {
@@ -587,22 +605,12 @@ public final class RateLimitsScreen extends AdminScreen {
         Skin.panel(g, in.inset(-8));
         RateLimitsData.Rule rule = ruleList.getSelected();
         Skin.text(g, font, rule == null ? "New rate limit" : "/" + rule.name(), in.x(), in.y(), in.w(), Palette.TEXT);
-        String subtitle;
-        if (!canEdit(GuiArea.RATE_LIMITS)) {
-            subtitle = "Read-only: needs " + GuiArea.RATE_LIMITS.node() + ".";
-        } else if (rule == null) {
-            subtitle = "Uses allowed per player within a sliding window.";
-        } else if (showingLevels()) {
-            subtitle = "Rule " + rule.max() + "/" + formatWindow(rule.windowSeconds()) + ", then server, grade, player.";
-        } else {
-            subtitle = switch (rule.target()) {
-                case ALIAS -> "Applies to the alias /" + rule.name() + ".";
-                case EXPOSED_COMMAND -> "Applies to the exposed command /" + rule.name() + ".";
-                case NONE -> "Waits: /" + rule.name() + " is neither exposed nor an alias.";
-            };
+        int subtitleColor = rule != null && rule.target() == RateLimitsData.Target.NONE ? Palette.WARN : Palette.TEXT_MUTE;
+        int subtitleY = in.y() + 11;
+        for (net.minecraft.util.FormattedCharSequence line : subtitleLines()) {
+            g.drawString(font, line, in.x(), subtitleY, subtitleColor, false);
+            subtitleY += SUBTITLE_LINE;
         }
-        Skin.text(g, font, subtitle, in.x(), in.y() + 11, in.w(), rule != null && rule.target() == RateLimitsData.Target.NONE
-                ? Palette.WARN : Palette.TEXT_MUTE);
 
         int half = (in.w() - GAP) / 2;
         if (showingLevels()) {
