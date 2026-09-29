@@ -20,7 +20,7 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ### Added
 
-- **Test automation beyond GameTests** - `./gradlew testAll` (JUnit, package check, the three GameTest modes judged from their logs); `./gradlew runClientSmoke` (every page on a real client, layout judged at four window sizes); `tools/server_smoke.py` (dedicated server with LuckPerms, a client without the mod, the import selection); `tools/cluster_smoke.py` (the release jar on a real NeoForge server and MariaDB: missing driver, Arcadia Lib's driver, TLS, a three-member first boot, sharing, per-member elements and limits); `tools/arcadia_smoke.py` (the release jar in the Arcadia server pack); `tools/test_all.py` runs them all and maps every result to the step of the test procedure it proves. See `docs/TESTING_GUIDE.md`, section 11.
+- **Test automation beyond GameTests** - `./gradlew testAll` (JUnit, package check, the three GameTest modes judged from their logs); `./gradlew runClientSmoke` (every page on a real client, layout judged at four window sizes); `tools/server_smoke.py` (dedicated server with LuckPerms, a client without the mod, the import selection); `tools/cluster_smoke.py` (the release jar on a real NeoForge server and MariaDB: missing driver, Arcadia Lib's driver, TLS, a three-member first boot, sharing, per-member elements and limits); `tools/arcadia_smoke.py` (the release jar in the Arcadia server pack); `tools/arcadia_db_smoke.py` (the pack on a local database through Arcadia Lib, with LuckPerms and as a two-server cluster without it); `tools/test_all.py` runs them all and maps every result to the step of the test procedure it proves. See `docs/TESTING_GUIDE.md`, section 11.
 
 ---
 

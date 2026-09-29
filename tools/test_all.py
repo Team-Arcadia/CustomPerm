@@ -7,6 +7,7 @@
   server     tools/server_smoke.py: dedicated server with LuckPerms, a client without the mod, V01 and V09
   cluster    tools/cluster_smoke.py: release jar on real NeoForge and MariaDB, D01-D10, V06 and V07
   arcadia    tools/arcadia_smoke.py: the release jar in the Arcadia server pack
+  arcadia-db tools/arcadia_db_smoke.py: the pack on a local database through Arcadia Lib, with and without LuckPerms
   spark      ./gradlew runSparkScenario and tools/spark_cluster.py (S01-S04), only with --spark (over an hour)
 
 Each layer writes its own report; this script reads them, never exit codes alone, and writes
@@ -34,6 +35,7 @@ LAYERS = {
     "server": ([PYTHON, "tools/server_smoke.py"], ROOT / "run" / "serversmoke" / "server-smoke-report.txt"),
     "cluster": ([PYTHON, "tools/cluster_smoke.py"], ROOT / "run" / "clustersmoke" / "cluster-smoke-report.txt"),
     "arcadia": ([PYTHON, "tools/arcadia_smoke.py"], ROOT / "run" / "arcadia" / "arcadia-smoke-report.txt"),
+    "arcadia-db": ([PYTHON, "tools/arcadia_db_smoke.py"], ROOT / "run" / "arcadia-db" / "arcadia-db-report.txt"),
 }
 
 # What each step of TEST_PROCEDURE_v1.1.0-r2-manual-only asks, to title the page.
