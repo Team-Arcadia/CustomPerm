@@ -15,12 +15,12 @@ import argparse
 import os
 import secrets
 import shutil
-import socket
-import struct
 import subprocess
 import sys
 import time
 from pathlib import Path
+
+from mc_harness import (Database, connect, heap, kill, profile_ms_per_tick, wait_for)
 
 ROOT = Path(__file__).resolve().parent.parent
 BASE = ROOT / "run" / "spark-cluster"
@@ -30,186 +30,6 @@ MEMBERS = {"a": {"port": 25601, "rcon": 25611, "id": "spark_alpha"},
 DATABASE = "customperm_spark"
 DB_USER = "customperm_spark"
 PROBE = "[spark-cluster]"
-
-
-# ---------------------------------------------------------------- RCON
-
-def _packet(pid, kind, body):
-    payload = struct.pack("<ii", pid, kind) + body.encode("utf-8") + b"\x00\x00"
-    return struct.pack("<i", len(payload)) + payload
-
-
-def _read(sock):
-    def exactly(n):
-        data = b""
-        while len(data) < n:
-            chunk = sock.recv(n - len(data))
-            if not chunk:
-                raise IOError("rcon closed")
-            data += chunk
-        return data
-    size = struct.unpack("<i", exactly(4))[0]
-    data = exactly(size)
-    return struct.unpack("<i", data[:4])[0], data[8:-2].decode("utf-8", "replace")
-
-
-class Rcon:
-    def __init__(self, port, password):
-        self.sock = socket.create_connection(("127.0.0.1", port), timeout=30)
-        self.sock.sendall(_packet(1, 3, password))
-        if _read(self.sock)[0] == -1:
-            raise IOError("rcon authentication refused")
-
-    def run(self, command):
-        self.sock.sendall(_packet(2, 2, command))
-        return _read(self.sock)[1].strip()
-
-    def close(self):
-        try:
-            self.sock.close()
-        except OSError:
-            pass
-
-
-def connect(port, password, seconds):
-    end = time.time() + seconds
-    while time.time() < end:
-        try:
-            return Rcon(port, password)
-        except (OSError, IOError):
-            time.sleep(3)
-    raise IOError(f"rcon never came up on {port}")
-
-
-# ---------------------------------------------------------------- spark files
-
-def _varint(b, i):
-    result = shift = 0
-    while True:
-        c = b[i]
-        i += 1
-        result |= (c & 0x7F) << shift
-        shift += 7
-        if c < 0x80:
-            return result, i
-
-
-def _fields(b):
-    i = 0
-    while i < len(b):
-        key, i = _varint(b, i)
-        field, wire = key >> 3, key & 7
-        if wire == 0:
-            value, i = _varint(b, i)
-        elif wire == 1:
-            value, i = b[i:i + 8], i + 8
-        elif wire == 5:
-            value, i = b[i:i + 4], i + 4
-        elif wire == 2:
-            n, i = _varint(b, i)
-            value, i = b[i:i + n], i + n
-        else:
-            raise ValueError(f"wire type {wire}")
-        yield field, wire, value
-
-
-def heap(path):
-    """Live instances per class, from spark's HeapData (entries: 2 = instances, 4 = type)."""
-    counts = {}
-    for field, _, value in _fields(path.read_bytes()):
-        if field == 2:
-            entry = {f: v for f, _, v in _fields(value)}
-            name = entry.get(4, b"").decode("utf-8", "replace")
-            counts[name] = counts.get(name, 0) + entry.get(2, 0)
-    return counts
-
-
-def profile_ms_per_tick(path, prefix):
-    """Time per tick of the server thread spent in frames of classes starting with prefix, callees included."""
-    ticks = 0
-    for field, _, value in _fields(path.read_bytes()):
-        if field == 1:
-            for f, _, v in _fields(value):
-                if f == 12:
-                    ticks = v
-        if field != 2:
-            continue
-        frames, roots, name, total = [], [], "", 0.0
-        for f, w, v in _fields(value):
-            if f == 1:
-                name = v.decode("utf-8", "replace")
-            elif f == 3:
-                frames.append(_frame(v))
-            elif f == 4:
-                total = sum(struct.unpack(f"<{len(v) // 8}d", v)) if w == 2 else struct.unpack("<d", v)[0]
-            elif f == 5:
-                roots += _ints(v, w)
-        if name != "Server thread":
-            continue
-        spent, stack = 0.0, list(roots)
-        while stack:
-            cls, ms, children = frames[stack.pop()]
-            if cls.startswith(prefix):
-                spent += ms
-            else:
-                stack.extend(children)
-        return spent / max(1, ticks or round(total / 50)), ticks
-    return None, ticks
-
-
-def _ints(v, wire):
-    if wire == 0:
-        return [v]
-    out, i = [], 0
-    while i < len(v):
-        n, i = _varint(v, i)
-        out.append(n)
-    return out
-
-
-def _frame(b):
-    cls, ms, children = "", 0.0, []
-    for f, w, v in _fields(b):
-        if f == 3:
-            cls = v.decode("utf-8", "replace")
-        elif f == 8:
-            ms = sum(struct.unpack(f"<{len(v) // 8}d", v)) if w == 2 else struct.unpack("<d", v)[0]
-        elif f == 9:
-            children += _ints(v, w)
-    return cls, ms, children
-
-
-# ---------------------------------------------------------------- database
-
-class Database:
-    def __init__(self, bin_dir, root_password):
-        self.bin = Path(bin_dir)
-        self.root = ["-u", "root"] + ([f"-p{root_password}"] if root_password else [])
-        self.process = None
-        self.started_here = False
-
-    def up(self):
-        return subprocess.run([str(self.bin / "mysqladmin.exe"), *self.root, "ping"],
-                              capture_output=True, text=True).returncode == 0
-
-    def start(self, log):
-        ini = self.bin / "my.ini"
-        args = [str(self.bin / "mysqld.exe")] + ([f"--defaults-file={ini}"] if ini.is_file() else []) + ["--standalone", "--console"]
-        self.process = subprocess.Popen(args, stdout=log, stderr=subprocess.STDOUT)
-        if not wait_for(self.up, 60):
-            raise RuntimeError("MariaDB did not start")
-
-    def stop(self):
-        subprocess.run([str(self.bin / "mysqladmin.exe"), *self.root, "shutdown"], capture_output=True)
-        wait_for(lambda: not self.up(), 60)
-        if self.process:
-            self.process.wait(timeout=60)
-            self.process = None
-
-    def sql(self, statement):
-        result = subprocess.run([str(self.bin / "mysql.exe"), *self.root, "-e", statement], capture_output=True, text=True)
-        if result.returncode != 0:
-            raise RuntimeError(f"SQL failed: {result.stderr.strip()}")
 
 
 # ---------------------------------------------------------------- members
@@ -280,23 +100,6 @@ def probes(member):
                 values = dict(part.split("=", 1) for part in line.split(PROBE, 1)[1].split())
                 lines.append({k: int(v) for k, v in values.items()})
     return lines
-
-
-def wait_for(predicate, seconds, step=1.0):
-    end = time.time() + seconds
-    while time.time() < end:
-        if predicate():
-            return True
-        time.sleep(step)
-    return False
-
-
-def kill(process):
-    if process.poll() is None:
-        if os.name == "nt":
-            subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"], capture_output=True)
-        else:
-            process.kill()
 
 
 # ---------------------------------------------------------------- use
