@@ -221,6 +221,43 @@ class ConfigManagerTest {
     }
 
     @Test
+    void reloadsThatChangeNothing_keepTheEarlierBackups() throws Exception {
+        ConfigManager mgr = new ConfigManager(tempDir);
+        mgr.load();
+        Path backupDir = tempDir.resolve("backup");
+        // An earlier state of grades.json, older than anything a reload writes.
+        Path earlier = backupDir.resolve("grades.json.2020-01-01T00-00-01.bak");
+        Files.writeString(earlier, "{\"grades\":{\"old\":{}}}");
+        Path latest = backupDir.resolve("grades.json.2099-01-01T00-00-00.bak");
+        Files.writeString(latest, Files.readString(tempDir.resolve("grades.json")));
+
+        for (int i = 0; i < 5; i++) assertTrue(mgr.load());
+
+        assertTrue(Files.exists(earlier), "a reload that changed nothing must not rotate an earlier state out");
+        long gradesBackups;
+        try (var stream = Files.list(backupDir)) {
+            gradesBackups = stream.filter(p -> p.getFileName().toString().startsWith("grades.json.")).count();
+        }
+        assertEquals(3L, gradesBackups, "no new backup for an unchanged file");
+    }
+
+    @Test
+    void saveLeavesAnUnchangedFileUntouched() throws Exception {
+        ConfigManager mgr = new ConfigManager(tempDir);
+        mgr.load();
+        Path grades = tempDir.resolve("grades.json");
+        java.nio.file.attribute.FileTime old = java.nio.file.attribute.FileTime.fromMillis(1_000_000_000_000L);
+        Files.setLastModifiedTime(grades, old);
+
+        assertTrue(mgr.save());
+        assertEquals(old, Files.getLastModifiedTime(grades), "an identical file is not rewritten");
+
+        mgr.getGrades().grades.put("fresh", new GradesConfig.Grade());
+        assertTrue(mgr.save());
+        assertTrue(Files.readString(grades).contains("fresh"), "a changed file is still written");
+    }
+
+    @Test
     void shouldMigrateLegacyConfigDirectory_whenNewDirectoryDoesNotExist() throws Exception {
         Path legacyDir = tempDir.resolve("customperm");
         Path newDir = tempDir.resolve("arcadia").resolve("customperm");

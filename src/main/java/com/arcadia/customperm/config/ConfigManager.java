@@ -239,16 +239,25 @@ public class ConfigManager {
         ConfigSnapshot snap = configRef.get();
         try {
             Files.createDirectories(dir);
-            AtomicFiles.write(gradesFile,     GSON.toJson(snap.grades()));
-            AtomicFiles.write(aliasesFile,    GSON.toJson(snap.aliases()));
-            AtomicFiles.write(commandsFile,   GSON.toJson(snap.commands()));
-            AtomicFiles.write(settingsFile,   GSON.toJson(snap.settings()));
-            AtomicFiles.write(rateLimitsFile, GSON.toJson(snap.rateLimits()));
+            writeIfChanged(gradesFile,     GSON.toJson(snap.grades()));
+            writeIfChanged(aliasesFile,    GSON.toJson(snap.aliases()));
+            writeIfChanged(commandsFile,   GSON.toJson(snap.commands()));
+            writeIfChanged(settingsFile,   GSON.toJson(snap.settings()));
+            writeIfChanged(rateLimitsFile, GSON.toJson(snap.rateLimits()));
             return true;
         } catch (IOException e) {
             LOGGER.error("[CustomPerm] Failed to save config", e);
             return false;
         }
+    }
+
+    /**
+     * Rewrites a file only when its text changes. A reload saves right after reading, and rewriting five unchanged
+     * files each time made every next read slow on a scanned disk (about a second per reload on Windows).
+     */
+    private static void writeIfChanged(Path file, String json) throws IOException {
+        if (Files.isRegularFile(file) && json.equals(Files.readString(file))) return;
+        AtomicFiles.write(file, json);
     }
 
     /**
@@ -271,22 +280,38 @@ public class ConfigManager {
             Files.createDirectories(backupDir);
             ConfigSnapshot snap = configRef.get();
 
-            Files.writeString(backupDir.resolve("grades.json."     + timestamp + ".bak"), GSON.toJson(snap.grades()));
-            Files.writeString(backupDir.resolve("aliases.json."    + timestamp + ".bak"), GSON.toJson(snap.aliases()));
-            Files.writeString(backupDir.resolve("commands.json."   + timestamp + ".bak"), GSON.toJson(snap.commands()));
-            Files.writeString(backupDir.resolve("settings.json."   + timestamp + ".bak"), GSON.toJson(snap.settings()));
-            Files.writeString(backupDir.resolve("ratelimits.json." + timestamp + ".bak"), GSON.toJson(snap.rateLimits()));
-
-            // Rotation AR10: keep the last 3 backups of each file.
-            rotateBackups(backupDir, "grades.json");
-            rotateBackups(backupDir, "aliases.json");
-            rotateBackups(backupDir, "commands.json");
-            rotateBackups(backupDir, "settings.json");
-            rotateBackups(backupDir, "ratelimits.json");
+            // A file identical to its latest backup gets no new one: with three kept per file, a few reloads
+            // that changed nothing would otherwise push every real earlier state out of the rotation.
+            backupIfChanged(backupDir, "grades.json",     timestamp, GSON.toJson(snap.grades()));
+            backupIfChanged(backupDir, "aliases.json",    timestamp, GSON.toJson(snap.aliases()));
+            backupIfChanged(backupDir, "commands.json",   timestamp, GSON.toJson(snap.commands()));
+            backupIfChanged(backupDir, "settings.json",   timestamp, GSON.toJson(snap.settings()));
+            backupIfChanged(backupDir, "ratelimits.json", timestamp, GSON.toJson(snap.rateLimits()));
 
         } catch (IOException e) {
             LOGGER.warn("[CustomPerm] Failed to write config backup: {}", e.getMessage());
             // Non-fatal: the config loaded, only the backup failed.
+        }
+    }
+
+    private void backupIfChanged(Path backupDir, String baseName, String timestamp, String json) throws IOException {
+        List<Path> backups = backups(backupDir, baseName);
+        if (!backups.isEmpty() && json.equals(Files.readString(backups.get(backups.size() - 1)))) return;
+        Files.writeString(backupDir.resolve(baseName + "." + timestamp + ".bak"), json);
+        // Rotation AR10: keep the last 3 backups of each file.
+        rotateBackups(backupDir, baseName);
+    }
+
+    /** Backups of {@code baseName}, oldest first: a lexicographic sort is a chronological one, the timestamp being ISO. */
+    private static List<Path> backups(Path backupDir, String baseName) throws IOException {
+        try (var stream = Files.list(backupDir)) {
+            return stream
+                    .filter(p -> {
+                        String name = p.getFileName().toString();
+                        return name.startsWith(baseName + ".") && name.endsWith(".bak");
+                    })
+                    .sorted()
+                    .collect(Collectors.toList());
         }
     }
 
@@ -297,16 +322,7 @@ public class ConfigManager {
      * <p>Package-private for {@code ConfigManagerTest}, in the same package.</p>
      */
     void rotateBackups(Path backupDir, String baseName) throws IOException {
-        List<Path> backups;
-        try (var stream = Files.list(backupDir)) {
-            backups = stream
-                    .filter(p -> {
-                        String name = p.getFileName().toString();
-                        return name.startsWith(baseName + ".") && name.endsWith(".bak");
-                    })
-                    .sorted()   // tri lexicographique = ordre chronologique (format ISO)
-                    .collect(Collectors.toList());
-        }
+        List<Path> backups = backups(backupDir, baseName);
         // Delete all but the 3 most recent.
         int toDelete = backups.size() - 3;
         for (int i = 0; i < toDelete; i++) {
