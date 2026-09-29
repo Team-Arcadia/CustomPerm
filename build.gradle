@@ -96,6 +96,15 @@ neoForge {
             // -PsparkScenarios=s03 plays one scenario; all three by default.
             systemProperty 'customperm.spark.scenarios', (project.findProperty('sparkScenarios') ?: 's01,s02,s03').toString()
         }
+        // The real-client steps of the test procedure a singleplayer world reaches (V02 to V05, V08, V10, V11),
+        // played by gametest/client/ClientSmoke. Verdict in run/clientsmoke/smoke-report.txt.
+        clientSmoke {
+            client()
+            sourceSet = sourceSets.gameTest
+            gameDirectory = project.file('run/clientsmoke')
+            programArguments.addAll '--username', 'SmokeAdmin', '--width', '1280', '--height', '720'
+            systemProperty 'customperm.clientSmoke', 'true'
+        }
         // Spark scenario S04: two cluster members through Arcadia Lib, driven by tools/spark_cluster.py over RCON.
         sparkClusterA {
             server()
@@ -242,6 +251,42 @@ def prepareSparkScenario = tasks.register('prepareSparkScenario', Delete) {
     }
 }
 tasks.matching { it.name == 'runSparkScenario' }.configureEach { dependsOn prepareSparkScenario }
+
+// Options that keep a driven client from stopping on its own: no onboarding, no pause menu when the window loses
+// focus, no sound, a fixed language and GUI scale.
+def automationOptions = { File dir, Map extra = [:] ->
+    def options = [onboardAccessibility: 'false', pauseOnLostFocus: 'false', tutorialStep: 'none', joinedFirstServer: 'true',
+                   skipMultiplayerWarning: 'true', soundCategory_master: '0.0', lang: 'en_us', guiScale: '2',
+                   narrator: '0', fullscreen: 'false'] + extra
+    dir.mkdirs()
+    new File(dir, 'options.txt').text = options.collect { k, v -> "${k}:${v}" }.join('\n') + '\n'
+}
+
+def verifyClientSmoke = tasks.register('verifyClientSmoke') {
+    group = 'verification'
+    description = 'Judges runClientSmoke from its report and its log.'
+    outputs.upToDateWhen { false }
+    doLast {
+        failOnLog(file('run/clientsmoke/logs/latest.log'), fatalLogPatterns)
+        def report = file('run/clientsmoke/smoke-report.txt')
+        if (!report.exists()) throw new GradleException('run/clientsmoke/smoke-report.txt was not written: the run stopped early.')
+        def lines = report.readLines('UTF-8')
+        def failed = lines.findAll { it.startsWith('FAIL ') }
+        if (!lines || !lines.last().startsWith('RESULT PASS')) {
+            throw new GradleException("Client smoke: ${lines ? lines.last() : 'empty report'}\n  " + failed.join('\n  '))
+        }
+        logger.lifecycle("Client smoke: ${lines.last()}. Screenshots in run/clientsmoke/screenshots.")
+    }
+}
+tasks.matching { it.name == 'runClientSmoke' }.configureEach {
+    doFirst {
+        delete 'run/clientsmoke/saves', 'run/clientsmoke/config/arcadia/customperm', 'run/clientsmoke/screenshots',
+                'run/clientsmoke/smoke-report.txt', 'run/clientsmoke/logs/latest.log', 'run/clientsmoke/usercache.json',
+                'run/clientsmoke/usernamecache.json'
+        automationOptions(file('run/clientsmoke'))
+    }
+    finalizedBy verifyClientSmoke
+}
 
 // S04 members carry Arcadia Lib, whose connector reaches the database; spark is copied in by the script.
 ['a', 'b'].each { member ->
