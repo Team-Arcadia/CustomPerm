@@ -109,7 +109,7 @@ published, and therefore govern no released build yet.
 | 1.0.3 | 2026-06-10 | MIT | `65ef813` |
 | 1.0.4 | 2026-06-11 | `GPL-3.0-only` | `ffc4624` |
 | 1.0.5 | 2026-07-08 | `GPL-3.0-only` | `v1.0.5` |
-| 2.0.0 onward | not yet released | `LicenseRef-CustomPerm-ARR` | — |
+| 2.0.0 onward | 2026-09-30 | `LicenseRef-CustomPerm-ARR` | `v2.0.0` |
 
 **Note on 0.1.0, 0.9.0 and 1.0.0.** Those three releases carried two notices
 that did not agree: the `LICENSE` file held the GPL-3.0 text, while the jar
@@ -308,7 +308,7 @@ publication de la 1.0.5, et ne régissent donc encore aucun build publié.
 | 1.0.3 | 2026-06-10 | MIT | `65ef813` |
 | 1.0.4 | 2026-06-11 | `GPL-3.0-only` | `ffc4624` |
 | 1.0.5 | 2026-07-08 | `GPL-3.0-only` | `v1.0.5` |
-| 2.0.0 et suivantes | pas encore publiée | `LicenseRef-CustomPerm-ARR` | — |
+| 2.0.0 et suivantes | 2026-09-30 | `LicenseRef-CustomPerm-ARR` | `v2.0.0` |
 
 **Note sur 0.1.0, 0.9.0 et 1.0.0.** Ces trois versions portaient deux mentions
 divergentes : le fichier `LICENSE` contenait le texte GPL-3.0, tandis que les
