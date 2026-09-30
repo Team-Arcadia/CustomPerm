@@ -40,7 +40,7 @@ LAYERS = {
     "arcadia-client": ([PYTHON, "tools/arcadia_client_smoke.py"], ROOT / "run" / "arcadia" / "arcadia-client-report.txt"),
 }
 
-# What each step of TEST_PROCEDURE_v1.1.0-r2-manual-only asks, to title the page.
+# What each step of the test procedure asks, to title the page.
 STEPS = {
     "V01": "A client without the mod joins", "V02": "The interface opens and draws", "V03": "A narrow window",
     "V04": "Decoration as a player sees it", "V05": "Completion changes under the player's eyes",

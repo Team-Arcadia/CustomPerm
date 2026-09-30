@@ -1,4 +1,4 @@
-# CustomPerm 1.1.0
+# CustomPerm 2.0.0
 
 > Upgrading from 1.0.x? Read **Before you upgrade** first: after the upgrade, nobody can administer CustomPerm until the new nodes are granted from the console. Back up your configuration folder before replacing the jar.
 
@@ -83,7 +83,7 @@ The complete list is in the [changelog](https://github.com/Team-Arcadia/CustomPe
 
 ## Licence
 
-1.1.0 is the first build published under the proprietary, source-available licence (All Rights Reserved). The source stays readable on GitHub. Modpacks on CurseForge and Modrinth that fetch the unmodified official file are allowed; anything else needs written permission. Versions up to 1.0.5 stay available on the licence they shipped with. See [NOTICE.md](https://github.com/Team-Arcadia/CustomPerm/blob/main/NOTICE.md).
+2.0.0 is the first build published under the proprietary, source-available licence (All Rights Reserved). The source stays readable on GitHub. Modpacks on CurseForge and Modrinth that fetch the unmodified official file are allowed; anything else needs written permission. Versions up to 1.0.5 stay available on the licence they shipped with. See [NOTICE.md](https://github.com/Team-Arcadia/CustomPerm/blob/main/NOTICE.md).
 
 ---
 
@@ -94,7 +94,7 @@ Open an issue on the [tracker](https://github.com/Team-Arcadia/CustomPerm/issues
 ---
 ---
 
-# CustomPerm 1.1.0
+# CustomPerm 2.0.0
 
 > Vous venez de la 1.0.x ? Lisez d'abord **Avant de mettre à jour** : après la mise à jour, personne ne peut administrer CustomPerm tant que les nouveaux nœuds ne sont pas accordés depuis la console. Sauvegardez votre dossier de configuration avant de remplacer le jar.
 
@@ -179,7 +179,7 @@ La liste complète est dans le [changelog](https://github.com/Team-Arcadia/Custo
 
 ## Licence
 
-La 1.1.0 est la première version publiée sous la licence propriétaire à source visible (Tous droits réservés). Le code reste lisible sur GitHub. Les modpacks CurseForge et Modrinth qui récupèrent le fichier officiel non modifié sont autorisés ; tout le reste demande une autorisation écrite. Les versions jusqu'à la 1.0.5 restent disponibles sous la licence avec laquelle elles ont été publiées. Voir [NOTICE.md](https://github.com/Team-Arcadia/CustomPerm/blob/main/NOTICE.md).
+La 2.0.0 est la première version publiée sous la licence propriétaire à source visible (Tous droits réservés). Le code reste lisible sur GitHub. Les modpacks CurseForge et Modrinth qui récupèrent le fichier officiel non modifié sont autorisés ; tout le reste demande une autorisation écrite. Les versions jusqu'à la 1.0.5 restent disponibles sous la licence avec laquelle elles ont été publiées. Voir [NOTICE.md](https://github.com/Team-Arcadia/CustomPerm/blob/main/NOTICE.md).
 
 ---
 

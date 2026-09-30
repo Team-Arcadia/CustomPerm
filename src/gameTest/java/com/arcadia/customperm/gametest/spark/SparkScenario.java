@@ -57,7 +57,7 @@ import java.util.function.Predicate;
 import java.util.stream.Stream;
 
 /**
- * Scenarios S01 to S03 of the 1.1.0 test procedure, played by themselves ({@code ./gradlew runSparkScenario}).
+ * Scenarios S01 to S03 of the 2.0.0 test procedure, played by themselves ({@code ./gradlew runSparkScenario}).
  * spark must be in {@code run/spark/mods}, never in the build. Every report is saved to a file and never
  * uploaded; the verdict of each expectation, with the numbers behind it, goes to {@code run/spark/spark-report.txt}.
  *
@@ -383,7 +383,7 @@ public final class SparkScenario {
 
     private static void report() {
         List<String> lines = new ArrayList<>();
-        lines.add("CustomPerm spark scenario, S01 to S03 of TEST_PROCEDURE_v1.1.0");
+        lines.add("CustomPerm spark scenario, S01 to S03 of TEST_PROCEDURE_v2.0.0");
         lines.add("Files: " + sparkDir());
         FILES.forEach((name, file) -> lines.add("  " + name + " = " + (file == null ? "missing" : file.getFileName())));
         lines.add("");

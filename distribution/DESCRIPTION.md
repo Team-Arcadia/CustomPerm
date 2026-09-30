@@ -60,7 +60,7 @@ It works with **LuckPerms** when installed, and otherwise brings its own grade s
 ## Installation
 
 1. Install **NeoForge 21.1.221+** for **Minecraft 1.21.1** (Java 21).
-2. Drop `customperm-1.1.0.jar` into your server's `mods/` folder.
+2. Drop `customperm-2.0.0.jar` into your server's `mods/` folder.
 3. *(Optional)* Add **[LuckPerms](https://luckperms.net/download)** (NeoForge 1.21.1 build).
 4. *(Optional)* Admins who want the in-game interface install CustomPerm on their client too.
 5. Start the server, then grant yourself administration from the console:
@@ -187,7 +187,7 @@ Il fonctionne avec **LuckPerms** s'il est installé, et apporte sinon son propre
 ## Installation
 
 1. Installez **NeoForge 21.1.221+** pour **Minecraft 1.21.1** (Java 21).
-2. Placez `customperm-1.1.0.jar` dans le dossier `mods/` du serveur.
+2. Placez `customperm-2.0.0.jar` dans le dossier `mods/` du serveur.
 3. *(Optionnel)* Ajoutez **[LuckPerms](https://luckperms.net/download)** (build NeoForge 1.21.1).
 4. *(Optionnel)* Les admins qui veulent l'interface en jeu installent aussi CustomPerm sur leur client.
 5. Démarrez le serveur, puis donnez-vous l'administration depuis la console :

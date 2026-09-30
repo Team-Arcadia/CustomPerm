@@ -19,7 +19,7 @@ public class SettingsConfig {
 
     /**
      * Version of the settings format, stamped on a fresh install and after an upgrade notice. A file written
-     * before 1.1.0 has no such field and reads as 0, which is how an upgrade is detected ({@link UpgradeNotice}).
+     * before 2.0.0 has no such field and reads as 0, which is how an upgrade is detected ({@link UpgradeNotice}).
      */
     public static final int CURRENT_CONFIG_VERSION = 1;
 
@@ -130,7 +130,7 @@ public class SettingsConfig {
      * Records every command players type in the activity log (player tab). Off by default: a command
      * history is personal data. Admin changes are always recorded.
      */
-    /** See {@link #CURRENT_CONFIG_VERSION}. 0 means a configuration written before 1.1.0. */
+    /** See {@link #CURRENT_CONFIG_VERSION}. 0 means a configuration written before 2.0.0. */
     public int configVersion = 0;
 
     public boolean playerCommandLog = false;

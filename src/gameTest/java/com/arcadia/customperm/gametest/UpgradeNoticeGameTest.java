@@ -20,7 +20,7 @@ import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 
 /**
- * Upgrade notice (backlog item 11): a configuration written before 1.1.0 is announced once, to the log, to the
+ * Upgrade notice (backlog item 11): a configuration written before 2.0.0 is announced once, to the log, to the
  * operators online and to any operator who joins, even one holding no CustomPerm node, which is what an upgrade
  * leaves them as. Own batch: it touches the settings of the whole server.
  */

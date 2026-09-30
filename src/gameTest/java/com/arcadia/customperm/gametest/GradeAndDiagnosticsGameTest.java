@@ -97,7 +97,7 @@ public class GradeAndDiagnosticsGameTest {
     }
 
     /**
-     * A3.3, revised for 1.1.0: the most specific entry wins, like LuckPerms. An explicit ALLOW beats a DENY
+     * A3.3, revised for 2.0.0: the most specific entry wins, like LuckPerms. An explicit ALLOW beats a DENY
      * on an ancestor (this used to be refused: W03), and a DENY still wins at the same level.
      */
     @GameTest(template = TEMPLATE, timeoutTicks = 100)

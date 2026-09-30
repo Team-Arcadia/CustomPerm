@@ -17,7 +17,7 @@ import java.util.List;
 /**
  * Tells the server owner what changed when a configuration written by an older CustomPerm is loaded.
  *
- * <p>The version of the configuration is stored in {@code settings.json}. A file written before 1.1.0 has
+ * <p>The version of the configuration is stored in {@code settings.json}. A file written before 2.0.0 has
  * none, which reads as version 0; a fresh install is stamped with the current version, so a new server is
  * never told about a migration it did not live through. The notice is given once: the log gets the full
  * list, the operators online are told, and an operator who joins while the notice is pending is told too, even
@@ -50,7 +50,7 @@ public final class UpgradeNotice {
 
         int from = settings.configVersion;
         CustomPerm.LOGGER.warn("[CustomPerm] This configuration was written by an older CustomPerm (version {} of the "
-                + "settings format). What changed in 1.1.0:", from);
+                + "settings format). What changed in 2.0.0:", from);
         for (String line : changes()) {
             CustomPerm.LOGGER.warn("[CustomPerm]   - {}", line);
         }

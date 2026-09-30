@@ -6,15 +6,15 @@ Upgrading an existing CustomPerm install. English first, French below.
 
 ---
 
-## 1.0.x to 1.1.0
+## 1.0.x to 2.0.0
 
-1.1.0 changes who may administer the mod, how permission nodes resolve, and how the in-game interface is
+2.0.0 changes who may administer the mod, how permission nodes resolve, and how the in-game interface is
 delivered. Nothing in your configuration files is rewritten, but two changes take effect the moment the
 server starts, so read [What breaks on the first start](#what-breaks-on-the-first-start) before upgrading a
 live server.
 
 CustomPerm tells you about this itself: the configuration is stamped with a format version, and a
-configuration written before 1.1.0 makes the server log the list of changes once, raise an admin alert, and
+configuration written before 2.0.0 makes the server log the list of changes once, raise an admin alert, and
 tell every operator who joins that the new permissions are needed.
 
 ### Before you upgrade
@@ -23,7 +23,7 @@ tell every operator who joins that the new permissions are needed.
 - Note which players administer CustomPerm. You are about to grant them a permission.
 - Check the exposed commands, aliases and grades you rely on: `/customperm status`, `/customperm scan`,
   `/customperm grade list`.
-- CustomPerm 1.1.0 needs NeoForge 1.21.1 and, if you use it, LuckPerms 5.4.150 or later.
+- CustomPerm 2.0.0 needs NeoForge 1.21.1 and, if you use it, LuckPerms 5.4.150 or later.
 
 ### What breaks on the first start
 
@@ -113,8 +113,8 @@ harmless, and it can also refuse something to a staff member who used to pass re
 
 ### Going back to 1.0.x
 
-Put the 1.0.5 jar back and restore the configuration you copied. A configuration written by 1.1.0 still loads
-in 1.0.x: the fields it does not know are ignored. What you lose is what 1.1.0 stored in them, and grades
+Put the 1.0.5 jar back and restore the configuration you copied. A configuration written by 2.0.0 still loads
+in 1.0.x: the fields it does not know are ignored. What you lose is what 2.0.0 stored in them, and grades
 written with the new resolution in mind must be reviewed again, since 1.0.x applies "a DENY anywhere wins".
 
 ---
@@ -123,15 +123,15 @@ written with the new resolution in mind must be reviewed again, since 1.0.x appl
 
 Mise à jour d'une installation CustomPerm existante.
 
-## 1.0.x vers 1.1.0
+## 1.0.x vers 2.0.0
 
-La 1.1.0 change qui peut administrer le mod, la façon dont les nœuds de permission sont résolus, et la façon
+La 2.0.0 change qui peut administrer le mod, la façon dont les nœuds de permission sont résolus, et la façon
 dont l'interface en jeu est fournie. Aucun fichier de configuration n'est réécrit, mais deux changements
 s'appliquent dès le démarrage du serveur : lisez [Ce qui casse au premier démarrage](#ce-qui-casse-au-premier-démarrage)
 avant de mettre à jour un serveur en production.
 
 CustomPerm vous prévient de lui-même : la configuration porte une version de format, et une configuration
-écrite avant la 1.1.0 fait écrire la liste des changements dans le log au démarrage, lève une alerte admin, et
+écrite avant la 2.0.0 fait écrire la liste des changements dans le log au démarrage, lève une alerte admin, et
 prévient chaque opérateur qui se connecte que les nouvelles permissions sont nécessaires.
 
 ### Avant la mise à jour
@@ -140,7 +140,7 @@ prévient chaque opérateur qui se connecte que les nouvelles permissions sont n
 - Notez quels joueurs administrent CustomPerm. Vous allez leur accorder une permission.
 - Vérifiez les commandes exposées, alias et grades dont vous dépendez : `/customperm status`,
   `/customperm scan`, `/customperm grade list`.
-- CustomPerm 1.1.0 demande NeoForge 1.21.1 et, si vous l'utilisez, LuckPerms 5.4.150 ou plus récent.
+- CustomPerm 2.0.0 demande NeoForge 1.21.1 et, si vous l'utilisez, LuckPerms 5.4.150 ou plus récent.
 
 ### Ce qui casse au premier démarrage
 
@@ -231,7 +231,7 @@ l'accès d'administration. Avant, les opérateurs passaient tous les contrôles 
 
 ### Revenir en 1.0.x
 
-Remettez le jar 1.0.5 et restaurez la configuration copiée. Une configuration écrite par la 1.1.0 se charge
-encore en 1.0.x : les champs qu'elle ne connaît pas sont ignorés. Ce que vous perdez, c'est ce que la 1.1.0 y
+Remettez le jar 1.0.5 et restaurez la configuration copiée. Une configuration écrite par la 2.0.0 se charge
+encore en 1.0.x : les champs qu'elle ne connaît pas sont ignorés. Ce que vous perdez, c'est ce que la 2.0.0 y
 stockait, et les grades écrits en pensant à la nouvelle résolution doivent être revus, puisque la 1.0.x
 applique « un DENY n'importe où l'emporte ».
