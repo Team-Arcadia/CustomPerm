@@ -395,6 +395,8 @@ jmh {
 tasks.named('jar', Jar) {
     from(rootProject.file('LICENSE'))   { into 'META-INF' }
     from(rootProject.file('NOTICE.md')) { into 'META-INF' }
+    // LICENSE §5.3(a) promises credit in the CONTRIBUTORS.md "distributed with" the mod.
+    from(rootProject.file('CONTRIBUTORS.md')) { into 'META-INF' }
 }
 
 tasks.named('processResources', ProcessResources).configure {
@@ -435,7 +437,7 @@ tasks.register('verifyPackage') {
         }
         def allowedFiles = [
             'META-INF/MANIFEST.MF', 'META-INF/neoforge.mods.toml',
-            'META-INF/LICENSE', 'META-INF/NOTICE.md', 'pack.mcmeta'
+            'META-INF/LICENSE', 'META-INF/NOTICE.md', 'META-INF/CONTRIBUTORS.md', 'pack.mcmeta'
         ] as Set
         def allowedPrefixes = ['com/arcadia/customperm/', 'data/customperm/', 'assets/customperm/']
         def problems = []
