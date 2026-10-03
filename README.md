@@ -1564,8 +1564,8 @@ LuckPerms stores and resolves both `customperm.command.*` and `customperm.alias.
 
 Copyright (C) 2026 THEFricadelle. All rights reserved.
 
-CustomPerm is **proprietary, source-available software** — the source is public
-for reference and interoperability, but it is **not** open-source. You may
+CustomPerm is **proprietary software** — its source code is not published, and
+it is **not** open-source. You may
 download the official builds and run the mod on your own server(s); you may
 **not** redistribute, re-upload, repackage, sell, or create derivative works
 without prior written permission.

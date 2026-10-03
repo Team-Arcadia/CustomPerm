@@ -2,7 +2,7 @@
 
 **Granular server-side command permissions for Minecraft NeoForge. Grant individual vanilla or modded commands to players who are not operators, with or without LuckPerms.**
 
-> Upgrading from 1.0.x? Read the [migration guide](https://github.com/Team-Arcadia/CustomPerm/blob/main/MIGRATION.md) first.
+> Upgrading from 1.0.x? Read the [migration guide](https://github.com/THEFricadelle/mc-mods-issues/blob/main/docs/customperm/MIGRATION.md) first.
 
 ![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-green.svg) ![NeoForge 21.1.221+](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg) ![Java 21](https://img.shields.io/badge/Java-21-red.svg) ![License All Rights Reserved](https://img.shields.io/badge/license-source--available%20(All%20Rights%20Reserved)-blue.svg)
 
@@ -118,7 +118,7 @@ Offline, aliases and the interface are the main draw. Grades come into their own
 | LuckPerms | 5.4.150+ (optional) |
 | Arcadia Lib | 1.3.0+ (cluster mode only, server and clients) |
 
-**License:** Proprietary, All Rights Reserved (source-available; no redistribution without permission) · **Author:** THEFricadelle
+**License:** Proprietary, All Rights Reserved (closed-source; no redistribution without permission) · **Author:** THEFricadelle
 
 **Modpacks:** ✅ Allowed in CurseForge / Modrinth modpacks that fetch the **unmodified official file** from the platform. ❌ Bundling the jar into an exported/offline pack, re-hosting it elsewhere, or including a modified build requires written permission.
 
@@ -129,7 +129,7 @@ Offline, aliases and the interface are the main draw. Grades come into their own
 
 **Permissions de commandes côté serveur pour Minecraft NeoForge. Accordez des commandes vanilla ou moddées précises à des joueurs qui ne sont pas opérateurs, avec ou sans LuckPerms.**
 
-> Vous venez de la 1.0.x ? Lisez d'abord le [guide de migration](https://github.com/Team-Arcadia/CustomPerm/blob/main/MIGRATION.md).
+> Vous venez de la 1.0.x ? Lisez d'abord le [guide de migration](https://github.com/THEFricadelle/mc-mods-issues/blob/main/docs/customperm/MIGRATION.md).
 
 ![Minecraft 1.21.1](https://img.shields.io/badge/Minecraft-1.21.1-green.svg) ![NeoForge 21.1.221+](https://img.shields.io/badge/NeoForge-21.1.221+-orange.svg) ![Java 21](https://img.shields.io/badge/Java-21-red.svg) ![License All Rights Reserved](https://img.shields.io/badge/license-source--available%20(All%20Rights%20Reserved)-blue.svg)
 
@@ -245,6 +245,6 @@ Hors ligne, les alias et l'interface sont l'intérêt principal. Les grades pren
 | LuckPerms | 5.4.150+ (optionnel) |
 | Arcadia Lib | 1.3.0+ (mode cluster uniquement, serveur et clients) |
 
-**Licence :** Propriétaire, Tous droits réservés (source visible ; redistribution interdite sans autorisation) · **Auteur :** THEFricadelle
+**Licence :** Propriétaire, Tous droits réservés (code fermé ; redistribution interdite sans autorisation) · **Auteur :** THEFricadelle
 
 **Modpacks :** ✅ Autorisé dans les modpacks CurseForge / Modrinth qui récupèrent le **fichier officiel non modifié** depuis la plateforme. ❌ Empaqueter le jar dans un pack exporté/hors-ligne, le ré-héberger ailleurs, ou inclure une version modifiée nécessite une autorisation écrite.

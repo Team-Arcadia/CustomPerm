@@ -1589,9 +1589,8 @@ LuckPerms stocke et résout à la fois les nodes `customperm.command.*` et `cust
 
 Copyright (C) 2026 THEFricadelle. Tous droits réservés.
 
-CustomPerm est un **logiciel propriétaire à source visible** — le code source
-est public à titre de référence et d'interopérabilité, mais il n'est **pas**
-open-source. Vous pouvez télécharger les builds officiels et exécuter le mod sur
+CustomPerm est un **logiciel propriétaire** — son code source n'est pas publié,
+et il n'est **pas** open-source. Vous pouvez télécharger les builds officiels et exécuter le mod sur
 votre/vos serveur(s) ; vous ne pouvez **pas** le redistribuer, le ré-uploader,
 le repackager, le vendre ni en créer des œuvres dérivées sans autorisation
 écrite préalable.

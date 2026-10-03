@@ -32,15 +32,15 @@ Under Section 5.3 of the [LICENSE](LICENSE):
   contributed, so the credit identifies the work and not only the person. No
   contribution will ever be misattributed to someone else. This credit is not
   withdrawn if the license is later terminated for any reason.
-- **Modpack permission.** Once your pull request has concluded, you may include
-  CustomPerm in a modpack you publish, on the same terms as everyone else
-  (§3(b)): the pack must reference an Official Channel so the mod is fetched
-  from CurseForge or Modrinth at install time, the unmodified Official Build
-  must be used, and the notices must be preserved. **Having forked the
-  repository never takes this away from you.**
+- **Modpack permission.** You may include CustomPerm in a modpack you publish,
+  on the same terms as everyone else (§3(b)): the pack must reference an
+  Official Channel so the mod is fetched from CurseForge or Modrinth at install
+  time, the unmodified Official Build must be used, and the notices must be
+  preserved. **Having had access to the source never takes this away from
+  you.**
 
-One limit worth stating plainly: you may never ship a build produced from
-**your own fork** — in a modpack or anywhere else. The permission covers the
+One limit worth stating plainly: you may never ship a build produced from the
+source code — in a modpack or anywhere else. The permission covers the
 Official Build only.
 
 ## What this list means — and what it does not
@@ -67,9 +67,10 @@ pull request.
 
 Contributions merged into the official repository, and reports that led to a
 correction, are added here at the maintainer's discretion. If you contributed and are missing from this list, or
-you would prefer a different name, handle, or no contact address, open an issue:
+you would prefer a different name, handle, or no contact address, use the
+official issue tracker:
 
-  https://github.com/Team-Arcadia/CustomPerm/issues
+  https://github.com/THEFricadelle/mc-mods-issues/issues/new?template=permission-request.yml
 
 ---
 
@@ -109,16 +110,16 @@ Au titre de la Section 5.3 de la [LICENSE](LICENSE) :
   la personne. Aucune contribution ne sera jamais attribuée à un tiers. Ce
   crédit n'est pas retiré si la licence est ultérieurement résiliée, pour
   quelque motif que ce soit.
-- **La permission modpack.** Une fois votre pull request terminée, vous pouvez
-  inclure CustomPerm dans un modpack que vous publiez, aux mêmes conditions que
-  tout le monde (§3(b)) : le pack doit référencer un canal officiel pour que le
-  mod soit récupéré depuis CurseForge ou Modrinth à l'installation, le build
-  officiel non modifié doit être utilisé, et les mentions doivent être
-  préservées. **Avoir forké le dépôt ne vous en prive jamais.**
+- **La permission modpack.** Vous pouvez inclure CustomPerm dans un modpack que
+  vous publiez, aux mêmes conditions que tout le monde (§3(b)) : le pack doit
+  référencer un canal officiel pour que le mod soit récupéré depuis CurseForge
+  ou Modrinth à l'installation, le build officiel non modifié doit être
+  utilisé, et les mentions doivent être préservées. **Avoir eu accès au code ne
+  vous en prive jamais.**
 
 Une limite à énoncer clairement : vous ne pouvez jamais diffuser un build issu
-de **votre propre fork** — ni dans un modpack, ni ailleurs. La permission ne
-couvre que le build officiel.
+du code source — ni dans un modpack, ni ailleurs. La permission ne couvre que
+le build officiel.
 
 ## Ce que cette liste signifie — et ce qu'elle ne signifie pas
 
@@ -146,6 +147,6 @@ Les contributions fusionnées dans le dépôt officiel, ainsi que les
 signalements ayant conduit à une correction, sont ajoutés ici à la discrétion
 du mainteneur. Si vous avez contribué et n'apparaissez pas dans cette
 liste, ou si vous préférez un autre nom, pseudonyme ou aucune adresse de
-contact, ouvrez une issue :
+contact, passez par le tracker d'issues officiel :
 
-  https://github.com/Team-Arcadia/CustomPerm/issues
+  https://github.com/THEFricadelle/mc-mods-issues/issues/new?template=permission-request.yml

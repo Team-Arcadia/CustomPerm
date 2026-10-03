@@ -3,9 +3,8 @@
 **Copyright (C) 2026 THEFricadelle. All rights reserved.**
 SPDX-License-Identifier: `LicenseRef-CustomPerm-ARR`
 
-CustomPerm is **source-available proprietary software**. The source code is
-public, but the project is **not open-source**. Reading the code grants you no
-right to reuse it.
+CustomPerm is **proprietary software**. Its source code is not published,
+and the project is **not open-source**.
 
 This file is a plain-language summary for convenience. The binding terms are in
 [LICENSE](LICENSE); if the two ever disagree, the LICENSE wins.
@@ -14,13 +13,10 @@ This file is a plain-language summary for convenience. The binding terms are in
 
 | Action | Allowed? |
 |--------|----------|
-| Download the official build from CurseForge / Modrinth / GitHub Releases | ✅ Yes |
+| Download the official build from CurseForge / Modrinth | ✅ Yes |
 | Run it on your server, any number of players | ✅ Yes |
 | Run it on a monetized server (donations, ranks, shop) | ✅ Yes — as long as the mod itself isn't sold or paywalled |
-| Read, audit, and review the source code | ✅ Yes |
 | Report bugs, open issues | ✅ Yes |
-| Fork the repo to submit a pull request | ✅ Yes — see [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Ship the mod in your own modpack **after** contributing a PR | ✅ Yes — §5.3, official file only |
 | Be credited for a merged contribution, by name and by what you contributed | ✅ Yes — [CONTRIBUTORS.md](CONTRIBUTORS.md), §5.3(a) |
 | Redistribute it, relicense it, or publish a fork **because you contributed** | ❌ No — §5.2, a merged PR enlarges nothing |
 | Include it in a CurseForge / Modrinth modpack that **references** the official unmodified file | ✅ Yes, no need to ask |
@@ -30,7 +26,9 @@ This file is a plain-language summary for convenience. The binding terms are in
 | Offer it as a "one-click install" product in a hosting panel catalogue | ❌ Written permission required |
 | Re-upload or mirror it anywhere (sites, forums, Discord, file lockers) | ❌ No |
 | Modify it and distribute the result | ❌ No |
-| Publish a build made from your fork | ❌ No |
+| Decompile or reverse-engineer it, beyond what the law always allows | ❌ No — §4 |
+| Share the source code, if you were given access to contribute | ❌ No — §5.1 |
+| Publish a build made from the source code | ❌ No |
 | Reuse its code in another mod, plugin, or project | ❌ No |
 | Sell it, rent it, or bundle it with a paid product | ❌ No |
 | Claim you wrote it, or remove the copyright notices | ❌ No |
@@ -47,14 +45,13 @@ and it does **not** silently kill a compliant modpack or stop other users from
 running an Official Build they lawfully obtained. It is a tool against abuse,
 not a kill switch over the ecosystem. See §2.3 of the LICENSE.
 
-## Why source-available and not open-source
+## Source code
 
-The code is public so that server owners can audit what runs on their machines,
-so that integration problems can be diagnosed against the real implementation,
-and so that anyone who spots a bug can fix it through a pull request.
-
-It is not open-source because the author retains exclusive control over
-distribution and derivative works. Visibility is not a license.
+The source code is not published. People given access to contribute may read
+it and prepare contributions, nothing more, and that access can be withdrawn
+(§5.1). A copy of the source made while an earlier version of the license made
+it public stays governed by that earlier version, grants no right over later
+releases, and is never an official channel.
 
 ## Ownership and maintenance
 
@@ -180,9 +177,9 @@ not place the mod as a whole under the MIT License.
 ## Requesting permission
 
 Anything marked ❌ above can still be granted case by case. Ask — the answer is
-often yes for reasonable requests. Open an issue on the official repository:
+often yes for reasonable requests. Use the official issue tracker:
 
-  https://github.com/Team-Arcadia/CustomPerm/issues
+  https://github.com/THEFricadelle/mc-mods-issues/issues/new?template=permission-request.yml
 
 Permission must be **written** to be valid. Silence is not consent: no reply, or
 no objection to a use, never counts as permission. A permission granted in one
@@ -197,9 +194,8 @@ case applies to that case only.
 **Copyright (C) 2026 THEFricadelle. Tous droits réservés.**
 SPDX-License-Identifier: `LicenseRef-CustomPerm-ARR`
 
-CustomPerm est un **logiciel propriétaire à source visible**. Le code source est
-public, mais le projet n'est **pas open-source**. Lire le code ne vous donne
-aucun droit de le réutiliser.
+CustomPerm est un **logiciel propriétaire**. Son code source n'est pas
+publié, et le projet n'est **pas open-source**.
 
 Ce fichier est un résumé en langage clair, fourni par commodité. Les conditions
 contraignantes se trouvent dans [LICENSE](LICENSE) ; en cas de divergence, la
@@ -209,13 +205,10 @@ LICENSE prévaut.
 
 | Action | Autorisé ? |
 |--------|-----------|
-| Télécharger le build officiel depuis CurseForge / Modrinth / GitHub Releases | ✅ Oui |
+| Télécharger le build officiel depuis CurseForge / Modrinth | ✅ Oui |
 | L'exécuter sur votre serveur, quel que soit le nombre de joueurs | ✅ Oui |
 | L'exécuter sur un serveur monétisé (dons, grades, boutique) | ✅ Oui — tant que le mod lui-même n'est ni vendu ni derrière un paywall |
-| Lire, auditer et relire le code source | ✅ Oui |
 | Signaler des bugs, ouvrir des issues | ✅ Oui |
-| Forker le dépôt pour soumettre une pull request | ✅ Oui — voir [CONTRIBUTING.md](CONTRIBUTING.md) |
-| Diffuser le mod dans votre propre modpack **après** avoir contribué une PR | ✅ Oui — §5.3, fichier officiel uniquement |
 | Être crédité pour une contribution fusionnée, par votre nom et par ce que vous avez contribué | ✅ Oui — [CONTRIBUTORS.md](CONTRIBUTORS.md), §5.3(a) |
 | Le redistribuer, le relicencier ou publier un fork **parce que vous avez contribué** | ❌ Non — §5.2, une PR fusionnée n'élargit rien |
 | L'inclure dans un modpack CurseForge / Modrinth qui **référence** le fichier officiel non modifié | ✅ Oui, sans demander |
@@ -225,7 +218,9 @@ LICENSE prévaut.
 | Le proposer en « installation en un clic » dans le catalogue d'un hébergeur | ❌ Autorisation écrite requise |
 | Le ré-uploader ou le mirrorer ailleurs (sites, forums, Discord, hébergeurs de fichiers) | ❌ Non |
 | Le modifier et en distribuer le résultat | ❌ Non |
-| Publier un build issu de votre fork | ❌ Non |
+| Le décompiler ou le rétro-concevoir, au-delà de ce que la loi permet toujours | ❌ Non — §4 |
+| Partager le code source, si l'on vous y a donné accès pour contribuer | ❌ Non — §5.1 |
+| Publier un build issu du code source | ❌ Non |
 | Réutiliser son code dans un autre mod, plugin ou projet | ❌ Non |
 | Le vendre, le louer, ou le lier à un produit payant | ❌ Non |
 | Prétendre l'avoir écrit, ou retirer les mentions de copyright | ❌ Non |
@@ -243,15 +238,14 @@ silencieusement un modpack conforme ni n'empêche les autres utilisateurs
 d'exécuter un build officiel obtenu licitement. C'est un outil contre l'abus,
 pas un interrupteur sur l'écosystème. Voir §2.3 de la LICENSE.
 
-## Pourquoi source visible et pas open-source
+## Code source
 
-Le code est public pour que les propriétaires de serveurs puissent auditer ce
-qui tourne sur leurs machines, pour que les problèmes d'intégration soient
-diagnostiqués face à l'implémentation réelle, et pour que quiconque repère un
-bug puisse le corriger via une pull request.
-
-Ce n'est pas open-source parce que l'auteur conserve le contrôle exclusif de la
-distribution et des œuvres dérivées. La visibilité n'est pas une licence.
+Le code source n'est pas publié. Les personnes à qui l'on donne accès pour
+contribuer peuvent le lire et préparer des contributions, rien de plus, et cet
+accès peut être retiré (§5.1). Une copie du code faite à l'époque où une version
+antérieure de la licence le rendait public reste régie par cette version
+antérieure, ne donne aucun droit sur les versions suivantes, et n'est jamais un
+canal officiel.
 
 ## Propriété et maintenance
 
@@ -381,10 +375,10 @@ au-delà, et ne place pas le mod dans son ensemble sous licence MIT.
 ## Demander une autorisation
 
 Tout ce qui est marqué ❌ ci-dessus peut malgré tout être accordé au cas par cas.
-Demandez — la réponse est souvent oui pour les demandes raisonnables. Ouvrez une
-issue sur le dépôt officiel :
+Demandez — la réponse est souvent oui pour les demandes raisonnables. Passez par
+le tracker d'issues officiel :
 
-  https://github.com/Team-Arcadia/CustomPerm/issues
+  https://github.com/THEFricadelle/mc-mods-issues/issues/new?template=permission-request.yml
 
 L'autorisation doit être **écrite** pour être valable. Le silence ne vaut pas
 accord : l'absence de réponse, ou l'absence d'objection à un usage, ne constitue
