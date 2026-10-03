@@ -9,6 +9,10 @@ Versioning: [Semantic Versioning](https://semver.org/)
 
 ## [Unreleased]
 
+---
+
+## [2.0.1] - 2026-10-03
+
 ### Changed
 
 - **License moved to 3.0, closed-source variant** — the source code is no longer published: the contribution fork of the former Section 5.1 is replaced by access for invited contributors only, and a fork made under 2.1 stays governed by 2.1. Official channels are CurseForge and Modrinth; bug reports and permission requests go to `THEFricadelle/mc-mods-issues`. Releases already published keep the license they shipped with. `CONTRIBUTORS.md` now ships inside the jar.
